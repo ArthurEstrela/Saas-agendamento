@@ -1,102 +1,183 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc } from 'firebase/firestore';
 import Booking from './Booking'; // Componente de agendamento separado
-import type { ProfessionalProfile, Appointment } from '../types'; // Tipos centralizados
+import type { Appointment, UserProfile } from '../types';
+
+// Ícone para o cabeçalho
+const HeaderIcon = ({ children }: { children: React.ReactNode }) => (
+    <div className="bg-gray-700 p-2 rounded-lg mr-4">
+        {children}
+    </div>
+);
 
 const ClientDashboard = () => {
-  const { currentUser, userProfile, logout, loading } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchCategory, setSearchCategory] = useState('');
-  const [searchLocation, setSearchLocation] = useState('');
-  const [searchResults, setSearchResults] = useState<ProfessionalProfile[]>([]);
-  const [selectedProfessional, setSelectedProfessional] = useState<ProfessionalProfile | null>(null);
-  const [clientAppointments, setClientAppointments] = useState<Appointment[]>([]);
+  const { userProfile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'search' | 'myAppointments'>('search');
+  
+  // Estado para a busca
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Busca agendamentos do cliente
+  // Estado para agendamentos
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+  
+  // Estado para o fluxo de agendamento
+  const [selectedProfessional, setSelectedProfessional] = useState<UserProfile | null>(null);
+
+  // Efeito para buscar os agendamentos do cliente
   useEffect(() => {
-    if (!currentUser) return;
-    const q = query(collection(db, 'appointments'), where('clientId', '==', currentUser.uid));
+    if (!userProfile?.uid) return;
+
+    const q = query(collection(db, 'appointments'), where('clientId', '==', userProfile.uid));
+    
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const appointments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
-      // Adicionar lógica para buscar nomes de profissionais, se necessário
-      setClientAppointments(appointments);
+      setLoadingAppointments(true);
+      const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
+
+      const appointmentsWithDetails = await Promise.all(apptsData.map(async (appt) => {
+        const profDoc = await getDoc(doc(db, "users", appt.serviceProviderId));
+        const professionalProfile = profDoc.data() as UserProfile;
+        const serviceName = professionalProfile?.services?.find(s => s.id === appt.serviceId)?.name || 'Serviço';
+        
+        return {
+          ...appt,
+          professionalName: professionalProfile?.establishmentName || 'Profissional',
+          serviceName: serviceName,
+        };
+      }));
+
+      appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+      
+      setAppointments(appointmentsWithDetails);
+      setLoadingAppointments(false);
     });
-    return unsubscribe;
-  }, [currentUser]);
+
+    return () => unsubscribe();
+  }, [userProfile]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const q = query(
-      collection(db, 'users'),
-      where('userType', '==', 'serviceProvider'),
-      // Adicionar filtros de busca (podem exigir índices no Firestore)
-    );
+    setIsSearching(true);
+    
+    // Simples busca por nome do estabelecimento por enquanto
+    // Para buscas mais complexas, considere usar um serviço como Algolia ou ElasticSearch
+    const q = query(collection(db, 'users'), where('userType', '==', 'serviceProvider'));
     const querySnapshot = await getDocs(q);
-    const results = querySnapshot.docs.map(doc => doc.data() as ProfessionalProfile);
-    setSearchResults(results);
-  };
+    
+    let results = querySnapshot.docs.map(doc => doc.data() as UserProfile);
 
+    if (searchTerm) {
+        results = results.filter(prof => 
+            prof.establishmentName?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }
+    
+    setSearchResults(results);
+    setIsSearching(false);
+  };
+  
+  // Se um profissional foi selecionado, mostra a tela de agendamento
   if (selectedProfessional) {
     return <Booking professional={selectedProfessional} onBack={() => setSelectedProfessional(null)} />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-yellow-500">Bem-vindo, {userProfile?.displayName}!</h2>
-        <button onClick={logout} className="text-red-500">Sair</button>
-      </div>
-
-      {/* Abas de Navegação */}
-      <div className="flex justify-center border-b border-yellow-700 mb-8">
-        <button onClick={() => setActiveTab('search')} className={`py-2 px-4 ${activeTab === 'search' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-400'}`}>
-          Buscar Profissional
+    <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
+      <header className="flex justify-between items-center mb-10">
+        <div className="flex items-center">
+            <HeaderIcon>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </HeaderIcon>
+            <div>
+                <h1 className="text-2xl font-bold text-white">Olá, {userProfile?.displayName}</h1>
+                <p className="text-gray-400">Encontre os melhores profissionais</p>
+            </div>
+        </div>
+        <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
+            <span>Sair</span>
         </button>
-        <button onClick={() => setActiveTab('myAppointments')} className={`py-2 px-4 ${activeTab === 'myAppointments' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-400'}`}>
-          Meus Agendamentos
-        </button>
-      </div>
+      </header>
 
-      {activeTab === 'search' && (
-        <div>
-          <form onSubmit={handleSearch} className="space-y-4 max-w-lg mx-auto mb-8">
-            {/* Campos de busca */}
-            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Nome do profissional" className="w-full p-2 bg-gray-800 rounded"/>
-            <input type="text" value={searchCategory} onChange={e => setSearchCategory(e.target.value)} placeholder="Categoria" className="w-full p-2 bg-gray-800 rounded"/>
-            <input type="text" value={searchLocation} onChange={e => setSearchLocation(e.target.value)} placeholder="Localização" className="w-full p-2 bg-gray-800 rounded"/>
-            <button type="submit" className="w-full bg-yellow-600 p-2 rounded">Buscar</button>
-          </form>
-          <div className="space-y-4">
-            {searchResults.map(prof => (
-              <div key={prof.uid} className="bg-gray-800 p-4 rounded-lg flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl">{prof.displayName}</h3>
-                  <p>{prof.segment} - {prof.address}</p>
+      <main>
+        <div className="mb-8">
+          <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">
+            <button onClick={() => setActiveTab('search')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'search' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Buscar Profissional</button>
+            <button onClick={() => setActiveTab('myAppointments')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'myAppointments' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meus Agendamentos</button>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-700">
+          {activeTab === 'search' && (
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-6">Encontre um profissional</h2>
+              <form onSubmit={handleSearch} className="flex items-center gap-4 mb-8">
+                <div className="relative flex-grow">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>
+                  </div>
+                  <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Nome do estabelecimento..." className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
                 </div>
-                <button onClick={() => setSelectedProfessional(prof)} className="bg-yellow-500 text-black px-4 py-2 rounded">
-                  Agendar
+                <button type="submit" disabled={isSearching} className="bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors duration-300 disabled:bg-gray-500">
+                  {isSearching ? 'Buscando...' : 'Buscar'}
                 </button>
+              </form>
+              
+              <div className="space-y-4">
+                {searchResults.map(prof => (
+                  <div key={prof.uid} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center transition-all hover:shadow-lg hover:bg-gray-600">
+                    <div>
+                      <h3 className="text-xl font-bold text-white">{prof.establishmentName}</h3>
+                      <p className="text-gray-400">{prof.segment} - {prof.address || 'Endereço não informado'}</p>
+                    </div>
+                    <button onClick={() => setSelectedProfessional(prof)} className="mt-4 md:mt-0 bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">
+                      Agendar
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
 
-      {activeTab === 'myAppointments' && (
-        <div className="max-w-lg mx-auto">
-          <h3 className="text-2xl font-bold text-yellow-500 mb-4">Meus Agendamentos</h3>
-          <div className="space-y-4">
-            {clientAppointments.map(app => (
-              <div key={app.id} className="bg-gray-800 p-4 rounded-lg">
-                <p>Data: {app.date} às {app.time}</p>
-                <p>Status: {app.status}</p>
-              </div>
-            ))}
-          </div>
+          {activeTab === 'myAppointments' && (
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-6">Meus Agendamentos</h2>
+              {loadingAppointments ? (
+                <p className="text-center text-gray-400">Carregando agendamentos...</p>
+              ) : appointments.length > 0 ? (
+                <ul className="space-y-4">
+                  {appointments.map(app => (
+                    <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                      <div className="flex items-center">
+                        <div className="text-center border-r border-gray-600 pr-4 mr-4">
+                            <p className="text-xl font-bold text-white">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit' })}</p>
+                            <p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-white">{app.serviceName} às {app.time}</p>
+                          <p className="text-sm text-gray-400">com {app.professionalName}</p>
+                        </div>
+                      </div>
+                      <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                          app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' :
+                          app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                          'bg-red-500/20 text-red-300'
+                      }`}>
+                          {app.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-center text-gray-400 py-8">Você ainda não possui agendamentos.</p>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </main>
     </div>
   );
 };

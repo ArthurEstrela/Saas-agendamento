@@ -1,167 +1,82 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { v4 as uuidv4 } from 'uuid'; // Para gerar IDs únicos para os serviços
-
-// Importa o polyfill para crypto.randomUUID se necessário (ambiente Canvas já deve ter)
-// if (typeof crypto.randomUUID === 'undefined') {
-//   // Polyfill simples para ambientes sem crypto.randomUUID (ex: Node.js mais antigo)
-//   // Em ambientes de navegador modernos, crypto.randomUUID é geralmente disponível.
-//   // Para o Canvas, v4 as uuidv4 é mais seguro.
-// }
-
+import { v4 as uuidv4 } from 'uuid';
 
 const ServicesManagement = () => {
-  const { userProfile, updateUserProfile, loading, message, clearMessage } = useAuth();
+  const { userProfile, updateUserProfile, loading } = useAuth();
   const [serviceName, setServiceName] = useState('');
-  const [serviceDuration, setServiceDuration] = useState(''); // Em minutos
+  const [serviceDuration, setServiceDuration] = useState('');
   const [servicePrice, setServicePrice] = useState('');
-
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        clearMessage();
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [message, clearMessage]);
-
+  
   const handleAddService = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userProfile || userProfile.userType !== 'serviceProvider') {
-      console.error("Apenas prestadores de serviço podem adicionar serviços.");
-      return;
-    }
-    if (!serviceName || !serviceDuration || !servicePrice) {
-      // Usar um modal ou mensagem de erro mais amigável em vez de alert
-      console.error("Por favor, preencha todos os campos do serviço.");
-      return;
-    }
+    if (!userProfile || !serviceName || !serviceDuration || !servicePrice) return;
 
     const newService = {
-      id: uuidv4(), // Gera um ID único para o serviço
+      id: uuidv4(),
       name: serviceName,
       duration: parseInt(serviceDuration),
       price: parseFloat(servicePrice),
     };
 
-    const updatedServices = userProfile.services ? [...userProfile.services, newService] : [newService];
-
+    const updatedServices = [...(userProfile.services || []), newService];
     await updateUserProfile({ services: updatedServices });
 
-    // Limpa o formulário
     setServiceName('');
     setServiceDuration('');
     setServicePrice('');
   };
 
   const handleDeleteService = async (serviceId: string) => {
-    if (!userProfile || userProfile.userType !== 'serviceProvider') {
-      console.error("Apenas prestadores de serviço podem remover serviços.");
-      return;
-    }
-
-    const updatedServices = userProfile.services?.filter(service => service.id !== serviceId) || [];
+    if (!userProfile) return;
+    const updatedServices = userProfile.services?.filter(s => s.id !== serviceId) || [];
     await updateUserProfile({ services: updatedServices });
   };
 
-  if (userProfile?.userType !== 'serviceProvider') {
-    return (
-      <div className="text-center text-red-400 p-4">
-        Você não tem permissão para gerenciar serviços.
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-2xl border border-yellow-600">
-      <h3 className="text-2xl font-bold text-yellow-500 mb-6 text-center">Gerenciar Serviços</h3>
-      {message && (
-        <div className="bg-yellow-800 text-yellow-100 p-3 rounded-md mb-4 text-sm text-center">
-          {message}
-        </div>
-      )}
-
-      {/* Formulário para Adicionar Novo Serviço */}
-      <form onSubmit={handleAddService} className="space-y-4 mb-8">
+    <div>
+      <h2 className="text-2xl font-bold text-white mb-6">Gerenciar Serviços</h2>
+      <form onSubmit={handleAddService} className="bg-gray-700 p-6 rounded-lg mb-8 space-y-4">
+        <h3 className="text-lg font-semibold text-yellow-400">Adicionar Novo Serviço</h3>
         <div>
-          <label htmlFor="serviceName" className="block text-gray-300 text-sm font-bold mb-2">
-            Nome do Serviço
-          </label>
-          <input
-            type="text"
-            id="serviceName"
-            className="shadow appearance-none border border-gray-700 rounded-md w-full py-3 px-4 text-gray-100 leading-tight focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-gray-700"
-            placeholder="Ex: Corte Masculino"
-            value={serviceName}
-            onChange={(e) => setServiceName(e.target.value)}
-            required
-          />
+          <label htmlFor="serviceName" className="block text-sm font-medium text-gray-300 mb-1">Nome do Serviço</label>
+          <input type="text" id="serviceName" value={serviceName} onChange={e => setServiceName(e.target.value)} required className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="serviceDuration" className="block text-gray-300 text-sm font-bold mb-2">
-              Duração (minutos)
-            </label>
-            <input
-              type="number"
-              id="serviceDuration"
-              className="shadow appearance-none border border-gray-700 rounded-md w-full py-3 px-4 text-gray-100 leading-tight focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-gray-700"
-              placeholder="Ex: 30"
-              value={serviceDuration}
-              onChange={(e) => setServiceDuration(e.target.value)}
-              required
-              min="1"
-            />
+            <label htmlFor="serviceDuration" className="block text-sm font-medium text-gray-300 mb-1">Duração (minutos)</label>
+            <input type="number" id="serviceDuration" value={serviceDuration} onChange={e => setServiceDuration(e.target.value)} required className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
           </div>
           <div>
-            <label htmlFor="servicePrice" className="block text-gray-300 text-sm font-bold mb-2">
-              Preço (R$)
-            </label>
-            <input
-              type="number"
-              id="servicePrice"
-              className="shadow appearance-none border border-gray-700 rounded-md w-full py-3 px-4 text-gray-100 leading-tight focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-gray-700"
-              placeholder="Ex: 50.00"
-              value={servicePrice}
-              onChange={(e) => setServicePrice(e.target.value)}
-              required
-              step="0.01"
-              min="0"
-            />
+            <label htmlFor="servicePrice" className="block text-sm font-medium text-gray-300 mb-1">Preço (R$)</label>
+            <input type="number" step="0.01" id="servicePrice" value={servicePrice} onChange={e => setServicePrice(e.target.value)} required className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
           </div>
         </div>
-        <button
-          type="submit"
-          className="w-full bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-200 ease-in-out transform hover:scale-105"
-          disabled={loading}
-        >
+        <button type="submit" disabled={loading} className="w-full bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">
           {loading ? 'Adicionando...' : 'Adicionar Serviço'}
         </button>
       </form>
 
-      {/* Lista de Serviços Cadastrados */}
-      <h4 className="text-xl font-bold text-yellow-400 mb-4">Serviços Cadastrados</h4>
-      {userProfile?.services && userProfile.services.length > 0 ? (
-        <ul className="space-y-3">
-          {userProfile.services.map(service => (
-            <li key={service.id} className="bg-gray-700 p-4 rounded-md flex flex-col sm:flex-row justify-between items-center text-center sm:text-left">
-              <div>
-                <p className="text-lg font-semibold text-gray-200">{service.name}</p>
-                <p className="text-sm text-gray-400">Duração: {service.duration} min | Preço: R$ {service.price.toFixed(2)}</p>
-              </div>
-              <button
-                onClick={() => handleDeleteService(service.id)}
-                className="mt-3 sm:mt-0 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1 px-3 rounded-md transition duration-200 ease-in-out transform hover:scale-105"
-                disabled={loading}
-              >
-                Excluir
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-gray-400 text-center">Nenhum serviço cadastrado ainda.</p>
-      )}
+      <div>
+        <h3 className="text-lg font-semibold text-yellow-400 mb-4">Serviços Cadastrados</h3>
+        {userProfile?.services && userProfile.services.length > 0 ? (
+          <ul className="space-y-3">
+            {userProfile.services.map(service => (
+              <li key={service.id} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-white">{service.name}</p>
+                  <p className="text-sm text-gray-400">{service.duration} min - R$ {service.price.toFixed(2)}</p>
+                </div>
+                <button onClick={() => handleDeleteService(service.id)} disabled={loading} className="text-red-500 hover:text-red-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-center text-gray-500">Nenhum serviço cadastrado.</p>
+        )}
+      </div>
     </div>
   );
 };

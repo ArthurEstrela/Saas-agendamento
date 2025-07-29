@@ -48,7 +48,8 @@ export interface UserProfile {
   email: string;
   createdAt: Date;
   userType: "client" | "serviceProvider";
-  displayName?: string;
+  displayName?: string; // Nome do cliente
+  establishmentName?: string; // Nome do estabelecimento
   photoURL?: string;
   address?: string;
   instagram?: string;
@@ -60,7 +61,7 @@ export interface UserProfile {
   availability?: Availability;
 }
 
-// Configuração do Firebase
+// Configuração do Firebase (usando variáveis de ambiente)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -75,7 +76,6 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const appId = "1:870432680871:web:00c3d8afddaa46b58f6482";
 
 // Contexto de Autenticação
 interface AuthContextType {
@@ -131,8 +131,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     setLoading(true);
-    await signInWithEmailAndPassword(auth, email, password);
-    setLoading(false);
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+        console.error("Erro no login:", error);
+        // Adicionar feedback para o usuário aqui
+    } finally {
+        setLoading(false);
+    }
   };
 
   const register = async (
@@ -142,43 +148,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     profileData: Partial<UserProfile> = {}
   ) => {
     setLoading(true);
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-    const newProfile: UserProfile = {
-      uid: user.uid,
-      email: user.email!,
-      createdAt: new Date(),
-      userType,
-      displayName: profileData.displayName || user.displayName || "",
-      ...profileData,
-    };
+        const newProfile: UserProfile = {
+          uid: user.uid,
+          email: user.email!,
+          createdAt: new Date(),
+          userType,
+          displayName: profileData.displayName || (userType === 'client' ? profileData.displayName : ''),
+          establishmentName: profileData.establishmentName || (userType === 'serviceProvider' ? profileData.establishmentName : ''),
+          ...profileData,
+        };
 
-    await setDoc(doc(db, `users/${user.uid}`), newProfile);
-    setUserProfile(newProfile);
-    setLoading(false);
+        await setDoc(doc(db, `users/${user.uid}`), newProfile);
+        setUserProfile(newProfile);
+    } catch (error) {
+        console.error("Erro no registro:", error);
+        // Adicionar feedback para o usuário aqui
+    } finally {
+        setLoading(false);
+    }
   };
 
   const loginWithGoogle = async () => {
     setLoading(true);
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    const profile = await fetchUserProfile(user.uid);
+    try {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        const profile = await fetchUserProfile(user.uid);
 
-    if (!profile) {
-      const newProfile: UserProfile = {
-        uid: user.uid,
-        email: user.email!,
-        createdAt: new Date(),
-        userType: "client", // Padrão para novos usuários do Google
-        displayName: user.displayName || "",
-        photoURL: user.photoURL || "",
-      };
-      await setDoc(doc(db, `users/${user.uid}`), newProfile);
-      setUserProfile(newProfile);
+        if (!profile) {
+          // Pergunta ao usuário se ele é cliente ou profissional
+          // Por simplicidade, vamos padronizar como cliente por enquanto
+          const newProfile: UserProfile = {
+            uid: user.uid,
+            email: user.email!,
+            createdAt: new Date(),
+            userType: "client",
+            displayName: user.displayName || "",
+            photoURL: user.photoURL || "",
+          };
+          await setDoc(doc(db, `users/${user.uid}`), newProfile);
+          setUserProfile(newProfile);
+        }
+    } catch (error) {
+        console.error("Erro no login com Google:", error);
+    } finally {
+        setLoading(false);
     }
-    setLoading(false);
   };
 
   const logout = async () => {

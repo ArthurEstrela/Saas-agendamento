@@ -16,52 +16,11 @@ import {
   setDoc,
   getDoc,
 } from "firebase/firestore";
+// Adicionando importações do Storage
+import { getStorage } from "firebase/storage";
+import type { UserProfile } from "../types"; // Importando tipos de um arquivo central
 
-// Interfaces
-export interface Service {
-  id: string;
-  name: string;
-  duration: number;
-  price: number;
-}
-
-export interface DayAvailability {
-  active: boolean;
-  startTime: string;
-  endTime: string;
-  breakStartTime?: string;
-  breakEndTime?: string;
-}
-
-export interface Availability {
-  monday: DayAvailability;
-  tuesday: DayAvailability;
-  wednesday: DayAvailability;
-  thursday: DayAvailability;
-  friday: DayAvailability;
-  saturday: DayAvailability;
-  sunday: DayAvailability;
-}
-
-export interface UserProfile {
-  uid: string;
-  email: string;
-  createdAt: Date;
-  userType: "client" | "serviceProvider";
-  displayName?: string; // Nome do cliente
-  establishmentName?: string; // Nome do estabelecimento
-  photoURL?: string;
-  address?: string;
-  instagram?: string;
-  whatsapp?: string;
-  phoneNumber?: string;
-  segment?: string;
-  cnpj?: string;
-  services?: Service[];
-  availability?: Availability;
-}
-
-// Configuração do Firebase (usando variáveis de ambiente)
+// Configuração do Firebase
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -76,6 +35,7 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app); // Inicializando o Storage
 
 // Contexto de Autenticação
 interface AuthContextType {
@@ -135,7 +95,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
         console.error("Erro no login:", error);
-        // Adicionar feedback para o usuário aqui
     } finally {
         setLoading(false);
     }
@@ -166,7 +125,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUserProfile(newProfile);
     } catch (error) {
         console.error("Erro no registro:", error);
-        // Adicionar feedback para o usuário aqui
     } finally {
         setLoading(false);
     }
@@ -181,8 +139,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const profile = await fetchUserProfile(user.uid);
 
         if (!profile) {
-          // Pergunta ao usuário se ele é cliente ou profissional
-          // Por simplicidade, vamos padronizar como cliente por enquanto
           const newProfile: UserProfile = {
             uid: user.uid,
             email: user.email!,

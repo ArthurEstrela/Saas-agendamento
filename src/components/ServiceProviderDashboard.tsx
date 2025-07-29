@@ -3,18 +3,12 @@ import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import ServicesManagement from './ServiceProvider/ServicesManagement';
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
-import type { Appointment, UserProfile } from '../types'; // Importando tipos centralizados
-
-// Ícone para o cabeçalho
-const HeaderIcon = ({ children }: { children: React.ReactNode }) => (
-    <div className="bg-gray-700 p-2 rounded-lg mr-4">
-        {children}
-    </div>
-);
+import ProfileManagement from './ServiceProvider/ProfileManagement'; // Importando o novo componente
+import type { Appointment, UserProfile } from '../types';
 
 const ServiceProviderDashboard = () => {
   const { userProfile, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'calendar' | 'services' | 'availability'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'services' | 'availability' | 'profile'>('calendar');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +21,6 @@ const ServiceProviderDashboard = () => {
         setLoading(true);
         const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
 
-        // Buscar informações adicionais (nome do cliente e do serviço)
         const appointmentsWithDetails = await Promise.all(apptsData.map(async (appt) => {
             const clientProfile = await getDoc(doc(db, "users", appt.clientId));
             const serviceName = userProfile.services?.find(s => s.id === appt.serviceId)?.name || 'Serviço não encontrado';
@@ -39,7 +32,6 @@ const ServiceProviderDashboard = () => {
             };
         }));
         
-        // Ordenar por data e hora
         appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
 
         setAppointments(appointmentsWithDetails);
@@ -53,9 +45,11 @@ const ServiceProviderDashboard = () => {
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
       <header className="flex justify-between items-center mb-10">
         <div className="flex items-center">
-            <HeaderIcon>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-            </HeaderIcon>
+            <img 
+              src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
+              alt="Foto do perfil" 
+              className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700"
+            />
             <div>
                 <h1 className="text-2xl font-bold text-white">{userProfile?.establishmentName}</h1>
                 <p className="text-gray-400">Painel do Profissional</p>
@@ -73,6 +67,7 @@ const ServiceProviderDashboard = () => {
             <button onClick={() => setActiveTab('calendar')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'calendar' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Agenda</button>
             <button onClick={() => setActiveTab('services')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'services' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meus Serviços</button>
             <button onClick={() => setActiveTab('availability')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'availability' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Disponibilidade</button>
+            <button onClick={() => setActiveTab('profile')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'profile' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meu Perfil</button>
           </div>
         </div>
 
@@ -105,7 +100,6 @@ const ServiceProviderDashboard = () => {
                                         }`}>
                                             {app.status}
                                         </span>
-                                        {/* Futuramente, adicionar botões de ação aqui (confirmar/cancelar) */}
                                     </div>
                                 </li>
                             ))}
@@ -117,6 +111,7 @@ const ServiceProviderDashboard = () => {
             )}
             {activeTab === 'services' && <ServicesManagement />}
             {activeTab === 'availability' && <AvailabilityManagement />}
+            {activeTab === 'profile' && <ProfileManagement />}
         </div>
       </main>
     </div>

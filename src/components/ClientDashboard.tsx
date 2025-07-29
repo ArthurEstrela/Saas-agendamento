@@ -46,6 +46,8 @@ const ClientDashboard = () => {
           ...appt,
           professionalName: professionalProfile?.establishmentName || 'Profissional',
           serviceName: serviceName,
+          // Adicionando a foto do profissional aos dados do agendamento
+          professionalPhotoURL: professionalProfile?.photoURL, 
         };
       }));
 
@@ -62,8 +64,6 @@ const ClientDashboard = () => {
     e.preventDefault();
     setIsSearching(true);
     
-    // Simples busca por nome do estabelecimento por enquanto
-    // Para buscas mais complexas, considere usar um serviço como Algolia ou ElasticSearch
     const q = query(collection(db, 'users'), where('userType', '==', 'serviceProvider'));
     const querySnapshot = await getDocs(q);
     
@@ -79,7 +79,6 @@ const ClientDashboard = () => {
     setIsSearching(false);
   };
   
-  // Se um profissional foi selecionado, mostra a tela de agendamento
   if (selectedProfessional) {
     return <Booking professional={selectedProfessional} onBack={() => setSelectedProfessional(null)} />;
   }
@@ -128,12 +127,19 @@ const ClientDashboard = () => {
               
               <div className="space-y-4">
                 {searchResults.map(prof => (
-                  <div key={prof.uid} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center transition-all hover:shadow-lg hover:bg-gray-600">
-                    <div>
-                      <h3 className="text-xl font-bold text-white">{prof.establishmentName}</h3>
-                      <p className="text-gray-400">{prof.segment} - {prof.address || 'Endereço não informado'}</p>
+                  <div key={prof.uid} className="bg-gray-700 p-4 rounded-lg flex items-center justify-between transition-all hover:shadow-lg hover:bg-gray-600">
+                    <div className="flex items-center">
+                      <img 
+                        src={prof.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
+                        alt={`Foto de ${prof.establishmentName}`}
+                        className="h-16 w-16 rounded-full object-cover mr-4 border-2 border-gray-600"
+                      />
+                      <div>
+                        <h3 className="text-xl font-bold text-white">{prof.establishmentName}</h3>
+                        <p className="text-gray-400">{prof.segment} - {prof.address || 'Endereço não informado'}</p>
+                      </div>
                     </div>
-                    <button onClick={() => setSelectedProfessional(prof)} className="mt-4 md:mt-0 bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">
+                    <button onClick={() => setSelectedProfessional(prof)} className="bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">
                       Agendar
                     </button>
                   </div>
@@ -152,13 +158,15 @@ const ClientDashboard = () => {
                   {appointments.map(app => (
                     <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
                       <div className="flex items-center">
-                        <div className="text-center border-r border-gray-600 pr-4 mr-4">
-                            <p className="text-xl font-bold text-white">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit' })}</p>
-                            <p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p>
-                        </div>
-                        <div>
+                        <img 
+                          src={app.professionalPhotoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
+                          alt={`Foto de ${app.professionalName}`}
+                          className="h-12 w-12 rounded-full object-cover mr-4 border-2 border-gray-600"
+                        />
+                        <div className="flex-grow">
                           <p className="font-semibold text-white">{app.serviceName} às {app.time}</p>
                           <p className="text-sm text-gray-400">com {app.professionalName}</p>
+                          <p className="text-sm text-gray-500">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                         </div>
                       </div>
                       <span className={`px-3 py-1 text-xs font-semibold rounded-full ${

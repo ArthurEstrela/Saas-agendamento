@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css'; // Importação padrão
+import '../Calendar.css'; // Importa nossa estilização customizada
 import type { UserProfile, Service, Appointment, Availability } from '../types';
+
+// O tipo de valor que o react-calendar usa
+type ValuePiece = Date | null;
+type Value = ValuePiece | [ValuePiece, ValuePiece];
 
 interface BookingProps {
   professional: UserProfile;
@@ -10,17 +17,16 @@ interface BookingProps {
 
 const Booking = ({ professional, onBack }: BookingProps) => {
   const { userProfile } = useAuth();
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Value>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [isBooking, setIsBooking] = useState(false);
 
-  // Lógica para gerar e buscar horários disponíveis
   useEffect(() => {
     const fetchAvailableTimes = async () => {
-      if (!selectedDate || !selectedService || !professional.availability) {
+      if (!selectedDate || !selectedService || !professional.availability || Array.isArray(selectedDate)) {
         setAvailableTimes([]);
         return;
       }
@@ -30,7 +36,6 @@ const Booking = ({ professional, onBack }: BookingProps) => {
       setSelectedTime('');
 
       try {
-        // Correção: Acessar a chave do dia da semana de forma segura
         const dayKey = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof Availability;
         const dayAvailability = professional.availability[dayKey];
 
@@ -50,7 +55,6 @@ const Booking = ({ professional, onBack }: BookingProps) => {
         let endTime = new Date(selectedDate);
         endTime.setHours(endHour, endMinute, 0, 0);
 
-        // Buscar agendamentos existentes para o dia
         const q = query(
             collection(db, 'appointments'),
             where('serviceProviderId', '==', professional.uid),
@@ -70,7 +74,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
         setAvailableTimes(slots);
       } catch (error) {
         console.error("Erro ao buscar horários:", error);
-        setAvailableTimes([]); // Garante que a lista fique vazia em caso de erro
+        setAvailableTimes([]);
       } finally {
         setLoadingTimes(false);
       }
@@ -80,8 +84,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
   }, [selectedDate, selectedService, professional]);
 
   const handleBookAppointment = async () => {
-    if (!userProfile || !selectedDate || !selectedService || !selectedTime) {
-      // Trocar alert por um modal/toast em produção
+    if (!userProfile || !selectedDate || Array.isArray(selectedDate) || !selectedService || !selectedTime) {
       alert("Por favor, selecione data, serviço e horário.");
       return;
     }
@@ -100,15 +103,6 @@ const Booking = ({ professional, onBack }: BookingProps) => {
     setIsBooking(false);
     onBack();
   };
-  
-  // Define a data mínima para o input de data como hoje
-  const getTodayString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
@@ -126,7 +120,6 @@ const Booking = ({ professional, onBack }: BookingProps) => {
         </div>
 
         <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 space-y-8">
-            {/* Passo 1: Selecionar Serviço */}
             <div>
                 <h2 className="text-xl font-bold text-white mb-4">1. Escolha o Serviço</h2>
                 <div className="space-y-3">
@@ -139,21 +132,19 @@ const Booking = ({ professional, onBack }: BookingProps) => {
                 </div>
             </div>
 
-            {/* Passo 2: Selecionar Data */}
             {selectedService && (
                 <div>
                     <h2 className="text-xl font-bold text-white mb-4">2. Escolha a Data</h2>
-                    <input 
-                      type="date" 
-                      min={getTodayString()}
-                      onChange={e => setSelectedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)} 
-                      className="w-full bg-gray-700 text-white border-gray-600 rounded-lg p-3 focus:ring-yellow-500 focus:border-yellow-500" 
+                    <Calendar
+                      onChange={setSelectedDate}
+                      value={selectedDate}
+                      minDate={new Date()}
+                      className="react-calendar"
                     />
                 </div>
             )}
 
-            {/* Passo 3: Selecionar Horário */}
-            {selectedDate && (
+            {selectedDate && !Array.isArray(selectedDate) && (
                 <div>
                     <h2 className="text-xl font-bold text-white mb-4">3. Escolha o Horário</h2>
                     {loadingTimes ? <p className="text-gray-400">Carregando horários...</p> : (

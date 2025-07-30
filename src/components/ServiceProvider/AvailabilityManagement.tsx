@@ -29,7 +29,7 @@ const AvailabilityManagement = () => {
     }));
   };
 
-  const handleTimeChange = (day: keyof Availability, field: 'startTime' | 'endTime', value: string) => {
+  const handleTimeChange = (day: keyof Availability, field: 'startTime' | 'endTime' | 'breakStartTime' | 'breakEndTime', value: string) => {
     setAvailability(prev => ({
       ...prev,
       [day]: { ...prev[day], [field]: value },
@@ -39,7 +39,7 @@ const AvailabilityManagement = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     await updateUserProfile({ availability });
-    // Adicionar um feedback de sucesso para o usuário
+    alert("Disponibilidade salva com sucesso!"); // Feedback para o usuário
   };
 
   const daysOfWeek = [
@@ -77,6 +77,22 @@ const AvailabilityManagement = () => {
                   <label className="block text-sm font-medium text-gray-300 mb-1">Fim</label>
                   <input type="time" value={availability[key as keyof Availability].endTime} onChange={e => handleTimeChange(key as keyof Availability, 'endTime', e.target.value)} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
                 </div>
+                
+                {/* BLOCO DE CÓDIGO DO INTERVALO */}
+                <div className="md:col-span-2 border-t border-gray-600 pt-4 mt-2">
+                    <p className="text-sm text-gray-400 mb-2">Horário de Intervalo (opcional)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Início do Intervalo</label>
+                            <input type="time" value={availability[key as keyof Availability].breakStartTime || ''} onChange={e => handleTimeChange(key as keyof Availability, 'breakStartTime', e.target.value)} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Fim do Intervalo</label>
+                            <input type="time" value={availability[key as keyof Availability].breakEndTime || ''} onChange={e => handleTimeChange(key as keyof Availability, 'breakEndTime', e.target.value)} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
+                        </div>
+                    </div>
+                </div>
+                {/* FIM DO BLOCO DO INTERVALO */}
               </div>
             )}
           </div>

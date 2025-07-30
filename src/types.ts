@@ -25,15 +25,27 @@ export interface Availability {
   sunday: DayAvailability;
 }
 
-export interface ProfessionalProfile {
+export interface UserProfile {
   uid: string;
-  displayName: string;
   email: string;
-  userType: 'serviceProvider';
-  segment: string;
-  address: string;
+  createdAt: any;
+  userType: 'client' | 'serviceProvider';
+  
+  phoneNumber?: string;
+  displayName?: string; 
+  favoriteProfessionals?: string[];
+
+  establishmentName?: string;
+  address?: string;
+  instagram?: string;
+  whatsapp?: string;
+  photoURL?: string;
+  segment?: string;
   services?: Service[];
   availability?: Availability;
+  cnpj?: string;
+  cancellationPolicyMinutes?: number;
+  bookingAdvanceDays?: number;
 }
 
 export interface Appointment {
@@ -44,8 +56,12 @@ export interface Appointment {
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
   status: 'pending' | 'confirmed' | 'cancelled';
-  createdAt: Date;
+  createdAt: any;
+  
   serviceName?: string;
   professionalName?: string;
+  clientName?: string;
   clientEmail?: string;
+  professionalPhotoURL?: string;
+  cancellationPolicyMinutes?: number;
 }

@@ -15,12 +15,14 @@ import {
   doc,
   setDoc,
   getDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  deleteDoc,
 } from "firebase/firestore";
-// Adicionando importações do Storage
 import { getStorage } from "firebase/storage";
-import type { UserProfile } from "../types"; // Importando tipos de um arquivo central
+import type { UserProfile } from "../types";
 
-// Configuração do Firebase
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -31,13 +33,11 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Inicialização do Firebase
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app); // Inicializando o Storage
+export const storage = getStorage(app);
 
-// Contexto de Autenticação
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
@@ -52,15 +52,28 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
+  toggleFavorite: (professionalId: string) => Promise<void>;
+  cancelAppointment: (appointmentId: string) => Promise<void>;
+  updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled') => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Provedor de Autenticação
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const fetchUserProfile = async (uid: string): Promise<UserProfile | null> => {
+    const userDocRef = doc(db, `users/${uid}`);
+    try {
+      const userDocSnap = await getDoc(userDocRef);
+      return userDocSnap.exists() ? (userDocSnap.data() as UserProfile) : null;
+    } catch (error) {
+      console.error("Erro ao buscar perfil do usuário:", error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -77,17 +90,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
     return unsubscribe;
   }, []);
-
-  const fetchUserProfile = async (uid: string): Promise<UserProfile | null> => {
-    const userDocRef = doc(db, `users/${uid}`);
-    try {
-      const userDocSnap = await getDoc(userDocRef);
-      return userDocSnap.exists() ? (userDocSnap.data() as UserProfile) : null;
-    } catch (error) {
-      console.error("Erro ao buscar perfil do usuário:", error);
-      return null;
-    }
-  };
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -170,6 +172,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
   };
 
+  const toggleFavorite = async (professionalId: string) => {
+    if (!currentUser || !userProfile) return;
+    const userDocRef = doc(db, `users/${currentUser.uid}`);
+    const isFavorite = userProfile.favoriteProfessionals?.includes(professionalId);
+    try {
+      await updateDoc(userDocRef, {
+        favoriteProfessionals: isFavorite ? arrayRemove(professionalId) : arrayUnion(professionalId)
+      });
+      const updatedProfile = await fetchUserProfile(currentUser.uid);
+      setUserProfile(updatedProfile);
+    } catch (error) {
+      console.error("Erro ao favoritar profissional:", error);
+      alert("Não foi possível atualizar seus favoritos.");
+    }
+  };
+
+  const cancelAppointment = async (appointmentId: string) => {
+    const appointmentRef = doc(db, 'appointments', appointmentId);
+    try {
+      await deleteDoc(appointmentRef);
+      alert("Agendamento cancelado/recusado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao cancelar/recusar agendamento:", error);
+      alert("Não foi possível processar a solicitação.");
+    }
+  };
+
+  // Função para o profissional confirmar um agendamento
+  const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled') => {
+    const appointmentRef = doc(db, 'appointments', appointmentId);
+    try {
+      await updateDoc(appointmentRef, { status });
+      alert(`Agendamento ${status === 'confirmed' ? 'confirmado' : 'marcado como cancelado'} com sucesso!`);
+    } catch (error) {
+      console.error("Erro ao atualizar status do agendamento:", error);
+      alert("Não foi possível atualizar o agendamento.");
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -181,6 +222,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loginWithGoogle,
         logout,
         updateUserProfile,
+        toggleFavorite,
+        cancelAppointment,
+        updateAppointmentStatus,
       }}
     >
       {children}

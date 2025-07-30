@@ -3,11 +3,11 @@ import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import ServicesManagement from './ServiceProvider/ServicesManagement';
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
-import ProfileManagement from './ServiceProvider/ProfileManagement'; // Importando o novo componente
-import type { Appointment, UserProfile } from '../types';
+import ProfileManagement from './ServiceProvider/ProfileManagement';
+import type { Appointment } from '../types';
 
 const ServiceProviderDashboard = () => {
-  const { userProfile, logout } = useAuth();
+  const { userProfile, logout, cancelAppointment, updateAppointmentStatus } = useAuth();
   const [activeTab, setActiveTab] = useState<'calendar' | 'services' | 'availability' | 'profile'>('calendar');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,26 +15,32 @@ const ServiceProviderDashboard = () => {
   useEffect(() => {
     if (!userProfile?.uid) return;
 
-    const q = query(collection(db, 'appointments'), where('serviceProviderId', '==', userProfile.uid));
+    const q = query(
+      collection(db, 'appointments'), 
+      where('serviceProviderId', '==', userProfile.uid)
+    );
     
     const unsubscribe = onSnapshot(q, async (snapshot) => {
         setLoading(true);
         const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
 
         const appointmentsWithDetails = await Promise.all(apptsData.map(async (appt) => {
-            const clientProfile = await getDoc(doc(db, "users", appt.clientId));
+            const clientDocRef = doc(db, "users", appt.clientId);
+            const clientSnap = await getDoc(clientDocRef);
+            const clientProfile = clientSnap.data();
             const serviceName = userProfile.services?.find(s => s.id === appt.serviceId)?.name || 'Serviço não encontrado';
             
             return {
                 ...appt,
-                clientName: (clientProfile.data() as UserProfile)?.displayName || 'Cliente não encontrado',
+                clientName: clientProfile?.displayName || 'Cliente não encontrado',
                 serviceName: serviceName,
             };
         }));
         
         appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
 
-        setAppointments(appointmentsWithDetails);
+        // Filtra para não mostrar agendamentos já cancelados pelo cliente
+        setAppointments(appointmentsWithDetails.filter(app => app.status !== 'cancelled'));
         setLoading(false);
     });
 
@@ -74,7 +80,7 @@ const ServiceProviderDashboard = () => {
         <div className="bg-gray-800 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-700">
             {activeTab === 'calendar' && (
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-6">Próximos Agendamentos</h2>
+                    <h2 className="text-2xl font-bold text-white mb-6">Solicitações e Agenda</h2>
                     {loading ? (
                         <p className="text-center text-gray-400">Carregando agendamentos...</p>
                     ) : appointments.length > 0 ? (
@@ -92,14 +98,47 @@ const ServiceProviderDashboard = () => {
                                             <p className="text-sm text-gray-400">com {app.clientName}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center space-x-3 self-end md:self-center">
                                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                            app.status === 'confirmed' ? 'bg-green-500 text-green-900' :
-                                            app.status === 'pending' ? 'bg-yellow-500 text-yellow-900' :
-                                            'bg-red-500 text-red-900'
+                                            app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' :
+                                            'bg-yellow-500/20 text-yellow-300'
                                         }`}>
-                                            {app.status}
+                                            {app.status === 'pending' ? 'Pendente' : 'Confirmado'}
                                         </span>
+                                        
+                                        {app.status === 'pending' && (
+                                            <>
+                                                <button
+                                                    onClick={() => updateAppointmentStatus(app.id, 'confirmed')}
+                                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors"
+                                                >
+                                                    Confirmar
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (window.confirm("Tem certeza que deseja recusar este agendamento? O horário ficará vago novamente.")) {
+                                                            cancelAppointment(app.id);
+                                                        }
+                                                    }}
+                                                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors"
+                                                >
+                                                    Recusar
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {app.status === 'confirmed' && (
+                                            <button
+                                                onClick={() => {
+                                                    if (window.confirm("Tem certeza que deseja cancelar este agendamento confirmado? O horário ficará vago novamente.")) {
+                                                        cancelAppointment(app.id);
+                                                    }
+                                                }}
+                                                className="bg-gray-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        )}
                                     </div>
                                 </li>
                             ))}

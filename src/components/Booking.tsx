@@ -10,6 +10,12 @@ import type { UserProfile, Service, Appointment, Availability } from '../types';
 type ValuePiece = Date | null;
 type Value = ValuePiece | [ValuePiece, ValuePiece];
 
+// Tipo para os horários, agora com mais status
+interface TimeSlot {
+  time: string;
+  status: 'available' | 'booked' | 'break' | 'past';
+}
+
 interface BookingProps {
   professional: UserProfile;
   onBack: () => void;
@@ -19,7 +25,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
   const { userProfile } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Value>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [isBooking, setIsBooking] = useState(false);
@@ -27,12 +33,12 @@ const Booking = ({ professional, onBack }: BookingProps) => {
   useEffect(() => {
     const fetchAvailableTimes = async () => {
       if (!selectedDate || !selectedService || !professional.availability || Array.isArray(selectedDate)) {
-        setAvailableTimes([]);
+        setTimeSlots([]);
         return;
       }
       
       setLoadingTimes(true);
-      setAvailableTimes([]);
+      setTimeSlots([]);
       setSelectedTime('');
 
       try {
@@ -48,12 +54,24 @@ const Booking = ({ professional, onBack }: BookingProps) => {
         const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number);
         const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number);
 
-        const slots: string[] = [];
+        const slots: TimeSlot[] = [];
         let currentTime = new Date(selectedDate);
         currentTime.setHours(startHour, startMinute, 0, 0);
         
         let endTime = new Date(selectedDate);
         endTime.setHours(endHour, endMinute, 0, 0);
+
+        let breakStartTimeObj: Date | null = null;
+        let breakEndTimeObj: Date | null = null;
+        if (dayAvailability.breakStartTime && dayAvailability.breakEndTime) {
+            const [breakStartHour, breakStartMinute] = dayAvailability.breakStartTime.split(':').map(Number);
+            breakStartTimeObj = new Date(selectedDate);
+            breakStartTimeObj.setHours(breakStartHour, breakStartMinute, 0, 0);
+
+            const [breakEndHour, breakEndMinute] = dayAvailability.breakEndTime.split(':').map(Number);
+            breakEndTimeObj = new Date(selectedDate);
+            breakEndTimeObj.setHours(breakEndHour, breakEndMinute, 0, 0);
+        }
 
         const q = query(
             collection(db, 'appointments'),
@@ -63,18 +81,40 @@ const Booking = ({ professional, onBack }: BookingProps) => {
         const querySnapshot = await getDocs(q);
         const bookedTimes = new Set(querySnapshot.docs.map(doc => doc.data().time));
 
+        const now = new Date();
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        
+        const startOfSelectedDay = new Date(selectedDate);
+        startOfSelectedDay.setHours(0, 0, 0, 0);
+
+        const isToday = startOfSelectedDay.getTime() === startOfToday.getTime();
+
         while (currentTime < endTime) {
           const timeString = currentTime.toTimeString().substring(0, 5);
-          if (!bookedTimes.has(timeString)) {
-              slots.push(timeString);
+          
+          const isInBreak = breakStartTimeObj && breakEndTimeObj && currentTime >= breakStartTimeObj && currentTime < breakEndTimeObj;
+          const isBooked = bookedTimes.has(timeString);
+          const isPast = isToday && currentTime < now;
+
+          let status: 'available' | 'booked' | 'break' | 'past' = 'available';
+          if (isPast) {
+            status = 'past';
+          } else if (isBooked) {
+            status = 'booked';
+          } else if (isInBreak) {
+            status = 'break';
           }
+
+          slots.push({ time: timeString, status: status });
+          
           currentTime.setMinutes(currentTime.getMinutes() + serviceDuration);
         }
         
-        setAvailableTimes(slots);
+        setTimeSlots(slots);
       } catch (error) {
         console.error("Erro ao buscar horários:", error);
-        setAvailableTimes([]);
+        setTimeSlots([]);
       } finally {
         setLoadingTimes(false);
       }
@@ -102,6 +142,24 @@ const Booking = ({ professional, onBack }: BookingProps) => {
     alert('Agendamento realizado com sucesso!');
     setIsBooking(false);
     onBack();
+  };
+
+  const getButtonClass = (status: 'available' | 'booked' | 'break' | 'past', time: string) => {
+    if (status === 'available') {
+      return selectedTime === time 
+        ? 'bg-yellow-500 text-black' 
+        : 'bg-green-600/50 hover:bg-green-500/80 text-white';
+    }
+    return 'bg-red-500/40 text-gray-400 cursor-not-allowed';
+  };
+
+  // <-- FUNÇÃO NOVA PARA CALCULAR A DATA MÁXIMA -->
+  const calculateMaxDate = () => {
+    // Se o profissional não definiu, usa 30 dias como padrão
+    const advanceDays = professional.bookingAdvanceDays || 30;
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + advanceDays);
+    return maxDate;
   };
 
   return (
@@ -139,6 +197,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
                       onChange={setSelectedDate}
                       value={selectedDate}
                       minDate={new Date()}
+                      maxDate={calculateMaxDate()} // <-- PROPRIEDADE ADICIONADA AQUI
                       className="react-calendar"
                     />
                 </div>
@@ -149,9 +208,14 @@ const Booking = ({ professional, onBack }: BookingProps) => {
                     <h2 className="text-xl font-bold text-white mb-4">3. Escolha o Horário</h2>
                     {loadingTimes ? <p className="text-gray-400">Carregando horários...</p> : (
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                            {availableTimes.length > 0 ? availableTimes.map(time => (
-                                <button key={time} onClick={() => setSelectedTime(time)} className={`p-3 rounded-lg font-semibold transition-colors ${selectedTime === time ? 'bg-yellow-500 text-black' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                    {time}
+                            {timeSlots.length > 0 ? timeSlots.map(slot => (
+                                <button 
+                                  key={slot.time} 
+                                  onClick={() => slot.status === 'available' && setSelectedTime(slot.time)} 
+                                  disabled={slot.status !== 'available'}
+                                  className={`p-3 rounded-lg font-semibold transition-colors ${getButtonClass(slot.status, slot.time)}`}
+                                >
+                                    {slot.time}
                                 </button>
                             )) : <p className="text-gray-500 col-span-full text-center">Nenhum horário disponível para esta data.</p>}
                         </div>

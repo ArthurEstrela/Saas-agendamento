@@ -1,5 +1,16 @@
 // src/types.ts
 
+// NOVO: Interface para o endereço estruturado
+export interface Address {
+  street: string;
+  number: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -31,15 +42,19 @@ export interface UserProfile {
   createdAt: any;
   userType: 'client' | 'serviceProvider';
   
+  // Campos para ambos
   phoneNumber?: string;
+  photoURL?: string;
+  address?: Address; // <-- ATUALIZADO AQUI
+
+  // Campos para Clientes
   displayName?: string; 
   favoriteProfessionals?: string[];
 
+  // Campos para Prestadores de Serviço
   establishmentName?: string;
-  address?: string;
   instagram?: string;
   whatsapp?: string;
-  photoURL?: string;
   segment?: string;
   services?: Service[];
   availability?: Availability;

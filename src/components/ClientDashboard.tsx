@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
 import Booking from './Booking';
+import ClientProfileManagement from './Client/ClientProfileManagement'; // <-- IMPORTA O NOVO COMPONENTE
 import type { Appointment, UserProfile } from '../types';
 
-// Componente de Ícone para o cabeçalho
 const HeaderIcon = ({ children }: { children: React.ReactNode }) => (
     <div className="bg-gray-700 p-2 rounded-lg mr-4">
         {children}
@@ -12,23 +12,19 @@ const HeaderIcon = ({ children }: { children: React.ReactNode }) => (
 );
 
 const ClientDashboard = () => {
-  // Puxa todas as funções necessárias do contexto
   const { userProfile, logout, toggleFavorite, cancelAppointment } = useAuth();
   const [activeTab, setActiveTab] = useState<'search' | 'myAppointments' | 'favorites'>('search');
-  
-  // Estados para a busca
+  const [isEditingProfile, setIsEditingProfile] = useState(false); // <-- NOVO ESTADO
+
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Estados para os agendamentos
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   
-  // Estado para o fluxo de agendamento
   const [selectedProfessional, setSelectedProfessional] = useState<UserProfile | null>(null);
 
-  // Estados para os favoritos
   const [favoriteProfessionals, setFavoriteProfessionals] = useState<UserProfile[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
 
@@ -47,7 +43,7 @@ const ClientDashboard = () => {
           ...appt,
           professionalName: professionalProfile?.establishmentName || 'Profissional',
           serviceName: serviceName,
-          professionalPhotoURL: professionalProfile?.photoURL, 
+          professionalPhotoURL: professionalProfile?.photoURL,
           cancellationPolicyMinutes: professionalProfile?.cancellationPolicyMinutes,
         };
       }));
@@ -102,9 +98,12 @@ const ClientDashboard = () => {
     return <Booking professional={selectedProfessional} onBack={() => setSelectedProfessional(null)} />;
   }
 
-  // Função para checar se o agendamento pode ser cancelado
+  // <-- NOVA LÓGICA DE RENDERIZAÇÃO AQUI -->
+  if (isEditingProfile) {
+    return <ClientProfileManagement onBack={() => setIsEditingProfile(false)} />;
+  }
+
   const canCancelAppointment = (appDate: string, appTime: string, policyMinutes?: number) => {
-    // Se o profissional não definiu uma regra, usamos 30 minutos como padrão
     const cancellationMinutes = policyMinutes ?? 30;
     const appointmentDateTime = new Date(`${appDate}T${appTime}`);
     const now = new Date();
@@ -112,7 +111,6 @@ const ClientDashboard = () => {
     return (appointmentDateTime.getTime() - now.getTime()) > policyInMillis;
   };
 
-  // Função para renderizar um card de profissional (evita repetição de código)
   const renderProfessionalCard = (prof: UserProfile) => {
     const isFavorite = userProfile?.favoriteProfessionals?.includes(prof.uid);
     return (
@@ -125,7 +123,7 @@ const ClientDashboard = () => {
               />
               <div className="min-w-0">
                 <h3 className="text-xl font-bold text-white truncate">{prof.establishmentName}</h3>
-                <p className="text-gray-400 truncate">{prof.segment} - {prof.address || 'Endereço não informado'}</p>
+                <p className="text-gray-400 truncate">{prof.segment} - {prof.address?.city || 'Endereço não informado'}</p>
               </div>
             </div>
             <div className="flex items-center space-x-4 ml-4">
@@ -146,20 +144,28 @@ const ClientDashboard = () => {
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
       <header className="flex justify-between items-center mb-10">
         <div className="flex items-center">
-            <HeaderIcon>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </HeaderIcon>
+            <img 
+              src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
+              alt="Sua foto de perfil"
+              className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700"
+            />
             <div>
                 <h1 className="text-2xl font-bold text-white">Olá, {userProfile?.displayName}</h1>
                 <p className="text-gray-400">Encontre os melhores profissionais</p>
             </div>
         </div>
-        <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
-            <span>Sair</span>
-        </button>
+        <div className="flex items-center space-x-4">
+            <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                <span>Meu Perfil</span>
+            </button>
+            <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
+                <span>Sair</span>
+            </button>
+        </div>
       </header>
-
+      
       <main>
         <div className="mb-8">
           <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">

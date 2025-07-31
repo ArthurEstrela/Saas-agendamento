@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css'; // Importação padrão
-import '../Calendar.css'; // Importa nossa estilização customizada
-import type { UserProfile, Service, Appointment, Availability } from '../types';
+import 'react-calendar/dist/Calendar.css';
+import '../Calendar.css';
+import type { UserProfile, Service, Appointment, Availability, DayAvailability } from '../types';
 
 // O tipo de valor que o react-calendar usa
 type ValuePiece = Date | null;
@@ -18,39 +18,55 @@ interface TimeSlot {
 
 interface BookingProps {
   professional: UserProfile;
-  onBack: () => void;
+  onBack?: () => void; // A função onBack agora é opcional
 }
 
 const Booking = ({ professional, onBack }: BookingProps) => {
   const { userProfile } = useAuth();
-  const [selectedDate, setSelectedDate] = useState<Value>(null);
+  const [selectedDate, setSelectedDate] = useState<Value>(new Date());
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [isBooking, setIsBooking] = useState(false);
+  const [availabilityMessage, setAvailabilityMessage] = useState(''); // Novo estado para mensagens
 
   useEffect(() => {
     const fetchAvailableTimes = async () => {
-      if (!selectedDate || !selectedService || !professional.availability || Array.isArray(selectedDate)) {
-        setTimeSlots([]);
+      // Reseta estados ao iniciar a busca
+      setTimeSlots([]);
+      setSelectedTime('');
+      setAvailabilityMessage('');
+
+      if (!selectedDate || Array.isArray(selectedDate) || !selectedService) {
+        if (selectedService) {
+          setAvailabilityMessage('Por favor, selecione uma data.');
+        }
         return;
       }
       
       setLoadingTimes(true);
-      setTimeSlots([]);
-      setSelectedTime('');
 
       try {
+        if (!professional.availability) {
+          setAvailabilityMessage('Este profissional ainda não configurou seus horários de atendimento.');
+          return;
+        }
+
         const dayKey = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof Availability;
         const dayAvailability = professional.availability[dayKey];
 
         if (!dayAvailability || !dayAvailability.active) {
-            setLoadingTimes(false);
+            setAvailabilityMessage('O profissional não atende neste dia da semana.');
             return;
         }
         
         const serviceDuration = selectedService.duration;
+        if (!serviceDuration || serviceDuration <= 0) {
+            setAvailabilityMessage('A duração do serviço selecionado é inválida.');
+            return;
+        }
+
         const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number);
         const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number);
 
@@ -82,18 +98,16 @@ const Booking = ({ professional, onBack }: BookingProps) => {
         const bookedTimes = new Set(querySnapshot.docs.map(doc => doc.data().time));
 
         const now = new Date();
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        
-        const startOfSelectedDay = new Date(selectedDate);
-        startOfSelectedDay.setHours(0, 0, 0, 0);
-
-        const isToday = startOfSelectedDay.getTime() === startOfToday.getTime();
+        const isToday = selectedDate.toDateString() === now.toDateString();
 
         while (currentTime < endTime) {
           const timeString = currentTime.toTimeString().substring(0, 5);
           
-          const isInBreak = breakStartTimeObj && breakEndTimeObj && currentTime >= breakStartTimeObj && currentTime < breakEndTimeObj;
+          const slotEndTime = new Date(currentTime.getTime() + serviceDuration * 60000);
+          
+          const isInBreak = breakStartTimeObj && breakEndTimeObj && 
+                            (currentTime < breakEndTimeObj && slotEndTime > breakStartTimeObj);
+
           const isBooked = bookedTimes.has(timeString);
           const isPast = isToday && currentTime < now;
 
@@ -108,13 +122,17 @@ const Booking = ({ professional, onBack }: BookingProps) => {
 
           slots.push({ time: timeString, status: status });
           
-          currentTime.setMinutes(currentTime.getMinutes() + serviceDuration);
+          currentTime.setMinutes(currentTime.getMinutes() + 15); // Gera horários a cada 15 minutos
         }
         
+        if (slots.length === 0) {
+            setAvailabilityMessage('Não foram encontrados horários disponíveis para este dia.');
+        }
+
         setTimeSlots(slots);
       } catch (error) {
         console.error("Erro ao buscar horários:", error);
-        setTimeSlots([]);
+        setAvailabilityMessage('Ocorreu um erro ao carregar os horários.');
       } finally {
         setLoadingTimes(false);
       }
@@ -124,7 +142,11 @@ const Booking = ({ professional, onBack }: BookingProps) => {
   }, [selectedDate, selectedService, professional]);
 
   const handleBookAppointment = async () => {
-    if (!userProfile || !selectedDate || Array.isArray(selectedDate) || !selectedService || !selectedTime) {
+    if (!userProfile) {
+        alert("Você precisa estar logado para fazer um agendamento. Por favor, faça login ou crie uma conta.");
+        return;
+    }
+    if (!selectedDate || Array.isArray(selectedDate) || !selectedService || !selectedTime) {
       alert("Por favor, selecione data, serviço e horário.");
       return;
     }
@@ -141,7 +163,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
     await addDoc(collection(db, 'appointments'), newAppointment);
     alert('Agendamento realizado com sucesso!');
     setIsBooking(false);
-    onBack();
+    if (onBack) onBack();
   };
 
   const getButtonClass = (status: 'available' | 'booked' | 'break' | 'past', time: string) => {
@@ -153,9 +175,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
     return 'bg-red-500/40 text-gray-400 cursor-not-allowed';
   };
 
-  // <-- FUNÇÃO NOVA PARA CALCULAR A DATA MÁXIMA -->
   const calculateMaxDate = () => {
-    // Se o profissional não definiu, usa 30 dias como padrão
     const advanceDays = professional.bookingAdvanceDays || 30;
     const maxDate = new Date();
     maxDate.setDate(maxDate.getDate() + advanceDays);
@@ -164,15 +184,22 @@ const Booking = ({ professional, onBack }: BookingProps) => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
-      <header className="flex items-center mb-10">
-        <button onClick={onBack} className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 font-semibold transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-            <span>Voltar</span>
-        </button>
-      </header>
+      {onBack && (
+        <header className="flex items-center mb-10">
+          <button onClick={onBack} className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 font-semibold transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              <span>Voltar</span>
+          </button>
+        </header>
+      )}
       
       <main className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
+        <div className={`text-center mb-8 ${!onBack ? 'pt-8' : ''}`}>
+            <img 
+              src={professional.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
+              alt={`Foto de ${professional.establishmentName}`}
+              className="h-24 w-24 rounded-full object-cover mx-auto mb-4 border-4 border-gray-700"
+            />
             <h1 className="text-3xl font-bold text-white">Agendar com</h1>
             <p className="text-2xl text-yellow-400">{professional.establishmentName}</p>
         </div>
@@ -197,7 +224,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
                       onChange={setSelectedDate}
                       value={selectedDate}
                       minDate={new Date()}
-                      maxDate={calculateMaxDate()} // <-- PROPRIEDADE ADICIONADA AQUI
+                      maxDate={calculateMaxDate()}
                       className="react-calendar"
                     />
                 </div>
@@ -217,7 +244,7 @@ const Booking = ({ professional, onBack }: BookingProps) => {
                                 >
                                     {slot.time}
                                 </button>
-                            )) : <p className="text-gray-500 col-span-full text-center">Nenhum horário disponível para esta data.</p>}
+                            )) : <p className="text-gray-500 col-span-full text-center">{availabilityMessage}</p>}
                         </div>
                     )}
                 </div>

@@ -7,24 +7,22 @@ const storage = getStorage();
 const ProfileManagement = () => {
   const { userProfile, updateUserProfile, loading } = useAuth();
   
-  // Estado principal com os dados a serem salvos
   const [profileData, setProfileData] = useState({
     establishmentName: '',
     address: '',
     instagram: '',
     whatsapp: '',
-    cancellationPolicyMinutes: 120, // Padrão de 2 horas (120 min)
-    bookingAdvanceDays: 30, // Valor padrão de 30 dias
+    cancellationPolicyMinutes: 120,
+    bookingAdvanceDays: 30,
   });
 
-  // Estado auxiliar para os inputs de horas e minutos da UI
   const [policyTime, setPolicyTime] = useState({ hours: 2, minutes: 0 });
-
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [bookingLink, setBookingLink] = useState('');
+  const [copySuccess, setCopySuccess] = useState('');
 
-  // Efeito para popular os campos quando o perfil carrega
   useEffect(() => {
     if (userProfile) {
       const totalMinutes = userProfile.cancellationPolicyMinutes || 120;
@@ -37,29 +35,28 @@ const ProfileManagement = () => {
         bookingAdvanceDays: userProfile.bookingAdvanceDays || 30,
       });
 
-      // Calcula horas e minutos para mostrar na UI
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       setPolicyTime({ hours, minutes });
 
       setPreviewImage(userProfile.photoURL || null);
+
+      // Gera o link de agendamento
+      const link = `${window.location.origin}/agendar/${userProfile.uid}`;
+      setBookingLink(link);
     }
   }, [userProfile]);
 
-  // Atualiza o estado principal quando os outros campos mudam
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    // Converte para número se for a política de agendamento
     const finalValue = name === 'bookingAdvanceDays' ? Number(value) : value;
     setProfileData(prev => ({ ...prev, [name]: finalValue }));
   };
 
-  // Atualiza o estado da política de cancelamento quando horas/minutos mudam
   const handlePolicyTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const newTime = { ...policyTime, [name]: Number(value) || 0 };
     setPolicyTime(newTime);
-    // Converte horas e minutos para o total de minutos e atualiza o estado principal
     setProfileData(prev => ({
       ...prev,
       cancellationPolicyMinutes: (newTime.hours * 60) + newTime.minutes,
@@ -77,7 +74,6 @@ const ProfileManagement = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
-
     setIsUploading(true);
     
     const dataToUpdate: { [key: string]: any } = { ...profileData };
@@ -101,10 +97,34 @@ const ProfileManagement = () => {
     alert("Perfil atualizado com sucesso!");
   };
 
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(bookingLink).then(() => {
+      setCopySuccess('Link copiado!');
+      setTimeout(() => setCopySuccess(''), 2000);
+    }, (err) => {
+      setCopySuccess('Falha ao copiar.');
+      console.error('Erro ao copiar link: ', err);
+    });
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-white mb-6">Editar Perfil e Regras</h2>
+      
+      {/* Seção do Link de Agendamento */}
+      <div className="bg-gray-700 p-4 rounded-lg mb-8">
+        <label className="block text-sm font-medium text-gray-300 mb-2">Seu Link de Agendamento Público</label>
+        <div className="flex items-center gap-2">
+          <input type="text" readOnly value={bookingLink} className="w-full bg-gray-600 text-gray-300 border-gray-500 rounded-md p-2 select-all" />
+          <button type="button" onClick={copyToClipboard} className="bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors">
+            Copiar
+          </button>
+        </div>
+        {copySuccess && <p className="text-sm text-green-400 mt-2">{copySuccess}</p>}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* ... resto do formulário ... */}
         <div className="flex items-center space-x-6">
           <div className="shrink-0">
             <img 
@@ -173,7 +193,6 @@ const ProfileManagement = () => {
             </div>
         </div>
         
-        {/* CAMPO NOVO PARA A REGRA DE AGENDAMENTO */}
         <div className="border-t border-gray-600 pt-6">
             <label htmlFor="bookingAdvanceDays" className="block text-sm font-medium text-gray-300 mb-1">
                 Antecedência máxima para agendamento (em dias)

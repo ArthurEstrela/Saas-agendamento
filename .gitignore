@@ -25,3 +25,10 @@ dist-ssr
 
 .env
 
+# Firebase
+.firebase
+firebase-debug.log
+
+# Firebase Functions
+functions/node_modules
+functions/lib

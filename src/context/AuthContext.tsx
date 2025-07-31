@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -21,8 +21,10 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import type { UserProfile } from "../types";
 
+// Configuração do Firebase a partir das variáveis de ambiente
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -33,11 +35,45 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+// Inicialização dos serviços do Firebase
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const messaging = getMessaging(app);
 
+/**
+ * Solicita permissão para notificações e obtém o token FCM do dispositivo.
+ * @returns O token FCM ou null se a permissão for negada.
+ */
+export const requestForToken = async () => {
+  try {
+    const currentToken = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
+    if (currentToken) {
+      console.log('FCM Token obtido:', currentToken);
+      return currentToken;
+    } else {
+      console.log('Nenhum token de registro disponível. Solicite permissão para gerar um.');
+      return null;
+    }
+  } catch (err) {
+    console.error('Ocorreu um erro ao recuperar o token.', err);
+    return null;
+  }
+};
+
+/**
+ * Cria um listener para mensagens recebidas enquanto o app está em primeiro plano.
+ * @returns Uma Promise que resolve com o payload da mensagem.
+ */
+export const onMessageListener = () =>
+  new Promise((resolve) => {
+    onMessage(messaging, (payload) => {
+      resolve(payload);
+    });
+  });
+
+// Tipagem para o contexto de autenticação
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
@@ -55,6 +91,7 @@ interface AuthContextType {
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
   updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled') => Promise<void>;
+  requestFCMToken: () => Promise<void>; // Nova função para solicitar o token
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,6 +134,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
         console.error("Erro no login:", error);
+        alert("Email ou senha inválidos.");
     } finally {
         setLoading(false);
     }
@@ -127,6 +165,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUserProfile(newProfile);
     } catch (error) {
         console.error("Erro no registro:", error);
+        alert("Ocorreu um erro ao tentar se registrar.");
     } finally {
         setLoading(false);
     }
@@ -154,6 +193,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     } catch (error) {
         console.error("Erro no login com Google:", error);
+        alert("Não foi possível fazer login com o Google.");
     } finally {
         setLoading(false);
     }
@@ -167,9 +207,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!currentUser) return;
     setLoading(true);
     const userDocRef = doc(db, `users/${currentUser.uid}`);
-    await setDoc(userDocRef, data, { merge: true });
-    setUserProfile((prev) => ({ ...prev!, ...data }));
-    setLoading(false);
+    try {
+        await updateDoc(userDocRef, data);
+        const updatedProfile = await fetchUserProfile(currentUser.uid);
+        setUserProfile(updatedProfile);
+    } catch (error) {
+        console.error("Erro ao atualizar o perfil:", error);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const toggleFavorite = async (professionalId: string) => {
@@ -199,7 +245,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Função para o profissional confirmar um agendamento
   const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled') => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
     try {
@@ -208,6 +253,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (error) {
       console.error("Erro ao atualizar status do agendamento:", error);
       alert("Não foi possível atualizar o agendamento.");
+    }
+  };
+
+  /**
+   * Solicita o token FCM e o salva no perfil do usuário no Firestore.
+   * Garante que o mesmo token não seja adicionado múltiplas vezes.
+   */
+  const requestFCMToken = async () => {
+    if (!currentUser) return;
+    try {
+      const fcmToken = await requestForToken();
+      if (fcmToken) {
+        const userDocRef = doc(db, `users/${currentUser.uid}`);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const currentTokens = userDoc.data().fcmTokens || [];
+          if (!currentTokens.includes(fcmToken)) {
+            await updateDoc(userDocRef, {
+              fcmTokens: arrayUnion(fcmToken)
+            });
+            console.log("Token FCM salvo no perfil do usuário.");
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao salvar o token FCM:", error);
     }
   };
 
@@ -225,6 +296,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         toggleFavorite,
         cancelAppointment,
         updateAppointmentStatus,
+        requestFCMToken, // Fornece a função para o resto do app
       }}
     >
       {children}
@@ -232,6 +304,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+// Hook customizado para usar o contexto de autenticação
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

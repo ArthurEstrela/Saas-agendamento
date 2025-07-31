@@ -44,7 +44,7 @@ const Login = () => {
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 font-sans">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-yellow-500">AgendaPro</h1>
+          <h1 className="text-4xl font-bold text-yellow-500">Stylo</h1>
           <p className="text-gray-400 mt-2">Sua agenda de beleza na palma da mão</p>
         </div>
 

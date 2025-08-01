@@ -96,6 +96,7 @@ export interface Expense {
   description: string;
   category: 'Aluguel' | 'Água' | 'Luz' | 'Salários' | 'Produtos' | 'Marketing' | 'Outros';
   amount: number;
+  isFixed: boolean;
   date: string; // 'YYYY-MM-DD'
   createdAt: any;
 }

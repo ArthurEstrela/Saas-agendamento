@@ -42,7 +42,7 @@ export interface Professional {
   name: string;
   photoURL?: string;
   services: Service[];
-  availability?: Availability; // <-- DISPONIBILIDADE ESTÁ AQUI
+  availability?: Availability;
 }
 
 export interface UserProfile {
@@ -51,22 +51,18 @@ export interface UserProfile {
   createdAt: any;
   userType: 'client' | 'serviceProvider';
   
-  // Campos para ambos
   phoneNumber?: string;
   photoURL?: string;
   address?: Address;
 
-  // Campos para Clientes
   displayName?: string; 
   favoriteProfessionals?: string[];
 
-  // Campos para Prestadores de Serviço
   establishmentName?: string;
   instagram?: string;
   whatsapp?: string;
   segment?: string;
   professionals?: Professional[]; 
-  // availability?: Availability; // <-- REMOVIDO DAQUI
   cnpj?: string;
   cancellationPolicyMinutes?: number;
   bookingAdvanceDays?: number;
@@ -77,13 +73,14 @@ export interface Appointment {
   serviceProviderId: string;
   professionalId: string; 
   clientId: string;
-  serviceId: string;
+  serviceIds: string[]; // <-- ATUALIZADO AQUI
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
   status: 'pending' | 'confirmed' | 'cancelled';
   createdAt: any;
   
-  serviceName?: string;
+  // Estes campos serão montados dinamicamente na UI
+  serviceName?: string; // Pode representar múltiplos serviços concatenados
   professionalName?: string;
   clientName?: string;
   clientEmail?: string;

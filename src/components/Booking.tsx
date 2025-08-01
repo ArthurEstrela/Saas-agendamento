@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import Calendar from 'react-calendar';
@@ -37,7 +37,7 @@ const Modal = ({ message, onClose }: { message: string; onClose: () => void }) =
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const { userProfile } = useAuth();
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]); // <-- MUDANÇA: AGORA É UM ARRAY
   const [selectedDate, setSelectedDate] = useState<Value>(new Date());
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
@@ -46,22 +46,46 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const [availabilityMessage, setAvailabilityMessage] = useState('');
   const [modalInfo, setModalInfo] = useState<{ message: string; onConfirm?: () => void } | null>(null);
 
+  // Calcula a duração total e o preço total dos serviços selecionados
+  const { totalDuration, totalPrice } = useMemo(() => {
+    return selectedServices.reduce(
+      (acc, service) => {
+        acc.totalDuration += service.duration;
+        acc.totalPrice += service.price;
+        return acc;
+      },
+      { totalDuration: 0, totalPrice: 0 }
+    );
+  }, [selectedServices]);
 
   useEffect(() => {
-    setSelectedService(null);
+    setSelectedServices([]);
     setSelectedDate(new Date());
     setTimeSlots([]);
     setSelectedTime('');
   }, [selectedProfessional]);
   
+  // NOVA FUNÇÃO: Lida com a seleção de múltiplos serviços
+  const handleToggleService = (service: Service) => {
+    setSelectedServices(prev => {
+      const isSelected = prev.some(s => s.id === service.id);
+      if (isSelected) {
+        return prev.filter(s => s.id !== service.id);
+      } else {
+        return [...prev, service];
+      }
+    });
+    setSelectedTime(''); // Reseta a hora ao mudar os serviços
+  };
+
   useEffect(() => {
     const fetchAvailableTimes = async () => {
       setTimeSlots([]);
       setSelectedTime('');
       setAvailabilityMessage('');
 
-      if (!selectedDate || Array.isArray(selectedDate) || !selectedService || !selectedProfessional) {
-        if (selectedProfessional) setAvailabilityMessage('Por favor, selecione um serviço.');
+      if (!selectedDate || Array.isArray(selectedDate) || selectedServices.length === 0 || !selectedProfessional) {
+        if (selectedProfessional) setAvailabilityMessage('Por favor, selecione pelo menos um serviço.');
         return;
       }
       
@@ -69,7 +93,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
       try {
         if (!selectedProfessional.availability) {
-          setAvailabilityMessage('Este profissional ainda não configurou seus horários de atendimento.');
+          setAvailabilityMessage('Este profissional ainda não configurou seus horários.');
           return;
         }
 
@@ -81,12 +105,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
             return;
         }
         
-        const serviceDuration = selectedService.duration;
-        if (!serviceDuration || serviceDuration <= 0) {
-            setAvailabilityMessage('A duração do serviço selecionado é inválida.');
-            return;
-        }
-
         const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number);
         const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number);
 
@@ -121,14 +139,17 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         querySnapshot.docs.forEach(doc => {
             const appointment = doc.data() as Appointment;
             const professionalForBooking = establishment.professionals?.find(p => p.id === appointment.professionalId);
-            const serviceForBooking = professionalForBooking?.services.find(s => s.id === appointment.serviceId);
             
-            if (serviceForBooking) {
+            const durationOfBooking = appointment.serviceIds.reduce((acc, serviceId) => {
+                const service = professionalForBooking?.services.find(s => s.id === serviceId);
+                return acc + (service?.duration || 0);
+            }, 0);
+
+            if (durationOfBooking > 0) {
                 const [hour, minute] = appointment.time.split(':').map(Number);
                 const startDate = new Date(selectedDate as Date);
                 startDate.setHours(hour, minute, 0, 0);
-                
-                const endDate = new Date(startDate.getTime() + serviceForBooking.duration * 60000);
+                const endDate = new Date(startDate.getTime() + durationOfBooking * 60000);
                 bookedIntervals.push({ start: startDate, end: endDate });
             }
         });
@@ -138,7 +159,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
         while (currentTime < endTime) {
           const timeString = currentTime.toTimeString().substring(0, 5);
-          const slotEndTime = new Date(currentTime.getTime() + serviceDuration * 60000);
+          const slotEndTime = new Date(currentTime.getTime() + totalDuration * 60000);
           
           const isInBreak = breakStartTimeObj && breakEndTimeObj && (currentTime < breakEndTimeObj && slotEndTime > breakStartTimeObj);
           
@@ -161,7 +182,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         }
         
         if (slots.filter(s => s.status === 'available').length === 0) {
-            setAvailabilityMessage('Não foram encontrados horários disponíveis para este dia.');
+            setAvailabilityMessage('Não foram encontrados horários disponíveis para este dia e duração.');
         }
 
         setTimeSlots(slots);
@@ -174,15 +195,15 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     };
 
     fetchAvailableTimes();
-  }, [selectedDate, selectedService, selectedProfessional, establishment]);
+  }, [selectedDate, selectedServices, selectedProfessional, establishment, totalDuration]);
 
   const handleBookAppointment = async () => {
     if (!userProfile) {
-        setModalInfo({ message: "Você precisa estar logado para agendar. Crie uma conta ou faça login." });
+        setModalInfo({ message: "Você precisa estar logado para agendar." });
         return;
     }
-    if (!selectedDate || Array.isArray(selectedDate) || !selectedService || !selectedTime || !selectedProfessional) {
-      setModalInfo({ message: "Por favor, selecione profissional, serviço, data e horário." });
+    if (selectedServices.length === 0 || !selectedDate || Array.isArray(selectedDate) || !selectedTime || !selectedProfessional) {
+      setModalInfo({ message: "Por favor, selecione profissional, serviço(s), data e horário." });
       return;
     }
     setIsBooking(true);
@@ -190,7 +211,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       clientId: userProfile.uid,
       serviceProviderId: establishment.uid,
       professionalId: selectedProfessional.id,
-      serviceId: selectedService.id,
+      serviceIds: selectedServices.map(s => s.id), // <-- SALVA O ARRAY DE IDs
       date: selectedDate.toISOString().split('T')[0],
       time: selectedTime,
       status: 'pending',
@@ -225,9 +246,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
           onClose={() => {
             const onConfirmAction = modalInfo.onConfirm;
             setModalInfo(null);
-            if (onConfirmAction) {
-              onConfirmAction();
-            }
+            if (onConfirmAction) onConfirmAction();
           }}
         />
       )}
@@ -266,34 +285,39 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
             {selectedProfessional && (
               <div>
-                  <h2 className="text-xl font-bold text-white mb-4">2. Escolha o Serviço</h2>
+                  <h2 className="text-xl font-bold text-white mb-4">2. Escolha o(s) Serviço(s)</h2>
                   <div className="space-y-3">
                       {selectedProfessional.services && selectedProfessional.services.length > 0 ? selectedProfessional.services.map(service => (
-                          <button key={service.id} onClick={() => setSelectedService(service)} className={`w-full text-left p-4 rounded-lg transition-all border-2 ${selectedService?.id === service.id ? 'bg-yellow-500/10 border-yellow-500' : 'bg-gray-700 border-transparent hover:border-yellow-600'}`}>
-                              <p className="font-semibold text-white">{service.name}</p>
-                              <p className="text-sm text-gray-400">{service.duration} min - R$ {service.price.toFixed(2)}</p>
+                          <button key={service.id} onClick={() => handleToggleService(service)} className={`w-full text-left p-4 rounded-lg transition-all border-2 flex justify-between items-center ${selectedServices.some(s => s.id === service.id) ? 'bg-yellow-500/10 border-yellow-500' : 'bg-gray-700 border-transparent hover:border-yellow-600'}`}>
+                              <div>
+                                <p className="font-semibold text-white">{service.name}</p>
+                                <p className="text-sm text-gray-400">{service.duration} min - R$ {service.price.toFixed(2)}</p>
+                              </div>
+                              {selectedServices.some(s => s.id === service.id) && <span className="text-yellow-400">✓</span>}
                           </button>
                       )) : <p className="text-gray-500">Este profissional não possui serviços cadastrados.</p>}
                   </div>
               </div>
             )}
 
-            {selectedService && (
+            {selectedServices.length > 0 && (
+              <div className="border-t border-gray-700 pt-6">
+                <h3 className="text-lg font-semibold text-white">Resumo</h3>
+                <p className="text-gray-300">Duração total: <span className="font-bold text-yellow-400">{totalDuration} minutos</span></p>
+                <p className="text-gray-300">Preço total: <span className="font-bold text-yellow-400">R$ {totalPrice.toFixed(2)}</span></p>
+              </div>
+            )}
+
+            {selectedServices.length > 0 && (
                 <div>
                     <h2 className="text-xl font-bold text-white mb-4">3. Escolha a Data</h2>
-                    <Calendar
-                      onChange={setSelectedDate}
-                      value={selectedDate}
-                      minDate={new Date()}
-                      maxDate={calculateMaxDate()}
-                      className="react-calendar"
-                    />
+                    <Calendar onChange={setSelectedDate} value={selectedDate} minDate={new Date()} maxDate={calculateMaxDate()} className="react-calendar" />
                 </div>
             )}
             
-            {selectedDate && !Array.isArray(selectedDate) && selectedService && (
+            {selectedDate && !Array.isArray(selectedDate) && selectedServices.length > 0 && (
                 <div>
-                    <h2 className="text-xl font-bold text-white mb-4">4. Escolha o Horário</h2>
+                    <h2 className="text-xl font-bold text-white mb-4">4. Escolha o Horário de Início</h2>
                     {loadingTimes ? <p className="text-gray-400">Carregando horários...</p> : (
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                             {timeSlots.length > 0 ? timeSlots.map(slot => (

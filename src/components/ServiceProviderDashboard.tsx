@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement'; // <-- Importa o novo componente
+import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement';
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
 import ProfileManagement from './ServiceProvider/ProfileManagement';
 import type { Appointment } from '../types';
 
 const ServiceProviderDashboard = () => {
   const { userProfile, logout, cancelAppointment, updateAppointmentStatus } = useAuth();
-  // Atualiza os tipos de abas
   const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'profile'>('calendar');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,15 +29,18 @@ const ServiceProviderDashboard = () => {
             const clientSnap = await getDoc(clientDocRef);
             const clientProfile = clientSnap.data();
 
-            // Encontra o nome do profissional e do serviço
             const professional = userProfile.professionals?.find(p => p.id === appt.professionalId);
-            const service = professional?.services.find(s => s.id === appt.serviceId);
+            
+            // Mapeia os IDs dos serviços para seus nomes
+            const serviceNames = appt.serviceIds?.map(serviceId => {
+                return professional?.services.find(s => s.id === serviceId)?.name || 'Serviço Removido';
+            }).join(', ') || 'N/A';
             
             return {
                 ...appt,
                 clientName: clientProfile?.displayName || 'Cliente não encontrado',
                 professionalName: professional?.name || 'Profissional não encontrado',
-                serviceName: service?.name || 'Serviço não encontrado',
+                serviceName: serviceNames, // <-- Usa a string com todos os nomes
             };
         }));
         
@@ -97,9 +99,10 @@ const ServiceProviderDashboard = () => {
                                             <p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p>
                                         </div>
                                         <div>
-                                            <p className="font-bold text-lg text-white">{app.time} - {app.serviceName}</p>
-                                            <p className="text-gray-300">Profissional: {app.professionalName}</p>
-                                            <p className="text-sm text-gray-400">Cliente: {app.clientName}</p>
+                                            <p className="font-bold text-lg text-white">{app.time}</p>
+                                            <p className="text-gray-300">{app.serviceName}</p>
+                                            <p className="text-sm text-gray-400">com {app.professionalName}</p>
+                                            <p className="text-sm text-gray-500">Cliente: {app.clientName}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-3 self-end md:self-center">
@@ -112,36 +115,13 @@ const ServiceProviderDashboard = () => {
                                         
                                         {app.status === 'pending' && (
                                             <>
-                                                <button
-                                                    onClick={() => updateAppointmentStatus(app.id, 'confirmed')}
-                                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors"
-                                                >
-                                                    Confirmar
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        if (window.confirm("Tem certeza que deseja recusar este agendamento? O horário ficará vago novamente.")) {
-                                                            cancelAppointment(app.id);
-                                                        }
-                                                    }}
-                                                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors"
-                                                >
-                                                    Recusar
-                                                </button>
+                                                <button onClick={() => updateAppointmentStatus(app.id, 'confirmed')} className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors">Confirmar</button>
+                                                <button onClick={() => cancelAppointment(app.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors">Recusar</button>
                                             </>
                                         )}
 
                                         {app.status === 'confirmed' && (
-                                            <button
-                                                onClick={() => {
-                                                    if (window.confirm("Tem certeza que deseja cancelar este agendamento confirmado? O horário ficará vago novamente.")) {
-                                                        cancelAppointment(app.id);
-                                                    }
-                                                }}
-                                                className="bg-gray-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors"
-                                            >
-                                                Cancelar
-                                            </button>
+                                            <button onClick={() => cancelAppointment(app.id)} className="bg-gray-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors">Cancelar</button>
                                         )}
                                     </div>
                                 </li>

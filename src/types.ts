@@ -1,6 +1,6 @@
 // src/types.ts
 
-// NOVO: Interface para o endereço estruturado
+// Interface para o endereço estruturado
 export interface Address {
   street: string;
   number: string;
@@ -36,6 +36,15 @@ export interface Availability {
   sunday: DayAvailability;
 }
 
+// Interface para o Profissional
+export interface Professional {
+  id: string;
+  name: string;
+  photoURL?: string;
+  services: Service[];
+  availability?: Availability; // <-- DISPONIBILIDADE ESTÁ AQUI
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -45,7 +54,7 @@ export interface UserProfile {
   // Campos para ambos
   phoneNumber?: string;
   photoURL?: string;
-  address?: Address; // <-- ATUALIZADO AQUI
+  address?: Address;
 
   // Campos para Clientes
   displayName?: string; 
@@ -56,8 +65,8 @@ export interface UserProfile {
   instagram?: string;
   whatsapp?: string;
   segment?: string;
-  services?: Service[];
-  availability?: Availability;
+  professionals?: Professional[]; 
+  // availability?: Availability; // <-- REMOVIDO DAQUI
   cnpj?: string;
   cancellationPolicyMinutes?: number;
   bookingAdvanceDays?: number;
@@ -66,6 +75,7 @@ export interface UserProfile {
 export interface Appointment {
   id: string;
   serviceProviderId: string;
+  professionalId: string; 
   clientId: string;
   serviceId: string;
   date: string; // 'YYYY-MM-DD'

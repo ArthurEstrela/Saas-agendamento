@@ -21,7 +21,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { getMessaging, getToken } from "firebase/messaging";
 import type { UserProfile } from "../types";
 
 // Configuração do Firebase a partir das variáveis de ambiente
@@ -62,17 +62,6 @@ export const requestForToken = async () => {
   }
 };
 
-/**
- * Cria um listener para mensagens recebidas enquanto o app está em primeiro plano.
- * @returns Uma Promise que resolve com o payload da mensagem.
- */
-export const onMessageListener = () =>
-  new Promise((resolve) => {
-    onMessage(messaging, (payload) => {
-      resolve(payload);
-    });
-  });
-
 // Tipagem para o contexto de autenticação
 interface AuthContextType {
   currentUser: User | null;
@@ -91,7 +80,7 @@ interface AuthContextType {
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
   updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled') => Promise<void>;
-  requestFCMToken: () => Promise<void>; // Nova função para solicitar o token
+  requestFCMToken: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -256,10 +245,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  /**
-   * Solicita o token FCM e o salva no perfil do usuário no Firestore.
-   * Garante que o mesmo token não seja adicionado múltiplas vezes.
-   */
   const requestFCMToken = async () => {
     if (!currentUser) return;
     try {
@@ -296,7 +281,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         toggleFavorite,
         cancelAppointment,
         updateAppointmentStatus,
-        requestFCMToken, // Fornece a função para o resto do app
+        requestFCMToken,
       }}
     >
       {children}
@@ -304,7 +289,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Hook customizado para usar o contexto de autenticação
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

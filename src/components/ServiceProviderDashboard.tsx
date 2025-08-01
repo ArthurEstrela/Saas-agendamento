@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import ServicesManagement from './ServiceProvider/ServicesManagement';
+import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement'; // <-- Importa o novo componente
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
 import ProfileManagement from './ServiceProvider/ProfileManagement';
 import type { Appointment } from '../types';
 
 const ServiceProviderDashboard = () => {
   const { userProfile, logout, cancelAppointment, updateAppointmentStatus } = useAuth();
-  const [activeTab, setActiveTab] = useState<'calendar' | 'services' | 'availability' | 'profile'>('calendar');
+  // Atualiza os tipos de abas
+  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'profile'>('calendar');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,18 +29,21 @@ const ServiceProviderDashboard = () => {
             const clientDocRef = doc(db, "users", appt.clientId);
             const clientSnap = await getDoc(clientDocRef);
             const clientProfile = clientSnap.data();
-            const serviceName = userProfile.services?.find(s => s.id === appt.serviceId)?.name || 'Serviço não encontrado';
+
+            // Encontra o nome do profissional e do serviço
+            const professional = userProfile.professionals?.find(p => p.id === appt.professionalId);
+            const service = professional?.services.find(s => s.id === appt.serviceId);
             
             return {
                 ...appt,
                 clientName: clientProfile?.displayName || 'Cliente não encontrado',
-                serviceName: serviceName,
+                professionalName: professional?.name || 'Profissional não encontrado',
+                serviceName: service?.name || 'Serviço não encontrado',
             };
         }));
         
         appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
-
-        // Filtra para não mostrar agendamentos já cancelados pelo cliente
+        
         setAppointments(appointmentsWithDetails.filter(app => app.status !== 'cancelled'));
         setLoading(false);
     });
@@ -71,7 +75,7 @@ const ServiceProviderDashboard = () => {
         <div className="mb-8">
           <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">
             <button onClick={() => setActiveTab('calendar')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'calendar' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Agenda</button>
-            <button onClick={() => setActiveTab('services')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'services' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meus Serviços</button>
+            <button onClick={() => setActiveTab('professionals')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'professionals' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Profissionais</button>
             <button onClick={() => setActiveTab('availability')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'availability' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Disponibilidade</button>
             <button onClick={() => setActiveTab('profile')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'profile' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meu Perfil</button>
           </div>
@@ -93,9 +97,9 @@ const ServiceProviderDashboard = () => {
                                             <p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p>
                                         </div>
                                         <div>
-                                            <p className="font-bold text-lg text-white">{app.time}</p>
-                                            <p className="text-gray-300">{app.serviceName}</p>
-                                            <p className="text-sm text-gray-400">com {app.clientName}</p>
+                                            <p className="font-bold text-lg text-white">{app.time} - {app.serviceName}</p>
+                                            <p className="text-gray-300">Profissional: {app.professionalName}</p>
+                                            <p className="text-sm text-gray-400">Cliente: {app.clientName}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-3 self-end md:self-center">
@@ -148,7 +152,7 @@ const ServiceProviderDashboard = () => {
                     )}
                 </div>
             )}
-            {activeTab === 'services' && <ServicesManagement />}
+            {activeTab === 'professionals' && <ProfessionalsManagement />}
             {activeTab === 'availability' && <AvailabilityManagement />}
             {activeTab === 'profile' && <ProfileManagement />}
         </div>

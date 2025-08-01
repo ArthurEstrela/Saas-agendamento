@@ -1,19 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, db } from '../context/AuthContext';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, getDocs, documentId } from 'firebase/firestore';
 import Booking from './Booking';
 import ClientProfileManagement from './Client/ClientProfileManagement';
 import type { Appointment, UserProfile } from '../types';
 
+// Componente de Modal de Confirmação para o cancelamento
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 animate-fade-in-down">
+        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 text-center w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
+            <p className="text-gray-300 mb-8">{message}</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
+                    Voltar
+                </button>
+                <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
+                    Confirmar Cancelamento
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 const ClientDashboard = () => {
-  const { userProfile, logout, toggleFavorite } = useAuth();
+  const { userProfile, logout, toggleFavorite, cancelAppointment } = useAuth();
   const [activeTab, setActiveTab] = useState<'search' | 'myAppointments' | 'favorites'>('search');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // Estados para busca e filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [allProviders, setAllProviders] = useState<UserProfile[]>([]);
-  const [filteredResults, setFilteredResults] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({
     segment: '',
@@ -29,7 +46,9 @@ const ClientDashboard = () => {
   const [favoriteProfessionals, setFavoriteProfessionals] = useState<UserProfile[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
 
-  // Efeito para buscar todos os prestadores de serviço uma única vez
+  const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
+
+  // Efeito para buscar todos os prestadores de serviço
   useEffect(() => {
     const fetchProviders = async () => {
       setIsLoading(true);
@@ -37,14 +56,13 @@ const ClientDashboard = () => {
       const querySnapshot = await getDocs(q);
       const providersData = querySnapshot.docs.map(doc => doc.data() as UserProfile);
       setAllProviders(providersData);
-      setFilteredResults(providersData);
       setIsLoading(false);
     };
     fetchProviders();
   }, []);
 
-  // Efeito para aplicar os filtros
-  useEffect(() => {
+  // Lógica de filtragem otimizada com useMemo
+  const filteredResults = useMemo(() => {
     let results = [...allProviders];
 
     if (searchTerm) {
@@ -55,57 +73,81 @@ const ClientDashboard = () => {
         provider.professionals?.some(p => p.services.some(s => s.name.toLowerCase().includes(searchTermLower)))
       );
     }
-
     if (filters.segment) {
       results = results.filter(provider => provider.segment === filters.segment);
     }
-
     if (filters.city) {
       const cityLower = filters.city.toLowerCase();
       results = results.filter(provider => provider.address?.city?.toLowerCase().includes(cityLower));
     }
-
     if (filters.date) {
       const selectedDate = new Date(filters.date + 'T00:00:00');
       const dayOfWeek = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-      
       results = results.filter(provider => 
         provider.professionals?.some(prof => prof.availability?.[dayOfWeek as keyof typeof prof.availability]?.active)
       );
     }
-
-    setFilteredResults(results);
+    return results;
   }, [searchTerm, filters, allProviders]);
 
   // Efeito para buscar os agendamentos do cliente
   useEffect(() => {
     if (!userProfile?.uid) return;
-    const q = query(collection(db, 'appointments'), where('clientId', '==', userProfile.uid));
+    const q = query(collection(db, 'appointments'), where('clientId', '==', userProfile.uid), where('status', 'in', ['pending', 'confirmed']));
+    
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       setLoadingAppointments(true);
       const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
-      setAppointments(apptsData);
+      
+      const appointmentsWithDetails = await Promise.all(apptsData.map(async (appt) => {
+          const providerDocRef = doc(db, "users", appt.serviceProviderId);
+          const providerSnap = await getDoc(providerDocRef);
+          const providerProfile = providerSnap.exists() ? providerSnap.data() as UserProfile : null;
+          
+          const professional = providerProfile?.professionals?.find(p => p.id === appt.professionalId);
+          const serviceNames = appt.serviceIds?.map(serviceId => professional?.services.find(s => s.id === serviceId)?.name || '').join(', ');
+
+          return {
+              ...appt,
+              establishmentName: providerProfile?.establishmentName || 'Estabelecimento não encontrado',
+              professionalName: professional?.name || 'Profissional não encontrado',
+              serviceName: serviceNames,
+          };
+      }));
+
+      appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+      setAppointments(appointmentsWithDetails);
       setLoadingAppointments(false);
     });
     return () => unsubscribe();
   }, [userProfile]);
 
-  // Efeito para buscar os perfis dos profissionais favoritos
+  // Efeito para buscar os perfis dos profissionais favoritos (LÓGICA CORRIGIDA)
   useEffect(() => {
     const fetchFavorites = async () => {
         if (!userProfile?.favoriteProfessionals || userProfile.favoriteProfessionals.length === 0) {
             setFavoriteProfessionals([]);
+            setLoadingFavorites(false);
             return;
         }
         setLoadingFavorites(true);
-        const favsData = allProviders.filter(p => userProfile.favoriteProfessionals?.includes(p.uid));
-        setFavoriteProfessionals(favsData);
-        setLoadingFavorites(false);
+        try {
+            const q = query(collection(db, 'users'), where(documentId(), 'in', userProfile.favoriteProfessionals));
+            const querySnapshot = await getDocs(q);
+            const favsData = querySnapshot.docs.map(doc => doc.data() as UserProfile);
+            setFavoriteProfessionals(favsData);
+        } catch (error) {
+            console.error("Erro ao procurar favoritos:", error);
+            setFavoriteProfessionals([]);
+        } finally {
+            setLoadingFavorites(false);
+        }
     };
+
     if (activeTab === 'favorites') {
         fetchFavorites();
     }
-  }, [userProfile, activeTab, allProviders]);
+  }, [userProfile?.favoriteProfessionals, activeTab]);
   
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -115,6 +157,18 @@ const ClientDashboard = () => {
   const clearFilters = () => {
     setSearchTerm('');
     setFilters({ segment: '', city: '', date: '' });
+  };
+
+  const handleCancelAppointment = (appointmentId: string) => {
+    setModalState({
+        isOpen: true,
+        title: 'Cancelar Agendamento',
+        message: 'Tem a certeza de que pretende cancelar este agendamento? Esta ação não pode ser desfeita.',
+        onConfirm: () => {
+            cancelAppointment(appointmentId);
+            setModalState(null);
+        }
+    });
   };
 
   if (selectedProfessional) {
@@ -178,11 +232,19 @@ const ClientDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
+      {modalState?.isOpen && (
+          <ConfirmationModal 
+              title={modalState.title}
+              message={modalState.message}
+              onConfirm={modalState.onConfirm}
+              onCancel={() => setModalState(null)}
+          />
+      )}
       <header className="flex justify-between items-center mb-10">
         <div className="flex items-center">
             <img 
               src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
-              alt="Sua foto de perfil"
+              alt="A sua foto de perfil"
               className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700"
             />
             <div>
@@ -193,7 +255,7 @@ const ClientDashboard = () => {
         <div className="flex items-center space-x-4">
             <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
-                <span>Meu Perfil</span>
+                <span>O Meu Perfil</span>
             </button>
             <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
@@ -205,7 +267,7 @@ const ClientDashboard = () => {
       <main>
         <div className="mb-8">
           <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">
-            <button onClick={() => setActiveTab('search')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'search' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Buscar</button>
+            <button onClick={() => setActiveTab('search')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'search' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Procurar</button>
             <button onClick={() => setActiveTab('myAppointments')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'myAppointments' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Agendamentos</button>
             <button onClick={() => setActiveTab('favorites')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'favorites' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Favoritos</button>
           </div>
@@ -226,7 +288,7 @@ const ClientDashboard = () => {
                       <option value="Salão de Beleza">Salão de Beleza</option>
                       <option value="Manicure/Pedicure">Manicure/Pedicure</option>
                       <option value="Esteticista">Esteticista</option>
-                      <option value="Maquiagem">Maquiagem</option>
+                      <option value="Maquiagem">Maquilhagem</option>
                       <option value="Outro">Outro</option>
                     </select>
                   </div>
@@ -250,7 +312,7 @@ const ClientDashboard = () => {
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>
                 </div>
-                <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Busque por nome, profissional ou serviço..." className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+                <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Procure por nome, profissional ou serviço..." className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
               </div>
 
               <div className="space-y-4">
@@ -264,14 +326,49 @@ const ClientDashboard = () => {
 
           {activeTab === 'myAppointments' && (
              <div>
-              <h2 className="text-2xl font-bold text-white mb-6">Meus Agendamentos</h2>
-              {/* A lógica dos agendamentos permanece aqui */}
+              <h2 className="text-2xl font-bold text-white mb-6">Os Meus Agendamentos</h2>
+              {loadingAppointments ? (
+                  <p className="text-center text-gray-400">A carregar os seus agendamentos...</p>
+              ) : appointments.length > 0 ? (
+                  <ul className="space-y-4">
+                      {appointments.map(app => (
+                          <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center">
+                              <div className="flex items-center mb-3 md:mb-0">
+                                  <div className="text-center border-r border-gray-600 pr-4 mr-4">
+                                      <p className="text-xl font-bold text-white">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit' })}</p>
+                                      <p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p>
+                                  </div>
+                                  <div>
+                                      <p className="font-bold text-lg text-white">{app.time} - {app.establishmentName}</p>
+                                      <p className="text-gray-300">{app.serviceName}</p>
+                                      <p className="text-sm text-gray-400">com {app.professionalName}</p>
+                                  </div>
+                              </div>
+                              <div className="flex items-center space-x-3 self-end md:self-center">
+                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                                      {app.status === 'pending' ? 'Pendente' : 'Confirmado'}
+                                  </span>
+                                  <button onClick={() => handleCancelAppointment(app.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg">
+                                      Cancelar
+                                  </button>
+                              </div>
+                          </li>
+                      ))}
+                  </ul>
+              ) : (
+                  <div className="text-center text-gray-400 py-8">
+                      <p className="mb-4">Ainda não tem nenhum agendamento futuro.</p>
+                      <button onClick={() => setActiveTab('search')} className="bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">
+                          Procurar Profissionais
+                      </button>
+                  </div>
+              )}
             </div>
           )}
 
           {activeTab === 'favorites' && (
             <div>
-              <h2 className="text-2xl font-bold text-white mb-6">Meus Favoritos</h2>
+              <h2 className="text-2xl font-bold text-white mb-6">Os Meus Favoritos</h2>
               {loadingFavorites ? (
                   <p className="text-center text-gray-400">A carregar favoritos...</p>
               ) : favoriteProfessionals.length > 0 ? (

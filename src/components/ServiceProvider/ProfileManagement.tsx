@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, storage, db } from '../../context/AuthContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useToast } from '../../context/ToastContext';
 import type { UserProfile, Address } from '../../types';
 
 interface ProfileManagementProps {
@@ -10,6 +11,7 @@ interface ProfileManagementProps {
 
 const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
   const { userProfile, updateUserProfile, loading } = useAuth();
+  const { showToast } = useToast();
   const [profileData, setProfileData] = useState<Partial<UserProfile>>({});
   const [addressData, setAddressData] = useState<Partial<Address>>({});
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -17,7 +19,6 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [slugMessage, setSlugMessage] = useState('');
   
-  // Estados para a busca do CEP
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
 
@@ -68,9 +69,8 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
     }
   };
 
-  // NOVA FUNÇÃO: Busca o endereço a partir do CEP
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const cep = e.target.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+    const cep = e.target.value.replace(/\D/g, '');
     setAddressData(prev => ({ ...prev, postalCode: cep }));
 
     if (cep.length === 8) {
@@ -83,7 +83,6 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
         const data = await response.json();
         if (data.erro) {
           setCepError('CEP não encontrado.');
-          // Limpa os campos se o CEP for inválido
           setAddressData(prev => ({ ...prev, street: '', neighborhood: '', city: '', state: '' }));
         } else {
           setAddressData(prev => ({
@@ -130,7 +129,7 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
         updatedData.photoURL = photoURL;
       } catch (error) {
         console.error("Erro no upload da imagem:", error);
-        alert("Falha ao enviar a foto.");
+        showToast("Falha ao enviar a foto.", 'error');
         setIsUploading(false);
         return;
       }
@@ -138,7 +137,6 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
     
     await updateUserProfile(updatedData);
     setIsUploading(false);
-    alert("Perfil atualizado com sucesso!");
     onBack();
   };
   
@@ -146,10 +144,10 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
     const baseURL = window.location.origin;
     const publicURL = `${baseURL}/agendar/${profileData.publicProfileSlug || userProfile?.uid}`;
     navigator.clipboard.writeText(publicURL).then(() => {
-        alert("Link copiado para a área de transferência!");
+        showToast("Link copiado para a área de transferência!", 'success');
     }, (err) => {
         console.error('Erro ao copiar o link: ', err);
-        alert("Não foi possível copiar o link.");
+        showToast("Não foi possível copiar o link.", 'error');
     });
   };
 
@@ -186,7 +184,7 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
                 <option value="Salão de Beleza">Salão de Beleza</option>
                 <option value="Manicure/Pedicure">Manicure/Pedicure</option>
                 <option value="Esteticista">Esteticista</option>
-                <option value="Maquiagem">Maquiagem</option>
+                <option value="Maquiagem">Maquilhagem</option>
                 <option value="Outro">Outro</option>
               </select>
               <input name="cnpj" value={profileData.cnpj || ''} onChange={handleProfileChange} placeholder="CNPJ (opcional)" className="md:col-span-2 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
@@ -208,7 +206,7 @@ const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
           </div>
 
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-            <h3 className="text-xl font-bold text-yellow-400 mb-4">Contato</h3>
+            <h3 className="text-xl font-bold text-yellow-400 mb-4">Contacto</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <input name="phoneNumber" value={profileData.phoneNumber || ''} onChange={handleProfileChange} placeholder="Telefone Principal" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
               <input name="whatsapp" value={profileData.whatsapp || ''} onChange={handleProfileChange} placeholder="WhatsApp para Agendamento" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />

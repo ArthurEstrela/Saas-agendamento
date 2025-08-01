@@ -77,7 +77,7 @@ export interface Appointment {
   serviceIds: string[]; 
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no-show';
   createdAt: any;
   
   serviceName?: string;

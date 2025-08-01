@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../Calendar.css';
+import { useToast } from '../context/ToastContext';
 import type { UserProfile, Service, Appointment, Professional } from '../types';
 
 type ValuePiece = Date | null;
@@ -19,34 +20,18 @@ interface BookingProps {
   onBack?: () => void;
 }
 
-// Componente de Modal para substituir os alertas
-const Modal = ({ message, onClose }: { message: string; onClose: () => void }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-    <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 text-center w-full max-w-sm">
-      <p className="text-white text-lg mb-6">{message}</p>
-      <button
-        onClick={onClose}
-        className="bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors w-full"
-      >
-        OK
-      </button>
-    </div>
-  </div>
-);
-
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const { userProfile } = useAuth();
+  const { showToast } = useToast();
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
-  const [selectedServices, setSelectedServices] = useState<Service[]>([]); // <-- MUDANÇA: AGORA É UM ARRAY
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState<Value>(new Date());
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [isBooking, setIsBooking] = useState(false);
   const [availabilityMessage, setAvailabilityMessage] = useState('');
-  const [modalInfo, setModalInfo] = useState<{ message: string; onConfirm?: () => void } | null>(null);
 
-  // Calcula a duração total e o preço total dos serviços selecionados
   const { totalDuration, totalPrice } = useMemo(() => {
     return selectedServices.reduce(
       (acc, service) => {
@@ -64,8 +49,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     setTimeSlots([]);
     setSelectedTime('');
   }, [selectedProfessional]);
-  
-  // NOVA FUNÇÃO: Lida com a seleção de múltiplos serviços
+
   const handleToggleService = (service: Service) => {
     setSelectedServices(prev => {
       const isSelected = prev.some(s => s.id === service.id);
@@ -75,7 +59,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         return [...prev, service];
       }
     });
-    setSelectedTime(''); // Reseta a hora ao mudar os serviços
+    setSelectedTime('');
   };
 
   useEffect(() => {
@@ -93,7 +77,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
       try {
         if (!selectedProfessional.availability) {
-          setAvailabilityMessage('Este profissional ainda não configurou seus horários.');
+          setAvailabilityMessage('Este profissional ainda não configurou os seus horários de atendimento.');
           return;
         }
 
@@ -187,7 +171,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
         setTimeSlots(slots);
       } catch (error) {
-        console.error("Erro ao buscar horários:", error);
+        console.error("Erro ao procurar horários:", error);
         setAvailabilityMessage('Ocorreu um erro ao carregar os horários.');
       } finally {
         setLoadingTimes(false);
@@ -199,11 +183,11 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
   const handleBookAppointment = async () => {
     if (!userProfile) {
-        setModalInfo({ message: "Você precisa estar logado para agendar." });
+        showToast("Precisa de estar autenticado para agendar.", 'error');
         return;
     }
     if (selectedServices.length === 0 || !selectedDate || Array.isArray(selectedDate) || !selectedTime || !selectedProfessional) {
-      setModalInfo({ message: "Por favor, selecione profissional, serviço(s), data e horário." });
+      showToast("Por favor, preencha todos os campos.", 'error');
       return;
     }
     setIsBooking(true);
@@ -211,15 +195,16 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       clientId: userProfile.uid,
       serviceProviderId: establishment.uid,
       professionalId: selectedProfessional.id,
-      serviceIds: selectedServices.map(s => s.id), // <-- SALVA O ARRAY DE IDs
-      date: selectedDate.toISOString().split('T')[0],
+      serviceIds: selectedServices.map(s => s.id),
+      date: (selectedDate as Date).toISOString().split('T')[0],
       time: selectedTime,
       status: 'pending',
       createdAt: new Date(),
     };
     await addDoc(collection(db, 'appointments'), newAppointment);
     setIsBooking(false);
-    setModalInfo({ message: 'Agendamento realizado com sucesso!', onConfirm: () => { if (onBack) onBack(); } });
+    showToast('Agendamento realizado com sucesso!', 'success');
+    if (onBack) onBack();
   };
   
   const getButtonClass = (status: TimeSlot['status'], time: string) => {
@@ -240,16 +225,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
-      {modalInfo && (
-        <Modal
-          message={modalInfo.message}
-          onClose={() => {
-            const onConfirmAction = modalInfo.onConfirm;
-            setModalInfo(null);
-            if (onConfirmAction) onConfirmAction();
-          }}
-        />
-      )}
       {onBack && (
         <header className="flex items-center mb-10">
           <button onClick={onBack} className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 font-semibold transition-colors">
@@ -279,7 +254,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
                             <img src={prof.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=?'} alt={prof.name} className="h-10 w-10 rounded-full object-cover" />
                             <span className="font-semibold text-white">{prof.name}</span>
                         </button>
-                    )) : <p className="text-gray-500 col-span-full">Este estabelecimento ainda não cadastrou profissionais.</p>}
+                    )) : <p className="text-gray-500 col-span-full">Este estabelecimento ainda não registou profissionais.</p>}
                 </div>
             </div>
 
@@ -295,7 +270,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
                               </div>
                               {selectedServices.some(s => s.id === service.id) && <span className="text-yellow-400">✓</span>}
                           </button>
-                      )) : <p className="text-gray-500">Este profissional não possui serviços cadastrados.</p>}
+                      )) : <p className="text-gray-500">Este profissional não possui serviços registados.</p>}
                   </div>
               </div>
             )}
@@ -318,7 +293,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
             {selectedDate && !Array.isArray(selectedDate) && selectedServices.length > 0 && (
                 <div>
                     <h2 className="text-xl font-bold text-white mb-4">4. Escolha o Horário de Início</h2>
-                    {loadingTimes ? <p className="text-gray-400">Carregando horários...</p> : (
+                    {loadingTimes ? <p className="text-gray-400">A carregar horários...</p> : (
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                             {timeSlots.length > 0 ? timeSlots.map(slot => (
                                 <button key={slot.time} onClick={() => slot.status === 'available' && setSelectedTime(slot.time)} disabled={slot.status !== 'available'} className={`p-3 rounded-lg font-semibold transition-colors ${getButtonClass(slot.status, slot.time)}`}>
@@ -332,9 +307,41 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         </div>
 
         {selectedTime && (
-            <div className="mt-8">
-                <button onClick={handleBookAppointment} disabled={isBooking} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500 text-lg">
-                    {isBooking ? 'Agendando...' : `Confirmar Agendamento às ${selectedTime}`}
+            <div className="mt-8 bg-gray-700 p-6 rounded-xl border border-yellow-500 animate-fade-in-down">
+                <h3 className="text-xl font-bold text-white mb-4">Confirmar Agendamento</h3>
+                <div className="space-y-3 text-gray-300">
+                    <div className="flex justify-between items-center">
+                        <span>Profissional:</span>
+                        <div className="flex items-center gap-2">
+                            <img src={selectedProfessional?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=?'} alt={selectedProfessional?.name} className="h-6 w-6 rounded-full object-cover" />
+                            <span className="font-semibold text-white">{selectedProfessional?.name}</span>
+                        </div>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Data:</span>
+                        <span className="font-semibold text-white">{(selectedDate as Date).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Horário:</span>
+                        <span className="font-semibold text-white">{selectedTime}</span>
+                    </div>
+                    <div className="border-t border-gray-600 pt-3">
+                        <span className="font-semibold text-white">Serviços:</span>
+                        <ul className="list-disc list-inside mt-2 text-sm">
+                            {selectedServices.map(s => <li key={s.id}>{s.name}</li>)}
+                        </ul>
+                    </div>
+                    <div className="border-t border-gray-600 pt-3 flex justify-between font-bold text-lg">
+                        <span className="text-yellow-400">Total:</span>
+                        <span className="text-yellow-400">R$ {totalPrice.toFixed(2)}</span>
+                    </div>
+                </div>
+                <button
+                    onClick={handleBookAppointment}
+                    disabled={isBooking}
+                    className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500 text-lg"
+                >
+                    {isBooking ? 'A agendar...' : 'Confirmar e Agendar'}
                 </button>
             </div>
         )}

@@ -7,12 +7,31 @@ import ProfileManagement from './ServiceProvider/ProfileManagement';
 import FinancialManagement from './ServiceProvider/FinancialManagement';
 import type { Appointment } from '../types';
 
+// Componente de Modal de Confirmação
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 animate-fade-in-down">
+        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 text-center w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
+            <p className="text-gray-300 mb-8">{message}</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
+                    Voltar
+                </button>
+                <button onClick={onConfirm} className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 const ServiceProviderDashboard = () => {
   const { userProfile, logout, updateAppointmentStatus } = useAuth();
   const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'financial'>('calendar');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
 
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -35,20 +54,11 @@ const ServiceProviderDashboard = () => {
             let totalPrice = 0;
             const serviceNames = appt.serviceIds?.map(serviceId => {
                 const service = professional?.services.find(s => s.id === serviceId);
-                if (service) {
-                    totalPrice += service.price;
-                    return service.name;
-                }
+                if (service) { totalPrice += service.price; return service.name; }
                 return 'Serviço Removido';
             }).join(', ') || 'N/A';
             
-            return {
-                ...appt,
-                clientName: clientProfile?.displayName || 'Cliente',
-                professionalName: professional?.name || 'N/A',
-                serviceName: serviceNames,
-                totalPrice,
-            };
+            return { ...appt, clientName: clientProfile?.displayName || 'Cliente', professionalName: professional?.name || 'N/A', serviceName: serviceNames, totalPrice };
         }));
         
         appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
@@ -60,10 +70,32 @@ const ServiceProviderDashboard = () => {
     return () => unsubscribe();
   }, [userProfile]);
   
+  const handleActionConfirmation = (action: () => void, title: string, message: string) => {
+    setModalState({
+        isOpen: true,
+        title,
+        message,
+        onConfirm: () => {
+            action();
+            setModalState(null);
+        }
+    });
+  };
+
   const handleCompleteAppointment = (app: Appointment) => {
-      if (window.confirm(`Confirmar conclusão do serviço "${app.serviceName}" no valor de R$ ${app.totalPrice?.toFixed(2)}?`)) {
-          updateAppointmentStatus(app.id, 'completed', app.totalPrice);
-      }
+    handleActionConfirmation(
+        () => updateAppointmentStatus(app.id, 'completed', app.totalPrice),
+        'Confirmar Conclusão',
+        `Tem a certeza de que pretende marcar o serviço de "${app.serviceName}" como concluído?`
+    );
+  };
+
+  const handleNoShowAppointment = (app: Appointment) => {
+    handleActionConfirmation(
+        () => updateAppointmentStatus(app.id, 'no-show'),
+        'Confirmar Ausência',
+        `Tem a certeza de que pretende marcar este agendamento como "não compareceu"? Esta ação não pode ser desfeita.`
+    );
   };
 
   if (isEditingProfile) {
@@ -72,6 +104,14 @@ const ServiceProviderDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
+      {modalState?.isOpen && (
+          <ConfirmationModal 
+              title={modalState.title}
+              message={modalState.message}
+              onConfirm={modalState.onConfirm}
+              onCancel={() => setModalState(null)}
+          />
+      )}
       <header className="flex justify-between items-center mb-10">
         <div className="flex items-center">
             <img 
@@ -111,7 +151,7 @@ const ServiceProviderDashboard = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-6">Solicitações e Agenda</h2>
                     {loading ? (
-                        <p className="text-center text-gray-400">Carregando agendamentos...</p>
+                        <p className="text-center text-gray-400">A carregar agendamentos...</p>
                     ) : appointments.length > 0 ? (
                         <ul className="space-y-4">
                             {appointments.map(app => {
@@ -119,7 +159,7 @@ const ServiceProviderDashboard = () => {
                                 const isPast = appointmentDateTime < new Date();
                                 
                                 return (
-                                <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center transition-all hover:shadow-lg hover:bg-gray-600">
+                                <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center">
                                     <div className="flex items-center mb-3 md:mb-0">
                                         <div className="text-center border-r border-gray-600 pr-4 mr-4">
                                             <p className="text-xl font-bold text-white">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit' })}</p>
@@ -136,9 +176,10 @@ const ServiceProviderDashboard = () => {
                                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                                             app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' :
                                             app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
-                                            'bg-blue-500/20 text-blue-300' // Concluído
+                                            app.status === 'completed' ? 'bg-blue-500/20 text-blue-300' :
+                                            'bg-red-500/20 text-red-300' // No-show
                                         }`}>
-                                            {app.status === 'pending' ? 'Pendente' : app.status === 'confirmed' ? 'Confirmado' : 'Concluído'}
+                                            {app.status === 'pending' ? 'Pendente' : app.status === 'confirmed' ? 'Confirmado' : app.status === 'completed' ? 'Concluído' : 'Não Compareceu'}
                                         </span>
                                         
                                         {app.status === 'pending' && (
@@ -149,7 +190,10 @@ const ServiceProviderDashboard = () => {
                                         )}
 
                                         {isPast && app.status === 'confirmed' && (
-                                            <button onClick={() => handleCompleteAppointment(app)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Concluir</button>
+                                            <>
+                                                <button onClick={() => handleNoShowAppointment(app)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Não Compareceu</button>
+                                                <button onClick={() => handleCompleteAppointment(app)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Concluir</button>
+                                            </>
                                         )}
                                     </div>
                                 </li>

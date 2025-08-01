@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -23,6 +23,7 @@ import {
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken } from "firebase/messaging";
 import type { UserProfile } from "../types";
+import { useToast } from "./ToastContext";
 
 // Configuração do Firebase a partir das variáveis de ambiente
 const firebaseConfig = {
@@ -42,10 +43,6 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const messaging = getMessaging(app);
 
-/**
- * Solicita permissão para notificações e obtém o token FCM do dispositivo.
- * @returns O token FCM ou null se a permissão for negada.
- */
 export const requestForToken = async () => {
   try {
     const currentToken = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
@@ -53,7 +50,7 @@ export const requestForToken = async () => {
       console.log('FCM Token obtido:', currentToken);
       return currentToken;
     } else {
-      console.log('Nenhum token de registro disponível. Solicite permissão para gerar um.');
+      console.log('Nenhum token de registo disponível. Solicite permissão para gerar um.');
       return null;
     }
   } catch (err) {
@@ -79,16 +76,17 @@ interface AuthContextType {
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
-  updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed', price?: number) => Promise<void>;
+  updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => Promise<void>;
   requestFCMToken: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
   const fetchUserProfile = async (uid: string): Promise<UserProfile | null> => {
     const userDocRef = doc(db, `users/${uid}`);
@@ -96,7 +94,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const userDocSnap = await getDoc(userDocRef);
       return userDocSnap.exists() ? (userDocSnap.data() as UserProfile) : null;
     } catch (error) {
-      console.error("Erro ao buscar perfil do usuário:", error);
+      console.error("Erro ao procurar perfil do utilizador:", error);
       return null;
     }
   };
@@ -123,7 +121,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
         console.error("Erro no login:", error);
-        alert("Email ou senha inválidos.");
+        showToast("Email ou senha inválidos.", 'error');
     } finally {
         setLoading(false);
     }
@@ -153,8 +151,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await setDoc(doc(db, `users/${user.uid}`), newProfile);
         setUserProfile(newProfile);
     } catch (error) {
-        console.error("Erro no registro:", error);
-        alert("Ocorreu um erro ao tentar se registrar.");
+        console.error("Erro no registo:", error);
+        showToast("Ocorreu um erro ao tentar registar-se.", 'error');
     } finally {
         setLoading(false);
     }
@@ -182,7 +180,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     } catch (error) {
         console.error("Erro no login com Google:", error);
-        alert("Não foi possível fazer login com o Google.");
+        showToast("Não foi possível fazer login com o Google.", 'error');
     } finally {
         setLoading(false);
     }
@@ -200,9 +198,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await updateDoc(userDocRef, data);
         const updatedProfile = await fetchUserProfile(currentUser.uid);
         setUserProfile(updatedProfile);
+        showToast("Perfil atualizado com sucesso!", 'success');
     } catch (error) {
         console.error("Erro ao atualizar o perfil:", error);
-        alert("Não foi possível atualizar o perfil.");
+        showToast("Não foi possível atualizar o perfil.", 'error');
     } finally {
         setLoading(false);
     }
@@ -220,7 +219,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUserProfile(updatedProfile);
     } catch (error) {
       console.error("Erro ao favoritar profissional:", error);
-      alert("Não foi possível atualizar seus favoritos.");
+      showToast("Não foi possível atualizar os seus favoritos.", 'error');
     }
   };
 
@@ -228,14 +227,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
     try {
       await deleteDoc(appointmentRef);
-      alert("Agendamento cancelado/recusado com sucesso!");
+      showToast("Agendamento removido com sucesso!", 'success');
     } catch (error) {
-      console.error("Erro ao cancelar/recusar agendamento:", error);
-      alert("Não foi possível processar a solicitação.");
+      console.error("Erro ao remover agendamento:", error);
+      showToast("Não foi possível processar a solicitação.", 'error');
     }
   };
 
-  const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed', price?: number) => {
+  const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
     try {
       const dataToUpdate: { status: string; totalPrice?: number } = { status };
@@ -243,9 +242,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         dataToUpdate.totalPrice = price;
       }
       await updateDoc(appointmentRef, dataToUpdate);
+      showToast('Estado do agendamento atualizado!', 'success');
     } catch (error) {
-      console.error("Erro ao atualizar status do agendamento:", error);
-      alert("Não foi possível atualizar o agendamento.");
+      console.error("Erro ao atualizar o estado do agendamento:", error);
+      showToast("Não foi possível atualizar o agendamento.", 'error');
     }
   };
 
@@ -262,12 +262,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             await updateDoc(userDocRef, {
               fcmTokens: arrayUnion(fcmToken)
             });
-            console.log("Token FCM salvo no perfil do usuário.");
+            console.log("Token FCM guardado no perfil do utilizador.");
           }
         }
       }
     } catch (error) {
-      console.error("Erro ao salvar o token FCM:", error);
+      console.error("Erro ao guardar o token FCM:", error);
     }
   };
 

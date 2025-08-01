@@ -73,17 +73,28 @@ export interface Appointment {
   serviceProviderId: string;
   professionalId: string; 
   clientId: string;
-  serviceIds: string[]; // <-- ATUALIZADO AQUI
+  serviceIds: string[]; 
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   createdAt: any;
   
-  // Estes campos serão montados dinamicamente na UI
-  serviceName?: string; // Pode representar múltiplos serviços concatenados
+  serviceName?: string;
   professionalName?: string;
   clientName?: string;
   clientEmail?: string;
   professionalPhotoURL?: string;
   cancellationPolicyMinutes?: number;
+  totalPrice?: number;
+}
+
+// NOVA interface para Despesas
+export interface Expense {
+  id: string;
+  serviceProviderId: string;
+  description: string;
+  category: 'Aluguel' | 'Água' | 'Luz' | 'Salários' | 'Produtos' | 'Marketing' | 'Outros';
+  amount: number;
+  date: string; // 'YYYY-MM-DD'
+  createdAt: any;
 }

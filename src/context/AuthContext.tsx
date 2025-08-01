@@ -79,7 +79,7 @@ interface AuthContextType {
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
-  updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled') => Promise<void>;
+  updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed', price?: number) => Promise<void>;
   requestFCMToken: () => Promise<void>;
 }
 
@@ -202,6 +202,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUserProfile(updatedProfile);
     } catch (error) {
         console.error("Erro ao atualizar o perfil:", error);
+        alert("Não foi possível atualizar o perfil.");
     } finally {
         setLoading(false);
     }
@@ -234,11 +235,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled') => {
+  const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed', price?: number) => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
     try {
-      await updateDoc(appointmentRef, { status });
-      alert(`Agendamento ${status === 'confirmed' ? 'confirmado' : 'marcado como cancelado'} com sucesso!`);
+      const dataToUpdate: { status: string; totalPrice?: number } = { status };
+      if (status === 'completed' && price !== undefined) {
+        dataToUpdate.totalPrice = price;
+      }
+      await updateDoc(appointmentRef, dataToUpdate);
     } catch (error) {
       console.error("Erro ao atualizar status do agendamento:", error);
       alert("Não foi possível atualizar o agendamento.");

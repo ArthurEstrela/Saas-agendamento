@@ -4,11 +4,12 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement';
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
 import ProfileManagement from './ServiceProvider/ProfileManagement';
+import FinancialManagement from './ServiceProvider/FinancialManagement'; // ATUALIZADO
 import type { Appointment } from '../types';
 
 const ServiceProviderDashboard = () => {
-  const { userProfile, logout, cancelAppointment, updateAppointmentStatus } = useAuth();
-  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'profile'>('calendar');
+  const { userProfile, logout, updateAppointmentStatus } = useAuth();
+  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'profile' | 'financial'>('calendar'); // ATUALIZADO
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,19 +29,24 @@ const ServiceProviderDashboard = () => {
             const clientDocRef = doc(db, "users", appt.clientId);
             const clientSnap = await getDoc(clientDocRef);
             const clientProfile = clientSnap.data();
-
             const professional = userProfile.professionals?.find(p => p.id === appt.professionalId);
             
-            // Mapeia os IDs dos serviços para seus nomes
+            let totalPrice = 0;
             const serviceNames = appt.serviceIds?.map(serviceId => {
-                return professional?.services.find(s => s.id === serviceId)?.name || 'Serviço Removido';
+                const service = professional?.services.find(s => s.id === serviceId);
+                if (service) {
+                    totalPrice += service.price;
+                    return service.name;
+                }
+                return 'Serviço Removido';
             }).join(', ') || 'N/A';
             
             return {
                 ...appt,
-                clientName: clientProfile?.displayName || 'Cliente não encontrado',
-                professionalName: professional?.name || 'Profissional não encontrado',
-                serviceName: serviceNames, // <-- Usa a string com todos os nomes
+                clientName: clientProfile?.displayName || 'Cliente',
+                professionalName: professional?.name || 'N/A',
+                serviceName: serviceNames,
+                totalPrice,
             };
         }));
         
@@ -52,6 +58,12 @@ const ServiceProviderDashboard = () => {
 
     return () => unsubscribe();
   }, [userProfile]);
+  
+  const handleCompleteAppointment = (app: Appointment) => {
+      if (window.confirm(`Confirmar conclusão do serviço "${app.serviceName}" no valor de R$ ${app.totalPrice?.toFixed(2)}?`)) {
+          updateAppointmentStatus(app.id, 'completed', app.totalPrice);
+      }
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
@@ -64,7 +76,7 @@ const ServiceProviderDashboard = () => {
             />
             <div>
                 <h1 className="text-2xl font-bold text-white">{userProfile?.establishmentName}</h1>
-                <p className="text-gray-400">Painel do Profissional</p>
+                <p className="text-gray-400">Painel do Prestador de Serviço</p>
             </div>
         </div>
         <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
@@ -75,11 +87,12 @@ const ServiceProviderDashboard = () => {
 
       <main>
         <div className="mb-8">
-          <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">
-            <button onClick={() => setActiveTab('calendar')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'calendar' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Agenda</button>
-            <button onClick={() => setActiveTab('professionals')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'professionals' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Profissionais</button>
-            <button onClick={() => setActiveTab('availability')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'availability' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Disponibilidade</button>
-            <button onClick={() => setActiveTab('profile')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'profile' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meu Perfil</button>
+          <div className="flex space-x-2 md:space-x-4 border-b border-gray-700 overflow-x-auto pb-2">
+            <button onClick={() => setActiveTab('calendar')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'calendar' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Agenda</button>
+            <button onClick={() => setActiveTab('professionals')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'professionals' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Profissionais</button>
+            <button onClick={() => setActiveTab('availability')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'availability' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Disponibilidade</button>
+            <button onClick={() => setActiveTab('financial')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'financial' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Financeiro</button>
+            <button onClick={() => setActiveTab('profile')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'profile' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meu Perfil</button>
           </div>
         </div>
 
@@ -91,7 +104,11 @@ const ServiceProviderDashboard = () => {
                         <p className="text-center text-gray-400">Carregando agendamentos...</p>
                     ) : appointments.length > 0 ? (
                         <ul className="space-y-4">
-                            {appointments.map(app => (
+                            {appointments.map(app => {
+                                const appointmentDateTime = new Date(`${app.date}T${app.time}`);
+                                const isPast = appointmentDateTime < new Date();
+                                
+                                return (
                                 <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center transition-all hover:shadow-lg hover:bg-gray-600">
                                     <div className="flex items-center mb-3 md:mb-0">
                                         <div className="text-center border-r border-gray-600 pr-4 mr-4">
@@ -105,27 +122,28 @@ const ServiceProviderDashboard = () => {
                                             <p className="text-sm text-gray-500">Cliente: {app.clientName}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center space-x-3 self-end md:self-center">
+                                    <div className="flex items-center space-x-3 self-end md:self-center mt-3 md:mt-0">
                                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                                             app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' :
-                                            'bg-yellow-500/20 text-yellow-300'
+                                            app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                                            'bg-blue-500/20 text-blue-300' // Concluído
                                         }`}>
-                                            {app.status === 'pending' ? 'Pendente' : 'Confirmado'}
+                                            {app.status === 'pending' ? 'Pendente' : app.status === 'confirmed' ? 'Confirmado' : 'Concluído'}
                                         </span>
                                         
                                         {app.status === 'pending' && (
                                             <>
-                                                <button onClick={() => updateAppointmentStatus(app.id, 'confirmed')} className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors">Confirmar</button>
-                                                <button onClick={() => cancelAppointment(app.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors">Recusar</button>
+                                                <button onClick={() => updateAppointmentStatus(app.id, 'confirmed')} className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Confirmar</button>
+                                                <button onClick={() => updateAppointmentStatus(app.id, 'cancelled')} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Recusar</button>
                                             </>
                                         )}
 
-                                        {app.status === 'confirmed' && (
-                                            <button onClick={() => cancelAppointment(app.id)} className="bg-gray-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg transition-colors">Cancelar</button>
+                                        {isPast && app.status === 'confirmed' && (
+                                            <button onClick={() => handleCompleteAppointment(app)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Concluir</button>
                                         )}
                                     </div>
                                 </li>
-                            ))}
+                            )})}
                         </ul>
                     ) : (
                         <p className="text-center text-gray-400 py-8">Nenhum agendamento encontrado.</p>
@@ -134,6 +152,7 @@ const ServiceProviderDashboard = () => {
             )}
             {activeTab === 'professionals' && <ProfessionalsManagement />}
             {activeTab === 'availability' && <AvailabilityManagement />}
+            {activeTab === 'financial' && <FinancialManagement />}
             {activeTab === 'profile' && <ProfileManagement />}
         </div>
       </main>

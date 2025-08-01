@@ -4,12 +4,13 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement';
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
 import ProfileManagement from './ServiceProvider/ProfileManagement';
-import FinancialManagement from './ServiceProvider/FinancialManagement'; // ATUALIZADO
+import FinancialManagement from './ServiceProvider/FinancialManagement';
 import type { Appointment } from '../types';
 
 const ServiceProviderDashboard = () => {
   const { userProfile, logout, updateAppointmentStatus } = useAuth();
-  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'profile' | 'financial'>('calendar'); // ATUALIZADO
+  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'financial'>('calendar');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,6 +66,10 @@ const ServiceProviderDashboard = () => {
       }
   };
 
+  if (isEditingProfile) {
+    return <ProfileManagement onBack={() => setIsEditingProfile(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
       <header className="flex justify-between items-center mb-10">
@@ -79,10 +84,16 @@ const ServiceProviderDashboard = () => {
                 <p className="text-gray-400">Painel do Prestador de Serviço</p>
             </div>
         </div>
-        <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+        <div className="flex items-center space-x-4">
+          <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+            <span>Editar Perfil</span>
+          </button>
+          <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
             <span>Sair</span>
-        </button>
+          </button>
+        </div>
       </header>
 
       <main>
@@ -92,7 +103,6 @@ const ServiceProviderDashboard = () => {
             <button onClick={() => setActiveTab('professionals')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'professionals' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Profissionais</button>
             <button onClick={() => setActiveTab('availability')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'availability' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Disponibilidade</button>
             <button onClick={() => setActiveTab('financial')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'financial' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Financeiro</button>
-            <button onClick={() => setActiveTab('profile')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'profile' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Meu Perfil</button>
           </div>
         </div>
 
@@ -153,7 +163,6 @@ const ServiceProviderDashboard = () => {
             {activeTab === 'professionals' && <ProfessionalsManagement />}
             {activeTab === 'availability' && <AvailabilityManagement />}
             {activeTab === 'financial' && <FinancialManagement />}
-            {activeTab === 'profile' && <ProfileManagement />}
         </div>
       </main>
     </div>

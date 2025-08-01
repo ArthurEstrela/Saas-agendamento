@@ -62,6 +62,7 @@ export interface UserProfile {
   instagram?: string;
   whatsapp?: string;
   segment?: string;
+  publicProfileSlug?: string; 
   professionals?: Professional[]; 
   cnpj?: string;
   cancellationPolicyMinutes?: number;

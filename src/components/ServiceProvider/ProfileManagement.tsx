@@ -1,218 +1,258 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useAuth, storage, db } from '../../context/AuthContext';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import type { UserProfile, Address } from '../../types';
 
-const storage = getStorage();
+interface ProfileManagementProps {
+  onBack: () => void;
+}
 
-const ProfileManagement = () => {
+const ProfileManagement = ({ onBack }: ProfileManagementProps) => {
   const { userProfile, updateUserProfile, loading } = useAuth();
-  
-  const [profileData, setProfileData] = useState({
-    establishmentName: '',
-    address: '',
-    instagram: '',
-    whatsapp: '',
-    cancellationPolicyMinutes: 120,
-    bookingAdvanceDays: 30,
-  });
-
-  const [policyTime, setPolicyTime] = useState({ hours: 2, minutes: 0 });
-  const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<Partial<UserProfile>>({});
+  const [addressData, setAddressData] = useState<Partial<Address>>({});
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [bookingLink, setBookingLink] = useState('');
-  const [copySuccess, setCopySuccess] = useState('');
+  const [slugMessage, setSlugMessage] = useState('');
+  
+  // Estados para a busca do CEP
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState('');
 
   useEffect(() => {
     if (userProfile) {
-      const totalMinutes = userProfile.cancellationPolicyMinutes || 120;
       setProfileData({
         establishmentName: userProfile.establishmentName || '',
-        address: userProfile.address || '',
+        segment: userProfile.segment || '',
+        cnpj: userProfile.cnpj || '',
+        phoneNumber: userProfile.phoneNumber || '',
         instagram: userProfile.instagram || '',
         whatsapp: userProfile.whatsapp || '',
-        cancellationPolicyMinutes: totalMinutes,
+        publicProfileSlug: userProfile.publicProfileSlug || '',
+        cancellationPolicyMinutes: userProfile.cancellationPolicyMinutes || 60,
         bookingAdvanceDays: userProfile.bookingAdvanceDays || 30,
       });
-
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      setPolicyTime({ hours, minutes });
-
-      setPreviewImage(userProfile.photoURL || null);
-
-      // Gera o link de agendamento
-      const link = `${window.location.origin}/agendar/${userProfile.uid}`;
-      setBookingLink(link);
+      setAddressData(userProfile.address || {});
+      setImagePreview(userProfile.photoURL || null);
     }
   }, [userProfile]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const finalValue = name === 'bookingAdvanceDays' ? Number(value) : value;
-    setProfileData(prev => ({ ...prev, [name]: finalValue }));
+    setProfileData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    const sanitizedValue = rawValue
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+    setProfileData(prev => ({ ...prev, publicProfileSlug: sanitizedValue }));
   };
 
-  const handlePolicyTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const newTime = { ...policyTime, [name]: Number(value) || 0 };
-    setPolicyTime(newTime);
-    setProfileData(prev => ({
-      ...prev,
-      cancellationPolicyMinutes: (newTime.hours * 60) + newTime.minutes,
-    }));
+    setAddressData(prev => ({ ...prev, [name]: value }));
   };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setProfileImage(file);
-      setPreviewImage(URL.createObjectURL(file));
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // NOVA FUNÇÃO: Busca o endereço a partir do CEP
+  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cep = e.target.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+    setAddressData(prev => ({ ...prev, postalCode: cep }));
+
+    if (cep.length === 8) {
+      setCepLoading(true);
+      setCepError('');
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        if (!response.ok) throw new Error('CEP não encontrado');
+        
+        const data = await response.json();
+        if (data.erro) {
+          setCepError('CEP não encontrado.');
+          // Limpa os campos se o CEP for inválido
+          setAddressData(prev => ({ ...prev, street: '', neighborhood: '', city: '', state: '' }));
+        } else {
+          setAddressData(prev => ({
+            ...prev,
+            street: data.logradouro,
+            neighborhood: data.bairro,
+            city: data.localidade,
+            state: data.uf,
+          }));
+        }
+      } catch (error) {
+        setCepError('Erro ao procurar o CEP.');
+      } finally {
+        setCepLoading(false);
+      }
+    } else {
+      setCepError('');
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
-    setIsUploading(true);
-    
-    const dataToUpdate: { [key: string]: any } = { ...profileData };
 
-    if (profileImage) {
-      const storageRef = ref(storage, `profile_pictures/${userProfile.uid}`);
+    if (profileData.publicProfileSlug && profileData.publicProfileSlug !== userProfile.publicProfileSlug) {
+      setSlugMessage('A verificar...');
+      const q = query(collection(db, "users"), where("publicProfileSlug", "==", profileData.publicProfileSlug));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        setSlugMessage("Este nome para o link já está em uso. Por favor, escolha outro.");
+        return;
+      }
+      setSlugMessage('');
+    }
+
+    let updatedData = { ...profileData, address: addressData };
+
+    if (imageFile) {
+      setIsUploading(true);
+      const storageRef = ref(storage, `profile_pictures/${userProfile.uid}/profile`);
       try {
-        const snapshot = await uploadBytes(storageRef, profileImage);
-        dataToUpdate.photoURL = await getDownloadURL(snapshot.ref);
+        await uploadBytes(storageRef, imageFile);
+        const photoURL = await getDownloadURL(storageRef);
+        updatedData.photoURL = photoURL;
       } catch (error) {
-        console.error("Erro ao fazer upload da imagem:", error);
+        console.error("Erro no upload da imagem:", error);
+        alert("Falha ao enviar a foto.");
         setIsUploading(false);
-        alert("Houve um erro ao enviar sua foto. Tente novamente.");
         return;
       }
     }
-
-    await updateUserProfile(dataToUpdate);
     
+    await updateUserProfile(updatedData);
     setIsUploading(false);
     alert("Perfil atualizado com sucesso!");
+    onBack();
   };
-
+  
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(bookingLink).then(() => {
-      setCopySuccess('Link copiado!');
-      setTimeout(() => setCopySuccess(''), 2000);
+    const baseURL = window.location.origin;
+    const publicURL = `${baseURL}/agendar/${profileData.publicProfileSlug || userProfile?.uid}`;
+    navigator.clipboard.writeText(publicURL).then(() => {
+        alert("Link copiado para a área de transferência!");
     }, (err) => {
-      setCopySuccess('Falha ao copiar.');
-      console.error('Erro ao copiar link: ', err);
+        console.error('Erro ao copiar o link: ', err);
+        alert("Não foi possível copiar o link.");
     });
   };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-white mb-6">Editar Perfil e Regras</h2>
-      
-      {/* Seção do Link de Agendamento */}
-      <div className="bg-gray-700 p-4 rounded-lg mb-8">
-        <label className="block text-sm font-medium text-gray-300 mb-2">Seu Link de Agendamento Público</label>
-        <div className="flex items-center gap-2">
-          <input type="text" readOnly value={bookingLink} className="w-full bg-gray-600 text-gray-300 border-gray-500 rounded-md p-2 select-all" />
-          <button type="button" onClick={copyToClipboard} className="bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors">
-            Copiar
-          </button>
-        </div>
-        {copySuccess && <p className="text-sm text-green-400 mt-2">{copySuccess}</p>}
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* ... resto do formulário ... */}
-        <div className="flex items-center space-x-6">
-          <div className="shrink-0">
-            <img 
-              className="h-24 w-24 object-cover rounded-full" 
-              src={previewImage || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
-              alt="Foto do perfil" 
-            />
-          </div>
-          <label className="block">
-            <span className="sr-only">Escolha a foto do perfil</span>
-            <input type="file" onChange={handleFileChange} accept="image/*" className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-500 file:text-yellow-900 hover:file:bg-yellow-400"/>
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <label htmlFor="establishmentName" className="block text-sm font-medium text-gray-300 mb-1">Nome do Estabelecimento</label>
-                <input type="text" name="establishmentName" id="establishmentName" value={profileData.establishmentName} onChange={handleChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-            </div>
-            <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-300 mb-1">Endereço</label>
-                <input type="text" name="address" id="address" value={profileData.address} onChange={handleChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-            </div>
-             <div>
-                <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-300 mb-1">WhatsApp (com DDD)</label>
-                <input type="tel" name="whatsapp" id="whatsapp" value={profileData.whatsapp} onChange={handleChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-            </div>
-            <div>
-                <label htmlFor="instagram" className="block text-sm font-medium text-gray-300 mb-1">Instagram (somente o @usuario)</label>
-                <input type="text" name="instagram" id="instagram" value={profileData.instagram} onChange={handleChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-            </div>
-        </div>
-
-        <div className="border-t border-gray-600 pt-6">
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-                Prazo para cancelamento
-            </label>
-            <p className="text-xs text-gray-400 mb-2">O cliente só poderá cancelar antes desse prazo.</p>
-            <div className="flex items-center gap-4">
-                <div>
-                    <label htmlFor="hours" className="block text-xs text-gray-400">Horas</label>
-                    <input 
-                        type="number" 
-                        name="hours" 
-                        id="hours" 
-                        value={policyTime.hours} 
-                        onChange={handlePolicyTimeChange} 
-                        min="0"
-                        className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" 
-                    />
-                </div>
-                <div>
-                    <label htmlFor="minutes" className="block text-xs text-gray-400">Minutos</label>
-                    <input 
-                        type="number" 
-                        name="minutes" 
-                        id="minutes" 
-                        value={policyTime.minutes} 
-                        onChange={handlePolicyTimeChange} 
-                        min="0"
-                        max="59"
-                        step="5"
-                        className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" 
-                    />
-                </div>
-            </div>
-        </div>
-        
-        <div className="border-t border-gray-600 pt-6">
-            <label htmlFor="bookingAdvanceDays" className="block text-sm font-medium text-gray-300 mb-1">
-                Antecedência máxima para agendamento (em dias)
-            </label>
-            <p className="text-xs text-gray-400 mb-2">O cliente só poderá agendar com até X dias de antecedência. (Ex: 30 = agenda aberta para os próximos 30 dias)</p>
-            <input 
-                type="number" 
-                name="bookingAdvanceDays" 
-                id="bookingAdvanceDays" 
-                value={profileData.bookingAdvanceDays} 
-                onChange={handleChange} 
-                min="1"
-                className="w-full md:w-1/2 bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" 
-            />
-        </div>
-        
-        <button type="submit" disabled={loading || isUploading} className="w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">
-          {isUploading ? 'Salvando...' : 'Salvar Alterações'}
+    <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
+      <header className="flex items-center mb-10">
+        <button onClick={onBack} className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 font-semibold transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+            <span>Voltar ao Painel</span>
         </button>
-      </form>
+      </header>
+
+      <main className="max-w-4xl mx-auto">
+        <form onSubmit={handleSave} className="space-y-8">
+          <div className="flex flex-col items-center space-y-4">
+            <img 
+              src={imagePreview || 'https://placehold.co/150x150/1F2937/4B5563?text=Logo'} 
+              alt="Logo do Estabelecimento"
+              className="h-32 w-32 rounded-full object-cover border-4 border-gray-700"
+            />
+            <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+              Alterar Imagem
+              <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+            </label>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h3 className="text-xl font-bold text-yellow-400 mb-4">Dados do Estabelecimento</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <input name="establishmentName" value={profileData.establishmentName || ''} onChange={handleProfileChange} placeholder="Nome do Estabelecimento" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <select name="segment" value={profileData.segment || ''} onChange={handleProfileChange} className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500">
+                <option value="">Selecione a Área de Atuação</option>
+                <option value="Barbearia">Barbearia</option>
+                <option value="Salão de Beleza">Salão de Beleza</option>
+                <option value="Manicure/Pedicure">Manicure/Pedicure</option>
+                <option value="Esteticista">Esteticista</option>
+                <option value="Maquiagem">Maquiagem</option>
+                <option value="Outro">Outro</option>
+              </select>
+              <input name="cnpj" value={profileData.cnpj || ''} onChange={handleProfileChange} placeholder="CNPJ (opcional)" className="md:col-span-2 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+            </div>
+          </div>
+          
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h3 className="text-xl font-bold text-yellow-400 mb-4">A sua Página Pública</h3>
+            <div className="flex items-stretch bg-gray-700 rounded-md focus-within:ring-2 focus-within:ring-yellow-500">
+                <span className="text-gray-400 p-3 border-r border-gray-600">{window.location.origin}/agendar/</span>
+                <input name="publicProfileSlug" value={profileData.publicProfileSlug || ''} onChange={handleSlugChange} placeholder="nome-do-seu-negocio" className="flex-grow bg-transparent p-3 focus:outline-none"/>
+            </div>
+            {slugMessage && <p className="text-red-500 text-sm mt-2">{slugMessage}</p>}
+            <div className="mt-4">
+                <button type="button" onClick={copyToClipboard} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg text-sm">
+                    Copiar Link
+                </button>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h3 className="text-xl font-bold text-yellow-400 mb-4">Contato</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <input name="phoneNumber" value={profileData.phoneNumber || ''} onChange={handleProfileChange} placeholder="Telefone Principal" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <input name="whatsapp" value={profileData.whatsapp || ''} onChange={handleProfileChange} placeholder="WhatsApp para Agendamento" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <input name="instagram" value={profileData.instagram || ''} onChange={handleProfileChange} placeholder="Instagram (ex: @seu_negocio)" className="md:col-span-2 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h3 className="text-xl font-bold text-yellow-400 mb-4">Endereço</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-1 w-full">
+                <input name="postalCode" value={addressData.postalCode || ''} onChange={handleCepChange} placeholder="CEP" maxLength={8} className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+                {cepLoading && <p className="text-xs text-yellow-400 mt-1">A procurar...</p>}
+                {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
+              </div>
+              <input name="street" value={addressData.street || ''} onChange={handleAddressChange} placeholder="Rua / Avenida" className="md:col-span-2 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <input name="number" value={addressData.number || ''} onChange={handleAddressChange} placeholder="Número" className="md:col-span-1 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <input name="neighborhood" value={addressData.neighborhood || ''} onChange={handleAddressChange} placeholder="Bairro" className="md:col-span-2 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <input name="city" value={addressData.city || ''} onChange={handleAddressChange} placeholder="Cidade" className="md:col-span-2 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              <input name="state" value={addressData.state || ''} onChange={handleAddressChange} placeholder="Estado" className="md:col-span-1 w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h3 className="text-xl font-bold text-yellow-400 mb-4">Políticas de Agendamento</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Cancelamento grátis até (minutos antes)</label>
+                <input type="number" name="cancellationPolicyMinutes" value={profileData.cancellationPolicyMinutes || ''} onChange={handleProfileChange} placeholder="Ex: 120" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Agendamento com antecedência de (dias)</label>
+                <input type="number" name="bookingAdvanceDays" value={profileData.bookingAdvanceDays || ''} onChange={handleProfileChange} placeholder="Ex: 30" className="w-full bg-gray-700 p-3 rounded-md focus:ring-2 focus:ring-yellow-500" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button type="submit" disabled={loading || isUploading} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-gray-500">
+              {isUploading ? 'A enviar Imagem...' : loading ? 'A guardar...' : 'Guardar Alterações'}
+            </button>
+          </div>
+        </form>
+      </main>
     </div>
   );
 };

@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth, db } from '../context/AuthContext';
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import Booking from './Booking';
 import ClientProfileManagement from './Client/ClientProfileManagement';
 import type { Appointment, UserProfile } from '../types';
 
 const ClientDashboard = () => {
-  const { userProfile, logout, toggleFavorite, cancelAppointment } = useAuth();
+  const { userProfile, logout, toggleFavorite } = useAuth();
   const [activeTab, setActiveTab] = useState<'search' | 'myAppointments' | 'favorites'>('search');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
@@ -37,17 +37,16 @@ const ClientDashboard = () => {
       const querySnapshot = await getDocs(q);
       const providersData = querySnapshot.docs.map(doc => doc.data() as UserProfile);
       setAllProviders(providersData);
-      setFilteredResults(providersData); // Inicialmente, mostra todos
+      setFilteredResults(providersData);
       setIsLoading(false);
     };
     fetchProviders();
   }, []);
 
-  // Efeito para aplicar os filtros sempre que eles ou o termo de busca mudarem
+  // Efeito para aplicar os filtros
   useEffect(() => {
     let results = [...allProviders];
 
-    // 1. Filtro por Termo de Busca (Nome do estabelecimento, profissional ou serviço)
     if (searchTerm) {
       const searchTermLower = searchTerm.toLowerCase();
       results = results.filter(provider => 
@@ -57,20 +56,17 @@ const ClientDashboard = () => {
       );
     }
 
-    // 2. Filtro por Segmento
     if (filters.segment) {
       results = results.filter(provider => provider.segment === filters.segment);
     }
 
-    // 3. Filtro por Cidade
     if (filters.city) {
       const cityLower = filters.city.toLowerCase();
       results = results.filter(provider => provider.address?.city?.toLowerCase().includes(cityLower));
     }
 
-    // 4. Filtro por Disponibilidade de Data
     if (filters.date) {
-      const selectedDate = new Date(filters.date + 'T00:00:00'); // Adiciona T00:00:00 para evitar problemas de fuso
+      const selectedDate = new Date(filters.date + 'T00:00:00');
       const dayOfWeek = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
       
       results = results.filter(provider => 
@@ -88,8 +84,7 @@ const ClientDashboard = () => {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       setLoadingAppointments(true);
       const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
-      // ... (lógica para buscar detalhes do agendamento)
-      setAppointments(apptsData); // Simplificado para o exemplo
+      setAppointments(apptsData);
       setLoadingAppointments(false);
     });
     return () => unsubscribe();
@@ -132,6 +127,15 @@ const ClientDashboard = () => {
 
   const renderProfessionalCard = (prof: UserProfile) => {
     const isFavorite = userProfile?.favoriteProfessionals?.includes(prof.uid);
+    
+    const getInstagramUrl = (usernameOrUrl: string) => {
+        if (usernameOrUrl.startsWith('http')) {
+            return usernameOrUrl;
+        }
+        const username = usernameOrUrl.replace('@', '');
+        return `https://instagram.com/${username}`;
+    };
+
     return (
         <div key={prof.uid} className="bg-gray-700 p-4 rounded-lg flex items-center justify-between transition-all hover:shadow-lg hover:bg-gray-600">
             <div className="flex items-center flex-grow min-w-0">
@@ -145,7 +149,20 @@ const ClientDashboard = () => {
                 <p className="text-gray-400 truncate">{prof.segment} - {prof.address?.city || 'Endereço não informado'}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4 ml-4">
+            <div className="flex items-center space-x-3 ml-4">
+                {prof.instagram && (
+                    <a 
+                        href={getInstagramUrl(prof.instagram)} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        title="Ver no Instagram"
+                        className="p-2 rounded-full bg-gray-600 hover:bg-pink-600 transition-colors"
+                    >
+                        <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.689-.073-4.948-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.162 6.162 6.162 6.162-2.759 6.162-6.162-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4s1.791-4 4-4 4 1.79 4 4-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44 1.441-.645 1.441-1.44c0-.795-.645-1.44-1.441-1.44z"></path>
+                        </svg>
+                    </a>
+                )}
                 <button onClick={() => toggleFavorite(prof.uid)} title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}>
                     <svg xmlns="http://www.w3.org/2000/svg" className={`h-7 w-7 transition-all duration-200 transform hover:scale-110 ${isFavorite ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`} viewBox="0 0 20 20" fill="currentColor">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -199,10 +216,8 @@ const ClientDashboard = () => {
             <div>
               <h2 className="text-2xl font-bold text-white mb-6">Encontre um profissional</h2>
               
-              {/* --- INÍCIO DA SEÇÃO DE FILTROS --- */}
               <div className="bg-gray-700 p-4 rounded-lg mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {/* Filtro por Segmento */}
                   <div>
                     <label htmlFor="segment" className="block text-sm font-medium text-gray-300 mb-1">Área de Atuação</label>
                     <select name="segment" id="segment" value={filters.segment} onChange={handleFilterChange} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500">
@@ -215,17 +230,14 @@ const ClientDashboard = () => {
                       <option value="Outro">Outro</option>
                     </select>
                   </div>
-                  {/* Filtro por Cidade */}
                   <div>
                     <label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-1">Cidade</label>
                     <input type="text" name="city" id="city" placeholder="Ex: Brasília" value={filters.city} onChange={handleFilterChange} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
                   </div>
-                  {/* Filtro por Data */}
                   <div>
                     <label htmlFor="date" className="block text-sm font-medium text-gray-300 mb-1">Disponível em</label>
                     <input type="date" name="date" id="date" value={filters.date} onChange={handleFilterChange} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" />
                   </div>
-                  {/* Botão de Limpar */}
                   <div className="flex items-end">
                     <button onClick={clearFilters} className="w-full bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
                       Limpar Filtros
@@ -233,7 +245,6 @@ const ClientDashboard = () => {
                   </div>
                 </div>
               </div>
-              {/* --- FIM DA SEÇÃO DE FILTROS --- */}
 
               <div className="relative mb-8">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -243,7 +254,7 @@ const ClientDashboard = () => {
               </div>
 
               <div className="space-y-4">
-                {isLoading ? <p className="text-center text-gray-400">Carregando profissionais...</p> 
+                {isLoading ? <p className="text-center text-gray-400">A carregar profissionais...</p> 
                  : filteredResults.length > 0 ? filteredResults.map(renderProfessionalCard)
                  : <p className="text-center text-gray-400 py-8">Nenhum resultado encontrado para os filtros aplicados.</p>
                 }
@@ -254,7 +265,7 @@ const ClientDashboard = () => {
           {activeTab === 'myAppointments' && (
              <div>
               <h2 className="text-2xl font-bold text-white mb-6">Meus Agendamentos</h2>
-              {/* ... (código dos agendamentos permanece o mesmo) ... */}
+              {/* A lógica dos agendamentos permanece aqui */}
             </div>
           )}
 
@@ -262,13 +273,13 @@ const ClientDashboard = () => {
             <div>
               <h2 className="text-2xl font-bold text-white mb-6">Meus Favoritos</h2>
               {loadingFavorites ? (
-                  <p className="text-center text-gray-400">Carregando favoritos...</p>
+                  <p className="text-center text-gray-400">A carregar favoritos...</p>
               ) : favoriteProfessionals.length > 0 ? (
                   <div className="space-y-4">
                       {favoriteProfessionals.map(renderProfessionalCard)}
                   </div>
               ) : (
-                  <p className="text-center text-gray-400 py-8">Você ainda não adicionou profissionais aos seus favoritos.</p>
+                  <p className="text-center text-gray-400 py-8">Ainda não adicionou profissionais aos seus favoritos.</p>
               )}
             </div>
           )}

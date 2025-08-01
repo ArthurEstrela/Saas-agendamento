@@ -21,7 +21,7 @@ export interface Service {
 export interface DayAvailability {
   active: boolean;
   startTime: string; // "HH:MM"
-  endTime: string;   // "HH:MM"
+  endTime: string; // "HH:MM"
   breakStartTime?: string;
   breakEndTime?: string;
 }
@@ -49,37 +49,40 @@ export interface UserProfile {
   uid: string;
   email: string;
   createdAt: any;
-  userType: 'client' | 'serviceProvider';
-  
+  userType: "client" | "serviceProvider";
+
   phoneNumber?: string;
   photoURL?: string;
   address?: Address;
 
-  displayName?: string; 
+  displayName?: string;
   favoriteProfessionals?: string[];
 
   establishmentName?: string;
   instagram?: string;
   whatsapp?: string;
   segment?: string;
-  publicProfileSlug?: string; 
-  professionals?: Professional[]; 
+  publicProfileSlug?: string;
+  professionals?: Professional[];
   cnpj?: string;
   cancellationPolicyMinutes?: number;
   bookingAdvanceDays?: number;
+
+  averageRating?: number;
+  reviewCount?: number;
 }
 
 export interface Appointment {
   id: string;
   serviceProviderId: string;
-  professionalId: string; 
+  professionalId: string;
   clientId: string;
-  serviceIds: string[]; 
+  serviceIds: string[];
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no-show';
+  status: "pending" | "confirmed" | "cancelled" | "completed" | "no-show";
   createdAt: any;
-  
+
   serviceName?: string;
   professionalName?: string;
   clientName?: string;
@@ -87,6 +90,7 @@ export interface Appointment {
   professionalPhotoURL?: string;
   cancellationPolicyMinutes?: number;
   totalPrice?: number;
+  hasBeenReviewed?: boolean;
 }
 
 // NOVA interface para Despesas
@@ -94,9 +98,28 @@ export interface Expense {
   id: string;
   serviceProviderId: string;
   description: string;
-  category: 'Aluguel' | 'Água' | 'Luz' | 'Salários' | 'Produtos' | 'Marketing' | 'Outros';
+  category:
+    | "Aluguel"
+    | "Água"
+    | "Luz"
+    | "Salários"
+    | "Produtos"
+    | "Marketing"
+    | "Outros";
   amount: number;
   isFixed: boolean;
   date: string; // 'YYYY-MM-DD'
+  createdAt: any;
+}
+
+export interface Review {
+  id: string;
+  serviceProviderId: string;
+  clientId: string;
+  clientName: string;
+  clientPhotoURL?: string;
+  appointmentId: string;
+  rating: number; // 1 a 5
+  comment: string;
   createdAt: any;
 }

@@ -5,6 +5,7 @@ import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement';
 import AvailabilityManagement from './ServiceProvider/AvailabilityManagement';
 import ProfileManagement from './ServiceProvider/ProfileManagement';
 import FinancialManagement from './ServiceProvider/FinancialManagement';
+import ReviewsManagement from './ServiceProvider/ReviewsManagement';
 import type { Appointment } from '../types';
 
 // Componente de Modal de Confirmação
@@ -27,13 +28,12 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: str
 
 const ServiceProviderDashboard = () => {
   const { userProfile, logout, updateAppointmentStatus } = useAuth();
-  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'financial'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'financial' | 'reviews'>('calendar');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
   
-  // Estados para os filtros da agenda
   const [filterMode, setFilterMode] = useState<'day' | 'range' | 'all'>('day');
   const [dateRange, setDateRange] = useState({
     start: new Date().toISOString().split('T')[0],
@@ -79,7 +79,6 @@ const ServiceProviderDashboard = () => {
   const filteredAndSortedAppointments = useMemo(() => {
     let filtered = allAppointments;
 
-    // Aplica filtro de data com base no modo
     if (filterMode === 'day') {
         filtered = filtered.filter(app => app.date === dateRange.start);
     } else if (filterMode === 'range') {
@@ -90,23 +89,20 @@ const ServiceProviderDashboard = () => {
             return appDate >= startDate && appDate <= endDate;
         });
     }
-    // Se o modo for 'all', não aplica filtro de data
 
-    // Aplica filtro de profissional
     if (professionalFilter !== 'todos') {
         filtered = filtered.filter(app => app.professionalId === professionalFilter);
     }
 
-    // Lógica de Ordenação Priorizada
     const now = new Date();
     const getOrder = (app: Appointment) => {
         const appDate = new Date(`${app.date}T${app.time}`);
-        if (app.status === 'pending') return 1; // 1. Pendentes
-        if (app.status === 'confirmed' && appDate < now) return 2; // 2. Ações Requeridas (Concluir/Não Compareceu)
-        if (app.status === 'confirmed' && appDate >= now) return 3; // 3. Próximos Agendamentos
-        if (app.status === 'completed') return 4; // 4. Concluídos
-        if (app.status === 'no-show') return 5; // 5. Não Compareceu
-        return 6; // Outros
+        if (app.status === 'pending') return 1;
+        if (app.status === 'confirmed' && appDate < now) return 2;
+        if (app.status === 'confirmed' && appDate >= now) return 3;
+        if (app.status === 'completed') return 4;
+        if (app.status === 'no-show') return 5;
+        return 6;
     };
 
     return filtered.sort((a, b) => {
@@ -165,6 +161,7 @@ const ServiceProviderDashboard = () => {
             <button onClick={() => setActiveTab('professionals')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'professionals' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Profissionais</button>
             <button onClick={() => setActiveTab('availability')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'availability' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Disponibilidade</button>
             <button onClick={() => setActiveTab('financial')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'financial' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Financeiro</button>
+            <button onClick={() => setActiveTab('reviews')} className={`py-3 px-4 font-semibold transition-colors duration-300 whitespace-nowrap ${activeTab === 'reviews' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Avaliações</button>
           </div>
         </div>
 
@@ -266,6 +263,7 @@ const ServiceProviderDashboard = () => {
             {activeTab === 'professionals' && <ProfessionalsManagement />}
             {activeTab === 'availability' && <AvailabilityManagement />}
             {activeTab === 'financial' && <FinancialManagement />}
+            {activeTab === 'reviews' && <ReviewsManagement />}
         </div>
       </main>
     </div>

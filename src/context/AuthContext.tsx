@@ -19,13 +19,16 @@ import {
   arrayUnion,
   arrayRemove,
   deleteDoc,
+  collection,
+  runTransaction,
+  Timestamp
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken } from "firebase/messaging";
-import type { UserProfile } from "../types";
+import type { UserProfile, Review } from "../types";
 import { useToast } from "./ToastContext";
 
-// Configuração do Firebase a partir das variáveis de ambiente
+// Configuração do Firebase
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -36,7 +39,7 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Inicialização dos serviços do Firebase
+// Inicialização dos serviços
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
@@ -59,18 +62,13 @@ export const requestForToken = async () => {
   }
 };
 
-// Tipagem para o contexto de autenticação
+// Tipagem do Contexto
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    userType: "client" | "serviceProvider",
-    profileData?: Partial<UserProfile>
-  ) => Promise<void>;
+  register: (email: string, password: string, userType: "client" | "serviceProvider", profileData?: Partial<UserProfile>) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
@@ -78,6 +76,7 @@ interface AuthContextType {
   cancelAppointment: (appointmentId: string) => Promise<void>;
   updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => Promise<void>;
   requestFCMToken: () => Promise<void>;
+  submitReview: (reviewData: Omit<Review, 'id' | 'createdAt' | 'clientName' | 'clientPhotoURL'>) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -127,27 +126,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (
-    email: string,
-    password: string,
-    userType: "client" | "serviceProvider",
-    profileData: Partial<UserProfile> = {}
-  ) => {
+  const register = async (email: string, password: string, userType: "client" | "serviceProvider", profileData: Partial<UserProfile> = {}) => {
     setLoading(true);
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-
         const newProfile: UserProfile = {
-          uid: user.uid,
-          email: user.email!,
-          createdAt: new Date(),
-          userType,
+          uid: user.uid, email: user.email!, createdAt: new Date(), userType,
           displayName: profileData.displayName || (userType === 'client' ? profileData.displayName : ''),
           establishmentName: profileData.establishmentName || (userType === 'serviceProvider' ? profileData.establishmentName : ''),
           ...profileData,
         };
-
         await setDoc(doc(db, `users/${user.uid}`), newProfile);
         setUserProfile(newProfile);
     } catch (error) {
@@ -165,15 +154,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
         const profile = await fetchUserProfile(user.uid);
-
         if (!profile) {
           const newProfile: UserProfile = {
-            uid: user.uid,
-            email: user.email!,
-            createdAt: new Date(),
-            userType: "client",
-            displayName: user.displayName || "",
-            photoURL: user.photoURL || "",
+            uid: user.uid, email: user.email!, createdAt: new Date(), userType: "client",
+            displayName: user.displayName || "", photoURL: user.photoURL || "",
           };
           await setDoc(doc(db, `users/${user.uid}`), newProfile);
           setUserProfile(newProfile);
@@ -259,15 +243,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (userDoc.exists()) {
           const currentTokens = userDoc.data().fcmTokens || [];
           if (!currentTokens.includes(fcmToken)) {
-            await updateDoc(userDocRef, {
-              fcmTokens: arrayUnion(fcmToken)
-            });
+            await updateDoc(userDocRef, { fcmTokens: arrayUnion(fcmToken) });
             console.log("Token FCM guardado no perfil do utilizador.");
           }
         }
       }
     } catch (error) {
       console.error("Erro ao guardar o token FCM:", error);
+    }
+  };
+
+  const submitReview = async (reviewData: Omit<Review, 'id' | 'createdAt' | 'clientName' | 'clientPhotoURL'>) => {
+    if (!userProfile) {
+      showToast("Precisa de estar autenticado para deixar uma avaliação.", 'error');
+      return;
+    }
+
+    const establishmentRef = doc(db, "users", reviewData.serviceProviderId);
+    const reviewRef = doc(collection(db, `users/${reviewData.serviceProviderId}/reviews`));
+    const appointmentRef = doc(db, "appointments", reviewData.appointmentId);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const establishmentDoc = await transaction.get(establishmentRef);
+        if (!establishmentDoc.exists()) {
+          throw "Estabelecimento não encontrado!";
+        }
+
+        transaction.set(reviewRef, { 
+            ...reviewData,
+            id: reviewRef.id,
+            clientName: userProfile.displayName || 'Anónimo',
+            clientPhotoURL: userProfile.photoURL || '',
+            createdAt: Timestamp.now() 
+        });
+
+        const establishmentData = establishmentDoc.data() as UserProfile;
+        const currentRating = establishmentData.averageRating || 0;
+        const reviewCount = establishmentData.reviewCount || 0;
+        const newReviewCount = reviewCount + 1;
+        const newAverageRating = (currentRating * reviewCount + reviewData.rating) / newReviewCount;
+
+        transaction.update(establishmentRef, {
+            averageRating: newAverageRating,
+            reviewCount: newReviewCount,
+        });
+
+        transaction.update(appointmentRef, { hasBeenReviewed: true });
+      });
+
+      showToast("A sua avaliação foi enviada com sucesso!", 'success');
+    } catch (error) {
+      console.error("Erro ao enviar avaliação:", error);
+      showToast("Ocorreu um erro ao enviar a sua avaliação.", 'error');
     }
   };
 
@@ -286,6 +314,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         cancelAppointment,
         updateAppointmentStatus,
         requestFCMToken,
+        submitReview,
       }}
     >
       {children}

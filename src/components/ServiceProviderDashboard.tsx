@@ -33,7 +33,7 @@ const ServiceProviderDashboard = () => {
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
-  
+
   const [filterMode, setFilterMode] = useState<'day' | 'range' | 'all'>('day');
   const [dateRange, setDateRange] = useState({
     start: new Date().toISOString().split('T')[0],
@@ -45,10 +45,10 @@ const ServiceProviderDashboard = () => {
     if (!userProfile?.uid) return;
 
     const q = query(
-      collection(db, 'appointments'), 
+      collection(db, 'appointments'),
       where('serviceProviderId', '==', userProfile.uid)
     );
-    
+
     const unsubscribe = onSnapshot(q, async (snapshot) => {
         setLoading(true);
         const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
@@ -58,17 +58,17 @@ const ServiceProviderDashboard = () => {
             const clientSnap = await getDoc(clientDocRef);
             const clientProfile = clientSnap.data();
             const professional = userProfile.professionals?.find(p => p.id === appt.professionalId);
-            
+
             let totalPrice = 0;
             const serviceNames = appt.serviceIds?.map(serviceId => {
                 const service = professional?.services.find(s => s.id === serviceId);
                 if (service) { totalPrice += service.price; return service.name; }
                 return 'Serviço Removido';
             }).join(', ') || 'N/A';
-            
+
             return { ...appt, clientName: clientProfile?.displayName || 'Cliente', professionalName: professional?.name || 'N/A', serviceName: serviceNames, totalPrice };
         }));
-        
+
         setAllAppointments(appointmentsWithDetails.filter(app => app.status !== 'cancelled'));
         setLoading(false);
     });
@@ -112,7 +112,7 @@ const ServiceProviderDashboard = () => {
         return new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime();
     });
   }, [allAppointments, filterMode, dateRange, professionalFilter]);
-  
+
   const handleActionConfirmation = (action: () => void, title: string, message: string) => {
     setModalState({ isOpen: true, title, message, onConfirm: () => { action(); setModalState(null); } });
   };
@@ -134,24 +134,32 @@ const ServiceProviderDashboard = () => {
       {modalState?.isOpen && (
           <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />
       )}
-      <header className="flex justify-between items-center mb-10">
-        <div className="flex items-center">
-            <img src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt="Foto do perfil" className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700" />
-            <div>
-                <h1 className="text-2xl font-bold text-white">{userProfile?.establishmentName}</h1>
-                <p className="text-gray-400">Painel do Prestador de Serviço</p>
-            </div>
-        </div>
-        <div className="flex items-center space-x-4">
-          <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
-            <span>Editar Perfil</span>
-          </button>
-          <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
-            <span>Sair</span>
-          </button>
-        </div>
+      <header className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
+          {/* Establishment Info (Left on Desktop) */}
+          <div className="flex items-center self-start md:self-center">
+              <img src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt="Foto do perfil" className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700" />
+              <div>
+                  <h1 className="text-xl font-bold text-white">{userProfile?.establishmentName || 'Painel'}</h1>
+                  <p className="text-gray-400 text-sm">Painel do Prestador</p>
+              </div>
+          </div>
+
+          {/* Logo (Center on Desktop) */}
+          <div className="order-first md:order-none">
+              <img className='w-[10rem] md:w-[12rem]' src="/src/assets/stylo-logo.png" alt="logo stylo" />
+          </div>
+
+          {/* Buttons (Right on Desktop) */}
+          <div className="flex items-center justify-end w-full md:w-auto space-x-2">
+              <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-3 rounded-lg transition-colors duration-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                  <span className="hidden sm:inline">Perfil</span>
+              </button>
+              <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-3 rounded-lg transition-colors duration-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
+                  <span className="hidden sm:inline">Sair</span>
+              </button>
+          </div>
       </header>
 
       <main>
@@ -169,14 +177,14 @@ const ServiceProviderDashboard = () => {
             {activeTab === 'calendar' && (
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-6">Agenda e Solicitações</h2>
-                    
+
                     <div className="bg-gray-700 p-4 rounded-lg mb-6 space-y-4">
                         <div className="flex flex-wrap items-center gap-2">
                             <button onClick={() => setFilterMode('day')} className={`px-3 py-1 rounded-md text-sm font-semibold ${filterMode === 'day' ? 'bg-yellow-500 text-black' : 'bg-gray-600 hover:bg-gray-500'}`}>Ver por Dia</button>
                             <button onClick={() => setFilterMode('range')} className={`px-3 py-1 rounded-md text-sm font-semibold ${filterMode === 'range' ? 'bg-yellow-500 text-black' : 'bg-gray-600 hover:bg-gray-500'}`}>Ver por Período</button>
                             <button onClick={() => setFilterMode('all')} className={`px-3 py-1 rounded-md text-sm font-semibold ${filterMode === 'all' ? 'bg-yellow-500 text-black' : 'bg-gray-600 hover:bg-gray-500'}`}>Mostrar Todos</button>
                         </div>
-                        
+
                         <div className="flex flex-col md:flex-row gap-4">
                             {filterMode === 'day' && (
                                 <div className="flex-1">
@@ -213,7 +221,7 @@ const ServiceProviderDashboard = () => {
                             {filteredAndSortedAppointments.map(app => {
                                 const appointmentDateTime = new Date(`${app.date}T${app.time}`);
                                 const isPast = appointmentDateTime < new Date();
-                                
+
                                 return (
                                 <li key={app.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center">
                                     <div className="flex items-center mb-3 md:mb-0">
@@ -237,7 +245,7 @@ const ServiceProviderDashboard = () => {
                                         }`}>
                                             {app.status === 'pending' ? 'Pendente' : app.status === 'confirmed' ? 'Confirmado' : app.status === 'completed' ? 'Concluído' : 'Não Compareceu'}
                                         </span>
-                                        
+
                                         {app.status === 'pending' && (
                                             <>
                                                 <button onClick={() => updateAppointmentStatus(app.id, 'confirmed')} className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Confirmar</button>

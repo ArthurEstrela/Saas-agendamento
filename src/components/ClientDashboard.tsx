@@ -32,7 +32,7 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
             <div className="bg-gray-800 p-8 rounded-xl w-full max-w-lg border border-gray-700">
                 <h3 className="text-xl font-bold text-white mb-2">Avalie o seu Atendimento</h3>
                 <p className="text-sm text-gray-400 mb-6">Estabelecimento: {appointment.establishmentName}</p>
-                
+
                 <div className="flex justify-center items-center mb-6">
                     {[1, 2, 3, 4, 5].map((star) => (
                         <svg key={star}
@@ -106,7 +106,7 @@ const ClientDashboard = () => {
     const filteredResults = useMemo(() => {
         return allProviders.filter(provider => {
             const searchTermLower = searchTerm.toLowerCase();
-            const matchesSearch = searchTerm ? 
+            const matchesSearch = searchTerm ?
                 provider.establishmentName?.toLowerCase().includes(searchTermLower) ||
                 provider.professionals?.some(p => p.name.toLowerCase().includes(searchTermLower)) ||
                 provider.professionals?.some(p => p.services.some(s => s.name.toLowerCase().includes(searchTermLower)))
@@ -128,16 +128,16 @@ const ClientDashboard = () => {
     useEffect(() => {
         if (!userProfile?.uid) return;
         const q = query(collection(db, 'appointments'), where('clientId', '==', userProfile.uid));
-        
+
         const unsubscribe = onSnapshot(q, async (snapshot) => {
             setLoadingAppointments(true);
             const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
-            
+
             const appointmentsWithDetails = await Promise.all(apptsData.map(async (appt) => {
                 const providerDocRef = doc(db, "users", appt.serviceProviderId);
                 const providerSnap = await getDoc(providerDocRef);
                 const providerProfile = providerSnap.exists() ? providerSnap.data() as UserProfile : null;
-                
+
                 const professional = providerProfile?.professionals?.find(p => p.id === appt.professionalId);
                 const serviceNames = appt.serviceIds?.map(serviceId => professional?.services.find(s => s.id === serviceId)?.name || '').join(', ');
 
@@ -178,7 +178,7 @@ const ClientDashboard = () => {
             fetchFavorites();
         }
     }, [userProfile?.favoriteProfessionals, activeTab]);
-    
+
     const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
@@ -259,27 +259,35 @@ const ClientDashboard = () => {
         <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
             {modalState?.isOpen && <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />}
             <ReviewModal isOpen={reviewModal.isOpen} onClose={() => setReviewModal({ isOpen: false })} appointment={reviewModal.appointment!} onSubmit={handleSubmitReview} />
-            
-            <header className="flex justify-between items-center mb-10">
-                <div className="flex items-center">
+
+            <header className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
+                {/* User Info (Left on Desktop) */}
+                <div className="flex items-center self-start md:self-center">
                     <img src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt="A sua foto de perfil" className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700" />
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Olá, {userProfile?.displayName || 'Cliente'}</h1>
-                        <p className="text-gray-400">Encontre os melhores profissionais</p>
+                        <p className="text-gray-400 text-sm">Bem-vindo(a),</p>
+                        <h1 className="text-xl font-bold text-white">{userProfile?.displayName || 'Cliente'}</h1>
                     </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                    <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+
+                {/* Logo (Center on Desktop) */}
+                <div className="order-first md:order-none">
+                    <img className='w-[10rem] md:w-[12rem]' src="/src/assets/stylo-logo.png" alt="logo stylo" />
+                </div>
+
+                {/* Buttons (Right on Desktop) */}
+                <div className="flex items-center justify-end w-full md:w-auto space-x-2">
+                    <button onClick={() => setIsEditingProfile(true)} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-3 rounded-lg transition-colors duration-300">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
-                        <span>Editar Perfil</span>
+                        <span className="hidden sm:inline">Perfil</span>
                     </button>
-                    <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+                    <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-3 rounded-lg transition-colors duration-300">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
-                        <span>Sair</span>
+                        <span className="hidden sm:inline">Sair</span>
                     </button>
                 </div>
             </header>
-            
+
             <main>
                 <div className="mb-8">
                     <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">

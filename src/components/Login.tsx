@@ -108,15 +108,15 @@ const Login = () => {
     <>
       <h3 className="text-lg font-semibold text-yellow-400 col-span-full mt-4 border-t border-gray-700 pt-4">Endereço</h3>
       <div className="relative">
-        <input 
-          type="text" 
-          name="postalCode" 
-          placeholder="CEP" 
-          value={formData.postalCode} 
-          onChange={handleChange} 
+        <input
+          type="text"
+          name="postalCode"
+          placeholder="CEP"
+          value={formData.postalCode}
+          onChange={handleChange}
           onBlur={handleCepBlur} // <-- EVENTO ADICIONADO AQUI
-          required 
-          className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" 
+          required
+          className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500"
         />
         {cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando CEP...</p>}
         {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
@@ -140,11 +140,11 @@ const Login = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col items-center justify-center p-4 font-sans">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-yellow-500">Stylo</h1>
-          <p className="text-gray-400 mt-2">Sua agenda de beleza na palma da mão</p>
+          <img className=" " src="/src/assets/stylo-logo.png" alt="logo stylo" />
+          <p className="text-gray-400 mt-2 text-lg">Sua agenda de beleza na palma da mão.</p>
         </div>
 
         <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
@@ -227,7 +227,7 @@ const Login = () => {
                 )}
               </div>
             )}
-            
+
             <button type="submit" disabled={loading} className="w-full bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 disabled:bg-gray-500">
               {loading ? 'Processando...' : isLoginView ? 'Entrar' : 'Criar Conta'}
             </button>

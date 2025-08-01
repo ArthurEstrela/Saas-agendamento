@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import ProfessionalsManagement from './ServiceProvider/ProfessionalsManagement';
@@ -29,9 +29,17 @@ const ServiceProviderDashboard = () => {
   const { userProfile, logout, updateAppointmentStatus } = useAuth();
   const [activeTab, setActiveTab] = useState<'calendar' | 'professionals' | 'availability' | 'financial'>('calendar');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
+  
+  // Estados para os filtros da agenda
+  const [filterMode, setFilterMode] = useState<'day' | 'range' | 'all'>('day');
+  const [dateRange, setDateRange] = useState({
+    start: new Date().toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0],
+  });
+  const [professionalFilter, setProfessionalFilter] = useState('todos');
 
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -61,41 +69,64 @@ const ServiceProviderDashboard = () => {
             return { ...appt, clientName: clientProfile?.displayName || 'Cliente', professionalName: professional?.name || 'N/A', serviceName: serviceNames, totalPrice };
         }));
         
-        appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
-        
-        setAppointments(appointmentsWithDetails.filter(app => app.status !== 'cancelled'));
+        setAllAppointments(appointmentsWithDetails.filter(app => app.status !== 'cancelled'));
         setLoading(false);
     });
 
     return () => unsubscribe();
   }, [userProfile]);
+
+  const filteredAndSortedAppointments = useMemo(() => {
+    let filtered = allAppointments;
+
+    // Aplica filtro de data com base no modo
+    if (filterMode === 'day') {
+        filtered = filtered.filter(app => app.date === dateRange.start);
+    } else if (filterMode === 'range') {
+        const startDate = new Date(dateRange.start + 'T00:00:00');
+        const endDate = new Date(dateRange.end + 'T23:59:59');
+        filtered = filtered.filter(app => {
+            const appDate = new Date(app.date + 'T00:00:00');
+            return appDate >= startDate && appDate <= endDate;
+        });
+    }
+    // Se o modo for 'all', não aplica filtro de data
+
+    // Aplica filtro de profissional
+    if (professionalFilter !== 'todos') {
+        filtered = filtered.filter(app => app.professionalId === professionalFilter);
+    }
+
+    // Lógica de Ordenação Priorizada
+    const now = new Date();
+    const getOrder = (app: Appointment) => {
+        const appDate = new Date(`${app.date}T${app.time}`);
+        if (app.status === 'pending') return 1; // 1. Pendentes
+        if (app.status === 'confirmed' && appDate < now) return 2; // 2. Ações Requeridas (Concluir/Não Compareceu)
+        if (app.status === 'confirmed' && appDate >= now) return 3; // 3. Próximos Agendamentos
+        if (app.status === 'completed') return 4; // 4. Concluídos
+        if (app.status === 'no-show') return 5; // 5. Não Compareceu
+        return 6; // Outros
+    };
+
+    return filtered.sort((a, b) => {
+        const orderA = getOrder(a);
+        const orderB = getOrder(b);
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime();
+    });
+  }, [allAppointments, filterMode, dateRange, professionalFilter]);
   
   const handleActionConfirmation = (action: () => void, title: string, message: string) => {
-    setModalState({
-        isOpen: true,
-        title,
-        message,
-        onConfirm: () => {
-            action();
-            setModalState(null);
-        }
-    });
+    setModalState({ isOpen: true, title, message, onConfirm: () => { action(); setModalState(null); } });
   };
 
   const handleCompleteAppointment = (app: Appointment) => {
-    handleActionConfirmation(
-        () => updateAppointmentStatus(app.id, 'completed', app.totalPrice),
-        'Confirmar Conclusão',
-        `Tem a certeza de que pretende marcar o serviço de "${app.serviceName}" como concluído?`
-    );
+    handleActionConfirmation(() => updateAppointmentStatus(app.id, 'completed', app.totalPrice), 'Confirmar Conclusão', `Tem a certeza de que pretende marcar o serviço de "${app.serviceName}" como concluído?`);
   };
 
   const handleNoShowAppointment = (app: Appointment) => {
-    handleActionConfirmation(
-        () => updateAppointmentStatus(app.id, 'no-show'),
-        'Confirmar Ausência',
-        `Tem a certeza de que pretende marcar este agendamento como "não compareceu"? Esta ação não pode ser desfeita.`
-    );
+    handleActionConfirmation(() => updateAppointmentStatus(app.id, 'no-show'), 'Confirmar Ausência', `Tem a certeza de que pretende marcar este agendamento como "não compareceu"?`);
   };
 
   if (isEditingProfile) {
@@ -105,20 +136,11 @@ const ServiceProviderDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
       {modalState?.isOpen && (
-          <ConfirmationModal 
-              title={modalState.title}
-              message={modalState.message}
-              onConfirm={modalState.onConfirm}
-              onCancel={() => setModalState(null)}
-          />
+          <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />
       )}
       <header className="flex justify-between items-center mb-10">
         <div className="flex items-center">
-            <img 
-              src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
-              alt="Foto do perfil" 
-              className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700"
-            />
+            <img src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt="Foto do perfil" className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700" />
             <div>
                 <h1 className="text-2xl font-bold text-white">{userProfile?.establishmentName}</h1>
                 <p className="text-gray-400">Painel do Prestador de Serviço</p>
@@ -149,12 +171,49 @@ const ServiceProviderDashboard = () => {
         <div className="bg-gray-800 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-700">
             {activeTab === 'calendar' && (
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-6">Solicitações e Agenda</h2>
+                    <h2 className="text-2xl font-bold text-white mb-6">Agenda e Solicitações</h2>
+                    
+                    <div className="bg-gray-700 p-4 rounded-lg mb-6 space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={() => setFilterMode('day')} className={`px-3 py-1 rounded-md text-sm font-semibold ${filterMode === 'day' ? 'bg-yellow-500 text-black' : 'bg-gray-600 hover:bg-gray-500'}`}>Ver por Dia</button>
+                            <button onClick={() => setFilterMode('range')} className={`px-3 py-1 rounded-md text-sm font-semibold ${filterMode === 'range' ? 'bg-yellow-500 text-black' : 'bg-gray-600 hover:bg-gray-500'}`}>Ver por Período</button>
+                            <button onClick={() => setFilterMode('all')} className={`px-3 py-1 rounded-md text-sm font-semibold ${filterMode === 'all' ? 'bg-yellow-500 text-black' : 'bg-gray-600 hover:bg-gray-500'}`}>Mostrar Todos</button>
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row gap-4">
+                            {filterMode === 'day' && (
+                                <div className="flex-1">
+                                    <label htmlFor="dateStart" className="block text-sm font-medium text-gray-300 mb-1">Selecione o dia</label>
+                                    <input type="date" id="dateStart" value={dateRange.start} onChange={e => setDateRange({start: e.target.value, end: e.target.value})} className="w-full bg-gray-600 text-white p-2 rounded-md" />
+                                </div>
+                            )}
+                            {filterMode === 'range' && (
+                                <>
+                                    <div className="flex-1">
+                                        <label htmlFor="dateStart" className="block text-sm font-medium text-gray-300 mb-1">Data de Início</label>
+                                        <input type="date" id="dateStart" value={dateRange.start} onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))} className="w-full bg-gray-600 text-white p-2 rounded-md" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label htmlFor="dateEnd" className="block text-sm font-medium text-gray-300 mb-1">Data de Fim</label>
+                                        <input type="date" id="dateEnd" value={dateRange.end} onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))} className="w-full bg-gray-600 text-white p-2 rounded-md" />
+                                    </div>
+                                </>
+                            )}
+                            <div className="flex-1">
+                                <label htmlFor="professionalFilter" className="block text-sm font-medium text-gray-300 mb-1">Filtrar por profissional</label>
+                                <select id="professionalFilter" value={professionalFilter} onChange={e => setProfessionalFilter(e.target.value)} className="w-full bg-gray-600 text-white p-2 rounded-md">
+                                    <option value="todos">Todos os Profissionais</option>
+                                    {userProfile?.professionals?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     {loading ? (
                         <p className="text-center text-gray-400">A carregar agendamentos...</p>
-                    ) : appointments.length > 0 ? (
+                    ) : filteredAndSortedAppointments.length > 0 ? (
                         <ul className="space-y-4">
-                            {appointments.map(app => {
+                            {filteredAndSortedAppointments.map(app => {
                                 const appointmentDateTime = new Date(`${app.date}T${app.time}`);
                                 const isPast = appointmentDateTime < new Date();
                                 
@@ -177,7 +236,7 @@ const ServiceProviderDashboard = () => {
                                             app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' :
                                             app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
                                             app.status === 'completed' ? 'bg-blue-500/20 text-blue-300' :
-                                            'bg-red-500/20 text-red-300' // No-show
+                                            'bg-red-500/20 text-red-300'
                                         }`}>
                                             {app.status === 'pending' ? 'Pendente' : app.status === 'confirmed' ? 'Confirmado' : app.status === 'completed' ? 'Concluído' : 'Não Compareceu'}
                                         </span>
@@ -200,7 +259,7 @@ const ServiceProviderDashboard = () => {
                             )})}
                         </ul>
                     ) : (
-                        <p className="text-center text-gray-400 py-8">Nenhum agendamento encontrado.</p>
+                        <p className="text-center text-gray-400 py-8">Nenhum agendamento encontrado para os filtros selecionados.</p>
                     )}
                 </div>
             )}

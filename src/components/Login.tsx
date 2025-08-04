@@ -144,7 +144,7 @@ const Login = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img className=" " src="/src/assets/stylo-logo.png" alt="logo stylo" />
-          <p className="text-gray-400 mt-2 text-lg">Sua agenda de beleza na palma da mão.</p>
+          <p className="text-yellow-400 font-semibold mt-3 text-lg">Seu tempo, seu Stylo.</p>
         </div>
 
         <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">

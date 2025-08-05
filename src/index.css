@@ -14,3 +14,10 @@
 .animate-fade-in-down {
   animation: fade-in-down 0.5s ease-out forwards;
 }
+
+@layer utilities {
+  .gradient-border {
+    border-image-slice: 1;
+    border-image-source: linear-gradient(to right, #FBBF24, #F59E0B);
+  }
+}

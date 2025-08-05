@@ -4,6 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../context/AuthContext';
 import Booking from './Booking';
 import type { UserProfile } from '../types';
+import Footer from './Footer'; // Importe o Footer aqui
 
 const PublicBookingPage = () => {
   const { professionalId } = useParams<{ professionalId: string }>();
@@ -58,11 +59,17 @@ const PublicBookingPage = () => {
   }
 
   if (professional) {
-    // O componente Booking agora não precisa do botão "Voltar" neste contexto
-    return <Booking professional={professional} />;
+    return (
+        <div className="flex flex-col min-h-screen bg-gray-900">
+            <main className="flex-grow">
+                <Booking professional={professional} />
+            </main>
+            <Footer />
+        </div>
+    );
   }
 
-  return null; // Caso final, embora não deva ser alcançado
+  return null;
 };
 
 export default PublicBookingPage;

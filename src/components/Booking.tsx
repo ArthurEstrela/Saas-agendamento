@@ -1,351 +1,295 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, db } from '../context/AuthContext';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { useToast } from '../context/ToastContext';
+import type { UserProfile, Service, Professional, Appointment } from '../types';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import '../Calendar.css';
-import { useToast } from '../context/ToastContext';
-import type { UserProfile, Service, Appointment, Professional } from '../types';
+import '../Calendar.css'; // Seu CSS customizado para o calendário
+import { Loader2, ArrowLeft, Scissors, Users, Calendar as CalendarIcon, Clock, CheckCircle, Info, LogIn } from 'lucide-react';
+import Login from './Login'; // Importando o componente de Login
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-type ValuePiece = Date | null;
-type Value = ValuePiece | [ValuePiece, ValuePiece];
-
-interface TimeSlot {
-  time: string;
-  status: 'available' | 'booked' | 'break' | 'past';
-}
-
+// --- Tipos e Interfaces ---
 interface BookingProps {
-  professional: UserProfile; // Este é o perfil do estabelecimento
-  onBack?: () => void;
+  professional: UserProfile; // Alterado para receber o objeto completo
+  onBack: () => void;
 }
 
-const Booking = ({ professional: establishment, onBack }: BookingProps) => {
-  const { userProfile } = useAuth();
+// --- Componentes de UI ---
+
+const BookingHeader: React.FC<{ provider: UserProfile; onBack: () => void }> = ({ provider, onBack }) => (
+  <div className="flex items-center mb-8">
+    <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-800 mr-4 transition-colors">
+      <ArrowLeft className="w-6 h-6 text-gray-300" />
+    </button>
+    <img
+      src={provider.photoURL || `https://placehold.co/150x150/111827/daa520?text=${(provider.establishmentName || 'S').charAt(0)}`}
+      alt={provider.establishmentName}
+      className="w-16 h-16 rounded-full object-cover border-2 border-gray-700 shadow-md"
+    />
+    <div className="ml-4">
+      <p className="text-sm text-gray-400">A agendar em</p>
+      <h2 className="text-2xl font-bold text-white">{provider.establishmentName}</h2>
+    </div>
+  </div>
+);
+
+const Stepper: React.FC<{ currentStep: number }> = ({ currentStep }) => {
+  const steps = ['Serviços', 'Profissional', 'Data e Hora', 'Confirmar'];
+  return (
+    <div className="flex items-center justify-between mb-12">
+      {steps.map((label, index) => (
+        <React.Fragment key={index}>
+          <div className="flex flex-col items-center text-center w-20">
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
+                currentStep > index + 1 ? 'bg-green-500 text-white' : currentStep === index + 1 ? 'bg-[#daa520] text-black ring-4 ring-[#daa520]/20' : 'bg-gray-800 text-gray-500'
+              }`}
+            >
+              {currentStep > index + 1 ? <CheckCircle size={20} /> : index + 1}
+            </div>
+            <p className={`mt-2 text-xs font-medium ${currentStep >= index + 1 ? 'text-white' : 'text-gray-500'}`}>{label}</p>
+          </div>
+          {index < steps.length - 1 && <div className={`flex-1 h-1 rounded-full transition-colors duration-500 ${currentStep > index + 1 ? 'bg-green-500' : 'bg-gray-800'}`}></div>}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
+// --- Componente Principal ---
+const Booking: React.FC<BookingProps> = ({ professional: serviceProvider, onBack }) => {
+  const { currentUser } = useAuth();
   const { showToast } = useToast();
-  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
+
+  const [step, setStep] = useState(1);
+  const [loginVisible, setLoginVisible] = useState(false);
+  
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Value>(new Date());
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
-  const [selectedTime, setSelectedTime] = useState<string>('');
-  const [isBooking, setIsBooking] = useState(false);
-  const [availabilityMessage, setAvailabilityMessage] = useState('');
 
-  const { totalDuration, totalPrice } = useMemo(() => {
-    return selectedServices.reduce(
-      (acc, service) => {
-        acc.totalDuration += service.duration;
-        acc.totalPrice += service.price;
-        return acc;
-      },
-      { totalDuration: 0, totalPrice: 0 }
-    );
-  }, [selectedServices]);
-
+  // Se o usuário faz login com sucesso, esconde o modal e tenta confirmar o agendamento de novo
   useEffect(() => {
-    setSelectedServices([]);
-    setSelectedDate(new Date());
-    setTimeSlots([]);
-    setSelectedTime('');
-  }, [selectedProfessional]);
+    if (currentUser && loginVisible) {
+      setLoginVisible(false);
+      showToast("Login efetuado com sucesso! Agora pode confirmar o seu agendamento.", { type: 'success' });
+      // Não chama handleConfirmBooking aqui para evitar loop, o usuário deve clicar novamente.
+    }
+  }, [currentUser, loginVisible]);
 
-  const handleToggleService = (service: Service) => {
-    setSelectedServices(prev => {
-      const isSelected = prev.some(s => s.id === service.id);
-      if (isSelected) {
-        return prev.filter(s => s.id !== service.id);
-      } else {
-        return [...prev, service];
-      }
-    });
-    setSelectedTime('');
-  };
-
+  // Lógica para buscar horários disponíveis
   useEffect(() => {
     const fetchAvailableTimes = async () => {
-      setTimeSlots([]);
-      setSelectedTime('');
-      setAvailabilityMessage('');
-
-      if (!selectedDate || Array.isArray(selectedDate) || selectedServices.length === 0 || !selectedProfessional) {
-        if (selectedProfessional) setAvailabilityMessage('Por favor, selecione pelo menos um serviço.');
-        return;
-      }
-      
-      setLoadingTimes(true);
-
-      try {
-        if (!selectedProfessional.availability) {
-          setAvailabilityMessage('Este profissional ainda não configurou os seus horários de atendimento.');
-          return;
-        }
-
-        const dayKey = (selectedDate as Date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof typeof selectedProfessional.availability;
-        const dayAvailability = selectedProfessional.availability[dayKey];
-
-        if (!dayAvailability || !dayAvailability.active) {
-            setAvailabilityMessage('O profissional não atende neste dia da semana.');
+        if (!selectedDate || !selectedProfessional || selectedServices.length === 0) {
+            setAvailableTimes([]);
             return;
         }
-        
-        const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number);
-        const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number);
+        setLoadingTimes(true);
 
-        const slots: TimeSlot[] = [];
-        let currentTime = new Date(selectedDate as Date);
-        currentTime.setHours(startHour, startMinute, 0, 0);
-        
-        let endTime = new Date(selectedDate as Date);
-        endTime.setHours(endHour, endMinute, 0, 0);
+        const dayOfWeek = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        const availability = selectedProfessional.availability?.[dayOfWeek];
 
-        let breakStartTimeObj: Date | null = null;
-        let breakEndTimeObj: Date | null = null;
-        if (dayAvailability.breakStartTime && dayAvailability.breakEndTime) {
-            const [breakStartHour, breakStartMinute] = dayAvailability.breakStartTime.split(':').map(Number);
-            breakStartTimeObj = new Date(selectedDate as Date);
-            breakStartTimeObj.setHours(breakStartHour, breakStartMinute, 0, 0);
-
-            const [breakEndHour, breakEndMinute] = dayAvailability.breakEndTime.split(':').map(Number);
-            breakEndTimeObj = new Date(selectedDate as Date);
-            breakEndTimeObj.setHours(breakEndHour, breakEndMinute, 0, 0);
+        if (!availability || !availability.active) {
+            setAvailableTimes([]);
+            setLoadingTimes(false);
+            return;
         }
 
-        const q = query(
-            collection(db, 'appointments'),
-            where('serviceProviderId', '==', establishment.uid),
+        const totalDuration = selectedServices.reduce((acc, service) => acc + service.duration, 0);
+        const slots = [];
+        let currentTime = new Date(`${selectedDate.toISOString().split('T')[0]}T${availability.startTime}`);
+        const endTime = new Date(`${selectedDate.toISOString().split('T')[0]}T${availability.endTime}`);
+        const breakStartTime = availability.breakStartTime ? new Date(`${selectedDate.toISOString().split('T')[0]}T${availability.breakStartTime}`) : null;
+        const breakEndTime = availability.breakEndTime ? new Date(`${selectedDate.toISOString().split('T')[0]}T${availability.breakEndTime}`) : null;
+        
+        const q = query(collection(db, 'appointments'), 
             where('professionalId', '==', selectedProfessional.id),
-            where('date', '==', (selectedDate as Date).toISOString().split('T')[0])
+            where('date', '==', format(selectedDate, 'yyyy-MM-dd'))
         );
         const querySnapshot = await getDocs(q);
-        
-        const bookedIntervals: { start: Date, end: Date }[] = [];
-        querySnapshot.docs.forEach(doc => {
-            const appointment = doc.data() as Appointment;
-            const professionalForBooking = establishment.professionals?.find(p => p.id === appointment.professionalId);
-            
-            const durationOfBooking = appointment.serviceIds.reduce((acc, serviceId) => {
-                const service = professionalForBooking?.services.find(s => s.id === serviceId);
-                return acc + (service?.duration || 0);
-            }, 0);
-
-            if (durationOfBooking > 0) {
-                const [hour, minute] = appointment.time.split(':').map(Number);
-                const startDate = new Date(selectedDate as Date);
-                startDate.setHours(hour, minute, 0, 0);
-                const endDate = new Date(startDate.getTime() + durationOfBooking * 60000);
-                bookedIntervals.push({ start: startDate, end: endDate });
-            }
-        });
-
-        const now = new Date();
-        const isToday = (selectedDate as Date).toDateString() === now.toDateString();
+        const bookedTimes = querySnapshot.docs.map(doc => doc.data().time);
 
         while (currentTime < endTime) {
-          const timeString = currentTime.toTimeString().substring(0, 5);
-          const slotEndTime = new Date(currentTime.getTime() + totalDuration * 60000);
-          
-          const isInBreak = breakStartTimeObj && breakEndTimeObj && (currentTime < breakEndTimeObj && slotEndTime > breakStartTimeObj);
-          
-          const isOverlapping = bookedIntervals.some(interval => 
-              currentTime < interval.end && slotEndTime > interval.start
-          );
+            const slotTime = format(currentTime, 'HH:mm');
+            const slotEndTime = new Date(currentTime.getTime() + totalDuration * 60000);
 
-          const isPast = isToday && currentTime < now;
-
-          let status: 'available' | 'booked' | 'break' | 'past' = 'available';
-          if (isPast) status = 'past';
-          else if (isOverlapping) status = 'booked';
-          else if (isInBreak) status = 'break';
-
-          if (slotEndTime <= endTime) {
-            slots.push({ time: timeString, status: status });
-          }
-          
-          currentTime.setMinutes(currentTime.getMinutes() + 15);
-        }
-        
-        if (slots.filter(s => s.status === 'available').length === 0) {
-            setAvailabilityMessage('Não foram encontrados horários disponíveis para este dia e duração.');
+            let isAvailable = true;
+            if (slotEndTime > endTime) isAvailable = false;
+            if (breakStartTime && breakEndTime && (currentTime < breakEndTime && slotEndTime > breakStartTime)) isAvailable = false;
+            if (bookedTimes.includes(slotTime)) isAvailable = false;
+            
+            if (isAvailable) {
+                slots.push(slotTime);
+            }
+            currentTime.setMinutes(currentTime.getMinutes() + 15); // Intervalo de 15 min para novos agendamentos
         }
 
-        setTimeSlots(slots);
-      } catch (error) {
-        console.error("Erro ao procurar horários:", error);
-        setAvailabilityMessage('Ocorreu um erro ao carregar os horários.');
-      } finally {
+        setAvailableTimes(slots);
         setLoadingTimes(false);
-      }
     };
 
     fetchAvailableTimes();
-  }, [selectedDate, selectedServices, selectedProfessional, establishment, totalDuration]);
+  }, [selectedDate, selectedProfessional, selectedServices]);
 
-  const handleBookAppointment = async () => {
-    if (!userProfile) {
-        showToast("Precisa de estar autenticado para agendar.", 'error');
-        return;
-    }
-    if (selectedServices.length === 0 || !selectedDate || Array.isArray(selectedDate) || !selectedTime || !selectedProfessional) {
-      showToast("Por favor, preencha todos os campos.", 'error');
+  const handleSelectService = (service: Service) => {
+    setSelectedServices(prev =>
+      prev.some(s => s.id === service.id)
+        ? prev.filter(s => s.id !== service.id)
+        : [...prev, service]
+    );
+  };
+
+  const handleConfirmServices = () => {
+    if (selectedServices.length === 0) {
+      showToast("Selecione pelo menos um serviço.", { type: 'warning' });
       return;
     }
-    setIsBooking(true);
-    const newAppointment: Omit<Appointment, 'id'> = {
-      clientId: userProfile.uid,
-      serviceProviderId: establishment.uid,
-      professionalId: selectedProfessional.id,
-      serviceIds: selectedServices.map(s => s.id),
-      date: (selectedDate as Date).toISOString().split('T')[0],
-      time: selectedTime,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    await addDoc(collection(db, 'appointments'), newAppointment);
-    setIsBooking(false);
-    showToast('Agendamento realizado com sucesso!', 'success');
-    if (onBack) onBack();
+    setStep(2);
   };
   
-  const getButtonClass = (status: TimeSlot['status'], time: string) => {
-    if (status === 'available') {
-      return selectedTime === time 
-        ? 'bg-yellow-500 text-black' 
-        : 'bg-green-600/50 hover:bg-green-500/80 text-white';
-    }
-    return 'bg-red-500/40 text-gray-400 cursor-not-allowed';
+  const handleSelectProfessional = (professional: Professional) => {
+    setSelectedProfessional(professional);
+    setStep(3);
   };
 
-  const calculateMaxDate = () => {
-    const advanceDays = establishment.bookingAdvanceDays || 30;
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + advanceDays);
-    return maxDate;
+  const handleSelectTime = (time: string) => {
+    setSelectedTime(time);
+    setStep(4);
+  }
+
+  const handleConfirmBooking = async () => {
+    if (!currentUser) {
+      showToast("Você precisa fazer login para confirmar o agendamento.", { type: 'info' });
+      setLoginVisible(true);
+      return;
+    }
+    
+    if (!serviceProvider || !selectedProfessional || !selectedDate || !selectedTime || selectedServices.length === 0) {
+        showToast("Todos os campos são obrigatórios para o agendamento.", { type: 'error' });
+        return;
+    }
+
+    const newAppointment = {
+        serviceProviderId: serviceProvider.uid,
+        professionalId: selectedProfessional.id,
+        clientId: currentUser.uid,
+        serviceIds: selectedServices.map(s => s.id),
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        time: selectedTime,
+        status: 'pending', // Começa como pendente para o profissional confirmar
+        createdAt: Timestamp.now(),
+        // Estes campos são para denormalização e facilitar a exibição
+        establishmentName: serviceProvider.establishmentName,
+        serviceName: selectedServices.map(s => s.name).join(', '),
+        professionalName: selectedProfessional.name,
+        clientName: currentUser.displayName,
+        totalPrice: selectedServices.reduce((total, s) => total + s.price, 0),
+    };
+
+    try {
+        await addDoc(collection(db, 'appointments'), newAppointment);
+        showToast("Agendamento solicitado com sucesso! Aguarde a confirmação.", { type: 'success' });
+        onBack();
+    } catch (error) {
+        console.error("Erro ao criar agendamento:", error);
+        showToast("Falha ao criar agendamento. Tente novamente.", { type: 'error' });
+    }
   };
+
+  if (!serviceProvider) {
+    return <div className="text-center p-16"><Info size={48} className="mx-auto text-red-500" /><h3 className="mt-4 text-xl font-semibold text-gray-800">Estabelecimento não encontrado</h3><p className="mt-2 text-gray-500">Não foi possível carregar as informações.</p><button onClick={onBack} className="mt-6 px-6 py-2 bg-[#daa520] text-black rounded-lg">Voltar</button></div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
-      {onBack && (
-        <header className="flex items-center mb-10">
-          <button onClick={onBack} className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 font-semibold transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-              <span>Voltar</span>
-          </button>
-        </header>
+    <div className="relative bg-black text-white p-8 rounded-lg shadow-2xl border border-gray-800">
+      {loginVisible && (
+        <div className="absolute inset-0 bg-black/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-4 rounded-lg animate-fade-in-down">
+          <div className="w-full max-w-md">
+            <Login />
+            <button onClick={() => setLoginVisible(false)} className="mt-4 w-full text-center text-sm text-gray-500 hover:text-[#daa520]">
+              Voltar ao agendamento
+            </button>
+          </div>
+        </div>
       )}
+
+      <BookingHeader provider={serviceProvider} onBack={onBack} />
+      <Stepper currentStep={step} />
       
-      <main className="max-w-2xl mx-auto">
-        <div className={`text-center mb-8 ${!onBack ? 'pt-8' : ''}`}>
-            <img 
-              src={establishment.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} 
-              alt={`Foto de ${establishment.establishmentName}`}
-              className="h-24 w-24 rounded-full object-cover mx-auto mb-4 border-4 border-gray-700"
-            />
-            <h1 className="text-3xl font-bold text-white">Agendar em</h1>
-            <p className="text-2xl text-yellow-400">{establishment.establishmentName}</p>
-        </div>
-
-        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 space-y-8">
-            <div>
-                <h2 className="text-xl font-bold text-white mb-4">1. Escolha o Profissional</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {establishment.professionals && establishment.professionals.length > 0 ? establishment.professionals.map(prof => (
-                        <button key={prof.id} onClick={() => setSelectedProfessional(prof)} className={`w-full text-left p-3 rounded-lg transition-all border-2 flex items-center gap-3 ${selectedProfessional?.id === prof.id ? 'bg-yellow-500/10 border-yellow-500' : 'bg-gray-700 border-transparent hover:border-yellow-600'}`}>
-                            <img src={prof.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=?'} alt={prof.name} className="h-10 w-10 rounded-full object-cover" />
-                            <span className="font-semibold text-white">{prof.name}</span>
-                        </button>
-                    )) : <p className="text-gray-500 col-span-full">Este estabelecimento ainda não registou profissionais.</p>}
-                </div>
-            </div>
-
-            {selectedProfessional && (
-              <div>
-                  <h2 className="text-xl font-bold text-white mb-4">2. Escolha o(s) Serviço(s)</h2>
-                  <div className="space-y-3">
-                      {selectedProfessional.services && selectedProfessional.services.length > 0 ? selectedProfessional.services.map(service => (
-                          <button key={service.id} onClick={() => handleToggleService(service)} className={`w-full text-left p-4 rounded-lg transition-all border-2 flex justify-between items-center ${selectedServices.some(s => s.id === service.id) ? 'bg-yellow-500/10 border-yellow-500' : 'bg-gray-700 border-transparent hover:border-yellow-600'}`}>
-                              <div>
-                                <p className="font-semibold text-white">{service.name}</p>
-                                <p className="text-sm text-gray-400">{service.duration} min - R$ {service.price.toFixed(2)}</p>
-                              </div>
-                              {selectedServices.some(s => s.id === service.id) && <span className="text-yellow-400">✓</span>}
-                          </button>
-                      )) : <p className="text-gray-500">Este profissional não possui serviços registados.</p>}
-                  </div>
-              </div>
-            )}
-
-            {selectedServices.length > 0 && (
-              <div className="border-t border-gray-700 pt-6">
-                <h3 className="text-lg font-semibold text-white">Resumo</h3>
-                <p className="text-gray-300">Duração total: <span className="font-bold text-yellow-400">{totalDuration} minutos</span></p>
-                <p className="text-gray-300">Preço total: <span className="font-bold text-yellow-400">R$ {totalPrice.toFixed(2)}</span></p>
-              </div>
-            )}
-
-            {selectedServices.length > 0 && (
-                <div>
-                    <h2 className="text-xl font-bold text-white mb-4">3. Escolha a Data</h2>
-                    <Calendar onChange={setSelectedDate} value={selectedDate} minDate={new Date()} maxDate={calculateMaxDate()} className="react-calendar" />
-                </div>
-            )}
-            
-            {selectedDate && !Array.isArray(selectedDate) && selectedServices.length > 0 && (
-                <div>
-                    <h2 className="text-xl font-bold text-white mb-4">4. Escolha o Horário de Início</h2>
-                    {loadingTimes ? <p className="text-gray-400">A carregar horários...</p> : (
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                            {timeSlots.length > 0 ? timeSlots.map(slot => (
-                                <button key={slot.time} onClick={() => slot.status === 'available' && setSelectedTime(slot.time)} disabled={slot.status !== 'available'} className={`p-3 rounded-lg font-semibold transition-colors ${getButtonClass(slot.status, slot.time)}`}>
-                                    {slot.time}
-                                </button>
-                            )) : <p className="text-gray-500 col-span-full text-center">{availabilityMessage}</p>}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-
-        {selectedTime && (
-            <div className="mt-8 bg-gray-700 p-6 rounded-xl border border-yellow-500 animate-fade-in-down">
-                <h3 className="text-xl font-bold text-white mb-4">Confirmar Agendamento</h3>
-                <div className="space-y-3 text-gray-300">
-                    <div className="flex justify-between items-center">
-                        <span>Profissional:</span>
-                        <div className="flex items-center gap-2">
-                            <img src={selectedProfessional?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=?'} alt={selectedProfessional?.name} className="h-6 w-6 rounded-full object-cover" />
-                            <span className="font-semibold text-white">{selectedProfessional?.name}</span>
-                        </div>
-                    </div>
-                    <div className="flex justify-between">
-                        <span>Data:</span>
-                        <span className="font-semibold text-white">{(selectedDate as Date).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span>Horário:</span>
-                        <span className="font-semibold text-white">{selectedTime}</span>
-                    </div>
-                    <div className="border-t border-gray-600 pt-3">
-                        <span className="font-semibold text-white">Serviços:</span>
-                        <ul className="list-disc list-inside mt-2 text-sm">
-                            {selectedServices.map(s => <li key={s.id}>{s.name}</li>)}
-                        </ul>
-                    </div>
-                    <div className="border-t border-gray-600 pt-3 flex justify-between font-bold text-lg">
-                        <span className="text-yellow-400">Total:</span>
-                        <span className="text-yellow-400">R$ {totalPrice.toFixed(2)}</span>
-                    </div>
-                </div>
-                <button
-                    onClick={handleBookAppointment}
-                    disabled={isBooking}
-                    className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500 text-lg"
-                >
-                    {isBooking ? 'A agendar...' : 'Confirmar e Agendar'}
+      <div className="mt-8 min-h-[300px]">
+        {step === 1 && (
+          <div className="animate-fade-in-down">
+            <h3 className="text-xl font-bold text-white mb-4">Selecione os serviços</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(serviceProvider.professionals?.flatMap(p => p.services.map(s => ({...s, professionalName: p.name}))) || []).map(service => (
+                <button key={service.id} onClick={() => handleSelectService(service)} className={`p-4 rounded-lg border-2 text-left transition-all duration-200 ${selectedServices.some(s => s.id === service.id) ? 'border-[#daa520] bg-gray-800/50 shadow-md' : 'border-gray-700 bg-gray-800/20 hover:border-gray-600'}`}>
+                  <p className="font-semibold text-white">{service.name}</p>
+                  <p className="text-sm text-gray-400">{service.duration} min - R$ {service.price.toFixed(2)}</p>
+                  <p className="text-xs text-gray-500 mt-1">com {service.professionalName}</p>
                 </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-8">
+                <button onClick={handleConfirmServices} className="px-6 py-3 bg-[#daa520] text-black font-semibold rounded-lg shadow-md hover:bg-[#c8961e] disabled:bg-gray-600 disabled:cursor-not-allowed" disabled={selectedServices.length === 0}>Avançar</button>
+            </div>
+          </div>
+        )}
+        {step === 2 && (
+          <div className="animate-fade-in-down">
+            <h3 className="text-xl font-bold text-white mb-4">Escolha um profissional</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {serviceProvider.professionals?.map(prof => (
+                <button key={prof.id} onClick={() => handleSelectProfessional(prof)} className="p-4 rounded-lg border-2 border-gray-700 text-center hover:border-[#daa520] hover:shadow-lg transition-all transform hover:-translate-y-1">
+                  <img src={prof.photoURL || `https://placehold.co/150x150/111827/daa520?text=${prof.name.charAt(0)}`} alt={prof.name} className="w-24 h-24 rounded-full mx-auto object-cover mb-4 border-4 border-gray-800" />
+                  <p className="font-bold text-white">{prof.name}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {step === 3 && (
+            <div className="animate-fade-in-down">
+                <h3 className="text-xl font-bold text-white mb-4">Selecione a data e o horário</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <Calendar onChange={(date) => setSelectedDate(date as Date)} value={selectedDate} minDate={new Date()}/>
+                    <div className="max-h-80 overflow-y-auto pr-2">
+                        <h4 className="font-semibold mb-3 text-gray-300">Horários disponíveis para <span className="text-[#daa520]">{format(selectedDate, "dd/MM")}</span>:</h4>
+                        {loadingTimes ? <div className="flex justify-center items-center h-full"><Loader2 className="w-6 h-6 animate-spin text-[#daa520]" /></div> : (
+                            availableTimes.length > 0 ? (
+                                <div className="grid grid-cols-3 gap-3">
+                                    {availableTimes.map(time => (<button key={time} onClick={() => handleSelectTime(time)} className="p-3 bg-gray-800 text-white font-semibold rounded-lg hover:bg-[#daa520] hover:text-black transition-colors">{time}</button>))}
+                                </div>
+                            ) : <p className="text-gray-500 text-center mt-10">Nenhum horário disponível para esta data.</p>
+                        )}
+                    </div>
+                </div>
             </div>
         )}
-      </main>
+        {step === 4 && (
+            <div className="animate-fade-in-down">
+                <h3 className="text-xl font-bold text-white mb-6">Confirme seu agendamento</h3>
+                <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 space-y-4">
+                    <div className="flex justify-between items-center"><p className="text-gray-400 font-medium flex items-center gap-2"><Scissors size={16}/> Serviços:</p><p className="font-bold text-white text-right">{selectedServices.map(s => s.name).join(', ')}</p></div>
+                    <div className="flex justify-between items-center"><p className="text-gray-400 font-medium flex items-center gap-2"><Users size={16}/> Profissional:</p><p className="font-bold text-white">{selectedProfessional?.name}</p></div>
+                    <div className="flex justify-between items-center"><p className="text-gray-400 font-medium flex items-center gap-2"><CalendarIcon size={16}/> Data:</p><p className="font-bold text-white">{format(selectedDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}</p></div>
+                    <div className="flex justify-between items-center"><p className="text-gray-400 font-medium flex items-center gap-2"><Clock size={16}/> Horário:</p><p className="font-bold text-white">{selectedTime}</p></div>
+                    <div className="border-t border-gray-700 pt-4 mt-4 flex justify-between items-center"><p className="text-lg text-gray-300 font-medium">Total:</p><p className="text-2xl font-bold text-[#daa520]">R$ {selectedServices.reduce((total, s) => total + s.price, 0).toFixed(2)}</p></div>
+                </div>
+                <div className="flex justify-end mt-8">
+                    <button onClick={handleConfirmBooking} className="px-8 py-3 bg-green-500 text-white font-bold rounded-lg shadow-md hover:bg-green-600 transition-colors flex items-center gap-2">
+                        <CheckCircle size={20}/>
+                        Solicitar Agendamento
+                    </button>
+                </div>
+            </div>
+        )}
+      </div>
     </div>
   );
 };

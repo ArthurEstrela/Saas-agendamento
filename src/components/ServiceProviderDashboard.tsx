@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom';
 import type { Appointment } from '../types';
 import logo from '../assets/stylo-logo.png';
 import { LayoutDashboard, User, Scissors, Users, Clock, DollarSign, Star, LogOut, Check, X, UserX, CheckCircle, AlertTriangle } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Importando os seus componentes de gerenciamento existentes
 import ProfileManagement from './ServiceProvider/ProfileManagement';
@@ -80,14 +82,14 @@ const SideNav = ({ activeView, setActiveView }) => {
     )
 };
 
-// --- Componente Principal do Dashboard ---
-const ServiceProviderDashboard = () => {
-    const { userProfile, logout, updateAppointmentStatus } = useAuth();
-    const [activeView, setActiveView] = useState('agenda');
+// Componente para a Agenda
+const AgendaView = () => {
+    const { userProfile, updateAppointmentStatus } = useAuth();
     const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
-    const [filterMode, setFilterMode] = useState<'day' | 'range' | 'all'>('day');
+    const [agendaTab, setAgendaTab] = useState<'upcoming' | 'history'>('upcoming');
+    const [filterMode, setFilterMode] = useState<'day' | 'range'>('day');
     const [dateRange, setDateRange] = useState({
         start: new Date().toISOString().split('T')[0],
         end: new Date().toISOString().split('T')[0],
@@ -113,44 +115,11 @@ const ServiceProviderDashboard = () => {
                 }).join(', ') || 'N/A';
                 return { ...appt, clientName: clientProfile?.displayName || 'Cliente', professionalName: professional?.name || 'N/A', serviceName: serviceNames, totalPrice };
             }));
-            setAllAppointments(appointmentsWithDetails.filter(app => app.status !== 'cancelled'));
+            setAllAppointments(appointmentsWithDetails);
             setLoading(false);
         });
         return () => unsubscribe();
     }, [userProfile]);
-
-    const filteredAndSortedAppointments = useMemo(() => {
-        let filtered = allAppointments;
-        if (filterMode === 'day') {
-            filtered = filtered.filter(app => app.date === dateRange.start);
-        } else if (filterMode === 'range') {
-            const startDate = new Date(dateRange.start + 'T00:00:00');
-            const endDate = new Date(dateRange.end + 'T23:59:59');
-            filtered = filtered.filter(app => {
-                const appDate = new Date(app.date + 'T00:00:00');
-                return appDate >= startDate && appDate <= endDate;
-            });
-        }
-        if (professionalFilter !== 'todos') {
-            filtered = filtered.filter(app => app.professionalId === professionalFilter);
-        }
-        const now = new Date();
-        const getOrder = (app: Appointment) => {
-            const appDate = new Date(`${app.date}T${app.time}`);
-            if (app.status === 'pending') return 1;
-            if (app.status === 'confirmed' && appDate >= now) return 2;
-            if (app.status === 'confirmed' && appDate < now) return 3;
-            if (app.status === 'completed') return 4;
-            if (app.status === 'no-show') return 5;
-            return 6;
-        };
-        return filtered.sort((a, b) => {
-            const orderA = getOrder(a);
-            const orderB = getOrder(b);
-            if (orderA !== orderB) return orderA - orderB;
-            return new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime();
-        });
-    }, [allAppointments, filterMode, dateRange, professionalFilter]);
 
     const handleActionConfirmation = (action: () => void, title: string, message: string) => {
         setModalState({ isOpen: true, title, message, onConfirm: () => { action(); setModalState(null); } });
@@ -163,66 +132,144 @@ const ServiceProviderDashboard = () => {
     const handleNoShowAppointment = (app: Appointment) => {
         handleActionConfirmation(() => updateAppointmentStatus(app.id, 'no-show'), 'Confirmar Ausência', `Tem a certeza de que pretende marcar este agendamento como "não compareceu"?`);
     };
-    
+
     const getStatusInfo = (status, isPast) => {
         switch (status) {
             case 'pending': return { text: 'Pendente', color: 'bg-yellow-500/20 text-yellow-300', icon: <Clock size={14} /> };
             case 'confirmed': return { text: 'Confirmado', color: isPast ? 'bg-gray-500/20 text-gray-300' : 'bg-green-500/20 text-green-300', icon: isPast ? <AlertTriangle size={14} /> : <Check size={14} /> };
             case 'completed': return { text: 'Concluído', color: 'bg-blue-500/20 text-blue-300', icon: <CheckCircle size={14} /> };
             case 'no-show': return { text: 'Não Compareceu', color: 'bg-red-500/20 text-red-300', icon: <UserX size={14} /> };
+            case 'cancelled': return { text: 'Cancelado', color: 'bg-red-500/20 text-red-300', icon: <X size={14} /> };
             default: return { text: 'Desconhecido', color: 'bg-gray-500/20 text-gray-300', icon: <AlertTriangle size={14} /> };
         }
     }
 
+    const { upcomingAppointments, historyAppointments } = useMemo(() => {
+        const now = new Date();
+        const upcoming = allAppointments.filter(app => {
+            const appDateTime = new Date(`${app.date}T${app.time}`);
+            return appDateTime >= now && (app.status === 'pending' || app.status === 'confirmed');
+        }).sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+
+        const history = allAppointments.filter(app => {
+            const appDateTime = new Date(`${app.date}T${app.time}`);
+            return appDateTime < now && (app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show');
+        }).sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime());
+        
+        return { upcomingAppointments: upcoming, historyAppointments: history };
+    }, [allAppointments]);
+    
+    const overviewStats = useMemo(() => {
+        const today = new Date().toISOString().split('T')[0];
+        const todayAppointments = upcomingAppointments.filter(app => app.date === today);
+        return {
+            total: todayAppointments.length,
+            confirmed: todayAppointments.filter(app => app.status === 'confirmed').length,
+            pending: todayAppointments.filter(app => app.status === 'pending').length,
+            pastDue: upcomingAppointments.filter(app => {
+                const appDateTime = new Date(`${app.date}T${app.time}`);
+                return app.status === 'confirmed' && appDateTime < new Date();
+            }).length,
+        };
+    }, [upcomingAppointments]);
+
+    const renderAppointmentList = (list) => {
+        return (
+            <ul className="space-y-4">
+                {list.map(app => {
+                    const appointmentDateTime = new Date(`${app.date}T${app.time}`);
+                    const isPast = appointmentDateTime < new Date();
+                    const statusInfo = getStatusInfo(app.status, isPast);
+                    return (
+                        <li key={app.id} className="bg-gray-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 hover:border-[#daa520]/50 transition-colors duration-300">
+                            <div className="flex items-center mb-4 md:mb-0 flex-grow">
+                                <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
+                                    <p className="text-2xl font-bold text-white">{app.time}</p>
+                                    <p className="text-sm text-gray-400">{format(new Date(app.date), "dd/MMM", { locale: ptBR })}</p>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-lg text-white">{app.serviceName}</p>
+                                    <p className="text-sm text-gray-300">Cliente: {app.clientName}</p>
+                                    <p className="text-sm text-gray-400">Profissional: {app.professionalName}</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 self-stretch md:self-center w-full md:w-auto">
+                                <div className={`flex items-center justify-center gap-2 px-3 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.icon}<span>{statusInfo.text}</span></div>
+                                <div className="flex items-center justify-end gap-2">
+                                    {app.status === 'pending' && (
+                                        <>
+                                            <button onClick={() => updateAppointmentStatus(app.id, 'confirmed')} className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white transition-colors"><Check size={16} /></button>
+                                            <button onClick={() => updateAppointmentStatus(app.id, 'cancelled')} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"><X size={16} /></button>
+                                        </>
+                                    )}
+                                    {isPast && app.status === 'confirmed' && (
+                                        <>
+                                            <button onClick={() => handleNoShowAppointment(app)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"><UserX size={16} /></button>
+                                            <button onClick={() => handleCompleteAppointment(app)} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white transition-colors"><CheckCircle size={16} /></button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+        );
+    };
+
+    return (
+        <div className="animate-fade-in-down">
+            <h2 className="text-3xl font-bold text-white mb-6">Agenda e Solicitações</h2>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
+                    <div><p className="text-sm text-gray-400">Total de Hoje</p><p className="text-3xl font-bold text-white mt-1">{overviewStats.total}</p></div>
+                    <LayoutDashboard className="h-10 w-10 text-gray-600" />
+                </div>
+                <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
+                    <div><p className="text-sm text-gray-400">Confirmados</p><p className="text-3xl font-bold text-green-400 mt-1">{overviewStats.confirmed}</p></div>
+                    <CheckCircle className="h-10 w-10 text-green-600" />
+                </div>
+                <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
+                    <div><p className="text-sm text-gray-400">Pendentes</p><p className="text-3xl font-bold text-yellow-400 mt-1">{overviewStats.pending}</p></div>
+                    <Clock className="h-10 w-10 text-yellow-600" />
+                </div>
+                <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
+                    <div><p className="text-sm text-gray-400">Atrasados</p><p className="text-3xl font-bold text-red-400 mt-1">{overviewStats.pastDue}</p></div>
+                    <AlertTriangle className="h-10 w-10 text-red-600" />
+                </div>
+            </div>
+
+            <div className="mb-6 flex space-x-2 border-b border-gray-800">
+                <button onClick={() => setAgendaTab('upcoming')} className={`py-2 px-4 font-semibold transition-colors duration-300 ${agendaTab === 'upcoming' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-500 hover:text-white'}`}>Próximos</button>
+                <button onClick={() => setAgendaTab('history')} className={`py-2 px-4 font-semibold transition-colors duration-300 ${agendaTab === 'history' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-500 hover:text-white'}`}>Histórico</button>
+            </div>
+
+            {loading ? <p className="text-center text-gray-400 py-10">A carregar agendamentos...</p> : (
+                agendaTab === 'upcoming' ? (
+                    upcomingAppointments.length > 0 ? 
+                    renderAppointmentList(upcomingAppointments) :
+                    <p className="text-center text-gray-400 py-10">Nenhum agendamento futuro.</p>
+                ) : (
+                    historyAppointments.length > 0 ?
+                    renderAppointmentList(historyAppointments) :
+                    <p className="text-center text-gray-400 py-10">O seu histórico de agendamentos está vazio.</p>
+                )
+            )}
+        </div>
+    );
+};
+
+// --- Componente Principal do Dashboard ---
+const ServiceProviderDashboard = () => {
+    const { logout, userProfile } = useAuth();
+    const [activeView, setActiveView] = useState('agenda');
+    const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
+
     const renderContent = () => {
         switch (activeView) {
-            case 'agenda':
-                return (
-                    <div>
-                        <h2 className="text-3xl font-bold text-white mb-6">Agenda e Solicitações</h2>
-                        <div className="bg-black/30 backdrop-blur-sm p-4 rounded-xl mb-8 space-y-4 border border-gray-800">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button onClick={() => setFilterMode('day')} className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${filterMode === 'day' ? 'bg-[#daa520] text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>Ver por Dia</button>
-                                <button onClick={() => setFilterMode('range')} className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${filterMode === 'range' ? 'bg-[#daa520] text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>Ver por Período</button>
-                                <button onClick={() => setFilterMode('all')} className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${filterMode === 'all' ? 'bg-[#daa520] text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>Mostrar Todos</button>
-                            </div>
-                            <div className="flex flex-col md:flex-row gap-4">
-                                {filterMode === 'day' && <div className="flex-1"><label htmlFor="dateStart" className="block text-sm font-medium text-gray-300 mb-1">Selecione o dia</label><input type="date" id="dateStart" value={dateRange.start} onChange={e => setDateRange({start: e.target.value, end: e.target.value})} className="w-full bg-gray-800 text-white p-2 rounded-md border border-gray-700" /></div>}
-                                {filterMode === 'range' && (<><div className="flex-1"><label htmlFor="dateStart" className="block text-sm font-medium text-gray-300 mb-1">Data de Início</label><input type="date" id="dateStart" value={dateRange.start} onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))} className="w-full bg-gray-800 text-white p-2 rounded-md border border-gray-700" /></div><div className="flex-1"><label htmlFor="dateEnd" className="block text-sm font-medium text-gray-300 mb-1">Data de Fim</label><input type="date" id="dateEnd" value={dateRange.end} onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))} className="w-full bg-gray-800 text-white p-2 rounded-md border border-gray-700" /></div></>)}
-                                <div className="flex-1"><label htmlFor="professionalFilter" className="block text-sm font-medium text-gray-300 mb-1">Filtrar por profissional</label><select id="professionalFilter" value={professionalFilter} onChange={e => setProfessionalFilter(e.target.value)} className="w-full bg-gray-800 text-white p-2 rounded-md border border-gray-700"><option value="todos">Todos os Profissionais</option>{userProfile?.professionals?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-                            </div>
-                        </div>
-                        {loading ? <p className="text-center text-gray-400 py-10">A carregar agendamentos...</p> : filteredAndSortedAppointments.length > 0 ? (
-                            <ul className="space-y-4">{filteredAndSortedAppointments.map(app => {
-                                const appointmentDateTime = new Date(`${app.date}T${app.time}`);
-                                const isPast = appointmentDateTime < new Date();
-                                const statusInfo = getStatusInfo(app.status, isPast);
-                                return (
-                                <li key={app.id} className="bg-gray-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 hover:border-[#daa520]/50 transition-colors duration-300">
-                                    <div className="flex items-center mb-4 md:mb-0 flex-grow">
-                                        <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
-                                            <p className="text-2xl font-bold text-white">{app.time}</p>
-                                            <p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</p>
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-lg text-white">{app.serviceName}</p>
-                                            <p className="text-sm text-gray-300">Cliente: {app.clientName}</p>
-                                            <p className="text-sm text-gray-400">Profissional: {app.professionalName}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 self-stretch md:self-center w-full md:w-auto">
-                                        <div className={`flex items-center justify-center gap-2 px-3 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.icon}<span>{statusInfo.text}</span></div>
-                                        <div className="flex items-center justify-end gap-2">
-                                            {app.status === 'pending' && (<><button onClick={() => updateAppointmentStatus(app.id, 'confirmed')} className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white transition-colors"><Check size={16} /></button><button onClick={() => updateAppointmentStatus(app.id, 'cancelled')} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"><X size={16} /></button></>)}
-                                            {isPast && app.status === 'confirmed' && (<><button onClick={() => handleNoShowAppointment(app)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"><UserX size={16} /></button><button onClick={() => handleCompleteAppointment(app)} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white transition-colors"><CheckCircle size={16} /></button></>)}
-                                        </div>
-                                    </div>
-                                </li>
-                            )})}</ul>
-                        ) : <p className="text-center text-gray-400 py-10">Nenhum agendamento encontrado para os filtros selecionados.</p>}
-                    </div>
-                );
-            case 'profile': return <ProfileManagement />;
+            case 'agenda': return <AgendaView />;
+            case 'profile': return <ProfileManagement onBack={() => setActiveView('agenda')} />;
             case 'services': return <ServicesManagement />;
             case 'professionals': return <ProfessionalsManagement />;
             case 'availability': return <AvailabilityManagement />;

@@ -11,7 +11,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // Componente de navegação lateral
-const SideNav = ({ activeView, setActiveView }) => (
+// Agora recebe `logout` como uma prop para a funcionalidade de sair
+const SideNav = ({ activeView, setActiveView, logout }) => (
     <nav className="fixed left-0 top-0 h-full w-72 bg-gray-950 p-6 flex flex-col shadow-lg z-20">
         <div className="flex items-center mb-10">
             <img src={logo} alt="Stylo Logo" className="h-10 w-auto mr-3" />
@@ -44,7 +45,8 @@ const SideNav = ({ activeView, setActiveView }) => (
             </li>
         </ul>
         <div className="mt-8">
-            <button onClick={() => setActiveView('login')} className="flex items-center w-full p-3 rounded-lg text-lg font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors duration-200">
+            {/* CORREÇÃO: O botão "Sair" agora chama a função de logout real */}
+            <button onClick={logout} className="flex items-center w-full p-3 rounded-lg text-lg font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors duration-200">
                 <LogOut className="w-5 h-5 mr-3" />
                 Sair
             </button>
@@ -479,7 +481,8 @@ const ClientDashboard = () => {
             {reviewModal.isOpen && <ReviewModal isOpen={reviewModal.isOpen} onClose={() => setReviewModal({ isOpen: false })} appointment={reviewModal.appointment!} onSubmit={handleSubmitReview} />}
             {showLoginPrompt && <LoginPrompt message="É necessário fazer login para realizar esta ação." onAction={() => { setShowLoginPrompt(false); handleLoginAction(); }} />}
             
-            <SideNav activeView={activeView} setActiveView={setActiveView} />
+            {/* CORREÇÃO: Passando a função `logout` como uma prop para o SideNav */}
+            <SideNav activeView={activeView} setActiveView={setActiveView} logout={logout} />
             
             <main className="flex-grow p-4 sm:p-6 md:p-8 ml-72">
                 <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">

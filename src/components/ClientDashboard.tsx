@@ -2,14 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, db } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, getDoc, getDocs, documentId } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import type { Appointment, UserProfile } from '../types';
+import { LogIn, Star, Search, Calendar, Heart, User, LogOut, Instagram, X } from 'lucide-react';
+import logo from '../assets/stylo-logo.png';
 import Booking from './Booking';
 import ClientProfileManagement from './Client/ClientProfileManagement';
-import type { Appointment, UserProfile } from '../types';
-import { LogIn, Star, X, Search, Calendar, Heart, User, Edit, LogOut, Instagram } from 'lucide-react';
 
 // --- Subcomponente de Alerta para Login ---
 const LoginPrompt = ({ message, onAction }: { message: string; onAction: () => void; }) => (
-    <div className="text-center bg-gray-800/50 p-10 rounded-xl border border-dashed border-gray-600">
+    <div className="text-center bg-gray-800/50 p-10 rounded-xl border border-dashed border-gray-600 animate-fade-in-down">
         <div className="mx-auto h-12 w-12 text-gray-500">
             <LogIn size={48} />
         </div>
@@ -20,14 +21,13 @@ const LoginPrompt = ({ message, onAction }: { message: string; onAction: () => v
         <div className="mt-6">
             <button
                 onClick={onAction}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-black bg-yellow-500 hover:bg-yellow-400"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-black bg-[#daa520] hover:bg-[#c8961e]"
             >
                 Entrar ou Criar Conta
             </button>
         </div>
     </div>
 );
-
 
 // --- Subcomponente do Modal de Avaliação ---
 const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boolean; onClose: () => void; appointment: Appointment; onSubmit: (rating: number, comment: string) => void; }) => {
@@ -56,7 +56,6 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
             <div className="bg-gray-800 p-8 rounded-xl w-full max-w-lg border border-gray-700">
                 <h3 className="text-xl font-bold text-white mb-2">Avalie o seu Atendimento</h3>
                 <p className="text-sm text-gray-400 mb-6">Estabelecimento: {appointment.establishmentName}</p>
-
                 <div className="flex justify-center items-center mb-6">
                     {[1, 2, 3, 4, 5].map((star) => (
                         <Star key={star}
@@ -68,9 +67,7 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
                         />
                     ))}
                 </div>
-
                 <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Deixe um comentário (opcional)..." rows={4} className="w-full bg-gray-700 p-3 rounded-md mb-6 focus:ring-2 focus:ring-yellow-500" />
-
                 <div className="flex justify-end gap-4">
                     <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 font-semibold px-6 py-2 rounded-lg">Fechar</button>
                     <button onClick={handleSubmit} disabled={rating === 0} className="bg-green-600 hover:bg-green-700 font-semibold px-6 py-2 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Enviar Avaliação</button>
@@ -98,13 +95,57 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: str
     </div>
 );
 
+// --- Componentes do Layout do Dashboard ---
+
+const NavItem = ({ icon: Icon, text, active, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${active ? 'bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20' : 'text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-md'}`}
+  >
+    <Icon className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
+    <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">{text}</span>
+  </button>
+);
+
+const SideNav = ({ activeView, setActiveView }) => {
+    const { logout, userProfile } = useAuth();
+    return (
+        <div className="w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0">
+            <div className="flex items-center space-x-2 mb-10 px-2">
+                <img className="h-10 w-auto" src={logo} alt="Stylo" />
+                <span className="text-white text-2xl font-bold tracking-tight">Stylo</span>
+            </div>
+            <nav className="flex-grow flex flex-col space-y-2">
+                <NavItem icon={Search} text="Procurar" active={activeView === 'search'} onClick={() => setActiveView('search')} />
+                <NavItem icon={Calendar} text="Meus Agendamentos" active={activeView === 'myAppointments'} onClick={() => setActiveView('myAppointments')} />
+                <NavItem icon={Heart} text="Meus Favoritos" active={activeView === 'favorites'} onClick={() => setActiveView('favorites')} />
+            </nav>
+            <div className="mt-auto">
+                <div className="border-t border-gray-800 pt-4">
+                    <div className="flex items-center px-2 mb-4">
+                        <img src={userProfile?.photoURL || 'https://placehold.co/150x150/111827/4B5563?text=Foto'} alt="Sua foto de perfil" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-gray-700" />
+                        <div>
+                            <p className="text-sm font-semibold text-white truncate">{userProfile?.displayName || 'Convidado(a)'}</p>
+                            <p className="text-xs text-gray-400">Cliente</p>
+                        </div>
+                    </div>
+                    <NavItem icon={User} text="Meu Perfil" active={activeView === 'profile'} onClick={() => setActiveView('profile')} />
+                    <button onClick={logout} className="flex items-center w-full h-12 px-4 mt-1 text-left text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all duration-300 ease-in-out group">
+                        <LogOut className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
+                        <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">Sair</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+};
 
 // --- Componente Principal ---
 const ClientDashboard = () => {
     const { currentUser, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuth();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'search' | 'myAppointments' | 'favorites'>('search');
-    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile'>('search');
+    
     const [searchTerm, setSearchTerm] = useState('');
     const [allProviders, setAllProviders] = useState<UserProfile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -177,10 +218,10 @@ const ClientDashboard = () => {
                 setLoadingFavorites(false);
             }
         };
-        if (currentUser && activeTab === 'favorites') {
+        if (currentUser && activeView === 'favorites') {
             fetchFavorites();
         }
-    }, [currentUser, userProfile?.favoriteProfessionals, activeTab]);
+    }, [currentUser, userProfile?.favoriteProfessionals, activeView]);
 
     const filteredResults = useMemo(() => {
         return allProviders.filter(provider => {
@@ -228,15 +269,14 @@ const ClientDashboard = () => {
     };
 
     if (selectedProfessional) return <Booking professional={selectedProfessional} onBack={() => setSelectedProfessional(null)} />;
-    if (isEditingProfile) return <ClientProfileManagement onBack={() => setIsEditingProfile(false)} />;
 
     const renderProfessionalCard = (prof: UserProfile) => {
         const isFavorite = userProfile?.favoriteProfessionals?.includes(prof.uid);
         const getInstagramUrl = (usernameOrUrl: string) => usernameOrUrl.startsWith('http') ? usernameOrUrl : `https://instagram.com/${usernameOrUrl.replace('@', '')}`;
         return (
-            <div key={prof.uid} className="bg-gray-700 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between transition-all hover:shadow-lg hover:bg-gray-600 gap-4">
+            <div key={prof.uid} className="bg-gray-800/80 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between transition-all hover:shadow-lg hover:bg-gray-800 gap-4 border border-gray-700">
                 <div className="flex items-center flex-grow min-w-0 w-full">
-                    <img src={prof.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt={`Foto de ${prof.establishmentName}`} className="h-16 w-16 rounded-full object-cover mr-4 border-2 border-gray-600" />
+                    <img src={prof.photoURL || 'https://placehold.co/150x150/111827/4B5563?text=Foto'} alt={`Foto de ${prof.establishmentName}`} className="h-16 w-16 rounded-full object-cover mr-4 border-2 border-gray-600" />
                     <div className="min-w-0">
                         <h3 className="text-xl font-bold text-white truncate">{prof.establishmentName}</h3>
                         <p className="text-gray-400 truncate">{prof.segment} - {prof.address?.city || 'Endereço não informado'}</p>
@@ -252,83 +292,63 @@ const ClientDashboard = () => {
                 <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
                     {prof.instagram && <a href={getInstagramUrl(prof.instagram)} target="_blank" rel="noopener noreferrer" title="Ver no Instagram" className="p-2 rounded-full bg-gray-600 hover:bg-pink-600 transition-colors"><Instagram className="w-6 h-6 text-white"/></a>}
                     <button onClick={() => handleProtectedAction(() => toggleFavorite(prof.uid))} title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}><Heart className={`h-7 w-7 transition-all duration-200 transform hover:scale-110 ${isFavorite ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`} fill={isFavorite ? 'currentColor' : 'none'} /></button>
-                    <button onClick={() => setSelectedProfessional(prof)} className="bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">Agendar</button>
+                    <button onClick={() => setSelectedProfessional(prof)} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Agendar</button>
                 </div>
             </div>
         );
     };
 
+    const renderContent = () => {
+        switch (activeView) {
+            case 'search':
+                return (
+                    <div>
+                        <h2 className="text-3xl font-bold text-white mb-6">Encontre um profissional</h2>
+                        <div className="bg-black/30 p-4 rounded-lg mb-6 border border-gray-800"><div className="grid grid-cols-1 md:grid-cols-4 gap-4"><div><label htmlFor="segment" className="block text-sm font-medium text-gray-300 mb-1">Área de Atuação</label><select name="segment" id="segment" value={filters.segment} onChange={handleFilterChange} className="w-full bg-gray-800 text-white border-gray-700 rounded-md p-2 focus:ring-[#daa520] focus:border-[#daa520]"><option value="">Todas</option><option value="Barbearia">Barbearia</option><option value="Salão de Beleza">Salão de Beleza</option><option value="Manicure/Pedicure">Manicure/Pedicure</option><option value="Esteticista">Esteticista</option><option value="Maquiagem">Maquilhagem</option><option value="Outro">Outro</option></select></div><div><label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-1">Cidade</label><input type="text" name="city" id="city" placeholder="Ex: Brasília" value={filters.city} onChange={handleFilterChange} className="w-full bg-gray-800 text-white border-gray-700 rounded-md p-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div><div><label htmlFor="date" className="block text-sm font-medium text-gray-300 mb-1">Disponível em</label><input type="date" name="date" id="date" value={filters.date} onChange={handleFilterChange} className="w-full bg-gray-800 text-white border-gray-700 rounded-md p-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div><div className="flex items-end"><button onClick={clearFilters} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Limpar Filtros</button></div></div></div>
+                        <div className="relative mb-8"><div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><Search className="h-5 w-5 text-gray-400" /></div><input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Procure por nome, profissional ou serviço..." className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-[#daa520]" /></div>
+                        <div className="space-y-4">{isLoading ? <p className="text-center text-gray-400">A carregar profissionais...</p> : filteredResults.length > 0 ? filteredResults.map(renderProfessionalCard) : <p className="text-center text-gray-400 py-8">Nenhum resultado encontrado para os filtros aplicados.</p>}</div>
+                    </div>
+                );
+            case 'myAppointments':
+                return !currentUser ? <LoginPrompt message="Veja aqui os seus próximos agendamentos." onAction={handleLoginAction} /> : (
+                    <div>
+                        <h2 className="text-3xl font-bold text-white mb-6">Os Meus Agendamentos</h2>
+                        {loadingAppointments ? (<p className="text-center text-gray-400">A carregar os seus agendamentos...</p>) : appointments.length > 0 ? (
+                            <ul className="space-y-4">{appointments.map(app => (<li key={app.id} className="bg-gray-800/80 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700"><div className="flex items-center mb-3 md:mb-0"><div className="text-center border-r border-gray-600 pr-4 mr-4"><p className="text-xl font-bold text-white">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit' })}</p><p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p></div><div><p className="font-bold text-lg text-white">{app.time} - {app.establishmentName}</p><p className="text-gray-300">{app.serviceName}</p><p className="text-sm text-gray-400">com {app.professionalName}</p></div></div><div className="flex items-center space-x-3 self-end md:self-center"><span className={`px-3 py-1 text-xs font-semibold rounded-full ${app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' : app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' : app.status === 'completed' ? 'bg-blue-500/20 text-blue-300' : 'bg-gray-500/20 text-gray-300'}`}>{app.status.charAt(0).toUpperCase() + app.status.slice(1)}</span>{(app.status === 'pending' || app.status === 'confirmed') && <button onClick={() => handleCancelAppointment(app.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Cancelar</button>}{app.status === 'completed' && !app.hasBeenReviewed && <button onClick={() => handleOpenReviewModal(app)} className="bg-[#daa520] text-black font-bold py-1 px-3 text-xs rounded-lg">Avaliar</button>}{app.status === 'completed' && app.hasBeenReviewed && <p className="text-xs text-green-400">Avaliado ✓</p>}</div></li>))}</ul>
+                        ) : (
+                            <div className="text-center text-gray-400 py-8"><p className="mb-4">Ainda não tem nenhum agendamento.</p><button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Procurar Profissionais</button></div>
+                        )}
+                    </div>
+                );
+            case 'favorites':
+                return !currentUser ? <LoginPrompt message="Guarde aqui os seus profissionais favoritos." onAction={handleLoginAction} /> : (
+                    <div>
+                        <h2 className="text-3xl font-bold text-white mb-6">Os Meus Favoritos</h2>
+                        {loadingFavorites ? (<p className="text-center text-gray-400">A carregar favoritos...</p>) : favoriteProfessionals.length > 0 ? (
+                            <div className="space-y-4">{favoriteProfessionals.map(renderProfessionalCard)}</div>
+                        ) : (
+                            <p className="text-center text-gray-400 py-8">Ainda não adicionou profissionais aos seus favoritos.</p>
+                        )}
+                    </div>
+                );
+            case 'profile':
+                return !currentUser ? <LoginPrompt message="Edite aqui o seu perfil." onAction={handleLoginAction} /> : <ClientProfileManagement />;
+            default:
+                return <div></div>;
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
+        <div className="flex min-h-screen bg-black text-gray-200 font-sans">
             {modalState?.isOpen && <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />}
             {reviewModal.isOpen && <ReviewModal isOpen={reviewModal.isOpen} onClose={() => setReviewModal({ isOpen: false })} appointment={reviewModal.appointment!} onSubmit={handleSubmitReview} />}
             {showLoginPrompt && <LoginPrompt message="É necessário fazer login para realizar esta ação." onAction={() => { setShowLoginPrompt(false); handleLoginAction(); }} />}
-
-            <header className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
-                <div className="flex items-center self-start md:self-center">
-                    <img src={userProfile?.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt="A sua foto de perfil" className="h-14 w-14 rounded-full object-cover mr-4 border-2 border-gray-700" />
-                    <div>
-                        <p className="text-gray-400 text-sm">{currentUser ? 'Bem-vindo(a) de volta,' : 'Bem-vindo(a) à Stylo!'}</p>
-                        <h1 className="text-xl font-bold text-white">{userProfile?.displayName || 'Convidado(a)'}</h1>
-                    </div>
-                </div>
-                <div className="order-first md:order-none"><img className='w-[10rem] md:w-[12rem]' src="/src/assets/stylo-logo.png" alt="logo stylo" /></div>
-                <div className="flex items-center justify-end w-full md:w-auto space-x-2">
-                    {currentUser ? (
-                        <>
-                            <button onClick={() => handleProtectedAction(() => setIsEditingProfile(true))} className="flex items-center space-x-2 bg-gray-800 hover:bg-yellow-600 text-gray-300 font-semibold py-2 px-3 rounded-lg transition-colors duration-300">
-                                <Edit className="h-5 w-5" /><span className="hidden sm:inline">Perfil</span>
-                            </button>
-                            <button onClick={logout} className="flex items-center space-x-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 font-semibold py-2 px-3 rounded-lg transition-colors duration-300">
-                                <LogOut className="h-5 w-5" /><span className="hidden sm:inline">Sair</span>
-                            </button>
-                        </>
-                    ) : (
-                        <button onClick={handleLoginAction} className="flex items-center space-x-2 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
-                            <LogIn className="h-5 w-5" /><span>Entrar</span>
-                        </button>
-                    )}
-                </div>
-            </header>
-
-            <main>
-                <div className="mb-8">
-                    <div className="flex space-x-2 md:space-x-4 border-b border-gray-700">
-                        <button onClick={() => setActiveTab('search')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'search' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Procurar</button>
-                        <button onClick={() => setActiveTab('myAppointments')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'myAppointments' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Agendamentos</button>
-                        <button onClick={() => setActiveTab('favorites')} className={`py-3 px-4 font-semibold transition-colors duration-300 ${activeTab === 'favorites' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`}>Favoritos</button>
-                    </div>
-                </div>
-
-                <div className="bg-gray-800 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-700">
-                    {activeTab === 'search' && (
-                        <div>
-                            <h2 className="text-2xl font-bold text-white mb-6">Encontre um profissional</h2>
-                            <div className="bg-gray-700 p-4 rounded-lg mb-6"><div className="grid grid-cols-1 md:grid-cols-4 gap-4"><div><label htmlFor="segment" className="block text-sm font-medium text-gray-300 mb-1">Área de Atuação</label><select name="segment" id="segment" value={filters.segment} onChange={handleFilterChange} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500"><option value="">Todas</option><option value="Barbearia">Barbearia</option><option value="Salão de Beleza">Salão de Beleza</option><option value="Manicure/Pedicure">Manicure/Pedicure</option><option value="Esteticista">Esteticista</option><option value="Maquiagem">Maquilhagem</option><option value="Outro">Outro</option></select></div><div><label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-1">Cidade</label><input type="text" name="city" id="city" placeholder="Ex: Brasília" value={filters.city} onChange={handleFilterChange} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" /></div><div><label htmlFor="date" className="block text-sm font-medium text-gray-300 mb-1">Disponível em</label><input type="date" name="date" id="date" value={filters.date} onChange={handleFilterChange} className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" /></div><div className="flex items-end"><button onClick={clearFilters} className="w-full bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Limpar Filtros</button></div></div></div>
-                            <div className="relative mb-8"><div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><Search className="h-5 w-5 text-gray-400" /></div><input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Procure por nome, profissional ou serviço..." className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" /></div>
-                            <div className="space-y-4">{isLoading ? <p className="text-center text-gray-400">A carregar profissionais...</p> : filteredResults.length > 0 ? filteredResults.map(renderProfessionalCard) : <p className="text-center text-gray-400 py-8">Nenhum resultado encontrado para os filtros aplicados.</p>}</div>
-                        </div>
-                    )}
-                    {activeTab === 'myAppointments' && (!currentUser ? <LoginPrompt message="Veja aqui os seus próximos agendamentos." onAction={handleLoginAction} /> : (
-                        <div>
-                            <h2 className="text-2xl font-bold text-white mb-6">Os Meus Agendamentos</h2>
-                            {loadingAppointments ? (<p className="text-center text-gray-400">A carregar os seus agendamentos...</p>) : appointments.length > 0 ? (
-                                <ul className="space-y-4">{appointments.map(app => (<li key={app.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center"><div className="flex items-center mb-3 md:mb-0"><div className="text-center border-r border-gray-600 pr-4 mr-4"><p className="text-xl font-bold text-white">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit' })}</p><p className="text-sm text-gray-400">{new Date(`${app.date}T00:00:00`).toLocaleDateString('pt-BR', { month: 'short' })}</p></div><div><p className="font-bold text-lg text-white">{app.time} - {app.establishmentName}</p><p className="text-gray-300">{app.serviceName}</p><p className="text-sm text-gray-400">com {app.professionalName}</p></div></div><div className="flex items-center space-x-3 self-end md:self-center"><span className={`px-3 py-1 text-xs font-semibold rounded-full ${app.status === 'confirmed' ? 'bg-green-500/20 text-green-300' : app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' : app.status === 'completed' ? 'bg-blue-500/20 text-blue-300' : 'bg-gray-500/20 text-gray-300'}`}>{app.status.charAt(0).toUpperCase() + app.status.slice(1)}</span>{(app.status === 'pending' || app.status === 'confirmed') && <button onClick={() => handleCancelAppointment(app.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 text-xs rounded-lg">Cancelar</button>}{app.status === 'completed' && !app.hasBeenReviewed && <button onClick={() => handleOpenReviewModal(app)} className="bg-yellow-500 text-black font-bold py-1 px-3 text-xs rounded-lg">Avaliar</button>}{app.status === 'completed' && app.hasBeenReviewed && <p className="text-xs text-green-400">Avaliado ✓</p>}</div></li>))}</ul>
-                            ) : (
-                                <div className="text-center text-gray-400 py-8"><p className="mb-4">Ainda não tem nenhum agendamento.</p><button onClick={() => setActiveTab('search')} className="bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">Procurar Profissionais</button></div>
-                            )}
-                        </div>
-                    ))}
-                    {activeTab === 'favorites' && (!currentUser ? <LoginPrompt message="Guarde aqui os seus profissionais favoritos." onAction={handleLoginAction} /> : (
-                        <div>
-                            <h2 className="text-2xl font-bold text-white mb-6">Os Meus Favoritos</h2>
-                            {loadingFavorites ? (<p className="text-center text-gray-400">A carregar favoritos...</p>) : favoriteProfessionals.length > 0 ? (
-                                <div className="space-y-4">{favoriteProfessionals.map(renderProfessionalCard)}</div>
-                            ) : (
-                                <p className="text-center text-gray-400 py-8">Ainda não adicionou profissionais aos seus favoritos.</p>
-                            )}
-                        </div>
-                    ))}
+            
+            <SideNav activeView={activeView} setActiveView={setActiveView} />
+            
+            <main className="flex-grow p-4 sm:p-6 md:p-8 ml-72">
+                <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
+                    {renderContent()}
                 </div>
             </main>
         </div>

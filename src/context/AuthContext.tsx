@@ -23,9 +23,9 @@ import {
   runTransaction,
   Timestamp
 } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Importações do Storage
 import { getMessaging, getToken } from "firebase/messaging";
-import type { UserProfile, Review } from "../types";
+import type { UserProfile, Review, Appointment } from "../types";
 import { useToast } from "./ToastContext";
 
 // Configuração do Firebase
@@ -72,11 +72,13 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
+  setUserProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
   updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => Promise<void>;
   requestFCMToken: () => Promise<void>;
   submitReview: (reviewData: Omit<Review, 'id' | 'createdAt' | 'clientName' | 'clientPhotoURL'>) => Promise<void>;
+  uploadImage: (file: File, path: string) => Promise<string>; // <-- Adicionado aqui
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -115,59 +117,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    setLoading(true);
-    try {
-        await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-        console.error("Erro no login:", error);
-        showToast("Email ou senha inválidos.", 'error');
-    } finally {
-        setLoading(false);
-    }
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const register = async (email: string, password: string, userType: "client" | "serviceProvider", profileData: Partial<UserProfile> = {}) => {
-    setLoading(true);
-    try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        const newProfile: UserProfile = {
-          uid: user.uid, email: user.email!, createdAt: new Date(), userType,
-          displayName: profileData.displayName || (userType === 'client' ? profileData.displayName : ''),
-          establishmentName: profileData.establishmentName || (userType === 'serviceProvider' ? profileData.establishmentName : ''),
-          ...profileData,
-        };
-        await setDoc(doc(db, `users/${user.uid}`), newProfile);
-        setUserProfile(newProfile);
-    } catch (error) {
-        console.error("Erro no registo:", error);
-        showToast("Ocorreu um erro ao tentar registar-se.", 'error');
-    } finally {
-        setLoading(false);
-    }
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      const newProfile: UserProfile = {
+        uid: user.uid, email: user.email!, createdAt: new Date(), userType,
+        displayName: profileData.displayName || (userType === 'client' ? profileData.displayName : ''),
+        establishmentName: profileData.establishmentName || (userType === 'serviceProvider' ? profileData.establishmentName : ''),
+        ...profileData,
+      };
+      await setDoc(doc(db, `users/${user.uid}`), newProfile);
+      setUserProfile(newProfile);
   };
 
   const loginWithGoogle = async () => {
-    setLoading(true);
-    try {
-        const provider = new GoogleAuthProvider();
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        const profile = await fetchUserProfile(user.uid);
-        if (!profile) {
-          const newProfile: UserProfile = {
-            uid: user.uid, email: user.email!, createdAt: new Date(), userType: "client",
-            displayName: user.displayName || "", photoURL: user.photoURL || "",
-          };
-          await setDoc(doc(db, `users/${user.uid}`), newProfile);
-          setUserProfile(newProfile);
-        }
-    } catch (error) {
-        console.error("Erro no login com Google:", error);
-        showToast("Não foi possível fazer login com o Google.", 'error');
-    } finally {
-        setLoading(false);
-    }
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const profile = await fetchUserProfile(user.uid);
+      if (!profile) {
+        const newProfile: UserProfile = {
+          uid: user.uid, email: user.email!, createdAt: new Date(), userType: "client",
+          displayName: user.displayName || "", photoURL: user.photoURL || "",
+        };
+        await setDoc(doc(db, `users/${user.uid}`), newProfile);
+        setUserProfile(newProfile);
+      }
   };
 
   const logout = async () => {
@@ -176,18 +154,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!currentUser) return;
-    setLoading(true);
     const userDocRef = doc(db, `users/${currentUser.uid}`);
     try {
-        await updateDoc(userDocRef, data);
-        const updatedProfile = await fetchUserProfile(currentUser.uid);
-        setUserProfile(updatedProfile);
-        showToast("Perfil atualizado com sucesso!", 'success');
+      await updateDoc(userDocRef, data);
+      const updatedProfile = await fetchUserProfile(currentUser.uid);
+      setUserProfile(updatedProfile);
+      showToast("Perfil atualizado com sucesso!", 'success');
     } catch (error) {
-        console.error("Erro ao atualizar o perfil:", error);
-        showToast("Não foi possível atualizar o perfil.", 'error');
-    } finally {
-        setLoading(false);
+      console.error("Erro ao atualizar o perfil:", error);
+      showToast("Não foi possível atualizar o perfil.", 'error');
     }
   };
 
@@ -271,11 +246,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         transaction.set(reviewRef, { 
-            ...reviewData,
-            id: reviewRef.id,
-            clientName: userProfile.displayName || 'Anónimo',
-            clientPhotoURL: userProfile.photoURL || '',
-            createdAt: Timestamp.now() 
+          ...reviewData,
+          id: reviewRef.id,
+          clientName: userProfile.displayName || 'Anónimo',
+          clientPhotoURL: userProfile.photoURL || '',
+          createdAt: Timestamp.now() 
         });
 
         const establishmentData = establishmentDoc.data() as UserProfile;
@@ -285,8 +260,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const newAverageRating = (currentRating * reviewCount + reviewData.rating) / newReviewCount;
 
         transaction.update(establishmentRef, {
-            averageRating: newAverageRating,
-            reviewCount: newReviewCount,
+          averageRating: newAverageRating,
+          reviewCount: newReviewCount,
         });
 
         transaction.update(appointmentRef, { hasBeenReviewed: true });
@@ -299,25 +274,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // <-- FUNÇÃO DE UPLOAD DE IMAGEM -->
+  const uploadImage = async (file: File, path: string): Promise<string> => {
+    const storageRef = ref(storage, path);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  };
+
+  const value = {
+    currentUser,
+    userProfile,
+    loading,
+    login,
+    register,
+    loginWithGoogle,
+    logout,
+    updateUserProfile,
+    setUserProfile,
+    toggleFavorite,
+    cancelAppointment,
+    updateAppointmentStatus,
+    requestFCMToken,
+    submitReview,
+    uploadImage, // <-- Adicionado ao contexto
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        currentUser,
-        userProfile,
-        loading,
-        login,
-        register,
-        loginWithGoogle,
-        logout,
-        updateUserProfile,
-        toggleFavorite,
-        cancelAppointment,
-        updateAppointmentStatus,
-        requestFCMToken,
-        submitReview,
-      }}
-    >
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

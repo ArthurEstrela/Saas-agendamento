@@ -1,261 +1,232 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import type { Address } from '../types';
+import logo from '../assets/stylo-logo.png';
+import { Mail, Lock, User, Briefcase, ArrowLeft, Building, Phone, FileText, MapPin } from 'lucide-react';
 
-// Componente de Ícone para reutilização
-const InputIcon = ({ children }: { children: React.ReactNode }) => (
-  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-    {children}
-  </div>
+// --- Componente de Card para Seleção de Tipo de Usuário ---
+const UserTypeCard = ({ icon: Icon, title, description, onClick, isSelected }) => (
+    <div
+        onClick={onClick}
+        className={`relative p-8 border-2 rounded-2xl cursor-pointer transition-all duration-300 ease-in-out transform hover:-translate-y-2 ${isSelected ? 'border-[#daa520] bg-black shadow-2xl shadow-[#daa520]/20' : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'}`}
+    >
+        <div className="flex flex-col items-center text-center">
+            <Icon className={`h-12 w-12 mb-4 transition-colors duration-300 ${isSelected ? 'text-[#daa520]' : 'text-gray-500'}`} />
+            <h3 className="text-xl font-bold text-white">{title}</h3>
+            <p className="text-sm text-gray-400 mt-2">{description}</p>
+        </div>
+        {isSelected && <div className="absolute top-4 right-4 h-5 w-5 bg-[#daa520] rounded-full border-2 border-black" />}
+    </div>
 );
 
+// --- Componente Principal de Login/Registro ---
 const Login = () => {
-  const { login, register, loginWithGoogle, loading } = useAuth();
-  const [isLoginView, setIsLoginView] = useState(true);
+    const { login, register, loginWithGoogle, loading } = useAuth();
+    const [isLoginView, setIsLoginView] = useState(true);
+    const navigate = useNavigate();
+    const location = useLocation();
 
-  // Estado unificado para o formulário
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    userType: 'client' as 'client' | 'serviceProvider',
-    displayName: '',
-    establishmentName: '',
-    phoneNumber: '',
-    cnpj: '',
-    segment: '',
-    instagram: '',
-    street: '',
-    number: '',
-    neighborhood: '',
-    city: '',
-    state: '',
-    postalCode: '',
-    country: 'Brasil',
-  });
+    // Estado unificado para o formulário
+    const [formData, setFormData] = useState({
+        email: '',
+        password: '',
+        userType: null as 'client' | 'serviceProvider' | null,
+        displayName: '',
+        establishmentName: '',
+        phoneNumber: '',
+        cnpj: '',
+        segment: '',
+        instagram: '',
+        street: '',
+        number: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        postalCode: '',
+        country: 'Brasil',
+    });
+    
+    const [error, setError] = useState('');
+    const [cepLoading, setCepLoading] = useState(false);
+    const [cepError, setCepError] = useState('');
 
-  // Novos estados para a lógica do CEP
-  const [cepLoading, setCepLoading] = useState(false);
-  const [cepError, setCepError] = useState('');
+    // Verifica se a URL tem o parâmetro para ir direto ao registro
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('type') === 'register') {
+            setIsLoginView(false);
+        }
+    }, [location.search]);
+    
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'postalCode') setCepError('');
+    };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    // Limpa o erro do CEP se o usuário começar a digitar de novo
-    if (name === 'postalCode') {
+    const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+        const cep = e.target.value.replace(/\D/g, '');
+        if (cep.length !== 8) {
+            setCepError('CEP deve conter 8 dígitos.');
+            return;
+        }
+        setCepLoading(true);
         setCepError('');
-    }
-  };
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await response.json();
+            if (data.erro) {
+                setCepError('CEP não encontrado.');
+                setFormData(prev => ({ ...prev, street: '', neighborhood: '', city: '', state: '' }));
+            } else {
+                setFormData(prev => ({ ...prev, street: data.logouro, neighborhood: data.bairro, city: data.localidade, state: data.uf }));
+            }
+        } catch (error) {
+            setCepError('Erro ao buscar CEP. Tente novamente.');
+        } finally {
+            setCepLoading(false);
+        }
+    };
 
-  // <-- FUNÇÃO NOVA PARA BUSCAR O CEP -->
-  const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-    const cep = e.target.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (isLoginView) {
+            try {
+                await login(formData.email, formData.password);
+                navigate('/dashboard');
+            } catch (err) {
+                setError('Email ou senha inválidos.');
+            }
+        } else {
+            if (!formData.userType) {
+                setError('Por favor, selecione um tipo de conta.');
+                return;
+            }
+            if (cepError) {
+                setError("Por favor, corrija o CEP antes de continuar.");
+                return;
+            }
+            try {
+                const { email, password, userType, street, number, neighborhood, city, state, postalCode, country, ...profileData } = formData;
+                const address: Address = { street, number, neighborhood, city, state, postalCode, country };
+                await register(email, password, userType, { ...profileData, address });
+                navigate('/dashboard');
+            } catch (err) {
+                setError('Falha ao criar a conta. Verifique os seus dados.');
+            }
+        }
+    };
 
-    if (cep.length !== 8) {
-      setCepError('CEP deve conter 8 dígitos.');
-      return;
-    }
+    const handleGoogleLogin = async () => {
+        try {
+            await loginWithGoogle();
+            navigate('/dashboard');
+        } catch (err) {
+            setError('Falha ao fazer login com o Google.');
+        }
+    };
+    
+    const resetForm = () => {
+        setFormData({
+            email: '', password: '', userType: null, displayName: '', establishmentName: '',
+            phoneNumber: '', cnpj: '', segment: '', instagram: '', street: '', number: '',
+            neighborhood: '', city: '', state: '', postalCode: '', country: 'Brasil',
+        });
+        setError('');
+        setCepError('');
+    };
 
-    setCepLoading(true);
-    setCepError('');
-
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        setCepError('CEP não encontrado.');
-        // Limpa os campos caso o CEP seja inválido
-        setFormData(prev => ({
-            ...prev,
-            street: '',
-            neighborhood: '',
-            city: '',
-            state: '',
-        }));
-      } else {
-        // Preenche os campos com os dados da API
-        setFormData(prev => ({
-          ...prev,
-          street: data.logradouro,
-          neighborhood: data.bairro,
-          city: data.localidade,
-          state: data.uf,
-        }));
-      }
-    } catch (error) {
-      setCepError('Erro ao buscar CEP. Tente novamente.');
-    } finally {
-      setCepLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (cepError) {
-        alert("Por favor, corrija o CEP antes de continuar.");
-        return;
-    }
-    if (isLoginView) {
-      await login(formData.email, formData.password);
-    } else {
-      const { email, password, userType, street, number, neighborhood, city, state, postalCode, country, ...profileData } = formData;
-      const address: Address = { street, number, neighborhood, city, state, postalCode, country };
-      await register(email, password, userType, { ...profileData, address });
-    }
-  };
-
-  const renderAddressFields = () => (
-    <>
-      <h3 className="text-lg font-semibold text-yellow-400 col-span-full mt-4 border-t border-gray-700 pt-4">Endereço</h3>
-      <div className="relative">
-        <input
-          type="text"
-          name="postalCode"
-          placeholder="CEP"
-          value={formData.postalCode}
-          onChange={handleChange}
-          onBlur={handleCepBlur} // <-- EVENTO ADICIONADO AQUI
-          required
-          className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-        />
-        {cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando CEP...</p>}
-        {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
-      </div>
-      <div className="relative">
-        <input type="text" name="street" placeholder="Rua / Avenida" value={formData.street} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-      </div>
-      <div className="relative">
-        <input type="text" name="number" placeholder="Número" value={formData.number} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-      </div>
-      <div className="relative">
-        <input type="text" name="neighborhood" placeholder="Bairro" value={formData.neighborhood} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-      </div>
-      <div className="relative">
-        <input type="text" name="city" placeholder="Cidade" value={formData.city} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-      </div>
-      <div className="relative">
-        <input type="text" name="state" placeholder="Estado" value={formData.state} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-      </div>
-    </>
-  );
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col items-center justify-center p-4 font-sans">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <img className=" " src="/src/assets/stylo-logo.png" alt="logo stylo" />
-          <p className="text-yellow-400 font-semibold mt-3 text-lg">Seu tempo, seu Stylo.</p>
-        </div>
-
-        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
-          <div className="flex border-b border-gray-700 mb-6">
-            <button
-              onClick={() => setIsLoginView(true)}
-              className={`w-1/2 py-3 text-center font-semibold transition-colors duration-300 ${isLoginView ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-yellow-400'}`}
-            >
-              Entrar
-            </button>
-            <button
-              onClick={() => setIsLoginView(false)}
-              className={`w-1/2 py-3 text-center font-semibold transition-colors duration-300 ${!isLoginView ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-yellow-400'}`}
-            >
-              Registrar
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="relative">
-              <InputIcon>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
-              </InputIcon>
-              <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all" />
-            </div>
-            <div className="relative">
-              <InputIcon>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L4.257 19.743A1 1 0 112.84 18.33l6.09-6.09A6 6 0 1118 8zm-6-4a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" /></svg>
-              </InputIcon>
-              <input type="password" name="password" placeholder="Senha" value={formData.password} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all" />
-            </div>
-
-            {!isLoginView && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2 flex items-center justify-center space-x-4">
-                    <label className="flex items-center text-gray-300">
-                        <input type="radio" name="userType" value="client" checked={formData.userType === 'client'} onChange={handleChange} className="form-radio text-yellow-500"/>
-                        <span className="ml-2">Sou Cliente</span>
-                    </label>
-                    <label className="flex items-center text-gray-300">
-                        <input type="radio" name="userType" value="serviceProvider" checked={formData.userType === 'serviceProvider'} onChange={handleChange} className="form-radio text-yellow-500"/>
-                        <span className="ml-2">Sou Profissional</span>
-                    </label>
+    const renderRegisterView = () => {
+        if (!formData.userType) {
+            return (
+                <div className="animate-fade-in-down">
+                    <div className="text-center mb-10">
+                        <h2 className="text-3xl font-bold text-white">Primeiro, quem é você?</h2>
+                        <p className="text-gray-400 mt-2">Escolha o tipo de conta que melhor descreve você.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <UserTypeCard icon={User} title="Sou Cliente" description="Quero encontrar e agendar serviços com os melhores profissionais." isSelected={formData.userType === 'client'} onClick={() => setFormData(prev => ({...prev, userType: 'client'}))} />
+                        <UserTypeCard icon={Briefcase} title="Sou Profissional" description="Quero gerenciar minha agenda, serviços e clientes na plataforma." isSelected={formData.userType === 'serviceProvider'} onClick={() => setFormData(prev => ({...prev, userType: 'serviceProvider'}))} />
+                    </div>
                 </div>
+            );
+        }
 
-                {formData.userType === 'client' ? (
-                  <>
-                    <div className="relative md:col-span-2">
-                      <input type="text" name="displayName" placeholder="Seu Nome Completo" value={formData.displayName} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+        return (
+            <div className="animate-fade-in-up">
+                <button onClick={() => setFormData(prev => ({...prev, userType: null}))} className="flex items-center text-sm text-gray-400 hover:text-[#daa520] mb-6">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Voltar para seleção
+                </button>
+                <h2 className="text-3xl font-bold text-white text-center mb-2">Crie a sua conta de {formData.userType === 'client' ? 'Cliente' : 'Profissional'}</h2>
+                <p className="text-gray-400 text-center mb-8">Vamos começar!</p>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="relative"><User className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="displayName" placeholder="Seu Nome Completo" value={formData.displayName} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div>
+                    <div className="relative"><Mail className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div>
+                    <div className="relative"><Lock className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="password" name="password" placeholder="Senha" value={formData.password} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div>
+                    
+                    {formData.userType === 'serviceProvider' && (
+                        <>
+                            <div className="relative"><Building className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="establishmentName" placeholder="Nome do Estabelecimento" value={formData.establishmentName} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" /></div>
+                            <div className="relative"><Phone className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="tel" name="phoneNumber" placeholder="Número de Celular" value={formData.phoneNumber} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" /></div>
+                            <div className="relative"><FileText className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="cnpj" placeholder="CNPJ" value={formData.cnpj} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" /></div>
+                            <div className="relative"><select name="segment" value={formData.segment} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-4 appearance-none focus:ring-2 focus:ring-[#daa520]"><option value="" disabled>Selecione sua área</option><option>Barbearia</option><option>Salão de Beleza</option><option>Manicure/Pedicure</option><option>Esteticista</option><option>Maquiagem</option><option>Outro</option></select></div>
+                        </>
+                    )}
+                    
+                    <h3 className="text-lg font-semibold text-[#daa520] col-span-full pt-4 border-t border-gray-700">Endereço</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="relative sm:col-span-2"><MapPin className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="postalCode" placeholder="CEP" value={formData.postalCode} onChange={handleChange} onBlur={handleCepBlur} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" />{cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando...</p>}{cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}</div>
+                        <div className="relative sm:col-span-2"><input type="text" name="street" placeholder="Rua / Avenida" value={formData.street} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
+                        <div><input type="text" name="number" placeholder="Número" value={formData.number} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
+                        <div><input type="text" name="neighborhood" placeholder="Bairro" value={formData.neighborhood} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
+                        <div><input type="text" name="city" placeholder="Cidade" value={formData.city} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
+                        <div><input type="text" name="state" placeholder="Estado" value={formData.state} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
                     </div>
-                    <div className="relative md:col-span-2">
-                      <input type="tel" name="phoneNumber" placeholder="Número de Celular" value={formData.phoneNumber} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-                    </div>
-                    {renderAddressFields()}
-                  </>
-                ) : (
-                  <>
-                    <div className="relative md:col-span-2">
-                      <input type="text" name="establishmentName" placeholder="Nome do Estabelecimento" value={formData.establishmentName} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-                    </div>
-                    <div className="relative md:col-span-2">
-                      <input type="tel" name="phoneNumber" placeholder="Número de Celular" value={formData.phoneNumber} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-                    </div>
-                    <div className="relative">
-                      <input type="text" name="cnpj" placeholder="CNPJ" value={formData.cnpj} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-                    </div>
-                    <div className="relative">
-                      <select name="segment" value={formData.segment} onChange={handleChange} required className="w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 appearance-none">
-                        <option value="" disabled>Selecione sua área</option>
-                        <option value="Barbearia">Barbearia</option>
-                        <option value="Salão de Beleza">Salão de Beleza</option>
-                        <option value="Manicure/Pedicure">Manicure/Pedicure</option>
-                        <option value="Esteticista">Esteticista</option>
-                        <option value="Maquiagem">Maquiagem</option>
-                        <option value="Outro">Outro</option>
-                      </select>
-                    </div>
-                    {renderAddressFields()}
-                  </>
-                )}
-              </div>
-            )}
 
-            <button type="submit" disabled={loading} className="w-full bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 disabled:bg-gray-500">
-              {loading ? 'Processando...' : isLoginView ? 'Entrar' : 'Criar Conta'}
-            </button>
-          </form>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-600"></div>
+                    <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">
+                        {loading ? 'Processando...' : 'Criar Conta'}
+                    </button>
+                </form>
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-800 text-gray-500">OU</span>
-            </div>
-          </div>
+        );
+    };
 
-          <button onClick={loginWithGoogle} disabled={loading} className="w-full flex items-center justify-center bg-white text-gray-800 font-semibold py-3 px-4 rounded-lg border border-gray-300 hover:bg-gray-100 transition duration-300 disabled:bg-gray-300">
-             <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.82l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                <path fill="none" d="M0 0h48v48H0z"></path>
-            </svg>
-            Entrar com Google
-          </button>
+    return (
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+            <div className="w-full max-w-lg mx-auto">
+                <div className="text-center mb-8"><Link to="/"><img className="w-32 mx-auto" src={logo} alt="Stylo Logo" /></Link></div>
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl shadow-black/50">
+                    {isLoginView ? (
+                        <div className="animate-fade-in-down">
+                            <h2 className="text-3xl font-bold text-white text-center mb-8">Bem-vindo de volta!</h2>
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div><label className="text-sm font-bold text-gray-400 block mb-2">Email</label><div className="relative"><Mail className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="email" name="email" value={formData.email} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div></div>
+                                <div><label className="text-sm font-bold text-gray-400 block mb-2">Senha</label><div className="relative"><Lock className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="password" name="password" value={formData.password} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div></div>
+                                <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">{loading ? 'Entrando...' : 'Entrar'}</button>
+                            </form>
+                        </div>
+                    ) : (
+                        renderRegisterView()
+                    )}
+                    {error && <p className="text-red-500 text-sm text-center mt-4">{error}</p>}
+                    <div className="flex items-center my-6"><hr className="flex-grow border-gray-700" /><span className="mx-4 text-gray-500 text-sm">OU</span><hr className="flex-grow border-gray-700" /></div>
+                    <button onClick={handleGoogleLogin} disabled={loading} className="w-full flex items-center justify-center gap-3 bg-gray-800 border border-gray-700 text-white font-bold py-3 rounded-lg hover:bg-gray-700 transition-colors disabled:bg-gray-600">
+                        <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path><path fill="#FF3D00" d="m6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z"></path><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.223 0-9.641-3.657-11.303-8.591l-6.571 4.819C9.656 39.663 16.318 44 24 44z"></path><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C42.012 36.49 44 30.686 44 24c0-1.341-.138-2.65-.389-3.917z"></path></svg>
+                        Continuar com Google
+                    </button>
+                    <p className="text-center text-sm text-gray-400 mt-8">
+                        {isLoginView ? 'Não tem uma conta?' : 'Já tem uma conta?'}
+                        <button onClick={() => { setIsLoginView(!isLoginView); resetForm(); }} className="font-bold text-[#daa520] hover:underline ml-2">
+                            {isLoginView ? 'Crie uma agora' : 'Faça login'}
+                        </button>
+                    </p>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default Login;

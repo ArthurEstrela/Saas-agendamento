@@ -1,191 +1,210 @@
-import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth, db } from '../../context/AuthContext';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useToast } from '../../context/ToastContext';
+import type { Professional } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
-import type { Professional, Service, Availability } from '../../types';
+import { PlusCircle, Edit, Trash2, User, Image as ImageIcon, X, UploadCloud } from 'lucide-react';
 
-const storage = getStorage();
+// --- Tipos e Interfaces ---
+type ModalMode = 'add' | 'edit';
+interface ProfessionalFormData {
+    name: string;
+    photoURL: string;
+}
 
-const defaultAvailability: Availability = {
-  monday: { active: true, startTime: '09:00', endTime: '18:00' },
-  tuesday: { active: true, startTime: '09:00', endTime: '18:00' },
-  wednesday: { active: true, startTime: '09:00', endTime: '18:00' },
-  thursday: { active: true, startTime: '09:00', endTime: '18:00' },
-  friday: { active: true, startTime: '09:00', endTime: '18:00' },
-  saturday: { active: false, startTime: '09:00', endTime: '18:00' },
-  sunday: { active: false, startTime: '09:00', endTime: '18:00' },
-};
+// --- Componente do Modal para Adicionar/Editar Profissional ---
+const ProfessionalModal = ({ isOpen, mode, professional, onClose, onSave }: { isOpen: boolean; mode: ModalMode; professional?: Professional; onClose: () => void; onSave: (data: Professional, imageFile: File | null, isEditing: boolean) => void; }) => {
+    const [formData, setFormData] = useState<ProfessionalFormData>({ name: '', photoURL: '' });
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-// Sub-componente para gerenciar os serviços de UM profissional
-const ProfessionalServiceManager = ({ professional, onUpdate }: { professional: Professional, onUpdate: (updatedProfessional: Professional) => void }) => {
-    const [serviceName, setServiceName] = useState('');
-    const [serviceDuration, setServiceDuration] = useState('');
-    const [servicePrice, setServicePrice] = useState('');
+    useEffect(() => {
+        if (isOpen) {
+            if (mode === 'edit' && professional) {
+                setFormData({ name: professional.name, photoURL: professional.photoURL || '' });
+                setImagePreview(professional.photoURL || null);
+            } else {
+                setFormData({ name: '', photoURL: '' });
+                setImagePreview(null);
+            }
+            setImageFile(null); // Reset file on open
+        }
+    }, [mode, professional, isOpen]);
 
-    const handleAddService = (e: React.FormEvent) => {
-        e.preventDefault();
-        const newService: Service = {
-            id: uuidv4(),
-            name: serviceName,
-            duration: parseInt(serviceDuration),
-            price: parseFloat(servicePrice),
-        };
-        const updatedProfessional = {
-            ...professional,
-            services: [...(professional.services || []), newService],
-        };
-        onUpdate(updatedProfessional);
-        setServiceName('');
-        setServiceDuration('');
-        setServicePrice('');
+    if (!isOpen) return null;
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+        }
     };
 
-    const handleDeleteService = (serviceId: string) => {
-        const updatedServices = professional.services.filter(s => s.id !== serviceId);
-        const updatedProfessional = { ...professional, services: updatedServices };
-        onUpdate(updatedProfessional);
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const professionalData: Professional = {
+            id: mode === 'edit' && professional ? professional.id : uuidv4(),
+            name: formData.name,
+            photoURL: formData.photoURL, // A URL final será atualizada na função de save
+            services: mode === 'edit' && professional ? professional.services : [],
+            availability: mode === 'edit' && professional ? professional.availability : {},
+        };
+        onSave(professionalData, imageFile, mode === 'edit');
     };
 
     return (
-        <div className="mt-4 pt-4 border-t border-gray-600">
-            <h4 className="text-md font-semibold text-yellow-400 mb-3">Serviços de {professional.name}</h4>
-            <div className="space-y-2 mb-4">
-                {professional.services && professional.services.length > 0 ? (
-                    professional.services.map(service => (
-                        <div key={service.id} className="bg-gray-800 p-2 rounded-md flex justify-between items-center">
-                            <div>
-                                <p className="text-sm text-white">{service.name}</p>
-                                <p className="text-xs text-gray-400">{service.duration} min - R$ {service.price.toFixed(2)}</p>
-                            </div>
-                            <button onClick={() => handleDeleteService(service.id)} className="text-red-500 hover:text-red-400 p-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in-down">
+            <div className="bg-gray-900/80 p-8 rounded-2xl w-full max-w-lg border border-[#daa520]/30 shadow-2xl shadow-[#daa520]/10">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-white">{mode === 'add' ? 'Adicionar Novo Profissional' : 'Editar Profissional'}</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><X size={24} /></button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="flex items-center gap-6">
+                        <div className="relative w-24 h-24">
+                            <img 
+                                src={imagePreview || `https://placehold.co/150x150/111827/daa520?text=${formData.name.charAt(0) || '?'}`} 
+                                alt="Pré-visualização" 
+                                className="w-24 h-24 rounded-full object-cover border-4 border-gray-700"
+                            />
+                             <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 bg-[#daa520] p-2 rounded-full text-black hover:bg-[#c8961e] transition-colors">
+                                <UploadCloud size={16} />
                             </button>
                         </div>
-                    ))
-                ) : (
-                    <p className="text-sm text-gray-500">Nenhum serviço cadastrado para este profissional.</p>
-                )}
+                        <div className="relative flex-grow">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                            <input name="name" value={formData.name} onChange={(e) => setFormData(p => ({...p, name: e.target.value}))} placeholder="Nome do Profissional" required className="w-full bg-gray-800 p-3 pl-10 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700" />
+                        </div>
+                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageChange} className="hidden" />
+                    </div>
+                    <div className="flex justify-end gap-4 pt-4">
+                        <button type="button" onClick={onClose} className="bg-gray-700 hover:bg-gray-600 font-semibold px-6 py-2 rounded-lg transition-colors">Cancelar</button>
+                        <button type="submit" className="bg-[#daa520] hover:bg-[#c8961e] text-black font-semibold px-6 py-2 rounded-lg transition-colors">Guardar</button>
+                    </div>
+                </form>
             </div>
-            <form onSubmit={handleAddService} className="space-y-3 bg-gray-800 p-3 rounded-lg">
-                <input type="text" placeholder="Nome do Serviço" value={serviceName} onChange={e => setServiceName(e.target.value)} required className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 text-sm focus:ring-yellow-500 focus:border-yellow-500" />
-                <div className="grid grid-cols-2 gap-2">
-                    <input type="number" placeholder="Duração (min)" value={serviceDuration} onChange={e => setServiceDuration(e.target.value)} required className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 text-sm focus:ring-yellow-500 focus:border-yellow-500" />
-                    <input type="number" step="0.01" placeholder="Preço (R$)" value={servicePrice} onChange={e => setServicePrice(e.target.value)} required className="w-full bg-gray-600 text-white border-gray-500 rounded-md p-2 text-sm focus:ring-yellow-500 focus:border-yellow-500" />
-                </div>
-                <button type="submit" className="w-full bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-1 px-3 text-sm rounded-lg transition-colors">Adicionar Serviço</button>
-            </form>
         </div>
     );
 };
 
+// --- Componente Principal ---
 const ProfessionalsManagement = () => {
-  const { userProfile, updateUserProfile, loading } = useAuth();
-  const [professionalName, setProfessionalName] = useState('');
-  const [isUploading, setIsUploading] = useState<string | null>(null); // Armazena o ID do profissional que está fazendo upload
+    const { userProfile, setUserProfile, uploadImage } = useAuth(); // Adicionar `uploadImage` do contexto
+    const { showToast } = useToast();
+    const [modal, setModal] = useState<{ isOpen: boolean; mode: ModalMode; professional?: Professional; }>({ isOpen: false, mode: 'add' });
+    const [isUploading, setIsUploading] = useState(false);
 
-  const handleAddProfessional = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userProfile || !professionalName) return;
+    const handleSaveProfessional = async (professionalData: Professional, imageFile: File | null, isEditing: boolean) => {
+        if (!userProfile) return;
+        setIsUploading(true);
 
-    const newProfessional: Professional = {
-      id: uuidv4(),
-      name: professionalName,
-      services: [],
-      availability: defaultAvailability,
+        let finalPhotoURL = professionalData.photoURL;
+
+        if (imageFile) {
+            try {
+                const uploadPath = `professionals/${userProfile.uid}/${professionalData.id}/${imageFile.name}`;
+                finalPhotoURL = await uploadImage(imageFile, uploadPath);
+            } catch (error) {
+                showToast('Erro ao fazer upload da imagem.', 'error');
+                console.error(error);
+                setIsUploading(false);
+                return;
+            }
+        }
+        
+        const finalProfessionalData = { ...professionalData, photoURL: finalPhotoURL };
+
+        const existingProfessionals = userProfile.professionals || [];
+        const updatedProfessionals = isEditing
+            ? existingProfessionals.map(p => p.id === finalProfessionalData.id ? finalProfessionalData : p)
+            : [...existingProfessionals, finalProfessionalData];
+
+        try {
+            const userDocRef = doc(db, 'users', userProfile.uid);
+            await updateDoc(userDocRef, { professionals: updatedProfessionals });
+            setUserProfile(prev => ({ ...prev!, professionals: updatedProfessionals }));
+            showToast(`Profissional ${isEditing ? 'atualizado' : 'adicionado'} com sucesso!`, 'success');
+            setModal({ isOpen: false, mode: 'add' });
+        } catch (error) {
+            showToast('Ocorreu um erro ao guardar os dados.', 'error');
+            console.error(error);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
-    const updatedProfessionals = [...(userProfile.professionals || []), newProfessional];
-    await updateUserProfile({ professionals: updatedProfessionals });
-    setProfessionalName('');
-  };
+    const handleDeleteProfessional = async (professionalId: string) => {
+        if (!userProfile || !window.confirm("Tem a certeza de que pretende eliminar este profissional? Todos os seus serviços associados também serão removidos.")) return;
 
-  const handleUpdateProfessional = async (updatedProfessional: Professional) => {
-    if (!userProfile) return;
-    const updatedProfessionals = userProfile.professionals?.map(p => 
-      p.id === updatedProfessional.id ? updatedProfessional : p
-    ) || [];
-    await updateUserProfile({ professionals: updatedProfessionals });
-  };
-  
-  const handleDeleteProfessional = async (professionalId: string) => {
-    if (!userProfile || !window.confirm("Tem certeza que deseja remover este profissional e todos os seus serviços?")) return;
-    const updatedProfessionals = userProfile.professionals?.filter(p => p.id !== professionalId) || [];
-    await updateUserProfile({ professionals: updatedProfessionals });
-  };
+        const updatedProfessionals = userProfile.professionals.filter(p => p.id !== professionalId);
 
-  const handleImageUpload = async (file: File, professionalId: string) => {
-    if (!userProfile) return;
-    setIsUploading(professionalId);
+        try {
+            const userDocRef = doc(db, 'users', userProfile.uid);
+            await updateDoc(userDocRef, { professionals: updatedProfessionals });
+            setUserProfile(prev => ({ ...prev!, professionals: updatedProfessionals }));
+            showToast('Profissional eliminado com sucesso!', 'success');
+        } catch (error) {
+            showToast('Ocorreu um erro ao eliminar o profissional.', 'error');
+            console.error(error);
+        }
+    };
 
-    const professional = userProfile.professionals?.find(p => p.id === professionalId);
-    if (!professional) {
-        setIsUploading(null);
-        return;
-    }
+    return (
+        <div>
+            <ProfessionalModal 
+                isOpen={modal.isOpen} 
+                mode={modal.mode} 
+                professional={modal.professional}
+                onClose={() => setModal({ isOpen: false, mode: 'add' })} 
+                onSave={handleSaveProfessional} 
+            />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                <h2 className="text-3xl font-bold text-white">Equipa de Profissionais</h2>
+                <button 
+                    onClick={() => setModal({ isOpen: true, mode: 'add' })}
+                    className="flex items-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors shadow-lg shadow-[#daa520]/20"
+                >
+                    <PlusCircle className="h-5 w-5" />
+                    Adicionar Profissional
+                </button>
+            </div>
 
-    const storageRef = ref(storage, `professional_pictures/${userProfile.uid}/${professionalId}`);
-    try {
-        await uploadBytes(storageRef, file);
-        const photoURL = await getDownloadURL(storageRef);
-        const updatedProfessional = { ...professional, photoURL };
-        await handleUpdateProfessional(updatedProfessional);
-        alert("Foto atualizada!");
-    } catch (error) {
-        console.error("Erro no upload da imagem:", error);
-        alert("Falha ao enviar a foto.");
-    } finally {
-        setIsUploading(null);
-    }
-  };
+            {isUploading && <p className="text-center text-[#daa520]">A guardar dados e imagem...</p>}
 
-  return (
-    <div>
-      <h2 className="text-2xl font-bold text-white mb-6">Gerenciar Profissionais</h2>
-      <form onSubmit={handleAddProfessional} className="bg-gray-700 p-6 rounded-lg mb-8 flex items-center gap-4">
-        <input 
-            type="text" 
-            placeholder="Nome do Novo Profissional" 
-            value={professionalName} 
-            onChange={e => setProfessionalName(e.target.value)} 
-            required 
-            className="flex-grow bg-gray-600 text-white border-gray-500 rounded-md p-2 focus:ring-yellow-500 focus:border-yellow-500" 
-        />
-        <button type="submit" disabled={loading} className="bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">
-          {loading ? 'Adicionando...' : 'Adicionar'}
-        </button>
-      </form>
-
-      <div>
-        <h3 className="text-lg font-semibold text-yellow-400 mb-4">Profissionais Cadastrados</h3>
-        {userProfile?.professionals && userProfile.professionals.length > 0 ? (
-          <ul className="space-y-4">
-            {userProfile.professionals.map(prof => (
-              <li key={prof.id} className="bg-gray-700 p-4 rounded-lg">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-4">
-                    <img src={prof.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=?'} alt={`Foto de ${prof.name}`} className="h-16 w-16 rounded-full object-cover border-2 border-gray-600" />
-                    <div>
-                      <p className="font-semibold text-lg text-white">{prof.name}</p>
-                      <label className="text-xs text-yellow-400 cursor-pointer hover:underline">
-                        {isUploading === prof.id ? 'Enviando...' : 'Alterar foto'}
-                        <input type="file" className="hidden" accept="image/*" disabled={isUploading === prof.id} onChange={(e) => e.target.files && handleImageUpload(e.target.files[0], prof.id)} />
-                      </label>
-                    </div>
-                  </div>
-                  <button onClick={() => handleDeleteProfessional(prof.id)} disabled={loading} className="text-red-500 hover:text-red-400">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
+            {userProfile?.professionals && userProfile.professionals.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {userProfile.professionals.map(prof => (
+                        <div key={prof.id} className="group relative bg-gray-800/80 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300 transform hover:-translate-y-1">
+                            <div className="flex items-center">
+                                <img 
+                                    src={prof.photoURL || `https://placehold.co/150x150/111827/daa520?text=${prof.name.charAt(0)}`} 
+                                    alt={`Foto de ${prof.name}`} 
+                                    className="h-20 w-20 rounded-full object-cover border-4 border-gray-900/50"
+                                />
+                                <div className="ml-4">
+                                    <h3 className="text-xl font-bold text-white">{prof.name}</h3>
+                                    <p className="text-sm text-gray-400">{prof.services?.length || 0} serviços</p>
+                                </div>
+                            </div>
+                            <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <button onClick={() => setModal({ isOpen: true, mode: 'edit', professional: prof })} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white"><Edit size={16} /></button>
+                                <button onClick={() => handleDeleteProfessional(prof.id)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white"><Trash2 size={16} /></button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-                <ProfessionalServiceManager professional={prof} onUpdate={handleUpdateProfessional} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-center text-gray-500">Nenhum profissional cadastrado.</p>
-        )}
-      </div>
-    </div>
-  );
+            ) : (
+                <div className="text-center text-gray-400 py-10 bg-black/30 rounded-xl border border-dashed border-gray-700">
+                    <User size={48} className="mx-auto text-gray-600 mb-4" />
+                    <h3 className="text-lg font-semibold text-white">Nenhum profissional adicionado</h3>
+                    <p className="text-sm mt-2">Comece por adicionar os membros da sua equipa.</p>
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default ProfessionalsManagement;

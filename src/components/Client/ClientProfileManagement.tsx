@@ -1,162 +1,207 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import type { Address } from '../../types';
+import { useToast } from '../../context/ToastContext';
+import type { UserProfile } from '../../types';
+import { User, Mail, Phone, MapPin, Save, Lock, Camera, ArrowLeft } from 'lucide-react';
 
-const storage = getStorage();
+// --- Componente Principal ---
+const ClientProfileManagement = ({ onBack }: { onBack: () => void; }) => {
+    const { userProfile, updateUserProfile, uploadImage, changePassword } = useAuth();
+    const { showToast } = useToast();
+    const [formData, setFormData] = useState<Partial<UserProfile>>({});
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [cepLoading, setCepLoading] = useState(false);
+    const [cepError, setCepError] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-interface ClientProfileManagementProps {
-  onBack: () => void;
-}
-
-const ClientProfileManagement = ({ onBack }: ClientProfileManagementProps) => {
-  const { userProfile, updateUserProfile, loading } = useAuth();
-  
-  const [profileData, setProfileData] = useState({
-    displayName: '',
-    phoneNumber: '',
-    address: {
-        street: '',
-        number: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        postalCode: '',
-        country: 'Brasil',
-    } as Address,
-  });
-
-  const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  useEffect(() => {
-    if (userProfile) {
-      setProfileData({
-        displayName: userProfile.displayName || '',
-        phoneNumber: userProfile.phoneNumber || '',
-        address: userProfile.address || profileData.address,
-      });
-      setPreviewImage(userProfile.photoURL || null);
-    }
-  }, [userProfile]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setProfileData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setProfileData(prev => ({
-        ...prev,
-        address: {
-            ...prev.address,
-            [name]: value,
+    useEffect(() => {
+        if (userProfile) {
+            setFormData({
+                displayName: userProfile.displayName || '',
+                phoneNumber: userProfile.phoneNumber || '',
+                address: userProfile.address || { street: '', number: '', neighborhood: '', city: '', state: '', postalCode: '', country: 'Brasil' },
+            });
+            setImagePreview(userProfile.photoURL || null);
         }
-    }));
-  };
+    }, [userProfile]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setProfileImage(file);
-      setPreviewImage(URL.createObjectURL(file));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userProfile) return;
-    setIsUploading(true);
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        if (['street', 'number', 'neighborhood', 'city', 'state', 'postalCode'].includes(name)) {
+            setFormData(prev => ({ ...prev, address: { ...prev.address!, [name]: value } }));
+            if (name === 'postalCode') setCepError('');
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
     
-    const dataToUpdate: { [key: string]: any } = { ...profileData };
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setPasswordData(prev => ({ ...prev, [name]: value }));
+    };
 
-    if (profileImage) {
-      const storageRef = ref(storage, `profile_pictures/${userProfile.uid}`);
-      try {
-        const snapshot = await uploadBytes(storageRef, profileImage);
-        dataToUpdate.photoURL = await getDownloadURL(snapshot.ref);
-      } catch (error) {
-        console.error("Erro no upload da imagem:", error);
-        setIsUploading(false);
-        alert("Houve um erro ao enviar sua foto.");
-        return;
-      }
-    }
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+        }
+    };
 
-    await updateUserProfile(dataToUpdate);
+    const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+        const cep = e.target.value.replace(/\D/g, '');
+        if (cep.length !== 8) {
+            if (cep.length > 0) setCepError('CEP inválido. Deve conter 8 dígitos.');
+            return;
+        }
+        setCepLoading(true);
+        setCepError('');
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await response.json();
+            if (data.erro) {
+                setCepError('CEP não encontrado.');
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    address: {
+                        ...prev.address!,
+                        street: data.logradouro,
+                        neighborhood: data.bairro,
+                        city: data.localidade,
+                        state: data.uf,
+                    }
+                }));
+                showToast('Endereço preenchido automaticamente!', 'success');
+            }
+        } catch (error) {
+            setCepError('Erro ao buscar CEP. Tente novamente.');
+        } finally {
+            setCepLoading(false);
+        }
+    };
+
+    const handleSaveProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!userProfile) return;
+        setLoading(true);
+
+        let finalPhotoURL = userProfile.photoURL;
+        if (imageFile) {
+            try {
+                const uploadPath = `profile_pictures/${userProfile.uid}/${imageFile.name}`;
+                finalPhotoURL = await uploadImage(imageFile, uploadPath);
+            } catch (error) {
+                showToast('Erro ao fazer upload da imagem.', 'error');
+                setLoading(false);
+                return;
+            }
+        }
+
+        try {
+            await updateUserProfile({ ...formData, photoURL: finalPhotoURL });
+        } finally {
+            setLoading(false);
+        }
+    };
     
-    setIsUploading(false);
-    alert("Perfil atualizado com sucesso!");
-    onBack();
-  };
+    const handleSavePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            showToast('As novas senhas não coincidem.', 'error');
+            return;
+        }
+        if (passwordData.newPassword.length < 6) {
+            showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
+            return;
+        }
+        setLoading(true);
+        try {
+            await changePassword(passwordData.currentPassword, passwordData.newPassword);
+            setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
-        <header className="flex items-center mb-10">
-            <button onClick={onBack} className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 font-semibold transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                <span>Voltar ao Painel</span>
+    return (
+        <div className="animate-fade-in-down">
+            <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-[#daa520] mb-6 transition-colors">
+                <ArrowLeft size={18} />
+                Voltar ao Dashboard
             </button>
-        </header>
-        <main className="max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-white mb-6">Editar Meu Perfil</h2>
-            <form onSubmit={handleSubmit} className="space-y-6 bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
-                <div className="flex items-center space-x-6">
-                    <img className="h-24 w-24 object-cover rounded-full" src={previewImage || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'} alt="Sua foto"/>
-                    <label className="block">
-                        <span className="sr-only">Escolha a foto do perfil</span>
-                        <input type="file" onChange={handleFileChange} accept="image/*" className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-500 file:text-yellow-900 hover:file:bg-yellow-400"/>
-                    </label>
+            <h2 className="text-3xl font-bold text-white mb-8">Meu Perfil</h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Coluna da Esquerda: Foto e Senha */}
+                <div className="lg:col-span-1 space-y-8">
+                    <div className="bg-black/30 p-6 rounded-xl border border-gray-800 text-center">
+                        <div className="relative w-32 h-32 mx-auto group">
+                            <img 
+                                src={imagePreview || `https://placehold.co/150x150/111827/daa520?text=${userProfile?.displayName?.charAt(0) || '?'}`} 
+                                alt="Foto de Perfil"
+                                className="w-32 h-32 rounded-full object-cover border-4 border-gray-700 group-hover:border-[#daa520] transition-all"
+                            />
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <Camera size={32} className="text-white"/>
+                            </button>
+                            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageChange} className="hidden" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mt-4">{userProfile?.displayName}</h3>
+                        <p className="text-sm text-gray-400">{userProfile?.email}</p>
+                    </div>
+
+                    <div className="bg-black/30 p-6 rounded-xl border border-gray-800">
+                         <h3 className="text-lg font-bold text-white mb-4">Alterar Senha</h3>
+                         <form onSubmit={handleSavePassword} className="space-y-4">
+                            <div className="relative"><Lock className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="password" name="currentPassword" value={passwordData.currentPassword} onChange={handlePasswordChange} placeholder="Senha Atual" required className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" /></div>
+                            <div className="relative"><Lock className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="password" name="newPassword" value={passwordData.newPassword} onChange={handlePasswordChange} placeholder="Nova Senha" required className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" /></div>
+                            <div className="relative"><Lock className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="password" name="confirmPassword" value={passwordData.confirmPassword} onChange={handlePasswordChange} placeholder="Confirmar Nova Senha" required className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" /></div>
+                            <button type="submit" disabled={loading} className="w-full bg-gray-700 text-white font-semibold py-2 rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-500">
+                                {loading ? 'A guardar...' : 'Guardar Nova Senha'}
+                            </button>
+                         </form>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2">
-                        <label htmlFor="displayName" className="block text-sm font-medium text-gray-300 mb-1">Nome Completo</label>
-                        <input type="text" name="displayName" id="displayName" value={profileData.displayName} onChange={handleChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-300 mb-1">Celular</label>
-                        <input type="tel" name="phoneNumber" id="phoneNumber" value={profileData.phoneNumber} onChange={handleChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
+                {/* Coluna da Direita: Dados */}
+                <div className="lg:col-span-2 bg-black/30 p-6 rounded-xl border border-gray-800">
+                    <form onSubmit={handleSaveProfile} className="space-y-6">
+                        <div>
+                            <h3 className="text-lg font-bold text-white mb-4">Informações Pessoais</h3>
+                            <div className="space-y-4">
+                                <div className="relative"><User className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="text" name="displayName" value={formData.displayName || ''} onChange={handleChange} placeholder="Nome Completo" required className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" /></div>
+                                <div className="relative"><Phone className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="tel" name="phoneNumber" value={formData.phoneNumber || ''} onChange={handleChange} placeholder="Número de Celular" className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" /></div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-white mb-4 pt-6 border-t border-gray-800">Endereço</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="relative sm:col-span-2"><MapPin className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="text" name="postalCode" placeholder="CEP" value={formData.address?.postalCode || ''} onChange={handleChange} onBlur={handleCepBlur} required className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" />{cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando...</p>}{cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}</div>
+                                <div className="sm:col-span-2"><input type="text" name="street" placeholder="Rua / Avenida" value={formData.address?.street || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
+                                <div><input type="text" name="number" placeholder="Número" value={formData.address?.number || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
+                                <div><input type="text" name="neighborhood" placeholder="Bairro" value={formData.address?.neighborhood || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
+                                <div><input type="text" name="city" placeholder="Cidade" value={formData.address?.city || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
+                                <div><input type="text" name="state" placeholder="Estado" value={formData.address?.state || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
+                            </div>
+                        </div>
+                        <div className="pt-6 border-t border-gray-800">
+                             <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2">
+                                <Save size={18}/>
+                                {loading ? 'A guardar...' : 'Guardar Alterações'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
-
-                <div className="border-t border-gray-600 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <h3 className="text-lg font-semibold text-yellow-400 col-span-full">Meu Endereço</h3>
-                    <div className="md:col-span-2">
-                        <label htmlFor="street" className="block text-sm font-medium text-gray-300 mb-1">Rua / Avenida</label>
-                        <input type="text" name="street" id="street" value={profileData.address.street} onChange={handleAddressChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                    <div>
-                        <label htmlFor="number" className="block text-sm font-medium text-gray-300 mb-1">Número</label>
-                        <input type="text" name="number" id="number" value={profileData.address.number} onChange={handleAddressChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                    <div>
-                        <label htmlFor="neighborhood" className="block text-sm font-medium text-gray-300 mb-1">Bairro</label>
-                        <input type="text" name="neighborhood" id="neighborhood" value={profileData.address.neighborhood} onChange={handleAddressChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                    <div>
-                        <label htmlFor="postalCode" className="block text-sm font-medium text-gray-300 mb-1">CEP</label>
-                        <input type="text" name="postalCode" id="postalCode" value={profileData.address.postalCode} onChange={handleAddressChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                    <div>
-                        <label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-1">Cidade</label>
-                        <input type="text" name="city" id="city" value={profileData.address.city} onChange={handleAddressChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                    <div>
-                        <label htmlFor="state" className="block text-sm font-medium text-gray-300 mb-1">Estado</label>
-                        <input type="text" name="state" id="state" value={profileData.address.state} onChange={handleAddressChange} className="w-full bg-gray-700 text-white border-gray-600 rounded-md p-3 focus:ring-yellow-500 focus:border-yellow-500" />
-                    </div>
-                </div>
-                
-                <button type="submit" disabled={loading || isUploading} className="w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-500">
-                    {isUploading ? 'Salvando...' : 'Salvar Alterações'}
-                </button>
-            </form>
-        </main>
-    </div>
-  );
+            </div>
+        </div>
+    );
 };
 
 export default ClientProfileManagement;

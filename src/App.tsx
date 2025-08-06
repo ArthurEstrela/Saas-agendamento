@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import MainAppContent from './components/MainAppContent';
@@ -12,17 +11,26 @@ import PrivacyPolicy from './components/PrivacyPolicy';
 import FAQ from './components/FAQ';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
-import ClientDashboard from './components/ClientDashboard'; // 1. Importar
+import ClientDashboard from './components/ClientDashboard';
 
 // Componente para proteger rotas que exigem autenticação
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { currentUser, loading } = useAuth();
-  
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-yellow-500 text-xl">A carregar...</div>;
+const ProtectedRoute = ({ children }) => {
+  const { currentUser } = useAuth();
+  if (!currentUser) {
+    // Redireciona para a página de login se o usuário não estiver autenticado
+    return <Navigate to="/login" replace />;
   }
+  return children;
+};
 
-  return currentUser ? <>{children}</> : <Navigate to="/login" replace />;
+// Componente para redirecionar usuários autenticados da página de login
+const LoginRedirect = () => {
+  const { currentUser } = useAuth();
+  if (currentUser) {
+    // Redireciona para o dashboard se o usuário já estiver autenticado
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Login />;
 };
 
 const App = () => {
@@ -42,10 +50,12 @@ const App = () => {
         {/* Rotas da Aplicação (sem o layout de marketing) */}
         <Route path="/login" element={<LoginRedirect />} />
         
-        {/* Nova rota principal para o cliente (convidado ou logado) */}
+        {/* Rota principal para o cliente (convidado ou logado) */}
+        {/* Agora, /booking leva ao ClientDashboard, onde a funcionalidade de agendamento é integrada */}
         <Route path="/booking" element={<ClientDashboard />} />
 
-        {/* Rota de Agendamento para um profissional específico */}
+        {/* Rota de Agendamento para um profissional específico (pública) */}
+        {/* Esta rota permanece para permitir que usuários não autenticados agendem diretamente via um link público */}
         <Route path="/agendar/:professionalId" element={<PublicBookingPage />} />
         
         {/* Rota Protegida para o Dashboard (decide entre cliente e profissional) */}
@@ -62,12 +72,5 @@ const App = () => {
     </AuthProvider>
   );
 };
-
-// Componente auxiliar para redirecionar se o utilizador já estiver logado
-const LoginRedirect = () => {
-    const { currentUser, loading } = useAuth();
-    if (loading) return <div>A carregar...</div>;
-    return currentUser ? <Navigate to="/dashboard" replace /> : <Login />;
-}
 
 export default App;

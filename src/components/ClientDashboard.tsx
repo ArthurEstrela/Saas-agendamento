@@ -10,143 +10,142 @@ import ClientProfileManagement from './Client/ClientProfileManagement';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// --- Subcomponente de Alerta para Login ---
-const LoginPrompt = ({ message, onAction }: { message: string; onAction: () => void; }) => (
-    <div className="text-center bg-gray-800/50 p-10 rounded-xl border border-dashed border-gray-600 animate-fade-in-down">
-        <div className="mx-auto h-12 w-12 text-gray-500">
-            <LogIn size={48} />
+// Componente de navegação lateral
+const SideNav = ({ activeView, setActiveView }) => (
+    <nav className="fixed left-0 top-0 h-full w-72 bg-gray-950 p-6 flex flex-col shadow-lg z-20">
+        <div className="flex items-center mb-10">
+            <img src={logo} alt="Stylo Logo" className="h-10 w-auto mr-3" />
+            <span className="text-2xl font-extrabold text-[#daa520]">Stylo</span>
         </div>
-        <h3 className="mt-4 text-lg font-semibold text-white">{message}</h3>
-        <p className="mt-2 text-sm text-gray-400">
-            Crie uma conta ou faça login para aceder a esta funcionalidade e guardar as suas preferências.
-        </p>
-        <div className="mt-6">
-            <button
-                onClick={onAction}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-black bg-[#daa520] hover:bg-[#c8961e]"
-            >
-                Entrar ou Criar Conta
+        <ul className="space-y-3 flex-grow">
+            <li>
+                <button onClick={() => setActiveView('search')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'search' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
+                    <Search className="w-5 h-5 mr-3" />
+                    Pesquisar
+                </button>
+            </li>
+            <li>
+                <button onClick={() => setActiveView('myAppointments')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'myAppointments' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
+                    <Calendar className="w-5 h-5 mr-3" />
+                    Meus Agendamentos
+                </button>
+            </li>
+            <li>
+                <button onClick={() => setActiveView('favorites')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'favorites' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
+                    <Heart className="w-5 h-5 mr-3" />
+                    Favoritos
+                </button>
+            </li>
+            <li>
+                <button onClick={() => setActiveView('profile')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'profile' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
+                    <User className="w-5 h-5 mr-3" />
+                    Meu Perfil
+                </button>
+            </li>
+        </ul>
+        <div className="mt-8">
+            <button onClick={() => setActiveView('login')} className="flex items-center w-full p-3 rounded-lg text-lg font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors duration-200">
+                <LogOut className="w-5 h-5 mr-3" />
+                Sair
             </button>
+        </div>
+    </nav>
+);
+
+// Componente de modal de confirmação
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
+            <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
+            <p className="text-gray-300 mb-6">{message}</p>
+            <div className="flex justify-center space-x-4">
+                <button onClick={onCancel} className="px-5 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">Cancelar</button>
+                <button onClick={onConfirm} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">Confirmar</button>
+            </div>
         </div>
     </div>
 );
 
-// --- Subcomponente do Modal de Avaliação ---
-const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boolean; onClose: () => void; appointment: Appointment; onSubmit: (rating: number, comment: string) => void; }) => {
+// Componente de modal de avaliação
+const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }) => {
     const [rating, setRating] = useState(0);
-    const [hoverRating, setHoverRating] = useState(0);
     const [comment, setComment] = useState('');
 
     useEffect(() => {
-        if (isOpen) {
+        if (!isOpen) {
             setRating(0);
-            setHoverRating(0);
             setComment('');
         }
     }, [isOpen]);
 
-    if (!isOpen) return null;
-
     const handleSubmit = () => {
-        if (rating > 0) {
-            onSubmit(rating, comment);
+        if (rating === 0) {
+            alert('Por favor, dê uma classificação.');
+            return;
         }
+        onSubmit(rating, comment);
     };
 
+    if (!isOpen) return null;
+
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 animate-fade-in-down">
-            <div className="bg-gray-800 p-8 rounded-xl w-full max-w-lg border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-2">Avalie o seu Atendimento</h3>
-                <p className="text-sm text-gray-400 mb-6">Estabelecimento: {appointment.establishmentName}</p>
-                <div className="flex justify-center items-center mb-6">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star}
-                            className={`w-10 h-10 cursor-pointer transition-colors ${ (hoverRating || rating) >= star ? 'text-yellow-400' : 'text-gray-600'}`}
-                            onMouseEnter={() => setHoverRating(star)}
-                            onMouseLeave={() => setHoverRating(0)}
-                            onClick={() => setRating(star)}
-                            fill="currentColor"
-                        />
-                    ))}
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-md w-full animate-scale-in">
+                <h3 className="text-2xl font-bold text-white mb-4 text-center">Avaliar Agendamento</h3>
+                <p className="text-gray-300 mb-6 text-center">Compartilhe sua experiência com {appointment?.establishmentName}.</p>
+                
+                <div className="mb-6 text-center">
+                    <p className="text-gray-400 mb-2">Sua classificação:</p>
+                    <div className="flex justify-center space-x-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                                key={star}
+                                className={`w-10 h-10 cursor-pointer transition-transform duration-200 ${rating >= star ? 'text-yellow-400 fill-current transform scale-110' : 'text-gray-500 hover:text-yellow-300'}`}
+                                onClick={() => setRating(star)}
+                            />
+                        ))}
+                    </div>
                 </div>
-                <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Deixe um comentário (opcional)..." rows={4} className="w-full bg-gray-700 p-3 rounded-md mb-6 focus:ring-2 focus:ring-yellow-500" />
-                <div className="flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 font-semibold px-6 py-2 rounded-lg">Fechar</button>
-                    <button onClick={handleSubmit} disabled={rating === 0} className="bg-green-600 hover:bg-green-700 font-semibold px-6 py-2 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Enviar Avaliação</button>
+
+                <div className="mb-6">
+                    <label htmlFor="comment" className="block text-gray-300 text-sm font-medium mb-2">Comentário (opcional):</label>
+                    <textarea
+                        id="comment"
+                        className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-[#daa520] focus:border-[#daa520] resize-y"
+                        rows={4}
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="Deixe seu comentário sobre o serviço..."
+                    ></textarea>
+                </div>
+
+                <div className="flex justify-end space-x-4">
+                    <button onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">Cancelar</button>
+                    <button onClick={handleSubmit} className="px-6 py-2 bg-[#daa520] text-gray-900 font-semibold rounded-lg hover:bg-[#c8961e] transition-colors">Enviar Avaliação</button>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- Subcomponente de Modal de Confirmação para o cancelamento ---
-const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 animate-fade-in-down">
-        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 text-center w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-            <p className="text-gray-300 mb-8">{message}</p>
-            <div className="flex justify-center gap-4">
-                <button onClick={onCancel} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
-                    Voltar
-                </button>
-                <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
-                    Confirmar Cancelamento
-                </button>
-            </div>
+// Componente de prompt de login
+const LoginPrompt = ({ message, onAction }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
+            <LogIn size={48} className="mx-auto text-[#daa520] mb-4" />
+            <h3 className="text-xl font-bold text-white mb-4">Ação Protegida</h3>
+            <p className="text-gray-300 mb-6">{message}</p>
+            <button onClick={onAction} className="px-6 py-2 bg-[#daa520] text-gray-900 font-semibold rounded-lg hover:bg-[#c8961e] transition-colors">
+                Fazer Login
+            </button>
         </div>
     </div>
 );
 
-// --- Componentes do Layout do Dashboard ---
-
-const NavItem = ({ icon: Icon, text, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${active ? 'bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20' : 'text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-md'}`}
-  >
-    <Icon className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
-    <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">{text}</span>
-  </button>
-);
-
-const SideNav = ({ activeView, setActiveView }) => {
-    const { logout, userProfile } = useAuth();
-    return (
-        <div className="w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0">
-            <div className="flex items-center space-x-2 mb-10 px-2">
-                <img className="h-10 w-auto" src={logo} alt="Stylo" />
-                <span className="text-white text-2xl font-bold tracking-tight">Stylo</span>
-            </div>
-            <nav className="flex-grow flex flex-col space-y-2">
-                <NavItem icon={Search} text="Procurar" active={activeView === 'search'} onClick={() => setActiveView('search')} />
-                <NavItem icon={Calendar} text="Meus Agendamentos" active={activeView === 'myAppointments'} onClick={() => setActiveView('myAppointments')} />
-                <NavItem icon={Heart} text="Meus Favoritos" active={activeView === 'favorites'} onClick={() => setActiveView('favorites')} />
-            </nav>
-            <div className="mt-auto">
-                <div className="border-t border-gray-800 pt-4">
-                    <div className="flex items-center px-2 mb-4">
-                        <img src={userProfile?.photoURL || 'https://placehold.co/150x150/111827/4B5563?text=Foto'} alt="Sua foto de perfil" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-gray-700" />
-                        <div>
-                            <p className="text-sm font-semibold text-white truncate">{userProfile?.displayName || 'Convidado(a)'}</p>
-                            <p className="text-xs text-gray-400">Cliente</p>
-                        </div>
-                    </div>
-                    <NavItem icon={User} text="Meu Perfil" active={activeView === 'profile'} onClick={() => setActiveView('profile')} />
-                    <button onClick={logout} className="flex items-center w-full h-12 px-4 mt-1 text-left text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all duration-300 ease-in-out group">
-                        <LogOut className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
-                        <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">Sair</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-};
-
-// --- Componente Principal ---
 const ClientDashboard = () => {
     const { currentUser, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuth();
     const navigate = useNavigate();
-    const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile'>('search');
+    const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking'>('search');
     
     const [searchTerm, setSearchTerm] = useState('');
     const [allProviders, setAllProviders] = useState<UserProfile[]>([]);
@@ -154,14 +153,13 @@ const ClientDashboard = () => {
     const [filters, setFilters] = useState({ segment: '', city: '', date: '' });
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loadingAppointments, setLoadingAppointments] = useState(true);
-    const [selectedProfessional, setSelectedProfessional] = useState<UserProfile | null>(null);
+    const [selectedProfessionalForBooking, setSelectedProfessionalForBooking] = useState<UserProfile | null>(null);
     const [favoriteProfessionals, setFavoriteProfessionals] = useState<UserProfile[]>([]);
     const [loadingFavorites, setLoadingFavorites] = useState(false);
     const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
     const [reviewModal, setReviewModal] = useState<{ isOpen: boolean; appointment?: Appointment }>({ isOpen: false });
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [appointmentSubTab, setAppointmentSubTab] = useState<'upcoming' | 'history'>('upcoming');
-
 
     // Fetch de todos os prestadores (público)
     useEffect(() => {
@@ -182,7 +180,7 @@ const ClientDashboard = () => {
             setAppointments([]);
             setLoadingAppointments(false);
             return;
-        };
+        }
         setLoadingAppointments(true);
         const q = query(collection(db, 'appointments'), where('clientId', '==', currentUser.uid));
 
@@ -228,28 +226,48 @@ const ClientDashboard = () => {
     }, [currentUser, userProfile?.favoriteProfessionals, activeView]);
 
     const filteredResults = useMemo(() => {
-        return allProviders.filter(provider => {
-            const searchTermLower = searchTerm.toLowerCase();
-            const matchesSearch = searchTerm ?
-                provider.establishmentName?.toLowerCase().includes(searchTermLower) ||
-                provider.professionals?.some(p => p.name.toLowerCase().includes(searchTermLower)) ||
-                provider.professionals?.some(p => p.services.some(s => s.name.toLowerCase().includes(searchTermLower)))
-                : true;
-            const matchesSegment = filters.segment ? provider.segment === filters.segment : true;
-            const matchesCity = filters.city ? provider.address?.city?.toLowerCase().includes(filters.city.toLowerCase()) : true;
-            const matchesDate = filters.date ? (() => {
-                const selectedDate = new Date(filters.date + 'T00:00:00');
-                const dayOfWeek = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-                return provider.professionals?.some(prof => prof.availability?.[dayOfWeek as keyof typeof prof.availability]?.active);
-            })() : true;
-            return matchesSearch && matchesSegment && matchesCity && matchesDate;
-        });
+        let results = allProviders;
+
+        if (searchTerm) {
+            const lowerCaseSearchTerm = searchTerm.toLowerCase();
+            results = results.filter(provider =>
+                provider.establishmentName?.toLowerCase().includes(lowerCaseSearchTerm) ||
+                provider.segment?.toLowerCase().includes(lowerCaseSearchTerm) ||
+                provider.professionals?.some(p => p.name.toLowerCase().includes(lowerCaseSearchTerm)) ||
+                provider.professionals?.some(p => p.services.some(s => s.name.toLowerCase().includes(lowerCaseSearchTerm)))
+            );
+        }
+
+        if (filters.segment) {
+            results = results.filter(provider => provider.segment === filters.segment);
+        }
+        if (filters.city) {
+            results = results.filter(provider => provider.address?.city?.toLowerCase().includes(filters.city.toLowerCase()));
+        }
+        if (filters.date) {
+            const selectedDay = new Date(filters.date).toDateString();
+            results = results.filter(provider =>
+                provider.professionals?.some(p =>
+                    p.availability?.some(a =>
+                        new Date(a.date).toDateString() === selectedDay && a.availableTimes.length > 0
+                    )
+                )
+            );
+        }
+        return results;
     }, [searchTerm, filters, allProviders]);
     
     const { upcomingAppointments, historyAppointments } = useMemo(() => {
-        const upcoming = appointments.filter(app => app.status === 'pending' || app.status === 'confirmed');
-        const history = appointments.filter(app => app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show');
-        return { upcomingAppointments: upcoming, historyAppointments: history.reverse() };
+        const now = new Date();
+        const upcoming = appointments.filter(app => {
+            const appDateTime = new Date(`${app.date}T${app.time}`);
+            return appDateTime >= now && (app.status === 'pending' || app.status === 'confirmed');
+        });
+        const history = appointments.filter(app => {
+            const appDateTime = new Date(`${app.date}T${app.time}`);
+            return appDateTime < now || app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show';
+        });
+        return { upcomingAppointments: upcoming, historyAppointments: history };
     }, [appointments]);
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -278,7 +296,15 @@ const ClientDashboard = () => {
         setReviewModal({ isOpen: false });
     };
 
-    if (selectedProfessional) return <Booking professional={selectedProfessional} onBack={() => setSelectedProfessional(null)} />;
+    const handleSelectProfessionalForBooking = (prof: UserProfile) => {
+        setSelectedProfessionalForBooking(prof);
+        setActiveView('booking');
+    };
+
+    const handleBackFromBooking = () => {
+        setSelectedProfessionalForBooking(null);
+        setActiveView('search');
+    };
 
     const renderProfessionalCard = (prof: UserProfile) => {
         const isFavorite = userProfile?.favoriteProfessionals?.includes(prof.uid);
@@ -302,12 +328,12 @@ const ClientDashboard = () => {
                 <div className="flex items-center space-x-3 w-full sm:w-auto justify-end mt-2 border-t border-gray-700 pt-3">
                     {prof.instagram && <a href={getInstagramUrl(prof.instagram)} target="_blank" rel="noopener noreferrer" title="Ver no Instagram" className="p-2 rounded-full bg-gray-600 hover:bg-pink-600 transition-colors"><Instagram className="w-6 h-6 text-white"/></a>}
                     <button onClick={() => handleProtectedAction(() => toggleFavorite(prof.uid))} title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}><Heart className={`h-7 w-7 transition-all duration-200 transform hover:scale-110 ${isFavorite ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-300'}`} fill={isFavorite ? 'currentColor' : 'none'} /></button>
-                    <button onClick={() => setSelectedProfessional(prof)} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Agendar</button>
+                    <button onClick={() => handleSelectProfessionalForBooking(prof)} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Agendar</button>
                 </div>
             </div>
         );
     };
-    
+
     const AppointmentCard = ({ app }) => {
         const getStatusInfo = (status) => {
             switch (status) {
@@ -346,6 +372,10 @@ const ClientDashboard = () => {
     }
 
     const renderContent = () => {
+        if (activeView === 'booking' && selectedProfessionalForBooking) {
+            return <Booking professional={selectedProfessionalForBooking} onBack={handleBackFromBooking} />;
+        }
+        
         switch (activeView) {
             case 'search':
                 return (
@@ -429,9 +459,9 @@ const ClientDashboard = () => {
                     </div>
                 );
             case 'profile':
-                return !currentUser ? <LoginPrompt message="Edite aqui o seu perfil." onAction={handleLoginAction} /> : <ClientProfileManagement />;
+                return !currentUser ? <LoginPrompt message="Edite aqui o seu perfil." onAction={handleLoginAction} /> : <ClientProfileManagement onBack={() => setActiveView('search')} />;
             default:
-                return <div></div>;
+                return null;
         }
     };
 

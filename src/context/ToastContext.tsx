@@ -10,20 +10,24 @@ interface ToastMessage {
 }
 
 interface ToastContextType {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, options?: { type?: ToastType; duration?: number }) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 // Componente de Toast individual
 const Toast = ({ message, type, onClose }: { message: string, type: ToastType, onClose: () => void }) => {
+  // Classes base para todos os toasts
   const baseClasses = 'w-full max-w-sm p-4 rounded-lg shadow-lg flex items-center justify-between animate-fade-in-down border';
+  
+  // Classes específicas para cada tipo de toast, com cores mais visíveis
   const typeClasses = {
-    success: 'bg-green-500/20 border-green-500 text-green-300',
-    error: 'bg-red-500/20 border-red-500 text-red-300',
-    info: 'bg-blue-500/20 border-blue-500 text-blue-300',
+    success: 'bg-green-600 border-green-700 text-white', // Fundo verde sólido, texto branco
+    error: 'bg-red-600 border-red-700 text-white',     // Fundo vermelho sólido, texto branco
+    info: 'bg-blue-600 border-blue-700 text-white',      // Fundo azul sólido, texto branco
   };
 
+  // Ícones para cada tipo de toast
   const Icon = () => {
     switch (type) {
       case 'success': return <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
@@ -47,12 +51,15 @@ const Toast = ({ message, type, onClose }: { message: string, type: ToastType, o
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+  const showToast = useCallback((message: string, options?: { type?: ToastType; duration?: number }) => {
     const id = uuidv4();
+    const type = options?.type || 'info';
+    const duration = options?.duration || 5000; // Duração padrão de 5 segundos
+
     setToasts(prevToasts => [...prevToasts, { id, message, type }]);
     setTimeout(() => {
       setToasts(prevToasts => prevToasts.filter(toast => toast.id !== id));
-    }, 5000); // Toasts desaparecem após 5 segundos
+    }, duration);
   }, []);
 
   const removeToast = (id: string) => {

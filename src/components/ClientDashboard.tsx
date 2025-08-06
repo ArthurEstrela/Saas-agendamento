@@ -364,8 +364,16 @@ const ClientDashboard = () => {
                     <p className="text-sm text-gray-400">com {app.professionalName}</p>
                 </div>
                 <div className="mt-4 flex justify-end gap-2">
-                    {app.status === 'completed' && !app.hasBeenReviewed && <button onClick={() => handleOpenReviewModal(app)} className="bg-[#daa520] text-black font-bold py-1 px-3 text-xs rounded-lg">Avaliar</button>}
-                    {(app.status === 'pending' || app.status === 'confirmed') && <button onClick={() => handleCancelAppointment(app.id)} className="bg-red-600/80 hover:bg-red-600 text-white font-bold py-1 px-3 text-xs rounded-lg">Cancelar</button>}
+                    {app.status === 'completed' && !app.hasBeenReviewed && (
+                        <button onClick={() => handleOpenReviewModal(app)} className="bg-[#daa520] text-black font-bold py-2 px-4 text-sm rounded-lg flex items-center gap-1 hover:bg-[#c8961e] transition-colors">
+                            <Star size={16} /> Avaliar
+                        </button>
+                    )}
+                    {(app.status === 'pending' || app.status === 'confirmed') && (
+                        <button onClick={() => handleCancelAppointment(app.id)} className="bg-red-600/80 hover:bg-red-600 text-white font-bold py-2 px-4 text-sm rounded-lg transition-colors">
+                            Cancelar
+                        </button>
+                    )}
                 </div>
             </div>
         )

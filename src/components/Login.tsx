@@ -1,3 +1,4 @@
+// src/components/Login.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -27,7 +28,6 @@ const Login = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Estado unificado para o formulário
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -50,8 +50,9 @@ const Login = () => {
     const [error, setError] = useState('');
     const [cepLoading, setCepLoading] = useState(false);
     const [cepError, setCepError] = useState('');
+    const [phoneError, setPhoneError] = useState('');
+    const [cnpjError, setCnpjError] = useState('');
 
-    // Verifica se a URL tem o parâmetro para ir direto ao registro
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         if (params.get('type') === 'register') {
@@ -59,16 +60,66 @@ const Login = () => {
         }
     }, [location.search]);
     
+    const formatPhoneNumber = (value: string) => {
+        const cleaned = value.replace(/\D/g, '');
+        const match = cleaned.match(/^(\d{2})(\d{5})(\d{4})$/);
+        if (match) {
+            return `(${match[1]}) ${match[2]}-${match[3]}`;
+        }
+        return cleaned;
+    };
+
+    const formatCnpj = (value: string) => {
+        const cleaned = value.replace(/\D/g, '');
+        const match = cleaned.match(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/);
+        if (match) {
+            return `${match[1]}.${match[2]}.${match[3]}/${match[4]}-${match[5]}`;
+        }
+        return cleaned;
+    };
+    
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (name === 'postalCode') setCepError('');
+        let finalValue = value;
+        let currentError = '';
+
+        if (name === 'phoneNumber') {
+            finalValue = value.replace(/\D/g, '');
+            if (finalValue.length > 11) {
+                finalValue = finalValue.slice(0, 11);
+            }
+            if (finalValue.length > 0 && finalValue.length < 10) {
+                currentError = 'Número de telefone deve ter 10 ou 11 dígitos.';
+            }
+            setPhoneError(currentError);
+        }
+
+        if (name === 'cnpj') {
+            finalValue = value.replace(/\D/g, '');
+            if (finalValue.length > 14) {
+                finalValue = finalValue.slice(0, 14);
+            }
+            if (finalValue.length > 0 && finalValue.length < 14) {
+                currentError = 'CNPJ deve ter 14 dígitos.';
+            }
+            setCnpjError(currentError);
+        }
+        
+        if (name === 'postalCode') {
+            finalValue = value.replace(/\D/g, '');
+            if (finalValue.length > 8) {
+                finalValue = finalValue.slice(0, 8);
+            }
+        }
+
+        setFormData(prev => ({ ...prev, [name]: finalValue }));
     };
 
     const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
         const cep = e.target.value.replace(/\D/g, '');
         if (cep.length !== 8) {
-            setCepError('CEP deve conter 8 dígitos.');
+            if (cep.length > 0) setCepError('CEP inválido. Deve conter 8 dígitos.');
+            setFormData(prev => ({ ...prev, street: '', neighborhood: '', city: '', state: '' }));
             return;
         }
         setCepLoading(true);
@@ -80,7 +131,7 @@ const Login = () => {
                 setCepError('CEP não encontrado.');
                 setFormData(prev => ({ ...prev, street: '', neighborhood: '', city: '', state: '' }));
             } else {
-                setFormData(prev => ({ ...prev, street: data.logouro, neighborhood: data.bairro, city: data.localidade, state: data.uf }));
+                setFormData(prev => ({ ...prev, street: data.logradouro, neighborhood: data.bairro, city: data.localidade, state: data.uf }));
             }
         } catch (error) {
             setCepError('Erro ao buscar CEP. Tente novamente.');
@@ -104,8 +155,8 @@ const Login = () => {
                 setError('Por favor, selecione um tipo de conta.');
                 return;
             }
-            if (cepError) {
-                setError("Por favor, corrija o CEP antes de continuar.");
+            if (cepError || phoneError || cnpjError) {
+                setError("Por favor, corrija os erros nos campos antes de continuar.");
                 return;
             }
             try {
@@ -136,6 +187,8 @@ const Login = () => {
         });
         setError('');
         setCepError('');
+        setPhoneError('');
+        setCnpjError('');
     };
 
     const renderRegisterView = () => {
@@ -170,15 +223,59 @@ const Login = () => {
                     {formData.userType === 'serviceProvider' && (
                         <>
                             <div className="relative"><Building className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="establishmentName" placeholder="Nome do Estabelecimento" value={formData.establishmentName} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" /></div>
-                            <div className="relative"><Phone className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="tel" name="phoneNumber" placeholder="Número de Celular" value={formData.phoneNumber} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" /></div>
-                            <div className="relative"><FileText className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="cnpj" placeholder="CNPJ" value={formData.cnpj} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" /></div>
+                            <div className="relative">
+                                <Phone className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" />
+                                <input
+                                    type="tel"
+                                    name="phoneNumber"
+                                    placeholder="Número de Celular"
+                                    value={formatPhoneNumber(formData.phoneNumber)}
+                                    onChange={handleChange}
+                                    pattern="\(\d{2}\) \d{5}-\d{4}"
+                                    title="Formato: (XX) XXXXX-XXXX"
+                                    required
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]"
+                                />
+                                {phoneError && <p className="text-red-500 text-xs mt-1 absolute bottom-[-20px] left-0">{phoneError}</p>}
+                            </div>
+                            <div className="relative">
+                                <FileText className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" />
+                                <input
+                                    type="tel"
+                                    name="cnpj"
+                                    placeholder="CNPJ"
+                                    value={formatCnpj(formData.cnpj)}
+                                    onChange={handleChange}
+                                    pattern="\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}"
+                                    title="Formato: XX.XXX.XXX/XXXX-XX"
+                                    required
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]"
+                                />
+                                {cnpjError && <p className="text-red-500 text-xs mt-1 absolute bottom-[-20px] left-0">{cnpjError}</p>}
+                            </div>
                             <div className="relative"><select name="segment" value={formData.segment} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-4 appearance-none focus:ring-2 focus:ring-[#daa520]"><option value="" disabled>Selecione sua área</option><option>Barbearia</option><option>Salão de Beleza</option><option>Manicure/Pedicure</option><option>Esteticista</option><option>Maquiagem</option><option>Outro</option></select></div>
                         </>
                     )}
                     
                     <h3 className="text-lg font-semibold text-[#daa520] col-span-full pt-4 border-t border-gray-700">Endereço</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="relative sm:col-span-2"><MapPin className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="text" name="postalCode" placeholder="CEP" value={formData.postalCode} onChange={handleChange} onBlur={handleCepBlur} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10" />{cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando...</p>}{cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}</div>
+                        <div className="relative sm:col-span-2">
+                            <MapPin className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" />
+                            <input
+                                type="tel"
+                                name="postalCode"
+                                placeholder="CEP"
+                                value={formData.postalCode}
+                                onChange={handleChange}
+                                onBlur={handleCepBlur}
+                                pattern="\d{8}"
+                                title="CEP deve conter 8 dígitos"
+                                required
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]"
+                            />
+                            {cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando...</p>}
+                            {cepError && <p className="text-red-500 text-xs mt-1">{cepError}</p>}
+                        </div>
                         <div className="relative sm:col-span-2"><input type="text" name="street" placeholder="Rua / Avenida" value={formData.street} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
                         <div><input type="text" name="number" placeholder="Número" value={formData.number} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
                         <div><input type="text" name="neighborhood" placeholder="Bairro" value={formData.neighborhood} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
@@ -186,7 +283,7 @@ const Login = () => {
                         <div><input type="text" name="state" placeholder="Estado" value={formData.state} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
                     </div>
 
-                    <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">
+                    <button type="submit" disabled={loading || !!cepError || !!phoneError || !!cnpjError} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">
                         {loading ? 'Processando...' : 'Criar Conta'}
                     </button>
                 </form>

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
+import { TrendingUp } from 'lucide-react';
 
 // Componente Wrapper para Animação de Scroll
 const AnimateOnScroll = ({ children, delay = 0, className = '' }) => {
@@ -49,6 +50,9 @@ const ChartIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-4 text-[#daa520]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
+);
+const TrendingUpSvgIcon = () => (
+  <TrendingUp className="h-12 w-12 mb-4 text-[#daa520]" />
 );
 const CheckIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#daa520]" viewBox="0 0 20 20" fill="currentColor">
@@ -110,7 +114,7 @@ const Home = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <AnimateOnScroll><FeatureCard icon={<CalendarIcon />} title="Agenda Inteligente" description="Visualize e gerencie todos os seus compromissos com uma interface simples e intuitiva."/></AnimateOnScroll>
             <AnimateOnScroll delay={200}><FeatureCard icon={<GlobeIcon />} title="Página Pública" description="Seus clientes podem agendar horários diretamente pela sua página personalizada, disponível 24/7."/></AnimateOnScroll>
-            <AnimateOnScroll delay={400}><FeatureCard icon={<ChartIcon />} title="Gestão Financeira" description="Acompanhe seus ganhos, controle suas despesas e tenha uma visão clara da saúde financeira."/></AnimateOnScroll>
+            <AnimateOnScroll delay={400}><FeatureCard icon={<TrendingUpSvgIcon />} title="Gestão Financeira" description="Acompanhe seus ganhos, controle suas despesas e tenha uma visão clara da saúde financeira."/></AnimateOnScroll>
           </div>
         </div>
       </section>

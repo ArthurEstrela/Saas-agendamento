@@ -17,7 +17,6 @@ const ClientSideNav: React.FC<ClientSideNavProps> = ({ activeView, setActiveView
     <nav className="fixed left-0 top-0 h-full w-72 bg-gray-950 p-6 flex flex-col shadow-lg z-20">
       <div className="flex items-center mb-10">
         <Link to="/"><img src={logo} alt="Stylo Logo" className="h-10 w-auto mr-3" /></Link>
-        <span className="text-2xl font-extrabold text-[#daa520]">Stylo</span>
       </div>
       <ul className="space-y-3 flex-grow">
         <li>

@@ -55,7 +55,6 @@ const Header = () => {
           <div className="flex-shrink-0">
             <Link to="/" className="flex items-center space-x-2">
               <img className="h-10 w-auto" src={logo} alt="Stylo" />
-              <span className="text-white text-2xl font-bold tracking-tight">Stylo</span>
             </Link>
           </div>
           <nav className="hidden md:flex items-center space-x-8">

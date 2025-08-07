@@ -110,7 +110,6 @@ const SideNav = ({ activeView, setActiveView }) => {
         <div className="w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0">
             <div className="flex items-center space-x-2 mb-10 px-2">
                 <Link to="/"><img className="h-10 w-auto" src={logo} alt="Stylo" /></Link>
-                <span className="text-white text-2xl font-bold tracking-tight">Stylo</span>
             </div>
             <nav className="flex-grow flex flex-col space-y-2">
                 <NavItem icon={LayoutDashboard} text="Agenda" active={activeView === 'agenda'} onClick={() => setActiveView('agenda')} />

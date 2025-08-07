@@ -42,7 +42,6 @@ const Footer = () => {
           <div className="lg:col-span-4">
             <div className="flex items-center space-x-2 mb-4">
               <img className="h-10 w-auto" src={logo} alt="Stylo" />
-              <span className="text-white text-2xl font-bold tracking-tight">Stylo</span>
             </div>
             <p className="text-gray-400 max-w-xs">
               A plataforma definitiva para automatizar seus agendamentos e impulsionar seu negócio.
@@ -86,16 +85,16 @@ const Footer = () => {
         <div className="mt-16 pt-8 border-t border-[#daa520]/10 flex flex-col sm:flex-row items-center justify-between">
           <p className="text-sm text-gray-500">&copy; {currentYear} Stylo Agendamentos. Todos os direitos reservados.</p>
           <div className="flex items-center space-x-5 mt-4 sm:mt-0">
-            <a href="#" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
+            <a href="https://x.com/StyloAgenda" target="_blank" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
               <TwitterIcon />
             </a>
-            <a href="#" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
+            <a href="#" target="_blank" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
               <FacebookIcon />
             </a>
-            <a href="#" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
+            <a href="https://www.instagram.com/stylo_agenda/" target="_blank" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
               <InstagramIcon />
             </a>
-            <a href="#" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
+            <a href="https://www.tiktok.com/@styloagenda" target="_blank" className="text-gray-400 hover:text-[#daa520] transition-transform hover:scale-110">
               <TikTokIcon />
             </a>
           </div>

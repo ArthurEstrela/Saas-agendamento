@@ -15,6 +15,7 @@ interface ClientFavoritesSectionProps {
   toggleFavorite: (professionalId: string) => Promise<void>;
   handleSelectProfessionalForBooking: (prof: UserProfile) => void;
   LoginPrompt: React.ComponentType<{ message: string; onAction: () => void }>;
+  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking') => void; // Adicionado setActiveView
 }
 
 const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
@@ -25,6 +26,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
   toggleFavorite,
   handleSelectProfessionalForBooking,
   LoginPrompt,
+  setActiveView, // Recebe setActiveView
 }) => {
   const [favoriteProfessionals, setFavoriteProfessionals] = useState<UserProfile[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
@@ -53,9 +55,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
     }
   }, [currentUser, userProfile?.favoriteProfessionals]);
 
-  if (!currentUser) {
-    return <LoginPrompt message="Guarde aqui os seus profissionais favoritos." onAction={handleLoginAction} />;
-  }
+  // Removido o condicional if (!currentUser) aqui, será tratado no ClientDashboard pai
 
   return (
     <div>
@@ -78,10 +78,9 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
           <Heart size={48} className="mx-auto text-gray-600 mb-4" />
           <h3 className="text-lg font-semibold text-white">Sua galeria de favoritos está vazia</h3>
           <p className="text-sm mt-2 mb-6">Comece a explorar e adicione os profissionais que mais gosta clicando no coração.</p>
-          {/* Note: setActiveView is not directly available here, needs to be passed down if this button should work */}
-          {/* <button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">
+          <button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">
             Procurar Profissionais
-          </button> */}
+          </button>
         </div>
       )}
     </div>

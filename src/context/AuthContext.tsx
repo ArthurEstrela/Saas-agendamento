@@ -67,7 +67,7 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,7 +142,13 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
 
   // Função para logout
   const logout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+      showToast("Você foi desconectado com sucesso!", "info"); // Notificação de logout
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      showToast("Não foi possível fazer logout.", "error");
+    }
   };
 
   // Função para atualizar o perfil do usuário no Firestore

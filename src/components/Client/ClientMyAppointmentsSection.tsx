@@ -14,6 +14,7 @@ interface ClientMyAppointmentsSectionProps {
   handleCancelAppointment: (appointmentId: string) => void;
   handleOpenReviewModal: (appointment: Appointment) => void;
   LoginPrompt: React.ComponentType<{ message: string; onAction: () => void }>;
+  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking') => void; // Adicionado setActiveView
 }
 
 const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = ({
@@ -22,6 +23,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
   handleCancelAppointment,
   handleOpenReviewModal,
   LoginPrompt,
+  setActiveView, // Recebe setActiveView
 }) => {
   const { userProfile } = useAuth(); // Para acessar professionals e services para detalhes do agendamento
   const { showToast } = useToast();
@@ -81,9 +83,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
     return { upcomingAppointments: upcoming, historyAppointments: history };
   }, [appointments]);
 
-  if (!currentUser) {
-    return <LoginPrompt message="Veja aqui os seus próximos agendamentos." onAction={handleLoginAction} />;
-  }
+  // Removido o condicional if (!currentUser) aqui, será tratado no ClientDashboard pai
 
   return (
     <div>
@@ -107,8 +107,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
             </div> :
             <div className="text-center text-gray-400 py-10">
               <p className="mb-4">Nenhum agendamento futuro.</p>
-              {/* Note: setActiveView is not directly available here, needs to be passed down if this button should work */}
-              {/* <button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Procurar Profissionais</button> */}
+              <button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Procurar Profissionais</button>
             </div>
         ) : (
           historyAppointments.length > 0 ?

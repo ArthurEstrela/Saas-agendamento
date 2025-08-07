@@ -1,21 +1,20 @@
 // src/components/ClientDashboard.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase/config';
-import { collection, query, where, onSnapshot, doc, getDoc, getDocs, documentId } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import type { Appointment, UserProfile } from '../types';
-import { LogIn, Star } from 'lucide-react'; // Removidos os ícones que agora estão nos subcomponentes
+import { Star } from 'lucide-react'; // Mantido para o ícone de estrela no ReviewModal
 import Booking from './Booking';
-import ClientProfileManagement from './Client/ClientProfileManagement';
 
 // Importa os novos subcomponentes
 import ClientSideNav from './Client/ClientSideNav';
 import ClientSearchSection from './Client/ClientSearchSection';
 import ClientMyAppointmentsSection from './Client/ClientMyAppointmentsSection';
 import ClientFavoritesSection from './Client/ClientFavoritesSection';
+import ClientProfileManagement from './Client/ClientProfileManagement'; // Importa o ClientProfileManagement
+import LoginPrompt from './Common/LoginPrompt'; // Importa o novo LoginPrompt
 
-// Componente de modal de confirmação (mantido aqui ou movido para um common/modals)
+// Componente de modal de confirmação (mantido aqui, pode ser movido para common/modals)
 const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; }) => (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
         <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
@@ -29,7 +28,7 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: str
     </div>
 );
 
-// Componente de modal de avaliação (mantido aqui ou movido para um common/modals)
+// Componente de modal de avaliação (mantido aqui, pode ser movido para common/modals)
 const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boolean; onClose: () => void; appointment: Appointment; onSubmit: (rating: number, comment: string) => void; }) => {
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
@@ -91,19 +90,6 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
     );
 };
 
-// Componente de prompt de login (mantido aqui ou movido para um common/modals)
-const LoginPrompt = ({ message, onAction }: { message: string; onAction: () => void; }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-        <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
-            <LogIn size={48} className="mx-auto text-[#daa520] mb-4" />
-            <h3 className="text-xl font-bold text-white mb-4">Ação Protegida</h3>
-            <p className="text-gray-300 mb-6">{message}</p>
-            <button onClick={onAction} className="px-6 py-2 bg-[#daa520] text-gray-900 font-semibold rounded-lg hover:bg-[#c8961e] transition-colors">
-                Fazer Login
-            </button>
-        </div>
-    </div>
-);
 
 const ClientDashboard: React.FC = () => {
     const { currentUser, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuth();
@@ -113,15 +99,16 @@ const ClientDashboard: React.FC = () => {
     const [selectedProfessionalForBooking, setSelectedProfessionalForBooking] = useState<UserProfile | null>(null);
     const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
     const [reviewModal, setReviewModal] = useState<{ isOpen: boolean; appointment?: Appointment }>({ isOpen: false });
-    const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+    // showLoginPrompt removido, pois o LoginPrompt agora é inline
 
     const handleLoginAction = () => navigate('/login');
     
+    // handleProtectedAction agora apenas navega para o login
     const handleProtectedAction = (action: () => void) => {
         if (!currentUser) {
-            setShowLoginPrompt(true);
+            handleLoginAction(); // Redireciona para o login
         } else {
-            action();
+            action(); // Executa a ação se o usuário estiver logado
         }
     };
 
@@ -153,6 +140,17 @@ const ClientDashboard: React.FC = () => {
             return <Booking professional={selectedProfessionalForBooking} onBack={handleBackFromBooking} />;
         }
         
+        // Seções que exigem login, renderizam o LoginPrompt se o usuário não estiver logado
+        if (!currentUser && (activeView === 'myAppointments' || activeView === 'favorites' || activeView === 'profile')) {
+            let message = "";
+            switch (activeView) {
+                case 'myAppointments': message = "Veja aqui os seus próximos agendamentos."; break;
+                case 'favorites': message = "Guarde aqui os seus profissionais favoritos."; break;
+                case 'profile': message = "Edite aqui o seu perfil."; break;
+            }
+            return <LoginPrompt message={message} onAction={handleLoginAction} />;
+        }
+
         switch (activeView) {
             case 'search':
                 return (
@@ -171,7 +169,8 @@ const ClientDashboard: React.FC = () => {
                         handleLoginAction={handleLoginAction}
                         handleCancelAppointment={handleCancelAppointment}
                         handleOpenReviewModal={handleOpenReviewModal}
-                        LoginPrompt={LoginPrompt}
+                        LoginPrompt={LoginPrompt} // Passa o componente LoginPrompt
+                        setActiveView={setActiveView} // Passa setActiveView
                     />
                 );
             case 'favorites':
@@ -183,11 +182,12 @@ const ClientDashboard: React.FC = () => {
                         handleProtectedAction={handleProtectedAction}
                         toggleFavorite={toggleFavorite}
                         handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
-                        LoginPrompt={LoginPrompt}
+                        LoginPrompt={LoginPrompt} // Passa o componente LoginPrompt
+                        setActiveView={setActiveView} // Passa setActiveView
                     />
                 );
             case 'profile':
-                return !currentUser ? <LoginPrompt message="Edite aqui o seu perfil." onAction={handleLoginAction} /> : <ClientProfileManagement onBack={() => setActiveView('search')} />;
+                return <ClientProfileManagement onBack={() => setActiveView('search')} LoginPrompt={LoginPrompt} handleLoginAction={handleLoginAction} />;
             default:
                 return null;
         }
@@ -197,9 +197,8 @@ const ClientDashboard: React.FC = () => {
         <div className="flex min-h-screen bg-black text-gray-200 font-sans">
             {modalState?.isOpen && <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />}
             {reviewModal.isOpen && <ReviewModal isOpen={reviewModal.isOpen} onClose={() => setReviewModal({ isOpen: false })} appointment={reviewModal.appointment!} onSubmit={handleSubmitReview} />}
-            {showLoginPrompt && <LoginPrompt message="É necessário fazer login para realizar esta ação." onAction={() => { setShowLoginPrompt(false); handleLoginAction(); }} />}
             
-            <ClientSideNav activeView={activeView} setActiveView={setActiveView} logout={logout} />
+            <ClientSideNav activeView={activeView} setActiveView={setActiveView} logout={logout} userProfile={userProfile} />
             
             <main className="flex-grow p-4 sm:p-6 md:p-8 ml-72">
                 <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">

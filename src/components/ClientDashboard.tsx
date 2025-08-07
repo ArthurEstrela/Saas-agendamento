@@ -1,5 +1,5 @@
 // src/components/ClientDashboard.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // Adicionado useEffect e useMemo
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import type { Appointment, UserProfile } from '../types';
@@ -33,6 +33,7 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
 
+    // Adicionado useEffect aqui para resolver o erro
     useEffect(() => {
         if (!isOpen) {
             setRating(0);
@@ -90,6 +91,9 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
     );
 };
 
+
+// REMOVIDA A DEFINIÇÃO LOCAL DE LoginPrompt AQUI
+// O componente LoginPrompt agora é importado diretamente de './Common/LoginPrompt'
 
 const ClientDashboard: React.FC = () => {
     const { currentUser, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuth();
@@ -197,6 +201,8 @@ const ClientDashboard: React.FC = () => {
         <div className="flex min-h-screen bg-black text-gray-200 font-sans">
             {modalState?.isOpen && <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />}
             {reviewModal.isOpen && <ReviewModal isOpen={reviewModal.isOpen} onClose={() => setReviewModal({ isOpen: false })} appointment={reviewModal.appointment!} onSubmit={handleSubmitReview} />}
+            
+            {/* showLoginPrompt foi removido daqui pois o LoginPrompt agora é inline */}
             
             <ClientSideNav activeView={activeView} setActiveView={setActiveView} logout={logout} userProfile={userProfile} />
             

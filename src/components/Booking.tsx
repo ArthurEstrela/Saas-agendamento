@@ -7,6 +7,8 @@ import 'react-calendar/dist/Calendar.css';
 import '../Calendar.css'; // Mantenha seu CSS customizado para o calendário
 import { useToast } from '../context/ToastContext';
 import type { UserProfile, Service, Appointment, Professional } from '../types';
+import { useNavigate } from 'react-router-dom'; // Importa useNavigate
+
 import {
   ArrowLeft, // Ícone de voltar
   User, // Profissional
@@ -20,6 +22,7 @@ import {
   Loader2, // Carregamento
   DollarSign, // Preço
   Clock as DurationIcon, // Duração
+  TrendingUp, // Ícone de gráfico subindo para Gestão Financeira
 } from 'lucide-react'; // Importa os ícones do Lucide React
 
 // Tipos para o calendário
@@ -49,6 +52,7 @@ const bookingSteps = [
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const { currentUser, userProfile } = useAuth(); // Obtém o perfil do usuário logado
   const { showToast } = useToast(); // Função para exibir toasts
+  const navigate = useNavigate(); // Hook para navegação
 
   // Estados para o processo de agendamento
   const [currentStep, setCurrentStep] = useState(1); // Passo atual
@@ -72,6 +76,21 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       { totalDuration: 0, totalPrice: 0 }
     );
   }, [selectedServices]);
+
+  // Efeito para inicializar o profissional e o passo se o prop 'professional' for fornecido
+  useEffect(() => {
+    if (establishment && establishment.professionals && establishment.professionals.length > 0) {
+      // Se o estabelecimento tem apenas um profissional, já o pré-seleciona e vai para o passo 2
+      if (establishment.professionals.length === 1) {
+        setSelectedProfessional(establishment.professionals[0]);
+        setCurrentStep(2); // Vai direto para a seleção de serviços
+      } else {
+        // Se há múltiplos profissionais, o usuário ainda precisa selecionar um no passo 1
+        setCurrentStep(1);
+      }
+    }
+  }, [establishment]);
+
 
   // Reseta os estados quando o profissional selecionado muda
   useEffect(() => {
@@ -231,7 +250,8 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   // Lida com o agendamento de um novo compromisso
   const handleBookAppointment = async () => {
     if (!currentUser) {
-      showToast("Você precisa estar logado para agendar.", 'error');
+      showToast("Você precisa estar logado para agendar. Redirecionando para o login...", 'info');
+      navigate('/login'); // Redireciona para a página de login
       return;
     }
     if (selectedServices.length === 0 || !selectedDate || Array.isArray(selectedDate) || !selectedTime || !selectedProfessional) {

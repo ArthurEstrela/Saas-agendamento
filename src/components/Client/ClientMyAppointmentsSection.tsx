@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'; // Ajuste o caminho
 import { useToast } from '../../context/ToastContext'; // Ajuste o caminho
 import type { Appointment, UserProfile } from '../../types'; // Ajuste o caminho
 import ClientAppointmentCard from './ClientAppointmentCard'; // Importa o novo componente
-import { Calendar } from 'lucide-react';
+import { Calendar } from 'lucide-react'; // Mantém apenas o Calendar para o botão "Procurar Profissionais"
 
 interface ClientMyAppointmentsSectionProps {
   currentUser: any; // Firebase User
@@ -59,7 +59,18 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
           serviceName: serviceNames,
         };
       }));
-      appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+      appointmentsWithDetails.sort((a, b) => {
+        // Cria a data no fuso horário local para ordenação
+        const [yearA, monthA, dayA] = a.date.split('-').map(Number);
+        const [hourA, minuteA] = a.time.split(':').map(Number);
+        const appDateTimeA = new Date(yearA, monthA - 1, dayA, hourA, minuteA);
+
+        const [yearB, monthB, dayB] = b.date.split('-').map(Number);
+        const [hourB, minuteB] = b.time.split(':').map(Number);
+        const appDateTimeB = new Date(yearB, monthB - 1, dayB, hourB, minuteB);
+
+        return appDateTimeA.getTime() - appDateTimeB.getTime();
+      });
       setAppointments(appointmentsWithDetails);
       setLoadingAppointments(false);
     }, (error) => {
@@ -73,17 +84,28 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
   const { upcomingAppointments, historyAppointments } = useMemo(() => {
     const now = new Date();
     const upcoming = appointments.filter(app => {
-      const appDateTime = new Date(`${app.date}T${app.time}`);
+      // Cria a data no fuso horário local
+      const [year, month, day] = app.date.split('-').map(Number);
+      const [hour, minute] = app.time.split(':').map(Number);
+      const appDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
+
       return appDateTime >= now && (app.status === 'pending' || app.status === 'confirmed');
     });
     const history = appointments.filter(app => {
-      const appDateTime = new Date(`${app.date}T${app.time}`);
+      // Cria a data no fuso horário local
+      const [year, month, day] = app.date.split('-').map(Number);
+      const [hour, minute] = app.time.split(':').map(Number);
+      const appDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
+
       return appDateTime < now || app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show';
     });
     return { upcomingAppointments: upcoming, historyAppointments: history };
   }, [appointments]);
 
   // Removido o condicional if (!currentUser) aqui, será tratado no ClientDashboard pai
+
+  // Removida a definição local de AppointmentCard
+  // O componente ClientAppointmentCard é importado e usado diretamente abaixo
 
   return (
     <div>
@@ -97,7 +119,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
           upcomingAppointments.length > 0 ?
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-down">
               {upcomingAppointments.map(app => (
-                <ClientAppointmentCard
+                <ClientAppointmentCard // Usando o componente importado
                   key={app.id}
                   app={app}
                   handleOpenReviewModal={handleOpenReviewModal}
@@ -113,7 +135,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
           historyAppointments.length > 0 ?
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-down">
               {historyAppointments.map(app => (
-                <ClientAppointmentCard
+                <ClientAppointmentCard // Usando o componente importado
                   key={app.id}
                   app={app}
                   handleOpenReviewModal={handleOpenReviewModal}

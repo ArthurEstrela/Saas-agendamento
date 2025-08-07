@@ -27,11 +27,15 @@ const ClientAppointmentCard: React.FC<ClientAppointmentCardProps> = ({
   };
   const statusInfo = getStatusInfo(app.status);
 
+  // Cria a data no fuso horário local para exibição
+  const [year, month, day] = app.date.split('-').map(Number);
+  const localDate = new Date(year, month - 1, day); // Mês é 0-indexado
+
   return (
     <div className="bg-gray-800/80 p-5 rounded-xl border border-gray-700 transition-all duration-300 hover:border-[#daa520]/50 hover:shadow-lg hover:shadow-[#daa520]/5">
       <div className="flex justify-between items-start">
         <div>
-          <p className="text-sm text-gray-400">{format(new Date(`${app.date}T00:00:00`), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+          <p className="text-sm text-gray-400">{format(localDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
           <p className="text-2xl font-bold text-white">{app.time}</p>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full bg-black/20 ${statusInfo.color}`}>
@@ -46,11 +50,19 @@ const ClientAppointmentCard: React.FC<ClientAppointmentCardProps> = ({
         <p className="text-sm text-gray-400">com {app.professionalName}</p>
       </div>
       <div className="mt-4 flex justify-end gap-2">
-        {app.status === 'completed' && !app.hasBeenReviewed && (
-          <button onClick={() => handleOpenReviewModal(app)} className="bg-[#daa520] text-black font-bold py-2 px-4 text-sm rounded-lg flex items-center gap-1 hover:bg-[#c8961e] transition-colors">
-            <Star size={16} /> Avaliar
-          </button>
+        {/* Condição para exibir o botão "Avaliar" ou o status "Avaliado" */}
+        {app.status === 'completed' && app.hasBeenReviewed ? (
+          <span className="text-blue-400 font-bold py-2 px-4 text-sm rounded-lg flex items-center gap-1">
+            <Star size={16} /> Avaliado
+          </span>
+        ) : (
+          app.status === 'completed' && !app.hasBeenReviewed && (
+            <button onClick={() => handleOpenReviewModal(app)} className="bg-[#daa520] text-black font-bold py-2 px-4 text-sm rounded-lg flex items-center gap-1 hover:bg-[#c8961e] transition-colors">
+              <Star size={16} /> Avaliar
+            </button>
+          )
         )}
+        {/* Botão de Cancelar */}
         {(app.status === 'pending' || app.status === 'confirmed') && (
           <button onClick={() => handleCancelAppointment(app.id)} className="bg-red-600/80 hover:bg-red-600 text-white font-bold py-2 px-4 text-sm rounded-lg transition-colors">
             Cancelar

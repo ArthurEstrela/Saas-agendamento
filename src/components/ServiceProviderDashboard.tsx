@@ -202,7 +202,7 @@ const AgendaView = () => {
 
     // Função para confirmar o serviço como concluído (abre o modal de preço)
     const handleCompleteServiceClick = (appointment: Appointment) => {
-        setCompleteServiceModalState({ isOpen: true, appointment });
+        handleConfirmation(() => setCompleteServiceModalState({ isOpen: true, appointment }), 'Confirmar Conclusão', `Tem a certeza de que pretende marcar o serviço de "${appointment.serviceName}" como concluído?`);
     };
 
     // Função chamada após o preço ser inserido no modal de conclusão
@@ -256,15 +256,42 @@ const AgendaView = () => {
     const { upcomingAppointments, historyAppointments } = useMemo(() => {
         const now = new Date();
         const upcoming = allAppointments.filter(app => {
-            const appDateTime = new Date(`${app.date}T${app.time}`);
+            // Cria a data no fuso horário local
+            const [year, month, day] = app.date.split('-').map(Number);
+            const [hour, minute] = app.time.split(':').map(Number);
+            const appDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
+
             return appDateTime >= now && (app.status === 'pending' || app.status === 'confirmed');
-        }).sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+        }).sort((a, b) => {
+            const [yearA, monthA, dayA] = a.date.split('-').map(Number);
+            const [hourA, minuteA] = a.time.split(':').map(Number);
+            const appDateTimeA = new Date(yearA, monthA - 1, dayA, hourA, minuteA);
+
+            const [yearB, monthB, dayB] = b.date.split('-').map(Number);
+            const [hourB, minuteB] = b.time.split(':').map(Number);
+            const appDateTimeB = new Date(yearB, monthB - 1, dayB, hourB, minuteB);
+
+            return appDateTimeA.getTime() - appDateTimeB.getTime();
+        });
 
         const history = allAppointments.filter(app => {
-            const appDateTime = new Date(`${app.date}T${app.time}`);
-            // Um agendamento é histórico se a data/hora já passou OU se o status é 'completed', 'cancelled' ou 'no-show'
+            // Cria a data no fuso horário local
+            const [year, month, day] = app.date.split('-').map(Number);
+            const [hour, minute] = app.time.split(':').map(Number);
+            const appDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
+
             return appDateTime < now || app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show';
-        }).sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime());
+        }).sort((a, b) => {
+            const [yearA, monthA, dayA] = a.date.split('-').map(Number);
+            const [hourA, minuteA] = a.time.split(':').map(Number);
+            const appDateTimeA = new Date(yearA, monthA - 1, dayA, hourA, minuteA);
+
+            const [yearB, monthB, dayB] = b.date.split('-').map(Number);
+            const [hourB, minuteB] = b.time.split(':').map(Number);
+            const appDateTimeB = new Date(yearB, monthB - 1, dayB, hourB, minuteB);
+
+            return appDateTimeB.getTime() - appDateTimeA.getTime(); // Ordem decrescente para histórico
+        });
         
         return { upcomingAppointments: upcoming, historyAppointments: history };
     }, [allAppointments]);
@@ -281,7 +308,10 @@ const AgendaView = () => {
 
         // Atrasados: Agendamentos confirmados cuja data/hora já passou, mas que não foram marcados como concluídos/cancelados/no-show
         const pastDueAppointments = allAppointments.filter(app => {
-            const appDateTime = new Date(`${app.date}T${app.time}`);
+            const [year, month, day] = app.date.split('-').map(Number);
+            const [hour, minute] = app.time.split(':').map(Number);
+            const appDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
+
             return app.status === 'confirmed' && appDateTime < new Date();
         }).length;
 
@@ -294,14 +324,15 @@ const AgendaView = () => {
     }, [allAppointments]);
 
 
-    const renderAppointmentList = (list: Appointment[]) => {
-        if (list.length === 0) {
-            return <p className="text-center text-gray-400 py-10">Nenhum agendamento para esta categoria.</p>;
-        }
+    const renderAppointmentList = (list) => {
         return (
             <ul className="space-y-4">
                 {list.map(app => {
-                    const appointmentDateTime = new Date(`${app.date}T${app.time}`);
+                    // Cria a data no fuso horário local para exibição e comparação
+                    const [year, month, day] = app.date.split('-').map(Number);
+                    const [hour, minute] = app.time.split(':').map(Number);
+                    const appointmentDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
+
                     const isPast = appointmentDateTime < new Date();
                     const statusInfo = getStatusInfo(app.status, isPast);
                     return (
@@ -309,13 +340,14 @@ const AgendaView = () => {
                             <div className="flex items-center mb-4 md:mb-0 flex-grow">
                                 <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
                                     <p className="text-2xl font-bold text-white">{app.time}</p>
-                                    <p className="text-sm text-gray-400">{format(new Date(app.date), "dd/MMM", { locale: ptBR })}</p>
+                                    {/* Usa a data construída localmente para formatar */}
+                                    <p className="text-sm text-gray-400">{format(appointmentDateTime, "dd/MMM", { locale: ptBR })}</p>
                                 </div>
                                 <div>
                                     <p className="font-bold text-lg text-white">{app.serviceName}</p>
                                     <p className="text-sm text-gray-300">Cliente: {app.clientName}</p>
                                     <p className="text-sm text-gray-400">Profissional: {app.professionalName}</p>
-                                    {app.totalPrice && <p className="text-sm text-gray-300">Valor Estimado: R$ {app.totalPrice.toFixed(2)}</p>}
+                                    {app.totalPrice && <p className="text-sm text-gray-300">Valor Estimado: R$ {app.totalPrice?.toFixed(2)}</p>}
                                 </div>
                             </div>
                             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 self-stretch md:self-center w-full md:w-auto">
@@ -331,7 +363,7 @@ const AgendaView = () => {
                                     {/* Botões para agendamentos CONFIRMADOS que já passaram */}
                                     {app.status === 'confirmed' && isPast && (
                                         <>
-                                            <button onClick={() => handleNoShowClick(app)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors" title="Marcar como Não Compareceu"><UserX size={16} /></button>
+                                            <button onClick={() => handleNoShowAppointment(app)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors" title="Marcar como Não Compareceu"><UserX size={16} /></button>
                                             <button onClick={() => handleCompleteServiceClick(app)} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white transition-colors" title="Marcar como Concluído"><CheckCircle size={16} /></button>
                                         </>
                                     )}

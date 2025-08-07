@@ -1,0 +1,132 @@
+// src/components/Client/ClientMyAppointmentsSection.tsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config'; // Ajuste o caminho
+import { useAuth } from '../../context/AuthContext'; // Ajuste o caminho
+import { useToast } from '../../context/ToastContext'; // Ajuste o caminho
+import type { Appointment, UserProfile } from '../../types'; // Ajuste o caminho
+import ClientAppointmentCard from './ClientAppointmentCard'; // Importa o novo componente
+import { Calendar } from 'lucide-react';
+
+interface ClientMyAppointmentsSectionProps {
+  currentUser: any; // Firebase User
+  handleLoginAction: () => void;
+  handleCancelAppointment: (appointmentId: string) => void;
+  handleOpenReviewModal: (appointment: Appointment) => void;
+  LoginPrompt: React.ComponentType<{ message: string; onAction: () => void }>;
+}
+
+const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = ({
+  currentUser,
+  handleLoginAction,
+  handleCancelAppointment,
+  handleOpenReviewModal,
+  LoginPrompt,
+}) => {
+  const { userProfile } = useAuth(); // Para acessar professionals e services para detalhes do agendamento
+  const { showToast } = useToast();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [appointmentSubTab, setAppointmentSubTab] = useState<'upcoming' | 'history'>('upcoming');
+
+  // Fetch de agendamentos (apenas para utilizadores logados)
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setAppointments([]);
+      setLoadingAppointments(false);
+      return;
+    }
+    setLoadingAppointments(true);
+    const q = query(collection(db, 'appointments'), where('clientId', '==', currentUser.uid));
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const apptsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
+      const appointmentsWithDetails = await Promise.all(apptsData.map(async (appt) => {
+        const providerDocRef = doc(db, "users", appt.serviceProviderId);
+        const providerSnap = await getDoc(providerDocRef);
+        const providerProfile = providerSnap.exists() ? providerSnap.data() as UserProfile : null;
+
+        // Encontrar o profissional e os nomes dos serviços dentro do perfil do provedor
+        const professional = providerProfile?.professionals?.find(p => p.id === appt.professionalId);
+        const serviceNames = appt.serviceIds?.map(serviceId => professional?.services.find(s => s.id === serviceId)?.name || '').join(', ');
+
+        return {
+          ...appt,
+          establishmentName: providerProfile?.establishmentName,
+          professionalName: professional?.name,
+          serviceName: serviceNames,
+        };
+      }));
+      appointmentsWithDetails.sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+      setAppointments(appointmentsWithDetails);
+      setLoadingAppointments(false);
+    }, (error) => {
+      console.error("Erro ao carregar agendamentos:", error);
+      showToast("Erro ao carregar agendamentos.", 'error');
+      setLoadingAppointments(false);
+    });
+    return () => unsubscribe();
+  }, [currentUser, showToast]);
+
+  const { upcomingAppointments, historyAppointments } = useMemo(() => {
+    const now = new Date();
+    const upcoming = appointments.filter(app => {
+      const appDateTime = new Date(`${app.date}T${app.time}`);
+      return appDateTime >= now && (app.status === 'pending' || app.status === 'confirmed');
+    });
+    const history = appointments.filter(app => {
+      const appDateTime = new Date(`${app.date}T${app.time}`);
+      return appDateTime < now || app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show';
+    });
+    return { upcomingAppointments: upcoming, historyAppointments: history };
+  }, [appointments]);
+
+  if (!currentUser) {
+    return <LoginPrompt message="Veja aqui os seus próximos agendamentos." onAction={handleLoginAction} />;
+  }
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold text-white mb-6">Os Meus Agendamentos</h2>
+      <div className="mb-6 flex space-x-2 border-b border-gray-800">
+        <button onClick={() => setAppointmentSubTab('upcoming')} className={`py-2 px-4 font-semibold transition-colors duration-300 ${appointmentSubTab === 'upcoming' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-500 hover:text-white'}`}>Próximos</button>
+        <button onClick={() => setAppointmentSubTab('history')} className={`py-2 px-4 font-semibold transition-colors duration-300 ${appointmentSubTab === 'history' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-500 hover:text-white'}`}>Histórico</button>
+      </div>
+      {loadingAppointments ? <p className="text-center text-gray-400 py-10">A carregar...</p> : (
+        appointmentSubTab === 'upcoming' ? (
+          upcomingAppointments.length > 0 ?
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-down">
+              {upcomingAppointments.map(app => (
+                <ClientAppointmentCard
+                  key={app.id}
+                  app={app}
+                  handleOpenReviewModal={handleOpenReviewModal}
+                  handleCancelAppointment={handleCancelAppointment}
+                />
+              ))}
+            </div> :
+            <div className="text-center text-gray-400 py-10">
+              <p className="mb-4">Nenhum agendamento futuro.</p>
+              {/* Note: setActiveView is not directly available here, needs to be passed down if this button should work */}
+              {/* <button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Procurar Profissionais</button> */}
+            </div>
+        ) : (
+          historyAppointments.length > 0 ?
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-down">
+              {historyAppointments.map(app => (
+                <ClientAppointmentCard
+                  key={app.id}
+                  app={app}
+                  handleOpenReviewModal={handleOpenReviewModal}
+                  handleCancelAppointment={handleCancelAppointment}
+                />
+              ))}
+            </div> :
+            <p className="text-center text-gray-400 py-10">O seu histórico de agendamentos está vazio.</p>
+        )
+      )}
+    </div>
+  );
+};
+
+export default ClientMyAppointmentsSection;

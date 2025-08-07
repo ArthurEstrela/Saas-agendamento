@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth, db } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { db } from '../firebase/config'; 
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import type { Appointment } from '../types';

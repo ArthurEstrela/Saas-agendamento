@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth, db } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebase/config'; 
 import { collection, query, where, getDocs, addDoc, Timestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { useToast } from '../../context/ToastContext';

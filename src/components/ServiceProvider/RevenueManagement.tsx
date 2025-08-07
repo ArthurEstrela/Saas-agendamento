@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth, db } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebase/config'; 
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { Appointment, Professional, Service } from '../../types';
 

@@ -1,7 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, ReactNode } from "react";
-import { initializeApp } from "firebase/app";
 import {
-  getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -11,7 +9,6 @@ import {
   type User,
 } from "firebase/auth";
 import {
-  getFirestore,
   doc,
   setDoc,
   getDoc,
@@ -23,29 +20,15 @@ import {
   runTransaction,
   Timestamp
 } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Importações do Storage
-import { getMessaging, getToken } from "firebase/messaging";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getToken } from "firebase/messaging";
+
+// Importa os serviços do novo arquivo de configuração
+import { auth, db, storage, messaging } from "../firebase/config"; // <-- Importação atualizada
 import type { UserProfile, Review, Appointment } from "../types";
 import { useToast } from "./ToastContext";
 
-// Configuração do Firebase
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-};
-
-// Inicialização dos serviços
-export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-export const messaging = getMessaging(app);
-
+// Função para solicitar o token FCM
 export const requestForToken = async () => {
   try {
     const currentToken = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
@@ -78,7 +61,7 @@ interface AuthContextType {
   updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => Promise<void>;
   requestFCMToken: () => Promise<void>;
   submitReview: (reviewData: Omit<Review, 'id' | 'createdAt' | 'clientName' | 'clientPhotoURL'>) => Promise<void>;
-  uploadImage: (file: File, path: string) => Promise<string>; // <-- Adicionado aqui
+  uploadImage: (file: File, path: string) => Promise<string>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -89,6 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
+  // Função para buscar o perfil do usuário no Firestore
   const fetchUserProfile = async (uid: string): Promise<UserProfile | null> => {
     const userDocRef = doc(db, `users/${uid}`);
     try {
@@ -100,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Efeito para observar mudanças no estado de autenticação do Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
@@ -113,13 +98,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       setLoading(false);
     });
+    // Retorna a função de unsubscribe para limpar o listener quando o componente for desmontado
     return unsubscribe;
   }, []);
 
+  // Função para login com email e senha
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
+  // Função para registro de novo usuário
   const register = async (email: string, password: string, userType: "client" | "serviceProvider", profileData: Partial<UserProfile> = {}) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -129,15 +117,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         establishmentName: profileData.establishmentName || (userType === 'serviceProvider' ? profileData.establishmentName : ''),
         ...profileData,
       };
+      // Salva o novo perfil no Firestore
       await setDoc(doc(db, `users/${user.uid}`), newProfile);
       setUserProfile(newProfile);
   };
 
+  // Função para login com Google
   const loginWithGoogle = async () => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       const profile = await fetchUserProfile(user.uid);
+      // Se o perfil não existir, cria um novo
       if (!profile) {
         const newProfile: UserProfile = {
           uid: user.uid, email: user.email!, createdAt: new Date(), userType: "client",
@@ -148,10 +139,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
   };
 
+  // Função para logout
   const logout = async () => {
     await signOut(auth);
   };
 
+  // Função para atualizar o perfil do usuário no Firestore
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!currentUser) return;
     const userDocRef = doc(db, `users/${currentUser.uid}`);
@@ -166,6 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Função para adicionar/remover profissional dos favoritos
   const toggleFavorite = async (professionalId: string) => {
     if (!currentUser || !userProfile) return;
     const userDocRef = doc(db, `users/${currentUser.uid}`);
@@ -176,12 +170,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       const updatedProfile = await fetchUserProfile(currentUser.uid);
       setUserProfile(updatedProfile);
+      showToast(isFavorite ? "Removido dos favoritos." : "Adicionado aos favoritos!", 'info');
     } catch (error) {
       console.error("Erro ao favoritar profissional:", error);
       showToast("Não foi possível atualizar os seus favoritos.", 'error');
     }
   };
 
+  // Função para cancelar um agendamento (exclui o documento)
   const cancelAppointment = async (appointmentId: string) => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
     try {
@@ -193,6 +189,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Função para atualizar o status de um agendamento
   const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
     try {
@@ -208,6 +205,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Função para solicitar e salvar o token FCM
   const requestFCMToken = async () => {
     if (!currentUser) return;
     try {
@@ -228,6 +226,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Função para submeter uma avaliação e atualizar a média do estabelecimento
   const submitReview = async (reviewData: Omit<Review, 'id' | 'createdAt' | 'clientName' | 'clientPhotoURL'>) => {
     if (!userProfile) {
       showToast("Precisa de estar autenticado para deixar uma avaliação.", 'error');
@@ -245,12 +244,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           throw "Estabelecimento não encontrado!";
         }
 
-        transaction.set(reviewRef, { 
+        transaction.set(reviewRef, {
           ...reviewData,
           id: reviewRef.id,
           clientName: userProfile.displayName || 'Anónimo',
           clientPhotoURL: userProfile.photoURL || '',
-          createdAt: Timestamp.now() 
+          createdAt: Timestamp.now()
         });
 
         const establishmentData = establishmentDoc.data() as UserProfile;
@@ -274,7 +273,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // <-- FUNÇÃO DE UPLOAD DE IMAGEM -->
+  // Função para upload de imagem para o Firebase Storage
   const uploadImage = async (file: File, path: string): Promise<string> => {
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, file);
@@ -282,6 +281,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return downloadURL;
   };
 
+  // Objeto de valor do contexto que será fornecido aos componentes filhos
   const value = {
     currentUser,
     userProfile,
@@ -297,16 +297,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     updateAppointmentStatus,
     requestFCMToken,
     submitReview,
-    uploadImage, // <-- Adicionado ao contexto
+    uploadImage,
   };
 
   return (
     <AuthContext.Provider value={value}>
+      {/* Renderiza os filhos apenas quando o carregamento inicial do usuário estiver completo */}
       {!loading && children}
     </AuthContext.Provider>
   );
 };
 
+// Hook personalizado para usar o contexto de autenticação
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

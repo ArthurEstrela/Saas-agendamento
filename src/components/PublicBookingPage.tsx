@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../context/AuthContext';
+import { db } from '../firebase/config'; 
 import Booking from './Booking';
 import type { UserProfile } from '../types';
 import Footer from './Footer'; // Importe o Footer aqui

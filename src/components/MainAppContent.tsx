@@ -1,6 +1,7 @@
 // src/components/MainAppContent.tsx
 import { useState, useEffect } from 'react';
-import { useAuth, messaging } from '../context/AuthContext';
+import { useAuth  } from '../context/AuthContext';
+import { messaging } from '../firebase/config'; 
 import { onMessage } from 'firebase/messaging';
 import Dashboard from './Dashboard';
 import Footer from './Footer';

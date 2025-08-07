@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth, db } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { db } from '../firebase/config'; 
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';

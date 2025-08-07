@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth, db } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebase/config'; 
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import type { Review } from '../../types';
 import { Star, MessageSquare, Calendar } from 'lucide-react';

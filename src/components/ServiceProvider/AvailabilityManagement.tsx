@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth, db } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebase/config'; 
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
 import type { Professional, DayAvailability } from '../../types';

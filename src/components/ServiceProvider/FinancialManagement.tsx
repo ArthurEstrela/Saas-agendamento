@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { db } from '../../firebase/config'; 
-import { collection, query, where, getDocs, addDoc, Timestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { collection, query, where, getDocs, addDoc, Timestamp, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore'; // Adicionado onSnapshot
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { useToast } from '../../context/ToastContext';
 import type { Appointment, Expense } from '../../types';
@@ -122,20 +122,45 @@ const FinancialManagement = () => {
     });
     const [modal, setModal] = useState<{ isOpen: boolean; mode: ExpenseModalMode; expense?: Expense }>({ isOpen: false, mode: 'add' });
 
-    const fetchTransactions = async () => {
+    useEffect(() => {
         if (!userProfile?.uid) return;
-        setLoading(true);
-        const appointmentsQuery = query(collection(db, 'appointments'), where('serviceProviderId', '==', userProfile.uid), where('status', '==', 'completed'));
-        const appointmentsSnapshot = await getDocs(appointmentsQuery);
-        const revenues = appointmentsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Appointment));
-        const expensesQuery = query(collection(db, `users/${userProfile.uid}/expenses`));
-        const expensesSnapshot = await getDocs(expensesQuery);
-        const expenses = expensesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Expense));
-        setTransactions([...revenues, ...expenses]);
-        setLoading(false);
-    };
 
-    useEffect(() => { fetchTransactions(); }, [userProfile]);
+        // Listener em tempo real para agendamentos concluídos
+        const appointmentsQuery = query(collection(db, 'appointments'), where('serviceProviderId', '==', userProfile.uid), where('status', '==', 'completed'));
+        const unsubscribeAppointments = onSnapshot(appointmentsQuery, (snapshot) => {
+            const revenues = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Appointment));
+            setTransactions(prev => {
+                const existingExpenses = prev.filter(t => !('status' in t));
+                return [...revenues, ...existingExpenses];
+            });
+            setLoading(false);
+        }, (error) => {
+            console.error("Erro ao carregar receitas:", error);
+            showToast("Erro ao carregar dados financeiros de receita.", 'error');
+            setLoading(false);
+        });
+
+        // Listener em tempo real para despesas
+        const expensesQuery = query(collection(db, `users/${userProfile.uid}/expenses`));
+        const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
+            const expenses = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Expense));
+            setTransactions(prev => {
+                const existingRevenues = prev.filter(t => 'status' in t && t.status === 'completed');
+                return [...existingRevenues, ...expenses];
+            });
+            setLoading(false);
+        }, (error) => {
+            console.error("Erro ao carregar despesas:", error);
+            showToast("Erro ao carregar dados financeiros de despesa.", 'error');
+            setLoading(false);
+        });
+
+        return () => {
+            unsubscribeAppointments();
+            unsubscribeExpenses();
+        };
+    }, [userProfile, showToast]);
+
 
     const handleSaveExpense = async (data: ExpenseFormData, id?: string) => {
         if (!userProfile) return;
@@ -157,7 +182,7 @@ const FinancialManagement = () => {
                 showToast('Despesa adicionada com sucesso!', 'success');
             }
             setModal({ isOpen: false, mode: 'add' });
-            fetchTransactions();
+            // fetchTransactions(); // Removido, onSnapshot já atualiza
         } catch (error) {
             showToast('Ocorreu um erro ao guardar a despesa.', 'error');
             console.error(error);
@@ -167,17 +192,32 @@ const FinancialManagement = () => {
     const handleDeleteExpense = async (id: string) => {
         if (!userProfile) return;
         // Substituir window.confirm por um modal customizado seria o ideal
-        if (window.confirm("Tem a certeza de que pretende eliminar esta despesa?")) {
-            try {
-                await deleteDoc(doc(db, `users/${userProfile.uid}/expenses`, id));
-                showToast('Despesa eliminada com sucesso!', 'success');
-                fetchTransactions();
-            } catch (error) {
-                showToast('Ocorreu um erro ao eliminar a despesa.', 'error');
-                console.error(error);
-            }
-        }
+        // Usando o ConfirmationModal para consistência
+        const confirmDelete = () => {
+            setModal({ isOpen: false, mode: 'add' }); // Fecha o modal de despesa se estiver aberto
+            // Abre o modal de confirmação
+            setConfirmationModalState({
+                isOpen: true,
+                title: "Confirmar Exclusão",
+                message: "Tem a certeza de que pretende eliminar esta despesa? Esta ação não pode ser desfeita.",
+                onConfirm: async () => {
+                    try {
+                        await deleteDoc(doc(db, `users/${userProfile.uid}/expenses`, id));
+                        showToast('Despesa eliminada com sucesso!', 'success');
+                        // fetchTransactions(); // Removido, onSnapshot já atualiza
+                    } catch (error) {
+                        showToast('Ocorreu um erro ao eliminar a despesa.', 'error');
+                        console.error(error);
+                    } finally {
+                        setConfirmationModalState(null); // Fecha o modal de confirmação
+                    }
+                },
+                onCancel: () => setConfirmationModalState(null)
+            });
+        };
+        confirmDelete();
     };
+
 
     const setDatePreset = (preset: 'month' | '30days' | 'year') => {
         const end = new Date();
@@ -213,14 +253,27 @@ const FinancialManagement = () => {
                     profReportData[prof.id].revenue += revenueAmount;
                     profReportData[prof.id].appointments += 1;
                 }
-                t.serviceIds.forEach(serviceId => {
-                    const service = userProfile?.professionals?.flatMap(p => p.services).find(s => s.id === serviceId);
-                    if (service) {
-                        if (!serviceReportData[service.id]) serviceReportData[service.id] = { name: service.name, revenue: 0, count: 0 };
-                        serviceReportData[service.id].revenue += service.price;
-                        serviceReportData[service.id].count += 1;
-                    }
-                });
+                // Ajuste para calcular a receita do serviço com base no preço real do serviço no momento do agendamento
+                // ou no preço total do agendamento se for um serviço único.
+                // Para múltiplos serviços, o ideal seria ter o preço de cada serviço no agendamento.
+                // Por enquanto, vamos somar o totalPrice do agendamento para cada serviço, o que pode duplicar se houver múltiplos serviços no mesmo agendamento.
+                // Uma melhoria futura seria armazenar os detalhes de cada serviço (id, name, price) dentro do próprio Appointment.
+                if (t.serviceIds && t.serviceIds.length > 0) {
+                    t.serviceIds.forEach(serviceId => {
+                        const service = userProfile?.professionals?.flatMap(p => p.services).find(s => s.id === serviceId);
+                        if (service) {
+                            if (!serviceReportData[service.id]) serviceReportData[service.id] = { name: service.name, revenue: 0, count: 0 };
+                            serviceReportData[service.id].revenue += service.price; // Usar o preço do serviço do perfil
+                            serviceReportData[service.id].count += 1;
+                        }
+                    });
+                } else {
+                    // Se não houver serviceIds, e for um serviço único, usa o totalPrice do agendamento
+                    if (!serviceReportData[t.serviceName || 'Serviço Único']) serviceReportData[t.serviceName || 'Serviço Único'] = { name: t.serviceName || 'Serviço Único', revenue: 0, count: 0 };
+                    serviceReportData[t.serviceName || 'Serviço Único'].revenue += revenueAmount;
+                    serviceReportData[t.serviceName || 'Serviço Único'].count += 1;
+                }
+
             } else if ('amount' in t) {
                 const expenseAmount = t.amount || 0;
                 totalExpense += expenseAmount;
@@ -229,7 +282,14 @@ const FinancialManagement = () => {
                 categoryData[t.category] += expenseAmount;
             }
         });
-        const barChartData = Object.entries(dailyData).map(([name, values]) => ({ name, ...values })).sort((a, b) => a.name.localeCompare(b.name));
+        const barChartData = Object.entries(dailyData).map(([name, values]) => ({ name, ...values })).sort((a, b) => {
+            // Ordena por data (dd/mm)
+            const [dayA, monthA] = a.name.split('/').map(Number);
+            const [dayB, monthB] = b.name.split('/').map(Number);
+            const dateA = new Date(new Date().getFullYear(), monthA - 1, dayA);
+            const dateB = new Date(new Date().getFullYear(), monthB - 1, dayB);
+            return dateA.getTime() - dateB.getTime();
+        });
         const pieChartData = Object.entries(categoryData).map(([name, value]) => ({ name, value }));
         const professionalReport = Object.values(profReportData).sort((a, b) => b.revenue - a.revenue);
         const serviceReport = Object.values(serviceReportData).sort((a, b) => b.revenue - a.revenue);
@@ -238,8 +298,12 @@ const FinancialManagement = () => {
 
     const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef'];
 
+    // Estado para o modal de confirmação de exclusão de despesa
+    const [confirmationModalState, setConfirmationModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
+
     return (
         <div>
+            {confirmationModalState?.isOpen && <ConfirmationModal title={confirmationModalState.title} message={confirmationModalState.message} onConfirm={confirmationModalState.onConfirm} onCancel={() => setConfirmationModalState(null)} />}
             <ExpenseModal isOpen={modal.isOpen} mode={modal.mode} expense={modal.expense} onClose={() => setModal({ isOpen: false, mode: 'add' })} onSave={handleSaveExpense} />
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white">Painel Financeiro</h2>
@@ -264,7 +328,8 @@ const FinancialManagement = () => {
             {loading ? <p className="text-center text-gray-400">A carregar dados...</p> : (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <StatCard title="Faturação Bruta" value={totalRevenue.toFixed(2)} icon={TrendingUp} color="from-green-500 to-emerald-500" />
+                        {/* Usando userProfile?.totalRevenue para Faturação Bruta do perfil, se disponível */}
+                        <StatCard title="Faturação Bruta" value={(userProfile?.totalRevenue || totalRevenue).toFixed(2)} icon={TrendingUp} color="from-green-500 to-emerald-500" />
                         <StatCard title="Total de Despesas" value={totalExpense.toFixed(2)} icon={TrendingDown} color="from-red-500 to-rose-500" />
                         <StatCard title="Lucro Líquido" value={totalProfit.toFixed(2)} icon={DollarSign} color="from-amber-500 to-yellow-500" />
                     </div>

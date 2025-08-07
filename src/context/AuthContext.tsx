@@ -17,14 +17,14 @@ import {
   arrayRemove,
   deleteDoc,
   collection,
-  runTransaction,
+  runTransaction, // Importação adicionada
   Timestamp
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getToken } from "firebase/messaging";
 
 // Importa os serviços do novo arquivo de configuração
-import { auth, db, storage, messaging } from "../firebase/config"; // <-- Importação atualizada
+import { auth, db, storage, messaging } from "../firebase/config";
 import type { UserProfile, Review, Appointment } from "../types";
 import { useToast } from "./ToastContext";
 
@@ -58,7 +58,8 @@ interface AuthContextType {
   setUserProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
-  updateAppointmentStatus: (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => Promise<void>;
+  // Atualizado para incluir o serviceProviderId para a transação
+  updateAppointmentStatus: (appointmentId: string, serviceProviderId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => Promise<void>;
   requestFCMToken: () => Promise<void>;
   submitReview: (reviewData: Omit<Review, 'id' | 'createdAt' | 'clientName' | 'clientPhotoURL'>) => Promise<void>;
   uploadImage: (file: File, path: string) => Promise<string>;
@@ -66,7 +67,7 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,18 +190,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Função para atualizar o status de um agendamento
-  const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => {
+  // Função para atualizar o status de um agendamento e a receita do prestador
+  const updateAppointmentStatus = async (appointmentId: string, serviceProviderId: string, status: 'confirmed' | 'cancelled' | 'completed' | 'no-show', price?: number) => {
     const appointmentRef = doc(db, 'appointments', appointmentId);
+    const serviceProviderRef = doc(db, 'users', serviceProviderId); // Referência ao perfil do prestador
+
     try {
-      const dataToUpdate: { status: string; totalPrice?: number } = { status };
-      if (status === 'completed' && price !== undefined) {
-        dataToUpdate.totalPrice = price;
-      }
-      await updateDoc(appointmentRef, dataToUpdate);
+      await runTransaction(db, async (transaction) => {
+        const appointmentDoc = await transaction.get(appointmentRef);
+        if (!appointmentDoc.exists()) {
+          throw new Error("Agendamento não encontrado!");
+        }
+
+        const dataToUpdate: { status: string; totalPrice?: number } = { status };
+
+        if (status === 'completed' && price !== undefined) {
+          dataToUpdate.totalPrice = price;
+
+          // Atualiza a receita total no perfil do prestador de serviço
+          const serviceProviderDoc = await transaction.get(serviceProviderRef);
+          if (serviceProviderDoc.exists()) {
+            const currentRevenue = (serviceProviderDoc.data() as UserProfile).totalRevenue || 0;
+            const newRevenue = currentRevenue + price;
+            transaction.update(serviceProviderRef, { totalRevenue: newRevenue });
+          } else {
+            console.warn("Perfil do prestador de serviço não encontrado para atualizar a receita.");
+          }
+        }
+
+        transaction.update(appointmentRef, dataToUpdate);
+      });
+
       showToast('Estado do agendamento atualizado!', 'success');
+      // Após a atualização, recarrega o perfil do usuário para refletir a nova receita
+      if (currentUser) {
+        const updatedProfile = await fetchUserProfile(currentUser.uid);
+        setUserProfile(updatedProfile);
+      }
     } catch (error) {
-      console.error("Erro ao atualizar o estado do agendamento:", error);
+      console.error("Erro ao atualizar o estado do agendamento ou receita:", error);
       showToast("Não foi possível atualizar o agendamento.", 'error');
     }
   };

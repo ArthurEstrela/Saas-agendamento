@@ -70,6 +70,7 @@ export interface UserProfile {
 
   averageRating?: number;
   reviewCount?: number;
+  totalRevenue?: number; // Adicionado para armazenar a receita total no perfil do prestador
 }
 
 export interface Appointment {

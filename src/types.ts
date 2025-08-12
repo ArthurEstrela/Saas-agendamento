@@ -1,6 +1,6 @@
-// src/types.ts
+import { Timestamp } from 'firebase/firestore';
 
-// Interface para o endereço estruturado
+// Interface para o endereço estruturado com geolocalização
 export interface Address {
   street: string;
   number: string;
@@ -9,94 +9,99 @@ export interface Address {
   state: string;
   postalCode: string;
   country: string;
-  latitude?: number;  // Adicionado
-  longitude?: number; // Adicionado
+  latitude?: number;
+  longitude?: number;
 }
 
+// Interface para Serviços, mantida detalhada para associar aos profissionais
 export interface Service {
   id: string;
-  name: string;
-  duration: number; // em minutos
+  name:string;
   price: number;
+  duration: number; // em minutos
+  description?: string;
+  professionalIds: string[]; // Associa quais profissionais realizam o serviço
 }
 
+// Estrutura para os intervalos de tempo (trabalho e pausa)
+export interface TimeInterval {
+  start: string; // "HH:mm"
+  end: string;   // "HH:mm"
+}
+
+// Disponibilidade por dia da semana, mais flexível para cada profissional
 export interface DayAvailability {
-  active: boolean;
-  startTime: string; // "HH:MM"
-  endTime: string; // "HH:MM"
-  breakStartTime?: string;
-  breakEndTime?: string;
+  dayOfWeek: 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
+  isDayOff: boolean;
+  workIntervals: TimeInterval[];
+  breakIntervals: TimeInterval[];
 }
 
-export interface Availability {
-  monday: DayAvailability;
-  tuesday: DayAvailability;
-  wednesday: DayAvailability;
-  thursday: DayAvailability;
-  friday: DayAvailability;
-  saturday: DayAvailability;
-  sunday: DayAvailability;
-}
-
-// Interface para o Profissional
+// Interface para o Profissional, com sua própria disponibilidade
 export interface Professional {
   id: string;
   name: string;
   photoURL?: string;
-  services: Service[];
-  availability?: Availability;
+  availability: DayAvailability[]; // Cada profissional tem sua agenda
 }
 
+// Perfil do Usuário unificado e atualizado
 export interface UserProfile {
   uid: string;
   email: string;
-  createdAt: any;
+  createdAt: Timestamp;
   userType: "client" | "serviceProvider";
 
   phoneNumber?: string;
   photoURL?: string;
-  address?: Address;
+  
+  // Para Clientes
+  name?: string; // Nome de exibição do cliente
+  favorites?: string[]; // UIDs dos prestadores favoritos
 
-  displayName?: string;
-  favoriteProfessionals?: string[];
-
-  establishmentName?: string;
+  // Para Prestadores de Serviço
+  companyName?: string; // Nome do estabelecimento
+  address?: Address; // Endereço estruturado
   instagram?: string;
   whatsapp?: string;
   segment?: string;
   publicProfileSlug?: string;
   professionals?: Professional[];
+  services?: Service[];
   cnpj?: string;
   cancellationPolicyMinutes?: number;
   bookingAdvanceDays?: number;
 
   averageRating?: number;
   reviewCount?: number;
-  totalRevenue?: number; // Adicionado para armazenar a receita total no perfil do prestador
+  totalRevenue?: number;
 }
 
+// Interface de Agendamento detalhada
 export interface Appointment {
   id: string;
   serviceProviderId: string;
   professionalId: string;
   clientId: string;
-  serviceIds: string[];
+  serviceId: string; // ID do serviço principal agendado
   date: string; // 'YYYY-MM-DD'
-  time: string; // 'HH:MM'
-  status: "pending" | "confirmed" | "cancelled" | "completed" | "no-show";
-  createdAt: any;
+  startTime: string; // 'HH:mm'
+  endTime: string; // 'HH:mm'
+  status: "scheduled" | "completed" | "canceledByClient" | "canceledByProvider" | "noShow";
+  createdAt: Timestamp;
 
-  serviceName?: string;
-  professionalName?: string;
-  clientName?: string;
+  serviceName: string;
+  professionalName: string;
+  clientName: string;
   clientEmail?: string;
-  professionalPhotoURL?: string;
-  cancellationPolicyMinutes?: number;
-  totalPrice?: number;
+  duration: number;
+  price: number;
+  cancellationReason?: string;
+  notes?: string;
   hasBeenReviewed?: boolean;
 }
 
-// NOVA interface para Despesas
+// Interface para Despesas
 export interface Expense {
   id: string;
   serviceProviderId: string;
@@ -112,9 +117,10 @@ export interface Expense {
   amount: number;
   isFixed: boolean;
   date: string; // 'YYYY-MM-DD'
-  createdAt: any;
+  createdAt: Timestamp;
 }
 
+// Interface para Avaliações
 export interface Review {
   id: string;
   serviceProviderId: string;
@@ -124,5 +130,5 @@ export interface Review {
   appointmentId: string;
   rating: number; // 1 a 5
   comment: string;
-  createdAt: any;
+  createdAt: Timestamp;
 }

@@ -1,28 +1,53 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../Calendar.css'; // Mantenha seu CSS customizado para o calendário
 import { useToast } from '../context/ToastContext';
 import type { UserProfile, Service, Appointment, Professional } from '../types';
-import { useNavigate, useLocation } from 'react-router-dom'; // Importa useNavigate e useLocation
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import {
-  ArrowLeft, // Ícone de voltar
-  User, // Profissional
-  Scissors, // Serviços
-  Calendar as CalendarIcon, // Data e Hora
-  CheckCircle, // Confirmar
-  Clock, // Horário disponível
-  XCircle, // Horário indisponível
-  Coffee, // Horário de almoço/pausa
-  Check, // Serviço selecionado
-  Loader2, // Carregamento
-  DollarSign, // Preço
-  Clock as DurationIcon, // Duração
-} from 'lucide-react'; // Importa os ícones do Lucide React
+  ArrowLeft,
+  User,
+  Scissors,
+  Calendar as CalendarIcon,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Coffee,
+  Check,
+  Loader2,
+  DollarSign,
+  Clock as DurationIcon,
+  ChevronRight
+} from 'lucide-react';
+
+// Interfaces locais para compatibilidade com a estrutura de dados usada no seu projeto
+interface DayAvailability {
+  active: boolean;
+  startTime: string;
+  endTime: string;
+  breakStartTime?: string;
+  breakEndTime?: string;
+}
+
+interface Availability {
+  monday: DayAvailability;
+  tuesday: DayAvailability;
+  wednesday: DayAvailability;
+  thursday: DayAvailability;
+  friday: DayAvailability;
+  saturday: DayAvailability;
+  sunday: DayAvailability;
+}
+
+interface ProfessionalWithAvailability extends Professional {
+    services: Service[];
+    availability?: Availability;
+}
 
 // Tipos para o calendário
 type ValuePiece = Date | null;
@@ -49,14 +74,14 @@ const bookingSteps = [
 ];
 
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
-  const { currentUser } = useAuth(); // Obtém o perfil do usuário logado
-  const { showToast } = useToast(); // Função para exibir toasts
-  const navigate = useNavigate(); // Hook para navegação
-  const location = useLocation(); // Hook para obter a localização atual
+  // CORREÇÃO: Pegando também o userProfile para uma verificação mais segura
+  const { currentUser, userProfile } = useAuth(); 
+  const { showToast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Estados para o processo de agendamento
-  const [currentStep, setCurrentStep] = useState(1); // Passo atual
-  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedProfessional, setSelectedProfessional] = useState<ProfessionalWithAvailability | null>(null);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState<Value>(new Date());
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
@@ -65,7 +90,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const [isBooking, setIsBooking] = useState(false);
   const [availabilityMessage, setAvailabilityMessage] = useState('');
 
-  // Calcula a duração total e o preço total dos serviços selecionados
   const { totalDuration, totalPrice } = useMemo(() => {
     return selectedServices.reduce(
       (acc, service) => {
@@ -77,11 +101,10 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     );
   }, [selectedServices]);
 
-  // Hooks movidos para o topo do componente para evitar renderização condicional.
   const allServices = useMemo(() => {
     if (!establishment?.professionals) return [];
     const serviceMap = new Map<string, Service>();
-    establishment.professionals.forEach(prof => {
+    (establishment.professionals as ProfessionalWithAvailability[]).forEach(prof => {
       prof.services.forEach(service => {
         if (!serviceMap.has(service.id)) {
           serviceMap.set(service.id, service);
@@ -92,15 +115,14 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   }, [establishment]);
 
   const professionalsForSelectedServices = useMemo(() => {
-    if (!establishment?.professionals || selectedServices.length === 0) return [];
-    return establishment.professionals.filter(prof =>
+    if (!establishment?.professionals || selectedServices.length === 0) return (establishment.professionals as ProfessionalWithAvailability[]) || [];
+    return (establishment.professionals as ProfessionalWithAvailability[]).filter(prof =>
       selectedServices.every(selService =>
         prof.services.some(profService => profService.id === selService.id)
       )
     );
   }, [establishment, selectedServices]);
 
-  // Reseta os estados quando o profissional selecionado muda
   useEffect(() => {
     setSelectedDate(new Date());
     setTimeSlots([]);
@@ -108,7 +130,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     setAvailabilityMessage('');
   }, [selectedProfessional]);
 
-  // Lida com a seleção/desseleção de serviços e reseta o profissional
   const handleToggleService = (service: Service) => {
     setSelectedServices(prev => {
       const isSelected = prev.some(s => s.id === service.id);
@@ -122,7 +143,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     setSelectedProfessional(null);
   };
 
-  // Efeito para buscar os horários disponíveis
   useEffect(() => {
     const fetchAvailableTimes = async () => {
       setTimeSlots([]);
@@ -139,7 +159,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       setLoadingTimes(true);
 
       try {
-        const dayKey = (selectedDate as Date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof typeof selectedProfessional.availability;
+        const dayKey = (selectedDate as Date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof Availability;
         const dayAvailability = selectedProfessional.availability?.[dayKey];
 
         if (!dayAvailability || !dayAvailability.active) {
@@ -180,7 +200,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         const bookedIntervals: { start: Date, end: Date }[] = [];
         querySnapshot.docs.forEach(doc => {
           const appointment = doc.data() as Appointment;
-          const professionalForBooking = establishment.professionals?.find(p => p.id === appointment.professionalId);
+          const professionalForBooking = (establishment.professionals as ProfessionalWithAvailability[])?.find(p => p.id === appointment.professionalId);
           const durationOfBooking = appointment.serviceIds.reduce((acc, serviceId) => {
             const service = professionalForBooking?.services.find(s => s.id === serviceId);
             return acc + (service?.duration || 0);
@@ -240,10 +260,9 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     fetchAvailableTimes();
   }, [selectedDate, selectedServices, selectedProfessional, establishment, totalDuration]);
 
-  // Lida com o agendamento de um novo compromisso
   const handleBookAppointment = useCallback(async () => {
-    // Se o usuário não estiver logado, salva o estado e redireciona para o login
-    if (!currentUser) {
+    // CORREÇÃO: Verifica tanto o usuário de autenticação quanto o perfil do app.
+    if (!currentUser || !userProfile) {
       showToast("Você precisa estar logado para agendar. Redirecionando...", 'info');
       const pendingBooking = {
         serviceProviderId: establishment.uid,
@@ -262,18 +281,20 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       return;
     }
     setIsBooking(true);
-    const newAppointment: Omit<Appointment, 'id'> = {
-      clientId: currentUser.uid,
+    const newAppointmentData = {
+      // CORREÇÃO: Usando o UID do perfil do usuário para consistência.
+      clientId: userProfile.uid,
       serviceProviderId: establishment.uid,
       professionalId: selectedProfessional.id,
       serviceIds: selectedServices.map(s => s.id),
       date: (selectedDate as Date).toISOString().split('T')[0],
       time: selectedTime,
       status: 'pending',
-      createdAt: new Date(),
+      // CORREÇÃO: Usando Timestamp do Firebase para consistência de dados
+      createdAt: Timestamp.now(), 
     };
     try {
-      await addDoc(collection(db, 'appointments'), newAppointment);
+      await addDoc(collection(db, 'appointments'), newAppointmentData);
       showToast('Agendamento realizado com sucesso!', 'success');
       
       sessionStorage.removeItem('pendingBooking');
@@ -281,7 +302,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       if (onBack) {
         onBack();
       } else {
-        // CORREÇÃO: Navega para a rota correta do dashboard do cliente
         navigate('/dashboard/client');
       }
     } catch (error) {
@@ -290,11 +310,10 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     } finally {
       setIsBooking(false);
     }
-  }, [currentUser, establishment, location, navigate, onBack, selectedDate, selectedProfessional, selectedServices, selectedTime, showToast]);
+  }, [currentUser, userProfile, establishment, location, navigate, onBack, selectedDate, selectedProfessional, selectedServices, selectedTime, showToast]);
 
-  // Lógica de auto-agendamento refatorada para ser mais robusta
   useEffect(() => {
-    if (currentUser && establishment?.uid) {
+    if (currentUser && userProfile && establishment?.uid) {
       const pendingBookingRaw = sessionStorage.getItem('pendingBooking');
 
       if (pendingBookingRaw) {
@@ -310,7 +329,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         if (pendingBooking && pendingBooking.serviceProviderId === establishment.uid) {
           sessionStorage.removeItem('pendingBooking');
 
-          const professional = establishment.professionals?.find(p => p.id === pendingBooking.professionalId);
+          const professional = (establishment.professionals as ProfessionalWithAvailability[])?.find(p => p.id === pendingBooking.professionalId);
           const services = pendingBooking.serviceIds.map((serviceId: string) =>
             allServices.find(s => s.id === serviceId)
           ).filter((s): s is Service => s !== undefined);
@@ -323,40 +342,19 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
             setSelectedDate(new Date(pendingBooking.date));
             setSelectedTime(pendingBooking.time);
             setCurrentStep(4);
-            setIsBooking(true);
-
-            const bookAutomatically = async () => {
-              const newAppointment: Omit<Appointment, 'id'> = {
-                clientId: currentUser.uid,
-                serviceProviderId: establishment.uid,
-                professionalId: professional.id,
-                serviceIds: services.map(s => s.id),
-                date: new Date(pendingBooking.date).toISOString().split('T')[0],
-                time: pendingBooking.time,
-                status: 'pending',
-                createdAt: new Date(),
-              };
-              try {
-                await addDoc(collection(db, 'appointments'), newAppointment);
-                showToast('Agendamento realizado com sucesso!', 'success');
-                // CORREÇÃO: Navega para a rota correta do dashboard do cliente
-                navigate('/dashboard/client');
-              } catch (err) {
-                console.error("Erro ao agendar automaticamente:", err);
-                showToast('Erro ao finalizar o agendamento. Tente novamente.', 'error');
-              } finally {
-                setIsBooking(false);
-              }
-            };
             
-            setTimeout(bookAutomatically, 100);
+            // Adiciona um pequeno delay para garantir que o estado da UI atualize antes de chamar a função de agendamento
+            setTimeout(() => {
+                handleBookAppointment();
+            }, 200);
+
           } else {
             showToast('Não foi possível restaurar os detalhes do seu agendamento. Por favor, tente novamente.', 'warning');
           }
         }
       }
     }
-  }, [currentUser, establishment, allServices, showToast, navigate]);
+  }, [currentUser, userProfile, establishment, allServices, showToast, navigate, handleBookAppointment]);
 
   const getButtonClass = (status: TimeSlot['status'], time: string) => {
     let baseClasses = 'p-3 rounded-lg font-semibold transition-colors duration-200';
@@ -369,7 +367,10 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   };
 
   const calculateMaxDate = () => {
-    const advanceDays = establishment.bookingAdvanceDays || 30;
+    const advanceDays = establishment.bookingAdvanceDays;
+    if (!advanceDays || advanceDays <= 0) {
+        return undefined;
+    }
     const maxDate = new Date();
     maxDate.setDate(maxDate.getDate() + advanceDays);
     return maxDate;
@@ -534,7 +535,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
                 <div className="space-y-3 text-gray-300">
                   <div className="flex justify-between items-center">
                     <span>Estabelecimento:</span>
-                    <span className="font-semibold text-white">{establishment.establishmentName}</span>
+                    <span className="font-semibold text-white">{establishment.companyName}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span>Profissional:</span>
@@ -590,11 +591,11 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         <div className="text-center mb-8">
           <img
             src={establishment.photoURL || 'https://placehold.co/150x150/1F2937/4B5563?text=Foto'}
-            alt={`Foto de ${establishment.establishmentName}`}
+            alt={`Foto de ${establishment.companyName}`}
             className="h-28 w-28 rounded-full object-cover mx-auto mb-4 border-4 border-[#daa520] shadow-lg shadow-[#daa520]/20"
           />
           <h1 className="text-3xl font-bold text-white">Agendar em</h1>
-          <p className="text-2xl text-[#daa520] font-semibold">{establishment.establishmentName}</p>
+          <p className="text-2xl text-[#daa520] font-semibold">{establishment.companyName}</p>
         </div>
 
         <div className="mb-10 relative flex justify-between items-center after:absolute after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-1 after:bg-gray-700 after:z-0">
@@ -630,7 +631,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
               onClick={handleNextStep}
               className={`ml-auto bg-[#daa520] hover:bg-[#c8961e] text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2 shadow-md shadow-[#daa520]/20 transform hover:scale-105`}
             >
-              Próximo <ArrowLeft size={20} className="rotate-180" />
+              Próximo <ChevronRight size={20} />
             </button>
           )}
           {currentStep === bookingSteps.length && (

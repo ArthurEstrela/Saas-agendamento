@@ -1,7 +1,7 @@
 // src/components/Client/ClientSearchSection.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
-import { Search, SlidersHorizontal, MapPin, Tag, X, Heart, Calendar } from 'lucide-react'; // Adicionado Calendar
+import { Search, SlidersHorizontal, MapPin, Tag, X, Heart, Calendar, LocateFixed } from 'lucide-react'; // Adicionado Calendar
 import { db } from '../../firebase/config'; // Ajuste o caminho
 import type { UserProfile } from '../../types'; // Ajuste o caminho
 import ClientProfessionalCard from './ClientProfessionalCard'; // Importa o novo componente
@@ -14,6 +14,21 @@ interface ClientSearchSectionProps {
   handleSelectProfessionalForBooking: (prof: UserProfile) => void;
 }
 
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+
+  const R = 6371; // Raio da Terra em km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+  return distance;
+};
+
 const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
   currentUser,
   userProfile,
@@ -25,6 +40,8 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
   const [allProviders, setAllProviders] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({ segment: '', city: '', date: '' });
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   // Fetch de todos os prestadores (público)
   useEffect(() => {
@@ -39,8 +56,31 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
     fetchProviders();
   }, []);
 
+   const handleGetLocation = () => {
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocationLoading(false);
+      },
+      (error) => {
+        console.error("Erro ao obter localização", error);
+        alert("Não foi possível obter sua localização. Verifique as permissões do seu navegador.");
+        setLocationLoading(false);
+      }
+    );
+  };
+
   const filteredResults = useMemo(() => {
-    let results = allProviders;
+    let results = allProviders.map(provider => {
+      const distance = userLocation && provider.address?.latitude && provider.address?.longitude
+        ? getDistance(userLocation.latitude, userLocation.longitude, provider.address.latitude, provider.address.longitude)
+        : null;
+      return { ...provider, distance };
+    });
 
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
@@ -58,24 +98,22 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
     if (filters.city) {
       results = results.filter(provider => provider.address?.city?.toLowerCase().includes(filters.city.toLowerCase()));
     }
-    if (filters.date) {
-      const selectedDay = new Date(filters.date).toDateString();
-      results = results.filter(provider =>
-        provider.professionals?.some(p =>
-          p.availability?.some(a =>
-            // Nota: a.date é um campo que você precisaria ter em Professional.availability para este filtro funcionar.
-            // Se a disponibilidade é por dia da semana, este filtro de data específica precisaria de uma lógica mais complexa.
-            // Assumindo que 'a.date' existe para simplificar.
-            new Date(a.date).toDateString() === selectedDay && a.availableTimes.length > 0
-          )
-        )
-      );
+    
+    // Ordena por distância se a localização do usuário estiver disponível
+    if (userLocation) {
+      results.sort((a, b) => {
+        if (a.distance === null) return 1;
+        if (b.distance === null) return -1;
+        return a.distance - b.distance;
+      });
     }
+
     return results;
-  }, [searchTerm, filters, allProviders]);
+  }, [searchTerm, filters, allProviders, userLocation]);
+
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  const clearFilters = () => { setSearchTerm(''); setFilters({ segment: '', city: '', date: '' }); };
+  const clearFilters = () => { setSearchTerm(''); setFilters({ segment: '', city: '', date: '' }); setUserLocation(null); };
 
   return (
     <div className="animate-fade-in-down">
@@ -89,6 +127,7 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4"><Search className="h-5 w-5 text-gray-400" /></div>
           <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Procure por barbearia, corte de cabelo, nome do profissional..." className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-[#daa520]" />
         </div>
+        
         <details className="mt-4">
           <summary className="font-semibold text-white cursor-pointer flex items-center gap-2">
             <SlidersHorizontal size={16}/>
@@ -101,6 +140,12 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
             <div className="flex items-end"><button onClick={clearFilters} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"><X size={16}/>Limpar</button></div>
           </div>
         </details>
+        <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
+          <button onClick={handleGetLocation} disabled={locationLoading} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                <LocateFixed size={16}/>
+                {locationLoading ? 'Buscando...' : 'Usar minha localização'}
+            </button>
+        </div>
       </div>
 
       {isLoading ? <p className="text-center text-gray-400 py-10">A carregar profissionais...</p> : filteredResults.length > 0 ? (

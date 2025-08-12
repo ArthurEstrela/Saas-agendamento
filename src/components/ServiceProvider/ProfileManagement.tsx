@@ -1,8 +1,58 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import type { UserProfile } from '../../types';
-import { Building, Phone, Tag, Instagram, MapPin, Save, Lock, Camera, ArrowLeft, FileText } from 'lucide-react';
+import type { UserProfile, Address } from '../../types';
+import { Building, Phone, Tag, Instagram, MapPin, Save, Lock, Camera, ArrowLeft, FileText, Search } from 'lucide-react';
+import LocationPicker from './LocationPicker'; // Importa o nosso componente de mapa
+
+// --- Funções de Máscara para Validação ---
+
+const formatCEP = (cep: string = '') => {
+    return cep
+        .replace(/\D/g, '') // Remove tudo o que não é dígito
+        .replace(/(\d{5})(\d)/, '$1-$2') // Coloca hífen depois do 5º dígito
+        .substring(0, 9); // Limita a 9 caracteres (99999-999)
+};
+
+const formatPhone = (phone: string = '') => {
+    return phone
+        .replace(/\D/g, '')
+        .replace(/(\d{2})(\d)/, '($1) $2') // Coloca parênteses nos dois primeiros dígitos
+        .replace(/(\d{5})(\d)/, '$1-$2') // Coloca hífen depois do 9º dígito (para celulares)
+        .replace(/(\d{4})-(\d)(\d{4})/, '$1$2-$3') // Ajuste para telefones fixos
+        .substring(0, 15); // Limita a 15 caracteres ((99) 99999-9999)
+};
+
+const formatCNPJ = (cnpj: string = '') => {
+    return cnpj
+        .replace(/\D/g, '')
+        .replace(/(\d{2})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+        .substring(0, 18); // Limita a 18 caracteres (99.999.999/9999-99)
+};
+
+
+// --- Função Auxiliar de Geocodificação ---
+const geocodeAddress = async (address: Partial<Address>): Promise<{ latitude: number; longitude: number } | null> => {
+    if (!address.street || !address.city || !address.state) return null;
+    const addressString = `${address.street}, ${address.number || ''}, ${address.city}, ${address.state}`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addressString)}&format=json&limit=1`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('API Nominatim falhou');
+        const data = await response.json();
+        if (data && data.length > 0) {
+            return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
+        }
+        return null;
+    } catch (error) {
+        console.error("Erro de Geocoding:", error);
+        return null;
+    }
+};
+
 
 // --- Componente Principal ---
 const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
@@ -14,18 +64,24 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [cepLoading, setCepLoading] = useState(false);
+    const [isGeocoding, setIsGeocoding] = useState(false);
     const [cepError, setCepError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const defaultPosition = { lat: -16.3299, lng: -48.9524 };
 
     useEffect(() => {
         if (userProfile) {
+            const initialAddress = userProfile.address || { street: '', number: '', neighborhood: '', city: '', state: '', postalCode: '', country: 'Brasil' };
             setFormData({
                 establishmentName: userProfile.establishmentName || '',
-                phoneNumber: userProfile.phoneNumber || '',
-                cnpj: userProfile.cnpj || '',
+                phoneNumber: formatPhone(userProfile.phoneNumber),
+                cnpj: formatCNPJ(userProfile.cnpj),
                 segment: userProfile.segment || '',
                 instagram: userProfile.instagram || '',
-                address: userProfile.address || { street: '', number: '', neighborhood: '', city: '', state: '', postalCode: '', country: 'Brasil' },
+                address: {
+                    ...initialAddress,
+                    postalCode: formatCEP(initialAddress.postalCode),
+                },
             });
             setImagePreview(userProfile.photoURL || null);
         }
@@ -33,11 +89,29 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        if (['street', 'number', 'neighborhood', 'city', 'state', 'postalCode'].includes(name)) {
+
+        // Campos de endereço (exceto CEP)
+        if (['street', 'number', 'neighborhood', 'city', 'state'].includes(name)) {
             setFormData(prev => ({ ...prev, address: { ...prev.address!, [name]: value } }));
-            if (name === 'postalCode') setCepError('');
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
+            return;
+        }
+
+        // Aplica máscaras e validações
+        switch (name) {
+            case 'postalCode':
+                setFormData(prev => ({ ...prev, address: { ...prev.address!, postalCode: formatCEP(value) } }));
+                if (cepError) setCepError('');
+                break;
+            case 'phoneNumber':
+                setFormData(prev => ({ ...prev, phoneNumber: formatPhone(value) }));
+                break;
+            case 'cnpj':
+                setFormData(prev => ({ ...prev, cnpj: formatCNPJ(value) }));
+                break;
+            default:
+                // Campos normais
+                setFormData(prev => ({ ...prev, [name]: value }));
+                break;
         }
     };
     
@@ -72,6 +146,7 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
                     ...prev,
                     address: {
                         ...prev.address!,
+                        postalCode: formatCEP(cep),
                         street: data.logradouro,
                         neighborhood: data.bairro,
                         city: data.localidade,
@@ -87,10 +162,49 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
         }
     };
 
+    const handleGeocodeAndSetMarker = async () => {
+        if (!formData.address) {
+            showToast("Preencha os campos de endereço primeiro.", "warning");
+            return;
+        }
+        setIsGeocoding(true);
+        const coords = await geocodeAddress(formData.address);
+        if (coords) {
+            setFormData(prev => ({
+                ...prev,
+                address: { ...prev.address!, latitude: coords.latitude, longitude: coords.longitude } as Address,
+            }));
+            showToast("Endereço encontrado! Ajuste o pino no mapa se necessário.", "success");
+        } else {
+            showToast("Endereço não encontrado. Verifique os dados ou ajuste o pino manualmente no mapa.", "error");
+        }
+        setIsGeocoding(false);
+    };
+
+    const handleMapPositionChange = useCallback((newPosition: { lat: number, lng: number }) => {
+        setFormData(prev => ({
+            ...prev,
+            address: { ...prev.address!, latitude: newPosition.lat, longitude: newPosition.lng } as Address,
+        }));
+    }, []);
+
     const handleSaveProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userProfile) return;
         setLoading(true);
+
+        const unmask = (value: string | undefined) => value ? value.replace(/\D/g, '') : '';
+
+        // Prepara os dados para salvar, removendo as máscaras
+        const dataToSave: Partial<UserProfile> = {
+            ...formData,
+            phoneNumber: unmask(formData.phoneNumber),
+            cnpj: unmask(formData.cnpj),
+            address: {
+                ...formData.address!,
+                postalCode: unmask(formData.address?.postalCode)
+            }
+        };
 
         let finalPhotoURL = userProfile.photoURL;
         if (imageFile) {
@@ -105,7 +219,16 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
         }
 
         try {
-            await updateUserProfile({ ...formData, photoURL: finalPhotoURL });
+            if (dataToSave.address && (!dataToSave.address.latitude || !dataToSave.address.longitude)) {
+                const coords = await geocodeAddress(dataToSave.address);
+                if (coords) {
+                    dataToSave.address.latitude = coords.latitude;
+                    dataToSave.address.longitude = coords.longitude;
+                } else {
+                    showToast("Não foi possível obter a localização exata. O perfil será salvo sem ela.", "warning");
+                }
+            }
+            await updateUserProfile({ ...dataToSave, photoURL: finalPhotoURL });
         } finally {
             setLoading(false);
         }
@@ -128,6 +251,11 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const mapPosition = {
+        lat: formData.address?.latitude || defaultPosition.lat,
+        lng: formData.address?.longitude || defaultPosition.lng,
     };
 
     return (
@@ -187,7 +315,7 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
                             </div>
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-white mb-4 pt-6 border-t border-gray-800">Endereço</h3>
+                            <h3 className="text-lg font-bold text-white mb-4 pt-6 border-t border-gray-800">Endereço e Localização Exata</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="relative sm:col-span-2"><MapPin className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" /><input type="text" name="postalCode" placeholder="CEP" value={formData.address?.postalCode || ''} onChange={handleChange} onBlur={handleCepBlur} required className="w-full bg-gray-800 p-3 pl-10 rounded-md border border-gray-700" />{cepLoading && <p className="text-xs text-yellow-400 mt-1">Buscando...</p>}{cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}</div>
                                 <div className="sm:col-span-2"><input type="text" name="street" placeholder="Rua / Avenida" value={formData.address?.street || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
@@ -196,9 +324,17 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
                                 <div><input type="text" name="city" placeholder="Cidade" value={formData.address?.city || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
                                 <div><input type="text" name="state" placeholder="Estado" value={formData.address?.state || ''} onChange={handleChange} required className="w-full bg-gray-800 p-3 rounded-md border border-gray-700" /></div>
                             </div>
+                            <div className="mt-4">
+                                <button type="button" onClick={handleGeocodeAndSetMarker} disabled={isGeocoding || cepLoading} className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed">
+                                    <Search size={16}/>
+                                    {isGeocoding ? 'A procurar...' : 'Procurar endereço no mapa'}
+                                </button>
+                                <p className="text-sm text-gray-400 mt-2">Após procurar, arraste o pino para a localização exata da entrada do seu estabelecimento.</p>
+                                <LocationPicker position={mapPosition} onPositionChange={handleMapPositionChange} />
+                            </div>
                         </div>
                         <div className="pt-6 border-t border-gray-800">
-                             <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2">
+                            <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2">
                                 <Save size={18}/>
                                 {loading ? 'A guardar...' : 'Guardar Alterações'}
                             </button>

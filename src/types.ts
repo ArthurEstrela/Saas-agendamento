@@ -9,6 +9,8 @@ export interface Address {
   state: string;
   postalCode: string;
   country: string;
+  latitude?: number;  // Adicionado
+  longitude?: number; // Adicionado
 }
 
 export interface Service {

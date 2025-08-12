@@ -154,6 +154,7 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
             <ClientProfessionalCard
               key={prof.uid}
               prof={prof}
+              distance={prof.distance}
               isFavorite={userProfile?.favoriteProfessionals?.includes(prof.uid) || false}
               handleProtectedAction={handleProtectedAction}
               toggleFavorite={toggleFavorite}

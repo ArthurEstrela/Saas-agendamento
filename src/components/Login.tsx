@@ -1,4 +1,3 @@
-// src/components/Login.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -292,9 +291,20 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+        <div className="relative min-h-screen bg-black text-white flex items-center justify-center p-4">
+            {/* Botão de Voltar movido e estilizado */}
+            <Link 
+                to="/" 
+                className="absolute top-8 left-8 flex items-center gap-2 px-4 py-2 bg-gray-800/60 border border-gray-700 rounded-full text-sm text-gray-300 hover:bg-gray-700/80 hover:text-[#daa520] transition-all duration-300"
+            >
+                <ArrowLeft className="h-4 w-4" />
+                <span>Voltar</span>
+            </Link>
+
             <div className="w-full max-w-lg mx-auto">
-                <div className="text-center mb-8"><Link to="/"><img className="w-32 mx-auto" src={logo} alt="Stylo Logo" /></Link></div>
+                <div className="text-center mb-8">
+                    <Link to="/"><img className="w-32 mx-auto" src={logo} alt="Stylo Logo" /></Link>
+                </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl shadow-black/50">
                     {isLoginView ? (
                         <div className="animate-fade-in-down">

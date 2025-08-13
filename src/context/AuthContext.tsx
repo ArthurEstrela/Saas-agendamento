@@ -51,7 +51,10 @@ interface AuthContextType {
   ) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   toggleFavorite: (professionalId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string) => Promise<void>;
@@ -63,38 +66,55 @@ interface AuthContextType {
   ) => Promise<void>;
   requestFCMToken: () => Promise<void>;
   submitReview: (
-    reviewData: Omit<Review, "id" | "createdAt" | "clientName" | "clientPhotoURL">
+    reviewData: Omit<
+      Review,
+      "id" | "createdAt" | "clientName" | "clientPhotoURL"
+    >
   ) => Promise<void>;
   uploadImage: (file: File, path: string) => Promise<string>;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 // --- Funções Auxiliares (sem alterações) ---
-const geocodeAddress = async (address: Partial<Address>): Promise<{ latitude: number; longitude: number } | null> => {
-    if (!address.street || !address.city || !address.state) return null;
-    const addressString = `${address.street}, ${address.number || ''}, ${address.city}, ${address.state}`;
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addressString)}&format=json&limit=1`;
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('API Nominatim falhou');
-        const data = await response.json();
-        if (data && data.length > 0) return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
-        return null;
-    } catch (error) {
-        console.error("Erro de Geocoding:", error);
-        return null;
-    }
+const geocodeAddress = async (
+  address: Partial<Address>
+): Promise<{ latitude: number; longitude: number } | null> => {
+  if (!address.street || !address.city || !address.state) return null;
+  const addressString = `${address.street}, ${address.number || ""}, ${
+    address.city
+  }, ${address.state}`;
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+    addressString
+  )}&format=json&limit=1`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("API Nominatim falhou");
+    const data = await response.json();
+    if (data && data.length > 0)
+      return {
+        latitude: parseFloat(data[0].lat),
+        longitude: parseFloat(data[0].lon),
+      };
+    return null;
+  } catch (error) {
+    console.error("Erro de Geocoding:", error);
+    return null;
+  }
 };
 
 export const requestForToken = async (): Promise<string | null> => {
-    try {
-        const currentToken = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
-        return currentToken || null;
-    } catch (err) {
-        console.error('Ocorreu um erro ao recuperar o token.', err);
-        return null;
-    }
+  try {
+    const currentToken = await getToken(messaging, {
+      vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+    });
+    return currentToken || null;
+  } catch (err) {
+    console.error("Ocorreu um erro ao recuperar o token.", err);
+    return null;
+  }
 };
 
 // --- Componente Provedor ---
@@ -121,18 +141,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const profileDocRef = doc(db, "users", user.uid);
 
         // Criamos um novo listener em tempo real para o perfil do usuário atual.
-        unsubscribeProfile = onSnapshot(profileDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
-          } else {
+        unsubscribeProfile = onSnapshot(
+          profileDocRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setUserProfile(docSnap.data() as UserProfile);
+            } else {
+              setUserProfile(null);
+            }
+            setLoading(false); // Finaliza o loading após obter o perfil.
+          },
+          (error) => {
+            console.error("Erro no listener do perfil:", error);
             setUserProfile(null);
+            setLoading(false);
           }
-          setLoading(false); // Finaliza o loading após obter o perfil.
-        }, (error) => {
-          console.error("Erro no listener do perfil:", error);
-          setUserProfile(null);
-          setLoading(false);
-        });
+        );
       } else {
         // --- USUÁRIO DESLOGADO ---
         // Limpa TODOS os estados relacionados ao usuário de uma só vez.
@@ -160,49 +184,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (email: string, password: string, userType: "client" | "serviceProvider", profileData: Partial<UserProfile> = {}) => {
+  const register = async (
+    email: string,
+    password: string,
+    userType: "client" | "serviceProvider",
+    profileData: Partial<UserProfile> = {}
+  ) => {
     setLoading(true);
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        const newProfile: UserProfile = {
-            uid: user.uid, email: user.email!, createdAt: serverTimestamp(), userType, ...profileData,
-        };
-        if (newProfile.userType === "serviceProvider" && newProfile.address) {
-            const coords = await geocodeAddress(newProfile.address);
-            if (coords) {
-                newProfile.address.latitude = coords.latitude;
-                newProfile.address.longitude = coords.longitude;
-            }
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
+      const newProfile: UserProfile = {
+        uid: user.uid,
+        email: user.email!,
+        createdAt: serverTimestamp(),
+        userType,
+        ...profileData,
+      };
+      if (newProfile.userType === "serviceProvider" && newProfile.address) {
+        const coords = await geocodeAddress(newProfile.address);
+        if (coords) {
+          newProfile.address.latitude = coords.latitude;
+          newProfile.address.longitude = coords.longitude;
         }
-        await setDoc(doc(db, "users", user.uid), newProfile);
-        // O listener onAuthStateChanged cuidará do resto.
+      }
+      await setDoc(doc(db, "users", user.uid), newProfile);
+      // O listener onAuthStateChanged cuidará do resto.
     } catch (error: any) {
-        showToast(error.code, "error");
-        setLoading(false);
-        throw error;
+      showToast(error.code, "error");
+      setLoading(false);
+      throw error;
     }
   };
-  
+
   const loginWithGoogle = async () => {
     setLoading(true);
     try {
-        const provider = new GoogleAuthProvider();
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        const profileDoc = await getDoc(doc(db, `users/${user.uid}`));
-        if (!profileDoc.exists()) {
-            const newProfile: UserProfile = {
-                uid: user.uid, email: user.email!, createdAt: serverTimestamp(), userType: "client",
-                displayName: user.displayName || "", photoURL: user.photoURL || "",
-            };
-            await setDoc(doc(db, `users/${user.uid}`), newProfile);
-        }
-        // O listener onAuthStateChanged cuidará do resto.
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const profileDoc = await getDoc(doc(db, `users/${user.uid}`));
+      if (!profileDoc.exists()) {
+        const newProfile: UserProfile = {
+          uid: user.uid,
+          email: user.email!,
+          createdAt: serverTimestamp(),
+          userType: "client",
+          displayName: user.displayName || "",
+          photoURL: user.photoURL || "",
+        };
+        await setDoc(doc(db, `users/${user.uid}`), newProfile);
+      }
+      // O listener onAuthStateChanged cuidará do resto.
     } catch (error: any) {
-        showToast(error.code, "error");
-        setLoading(false);
-        throw error;
+      showToast(error.code, "error");
+      setLoading(false);
+      throw error;
     }
   };
 
@@ -216,45 +257,69 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const changePassword = async (currentPassword: string, newPassword: string) => {
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ) => {
     if (!currentUser || !currentUser.email) {
-        showToast("Usuário não encontrado.", "error");
-        return;
+      showToast("Usuário não encontrado.", "error");
+      return;
     }
     try {
-        const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
-        await reauthenticateWithCredential(currentUser, credential);
-        await updatePassword(currentUser, newPassword);
-        showToast("Senha alterada com sucesso!", "success");
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        currentPassword
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPassword);
+      showToast("Senha alterada com sucesso!", "success");
     } catch (error: any) {
-        console.error("Erro ao alterar senha:", error);
-        showToast("Falha ao alterar a senha. Verifique sua senha atual.", "error");
-        throw error;
+      console.error("Erro ao alterar senha:", error);
+      showToast(
+        "Falha ao alterar a senha. Verifique sua senha atual.",
+        "error"
+      );
+      throw error;
     }
   };
 
   // --- Outras Funções (sem alterações na lógica interna) ---
   const updateUserProfile = async (data: Partial<UserProfile>) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      showToast("Usuário não autenticado.", "error");
+      return;
+    }
     try {
-        await updateDoc(doc(db, `users/${currentUser.uid}`), data);
-        showToast("Perfil atualizado com sucesso!", "success");
+      const userDocRef = doc(db, `users/${currentUser.uid}`);
+      await updateDoc(userDocRef, data);
+
+      // ATUALIZAÇÃO DO ESTADO LOCAL
+      setUserProfile((prevProfile) => {
+        if (!prevProfile) return null;
+        return { ...prevProfile, ...data };
+      });
+
+      showToast("Perfil atualizado com sucesso!", "success");
     } catch (error) {
-        showToast("Não foi possível atualizar o perfil.", "error");
+      console.error("Erro ao atualizar perfil:", error);
+      showToast("Não foi possível atualizar o perfil.", "error");
     }
   };
 
-  const uploadImage = async (file: File, path: string): Promise<string> => {
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
-    return getDownloadURL(snapshot.ref);
-  };
-  
+const uploadImage = async (file: File, path: string): Promise<string> => {
+  const storageRef = ref(storage, path);
+  // 👇 PRECISA DE GUARDAR O RESULTADO (snapshot) AQUI
+  const snapshot = await uploadBytes(storageRef, file); 
+  // 👇 E DEPOIS USAR A REFERÊNCIA CORRETA
+  return getDownloadURL(snapshot.ref);
+};
+
   // ... (Restante das suas funções: toggleFavorite, cancelAppointment, etc. permanecem iguais)
   const toggleFavorite = async (professionalId: string) => {
     if (!currentUser || !userProfile) return;
     const userDocRef = doc(db, `users/${currentUser.uid}`);
-    const isFavorite = userProfile.favoriteProfessionals?.includes(professionalId);
+    const isFavorite =
+      userProfile.favoriteProfessionals?.includes(professionalId);
     try {
       await updateDoc(userDocRef, {
         favoriteProfessionals: isFavorite
@@ -291,14 +356,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await runTransaction(db, async (transaction) => {
         const appointmentDoc = await transaction.get(appointmentRef);
-        if (!appointmentDoc.exists()) throw new Error("Agendamento não encontrado!");
-        const dataToUpdate: { status: string; totalPrice?: number } = { status };
+        if (!appointmentDoc.exists())
+          throw new Error("Agendamento não encontrado!");
+        const dataToUpdate: { status: string; totalPrice?: number } = {
+          status,
+        };
         if (status === "completed" && price !== undefined) {
           dataToUpdate.totalPrice = price;
           const serviceProviderDoc = await transaction.get(serviceProviderRef);
           if (serviceProviderDoc.exists()) {
-            const currentRevenue = (serviceProviderDoc.data() as UserProfile).totalRevenue || 0;
-            transaction.update(serviceProviderRef, { totalRevenue: currentRevenue + price });
+            const currentRevenue =
+              (serviceProviderDoc.data() as UserProfile).totalRevenue || 0;
+            transaction.update(serviceProviderRef, {
+              totalRevenue: currentRevenue + price,
+            });
           }
         }
         transaction.update(appointmentRef, dataToUpdate);
@@ -314,7 +385,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const fcmToken = await requestForToken();
       if (fcmToken) {
-        await updateDoc(doc(db, `users/${currentUser.uid}`), { fcmTokens: arrayUnion(fcmToken) });
+        await updateDoc(doc(db, `users/${currentUser.uid}`), {
+          fcmTokens: arrayUnion(fcmToken),
+        });
       }
     } catch (error) {
       console.error("Erro ao guardar o token FCM:", error);
@@ -322,14 +395,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const submitReview = async (
-    reviewData: Omit<Review, "id" | "createdAt" | "clientName" | "clientPhotoURL">
+    reviewData: Omit<
+      Review,
+      "id" | "createdAt" | "clientName" | "clientPhotoURL"
+    >
   ) => {
     if (!userProfile) {
-      showToast("Precisa de estar autenticado para deixar uma avaliação.", "error");
+      showToast(
+        "Precisa de estar autenticado para deixar uma avaliação.",
+        "error"
+      );
       return;
     }
     const establishmentRef = doc(db, "users", reviewData.serviceProviderId);
-    const reviewRef = doc(collection(db, `users/${reviewData.serviceProviderId}/reviews`));
+    const reviewRef = doc(
+      collection(db, `users/${reviewData.serviceProviderId}/reviews`)
+    );
     const appointmentRef = doc(db, "appointments", reviewData.appointmentId);
     try {
       await runTransaction(db, async (transaction) => {
@@ -346,7 +427,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const currentRating = establishmentData.averageRating || 0;
         const reviewCount = establishmentData.reviewCount || 0;
         const newReviewCount = reviewCount + 1;
-        const newAverageRating = (currentRating * reviewCount + reviewData.rating) / newReviewCount;
+        const newAverageRating =
+          (currentRating * reviewCount + reviewData.rating) / newReviewCount;
         transaction.update(establishmentRef, {
           averageRating: newAverageRating,
           reviewCount: newReviewCount,
@@ -358,7 +440,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       showToast(`Ocorreu um erro: ${error.message || error}`, "error");
     }
   };
-
 
   const value = {
     currentUser,

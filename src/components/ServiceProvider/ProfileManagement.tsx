@@ -188,47 +188,61 @@ const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
         }));
     }, []);
 
-    const handleSaveProfile = async (e: React.FormEvent) => {
+      const handleSaveProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userProfile) return;
         setLoading(true);
 
         const unmask = (value: string | undefined) => value ? value.replace(/\D/g, '') : '';
-
-        // Prepara os dados para salvar, removendo as máscaras
-        const dataToSave: Partial<UserProfile> = {
-            ...formData,
-            phoneNumber: unmask(formData.phoneNumber),
-            cnpj: unmask(formData.cnpj),
-            address: {
-                ...formData.address!,
-                postalCode: unmask(formData.address?.postalCode)
-            }
-        };
-
-        let finalPhotoURL = userProfile.photoURL;
-        if (imageFile) {
-            try {
-                const uploadPath = `profile_pictures/${userProfile.uid}/${imageFile.name}`;
-                finalPhotoURL = await uploadImage(imageFile, uploadPath);
-            } catch (error) {
-                showToast('Erro ao fazer upload da imagem.', 'error');
-                setLoading(false);
-                return;
-            }
-        }
-
+        
         try {
-            if (dataToSave.address && (!dataToSave.address.latitude || !dataToSave.address.longitude)) {
-                const coords = await geocodeAddress(dataToSave.address);
+            // 1. Começamos com os dados do formulário
+            const dataToUpdate: Partial<UserProfile> = {
+                ...formData,
+                phoneNumber: unmask(formData.phoneNumber),
+                cnpj: unmask(formData.cnpj),
+                address: {
+                    ...formData.address!,
+                    postalCode: unmask(formData.address?.postalCode)
+                }
+            };
+
+            // 2. Lógica para o upload da imagem
+            if (imageFile) {
+                // Se houver um novo ficheiro, faz o upload e define a photoURL
+                const uploadPath = `profile_pictures/${userProfile.uid}/${imageFile.name}`;
+                dataToUpdate.photoURL = await uploadImage(imageFile, uploadPath);
+            } else if (userProfile.photoURL) {
+                // Se não houver ficheiro novo, mantém a URL existente
+                dataToUpdate.photoURL = userProfile.photoURL;
+            }
+            // Se não houver ficheiro novo e nem URL existente, o campo photoURL não é adicionado,
+            // evitando o envio de 'undefined'.
+
+            // 3. Geocodificação (se necessário)
+            if (dataToUpdate.address && (!dataToUpdate.address.latitude || !dataToUpdate.address.longitude)) {
+                const coords = await geocodeAddress(dataToUpdate.address);
                 if (coords) {
-                    dataToSave.address.latitude = coords.latitude;
-                    dataToSave.address.longitude = coords.longitude;
+                    dataToUpdate.address.latitude = coords.latitude;
+                    dataToUpdate.address.longitude = coords.longitude;
                 } else {
                     showToast("Não foi possível obter a localização exata. O perfil será salvo sem ela.", "warning");
                 }
             }
-            await updateUserProfile({ ...dataToSave, photoURL: finalPhotoURL });
+            
+            // 4. Limpa o objeto de quaisquer chaves com valor 'undefined'
+            Object.keys(dataToUpdate).forEach(key => {
+                if (dataToUpdate[key as keyof typeof dataToUpdate] === undefined) {
+                    delete dataToUpdate[key as keyof typeof dataToUpdate];
+                }
+            });
+
+            // 5. Envia os dados limpos para o Firestore
+            await updateUserProfile(dataToUpdate);
+
+        } catch (error) {
+            console.error("Erro ao salvar perfil:", error);
+            showToast("Ocorreu um erro ao salvar o perfil.", "error");
         } finally {
             setLoading(false);
         }

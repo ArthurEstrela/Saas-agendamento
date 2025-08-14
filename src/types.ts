@@ -37,12 +37,21 @@ export interface DayAvailability {
   breakIntervals: TimeInterval[];
 }
 
+// Interface para Folgas e Imprevistos
+export interface Unavailability {
+  id: string;
+  date: string; // 'YYYY-MM-DD'
+  period: 'morning' | 'afternoon' | 'all_day';
+  description: string;
+}
+
 // Interface para o Profissional, com sua própria disponibilidade
 export interface Professional {
   id: string;
   name: string;
   photoURL?: string;
   availability: DayAvailability[]; // Cada profissional tem sua agenda
+  unavailability?: Unavailability[]; // Campo para folgas e imprevistos
 }
 
 // Perfil do Usuário unificado e atualizado
@@ -116,6 +125,7 @@ export interface Expense {
     | "Outros";
   amount: number;
   isFixed: boolean;
+  recurringDay?: number; // Dia do mês para recorrência (1-31)
   date: string; // 'YYYY-MM-DD'
   createdAt: Timestamp;
 }

@@ -26,6 +26,7 @@ import {
   UserX,
   CheckCircle,
   AlertTriangle,
+  Menu,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -165,89 +166,110 @@ const NavItem = ({ icon: Icon, text, active, onClick }) => (
   </button>
 );
 
-const SideNav = ({ activeView, setActiveView }) => {
+const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
   const { logout, userProfile } = useAuth();
   return (
-    <div className="w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0">
-      <div className="flex items-center space-x-2 mb-10 px-2">
-        <Link to="/">
-          <img className="h-10 w-auto" src={logo} alt="Stylo" />
-        </Link>
-      </div>
-      <nav className="flex-grow flex flex-col space-y-2">
-        <NavItem
-          icon={LayoutDashboard}
-          text="Agenda"
-          active={activeView === "agenda"}
-          onClick={() => setActiveView("agenda")}
-        />
-        <NavItem
-          icon={Scissors}
-          text="Serviços"
-          active={activeView === "services"}
-          onClick={() => setActiveView("services")}
-        />
-        <NavItem
-          icon={Users}
-          text="Profissionais"
-          active={activeView === "professionals"}
-          onClick={() => setActiveView("professionals")}
-        />
-        <NavItem
-          icon={Clock}
-          text="Disponibilidade"
-          active={activeView === "availability"}
-          onClick={() => setActiveView("availability")}
-        />
-        <NavItem
-          icon={DollarSign}
-          text="Financeiro"
-          active={activeView === "financial"}
-          onClick={() => setActiveView("financial")}
-        />
-        <NavItem
-          icon={Star}
-          text="Avaliações"
-          active={activeView === "reviews"}
-          onClick={() => setActiveView("reviews")}
-        />
-      </nav>
-      <div className="mt-auto">
-        <div className="border-t border-gray-800 pt-4">
-          <div className="flex items-center px-2 mb-4">
-            <img
-              src={
-                userProfile?.photoURL ||
-                "https://placehold.co/150x150/111827/4B5563?text=Foto"
-              }
-              alt="Sua foto de perfil"
-              className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-gray-700"
-            />
-            <div>
-              <p className="text-sm font-semibold text-white truncate">
-                {userProfile?.establishmentName || "Nome do Salão"}
-              </p>
-              <p className="text-xs text-gray-400">Prestador de Serviço</p>
-            </div>
-          </div>
-          <NavItem
-            icon={User}
-            text="Meu Perfil"
-            active={activeView === "profile"}
-            onClick={() => setActiveView("profile")}
-          />
+    <>
+      <div
+        className={`fixed inset-0 bg-black/60 z-30 md:hidden transition-opacity duration-300 ${
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setIsOpen(false)}
+      ></div>
+      <div
+        className={`w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0 z-40
+                   transition-transform duration-300 ease-in-out 
+                   md:translate-x-0 
+                   ${isOpen ? "translate-x-0" : "-translate-x-full"}
+                  `}
+      >
+        {/* A div do logo, agora com o botão de fechar */}
+        <div className="flex items-center justify-between mb-10 px-2">
+          <Link to="/">
+            <img className="h-10 w-auto" src={logo} alt="Stylo" />
+          </Link>
           <button
-            onClick={logout}
-            className="flex items-center w-full h-12 px-4 mt-1 text-left text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all duration-300 ease-in-out group"
+            onClick={() => setIsOpen(false)}
+            className="md:hidden text-gray-400 hover:text-white"
           >
-            <LogOut className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
-            <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">
-              Sair
-            </span>
+            <X size={24} />
           </button>
         </div>
+        <nav className="flex-grow flex flex-col space-y-2">
+          <NavItem
+            icon={LayoutDashboard}
+            text="Agenda"
+            active={activeView === "agenda"}
+            onClick={() => setActiveView("agenda")}
+          />
+          <NavItem
+            icon={Scissors}
+            text="Serviços"
+            active={activeView === "services"}
+            onClick={() => setActiveView("services")}
+          />
+          <NavItem
+            icon={Users}
+            text="Profissionais"
+            active={activeView === "professionals"}
+            onClick={() => setActiveView("professionals")}
+          />
+          <NavItem
+            icon={Clock}
+            text="Disponibilidade"
+            active={activeView === "availability"}
+            onClick={() => setActiveView("availability")}
+          />
+          <NavItem
+            icon={DollarSign}
+            text="Financeiro"
+            active={activeView === "financial"}
+            onClick={() => setActiveView("financial")}
+          />
+          <NavItem
+            icon={Star}
+            text="Avaliações"
+            active={activeView === "reviews"}
+            onClick={() => setActiveView("reviews")}
+          />
+        </nav>
+        <div className="mt-auto">
+          <div className="border-t border-gray-800 pt-4">
+            <div className="flex items-center px-2 mb-4">
+              <img
+                src={
+                  userProfile?.photoURL ||
+                  "https://placehold.co/150x150/111827/4B5563?text=Foto"
+                }
+                alt="Sua foto de perfil"
+                className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-gray-700"
+              />
+              <div>
+                <p className="text-sm font-semibold text-white truncate">
+                  {userProfile?.establishmentName || "Nome do Salão"}
+                </p>
+                <p className="text-xs text-gray-400">Prestador de Serviço</p>
+              </div>
+            </div>
+            <NavItem
+              icon={User}
+              text="Meu Perfil"
+              active={activeView === "profile"}
+              onClick={() => setActiveView("profile")}
+            />
+            <button
+              onClick={logout}
+              className="flex items-center w-full h-12 px-4 mt-1 text-left text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all duration-300 ease-in-out group"
+            >
+              <LogOut className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
+              <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">
+                Sair
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -344,88 +366,88 @@ const AgendaView = () => {
     return () => unsubscribe(); // Limpa o listener ao desmontar o componente
   }, [userProfile, showToast]);
 
-const { upcomingAppointments, historyAppointments } = useMemo(() => {
-  const now = new Date();
-  
-  const upcoming = allAppointments
-    .filter((app) => {
-      const [year, month, day] = app.date.split("-").map(Number);
-      const [hour, minute] = app.time.split(":").map(Number);
-      const appDateTime = new Date(year, month - 1, day, hour, minute);
-      return (
-        appDateTime >= now &&
-        (app.status === "pending" || app.status === "confirmed")
-      );
-    })
-    .sort((a, b) => {
-      const dateA = new Date(`${a.date}T${a.time}`);
-      const dateB = new Date(`${b.date}T${b.time}`);
-      return dateA.getTime() - dateB.getTime();
-    });
+  const { upcomingAppointments, historyAppointments } = useMemo(() => {
+    const now = new Date();
 
-  const history = allAppointments
-    .filter((app) => {
-      const [year, month, day] = app.date.split("-").map(Number);
-      const [hour, minute] = app.time.split(":").map(Number);
-      const appDateTime = new Date(year, month - 1, day, hour, minute);
-      return (
-        appDateTime < now ||
-        app.status === "completed" ||
-        app.status === "cancelled" ||
-        app.status === "no-show"
-      );
-    })
-    .sort((a, b) => {
+    const upcoming = allAppointments
+      .filter((app) => {
+        const [year, month, day] = app.date.split("-").map(Number);
+        const [hour, minute] = app.time.split(":").map(Number);
+        const appDateTime = new Date(year, month - 1, day, hour, minute);
+        return (
+          appDateTime >= now &&
+          (app.status === "pending" || app.status === "confirmed")
+        );
+      })
+      .sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
-      return dateB.getTime() - dateA.getTime(); // Ordem decrescente
-    });
+        return dateA.getTime() - dateB.getTime();
+      });
 
-  return { upcomingAppointments: upcoming, historyAppointments: history };
-}, [allAppointments]);
+    const history = allAppointments
+      .filter((app) => {
+        const [year, month, day] = app.date.split("-").map(Number);
+        const [hour, minute] = app.time.split(":").map(Number);
+        const appDateTime = new Date(year, month - 1, day, hour, minute);
+        return (
+          appDateTime < now ||
+          app.status === "completed" ||
+          app.status === "cancelled" ||
+          app.status === "no-show"
+        );
+      })
+      .sort((a, b) => {
+        const dateA = new Date(`${a.date}T${a.time}`);
+        const dateB = new Date(`${b.date}T${b.time}`);
+        return dateB.getTime() - dateA.getTime(); // Ordem decrescente
+      });
 
-// 2. AGORA QUE `historyAppointments` EXISTE, podemos usá-la para criar a lista filtrada.
-const filteredHistoryAppointments = useMemo(() => {
-  let filtered = historyAppointments; // Agora isso funciona!
+    return { upcomingAppointments: upcoming, historyAppointments: history };
+  }, [allAppointments]);
 
-  // Filtrar por profissional
-  if (historyFilters.professionalId !== "todos") {
-    filtered = filtered.filter(
-      (app) => app.professionalId === historyFilters.professionalId
-    );
-  }
+  // 2. AGORA QUE `historyAppointments` EXISTE, podemos usá-la para criar a lista filtrada.
+  const filteredHistoryAppointments = useMemo(() => {
+    let filtered = historyAppointments; // Agora isso funciona!
 
-  // Filtrar por nome do cliente
-  if (historyFilters.clientName) {
-    filtered = filtered.filter((app) =>
-      app.clientName
-        .toLowerCase()
-        .includes(historyFilters.clientName.toLowerCase())
-    );
-  }
+    // Filtrar por profissional
+    if (historyFilters.professionalId !== "todos") {
+      filtered = filtered.filter(
+        (app) => app.professionalId === historyFilters.professionalId
+      );
+    }
 
-  // Filtrar por intervalo de datas
-  if (historyFilters.dateStart) {
-    const startDate = new Date(historyFilters.dateStart + "T00:00:00");
-    filtered = filtered.filter((app) => new Date(app.date) >= startDate);
-  }
-  if (historyFilters.dateEnd) {
-    const endDate = new Date(historyFilters.dateEnd + "T23:59:59");
-    filtered = filtered.filter((app) => new Date(app.date) <= endDate);
-  }
+    // Filtrar por nome do cliente
+    if (historyFilters.clientName) {
+      filtered = filtered.filter((app) =>
+        app.clientName
+          .toLowerCase()
+          .includes(historyFilters.clientName.toLowerCase())
+      );
+    }
 
-  return filtered;
-}, [historyAppointments, historyFilters]);
+    // Filtrar por intervalo de datas
+    if (historyFilters.dateStart) {
+      const startDate = new Date(historyFilters.dateStart + "T00:00:00");
+      filtered = filtered.filter((app) => new Date(app.date) >= startDate);
+    }
+    if (historyFilters.dateEnd) {
+      const endDate = new Date(historyFilters.dateEnd + "T23:59:59");
+      filtered = filtered.filter((app) => new Date(app.date) <= endDate);
+    }
 
-// 3. POR FIM, com a lista filtrada pronta, criamos a paginação.
-const totalPages = Math.ceil(
-  filteredHistoryAppointments.length / ITEMS_PER_PAGE
-);
-const paginatedHistory = useMemo(() => {
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  return filteredHistoryAppointments.slice(startIndex, endIndex);
-}, [currentPage, filteredHistoryAppointments]);
+    return filtered;
+  }, [historyAppointments, historyFilters]);
+
+  // 3. POR FIM, com a lista filtrada pronta, criamos a paginação.
+  const totalPages = Math.ceil(
+    filteredHistoryAppointments.length / ITEMS_PER_PAGE
+  );
+  const paginatedHistory = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredHistoryAppointments.slice(startIndex, endIndex);
+  }, [currentPage, filteredHistoryAppointments]);
 
   // Função para abrir o modal de confirmação genérico
   const handleConfirmation = (
@@ -631,14 +653,14 @@ const paginatedHistory = useMemo(() => {
                   )}
                 </div>
               </div>
-              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 self-stretch md:self-center w-full md:w-auto">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full border-t border-gray-700 pt-4 mt-4 md:border-none md:pt-0 md:mt-0 md:w-auto">
                 <div
-                  className={`flex items-center justify-center gap-2 px-3 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg ${statusInfo.color}`}
                 >
                   {statusInfo.icon}
                   <span>{statusInfo.text}</span>
                 </div>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-center gap-2 flex-grow">
                   {/* Botões para agendamentos PENDENTES */}
                   {app.status === "pending" && (
                     <>
@@ -911,7 +933,7 @@ const paginatedHistory = useMemo(() => {
 const ServiceProviderDashboard = () => {
   const { logout, userProfile } = useAuth();
   const [activeView, setActiveView] = useState("agenda");
-  // Removido o modalState daqui, pois agora está dentro de AgendaView para melhor escopo
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const renderContent = () => {
     switch (activeView) {
@@ -937,9 +959,26 @@ const ServiceProviderDashboard = () => {
   return (
     <div className="flex min-h-screen bg-black text-gray-200 font-sans">
       {/* O modal de confirmação agora é gerenciado dentro de AgendaView */}
-      <SideNav activeView={activeView} setActiveView={setActiveView} />
-      <main className="flex-grow p-4 sm:p-6 md:p-8 ml-72">
-        <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full animate-fade-in-down">
+      <SideNav
+        activeView={activeView}
+        setActiveView={setActiveView}
+        isOpen={isMobileNavOpen}
+        setIsOpen={setIsMobileNavOpen}
+      />
+      <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
+        <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
+          {/* --- BOTÃO HAMBÚRGUER --- */}
+          <div className="md:hidden flex justify-between items-center mb-6">
+            <button
+              onClick={() => setIsMobileNavOpen(true)}
+              className="text-gray-300"
+            >
+              <Menu size={28} />
+            </button>
+            {/* Opcional: Adicionar logo ou nome da página aqui */}
+            <span className="text-xl font-bold text-white">Stylo</span>
+          </div>
+
           {renderContent()}
         </div>
       </main>

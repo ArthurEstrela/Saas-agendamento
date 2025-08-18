@@ -105,6 +105,7 @@ export interface Appointment {
   clientEmail?: string;
   duration: number;
   price: number;
+  totalPrice?: number;
   cancellationReason?: string;
   notes?: string;
   hasBeenReviewed?: boolean;

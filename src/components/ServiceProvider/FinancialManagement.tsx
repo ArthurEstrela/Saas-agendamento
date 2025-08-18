@@ -275,7 +275,7 @@ const FinancialManagement = () => {
             if (!dailyData[day]) dailyData[day] = { Receita: 0, Despesa: 0 };
             
             if ('status' in t && t.status === 'completed') { // É uma Receita (Appointment)
-                const revenueAmount = t.price || 0;
+                const revenueAmount = t.totalPrice || 0;
                 totalRevenue += revenueAmount;
                 dailyData[day].Receita += revenueAmount;
 

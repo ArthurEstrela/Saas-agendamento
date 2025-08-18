@@ -292,6 +292,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       status: 'pending',
       // CORREÇÃO: Usando Timestamp do Firebase para consistência de dados
       createdAt: Timestamp.now(), 
+      price: totalPrice,
     };
     try {
       await addDoc(collection(db, 'appointments'), newAppointmentData);

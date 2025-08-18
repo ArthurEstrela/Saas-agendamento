@@ -1,24 +1,18 @@
 // src/components/AboutUs.tsx
-import React from 'react';
+import React from "react";
 
 const teamMembers = [
   {
-    name: 'Arthur Estrela',
-    role: 'CEO & Fundador',
-    imageUrl: 'https://placehold.co/400x400/1F2937/FFFFFF?text=AE',
-    bio: 'Apaixonado por tecnologia e beleza, Arthur fundou a Stylo para revolucionar a gestão de negócios no setor.'
+    name: "Arthur Estrela",
+    role: "CEO & Fundador",
+    imageUrl: "https://placehold.co/400x400/1F2937/FFFFFF?text=AE",
+    bio: "Apaixonado por tecnologia e beleza, Arthur fundou a Stylo para revolucionar a gestão de negócios no setor.",
   },
   {
-    name: 'Sofia Lima',
-    role: 'Diretora de Tecnologia (CTO)',
-    imageUrl: 'https://placehold.co/400x400/1F2937/FFFFFF?text=SL',
-    bio: 'Comanda a nossa equipa de engenharia, garantindo que a plataforma seja robusta, segura e inovadora.'
-  },
-  {
-    name: 'Miguel Costa',
-    role: 'Diretor de Produto (CPO)',
-    imageUrl: 'https://placehold.co/400x400/1F2937/FFFFFF?text=MC',
-    bio: 'Focado na experiência do utilizador, Miguel trabalha para tornar a Stylo a ferramenta mais intuitiva do mercado.'
+    name: "Sávio Issa",
+    role: "Diretora de Tecnologia (CTO)",
+    imageUrl: "https://placehold.co/400x400/1F2937/FFFFFF?text=SL",
+    bio: "Comanda a nossa equipa de engenharia, garantindo que a plataforma seja robusta, segura e inovadora.",
   },
 ];
 
@@ -33,7 +27,9 @@ const AboutUs = () => {
             A nossa missão é o seu sucesso.
           </h1>
           <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-300">
-            Nascemos da paixão por simplificar. Acreditamos que, com as ferramentas certas, todo o profissional de beleza pode prosperar, focando no que realmente importa: a arte de transformar e cuidar.
+            Nascemos da paixão por simplificar. Acreditamos que, com as
+            ferramentas certas, todo o profissional de beleza pode prosperar,
+            focando no que realmente importa: a arte de transformar e cuidar.
           </p>
         </div>
       </div>
@@ -44,31 +40,54 @@ const AboutUs = () => {
           <div className="prose prose-invert prose-lg text-gray-300 mx-auto">
             <h2 className="text-3xl font-bold text-white">A nossa história</h2>
             <p>
-              A Stylo começou com uma observação simples: profissionais talentosos da área da beleza gastavam demasiado tempo com tarefas administrativas e perdiam clientes por falta de um sistema de agendamento eficiente. Decidimos mudar essa realidade.
+              A Stylo começou com uma observação simples: profissionais
+              talentosos da área da beleza gastavam demasiado tempo com tarefas
+              administrativas e perdiam clientes por falta de um sistema de
+              agendamento eficiente. Decidimos mudar essa realidade.
             </p>
             <p>
-              Reunimos uma equipa de especialistas em tecnologia e design, e trabalhámos lado a lado com donos de salões e barbearias para construir uma solução que realmente atendesse às suas necessidades. Hoje, orgulhamo-nos de oferecer uma plataforma que não só organiza a agenda, mas também impulsiona o crescimento dos nossos parceiros.
+              Reunimos uma equipa de especialistas em tecnologia e design, e
+              trabalhámos lado a lado com donos de salões e barbearias para
+              construir uma solução que realmente atendesse às suas
+              necessidades. Hoje, orgulhamo-nos de oferecer uma plataforma que
+              não só organiza a agenda, mas também impulsiona o crescimento dos
+              nossos parceiros.
             </p>
             <blockquote className="border-l-4 border-yellow-500 pl-4">
-              "Queremos ser mais do que um software. Queremos ser o parceiro estratégico que ajuda cada negócio de beleza a atingir o seu máximo potencial."
+              "Queremos ser mais do que um software. Queremos ser o parceiro
+              estratégico que ajuda cada negócio de beleza a atingir o seu
+              máximo potencial."
             </blockquote>
           </div>
         </div>
       </div>
-      
+
       {/* Seção da Equipa */}
       <div className="bg-gray-800/50 py-16 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-white">A equipa por detrás da Stylo</h2>
-            <p className="mt-4 text-lg text-gray-400">Pessoas dedicadas a construir o futuro da gestão de beleza.</p>
+            <h2 className="text-3xl font-extrabold text-white">
+              A equipe por detrás da Stylo
+            </h2>
+            <p className="mt-4 text-lg text-gray-400">
+              Pessoas dedicadas a construir o futuro da gestão de beleza.
+            </p>
           </div>
-          <div className="mt-12 grid gap-12 space-y-0 lg:grid-cols-3 lg:gap-x-8">
+          <div className="mt-12 grid gap-12 space-y-0 lg:grid-cols-2 lg:gap-x-8">
             {teamMembers.map((person) => (
-              <div key={person.name} className="flex flex-col items-center text-center">
-                <img className="object-cover w-40 h-40 rounded-full" src={person.imageUrl} alt={`Foto de ${person.name}`} />
+              <div
+                key={person.name}
+                className="flex flex-col items-center text-center"
+              >
+                <img
+                  className="object-cover w-40 h-40 rounded-full"
+                  src={person.imageUrl}
+                  alt={`Foto de ${person.name}`}
+                />
                 <div className="mt-6">
-                  <h3 className="text-xl font-semibold text-white">{person.name}</h3>
+                  <h3 className="text-xl font-semibold text-white">
+                    {person.name}
+                  </h3>
                   <p className="text-yellow-400">{person.role}</p>
                   <p className="mt-2 text-base text-gray-400">{person.bio}</p>
                 </div>

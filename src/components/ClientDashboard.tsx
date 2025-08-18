@@ -1,9 +1,9 @@
 // src/components/ClientDashboard.tsx
-import React, { useState, useEffect, useMemo } from 'react'; // Adicionado useEffect e useMemo
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import type { Appointment, UserProfile } from '../types';
-import { Star } from 'lucide-react'; // Mantido para o ícone de estrela no ReviewModal
+import { Star, Menu as MenuIcon } from 'lucide-react'; // Importa o ícone de Menu
 import Booking from './Booking';
 
 // Importa os novos subcomponentes
@@ -11,10 +11,11 @@ import ClientSideNav from './Client/ClientSideNav';
 import ClientSearchSection from './Client/ClientSearchSection';
 import ClientMyAppointmentsSection from './Client/ClientMyAppointmentsSection';
 import ClientFavoritesSection from './Client/ClientFavoritesSection';
-import ClientProfileManagement from './Client/ClientProfileManagement'; // Importa o ClientProfileManagement
-import LoginPrompt from './Common/LoginPrompt'; // Importa o novo LoginPrompt
+import ClientProfileManagement from './Client/ClientProfileManagement';
+import LoginPrompt from './Common/LoginPrompt';
 
-// Componente de modal de confirmação (mantido aqui, pode ser movido para common/modals)
+// ... (Mantenha os componentes ConfirmationModal e ReviewModal como estão no seu arquivo original)
+
 const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; }) => (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
         <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
@@ -28,12 +29,10 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: str
     </div>
 );
 
-// Componente de modal de avaliação (mantido aqui, pode ser movido para common/modals)
 const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boolean; onClose: () => void; appointment: Appointment; onSubmit: (rating: number, comment: string) => void; }) => {
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
 
-    // Adicionado useEffect aqui para resolver o erro
     useEffect(() => {
         if (!isOpen) {
             setRating(0);
@@ -92,27 +91,25 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
 };
 
 
-// REMOVIDA A DEFINIÇÃO LOCAL DE LoginPrompt AQUI
-// O componente LoginPrompt agora é importado diretamente de './Common/LoginPrompt'
-
 const ClientDashboard: React.FC = () => {
     const { currentUser, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuth();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking'>('search');
     
+    // NOVO: Estado para controlar a visibilidade do menu no mobile
+    const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
     const [selectedProfessionalForBooking, setSelectedProfessionalForBooking] = useState<UserProfile | null>(null);
     const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
     const [reviewModal, setReviewModal] = useState<{ isOpen: boolean; appointment?: Appointment }>({ isOpen: false });
-    // showLoginPrompt removido, pois o LoginPrompt agora é inline
 
     const handleLoginAction = () => navigate('/login');
     
-    // handleProtectedAction agora apenas navega para o login
     const handleProtectedAction = (action: () => void) => {
         if (!currentUser) {
-            handleLoginAction(); // Redireciona para o login
+            handleLoginAction();
         } else {
-            action(); // Executa a ação se o usuário estiver logado
+            action();
         }
     };
 
@@ -144,7 +141,6 @@ const ClientDashboard: React.FC = () => {
             return <Booking professional={selectedProfessionalForBooking} onBack={handleBackFromBooking} />;
         }
         
-        // Seções que exigem login, renderizam o LoginPrompt se o usuário não estiver logado
         if (!currentUser && (activeView === 'myAppointments' || activeView === 'favorites' || activeView === 'profile')) {
             let message = "";
             switch (activeView) {
@@ -173,8 +169,8 @@ const ClientDashboard: React.FC = () => {
                         handleLoginAction={handleLoginAction}
                         handleCancelAppointment={handleCancelAppointment}
                         handleOpenReviewModal={handleOpenReviewModal}
-                        LoginPrompt={LoginPrompt} // Passa o componente LoginPrompt
-                        setActiveView={setActiveView} // Passa setActiveView
+                        LoginPrompt={LoginPrompt}
+                        setActiveView={setActiveView}
                     />
                 );
             case 'favorites':
@@ -186,8 +182,8 @@ const ClientDashboard: React.FC = () => {
                         handleProtectedAction={handleProtectedAction}
                         toggleFavorite={toggleFavorite}
                         handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
-                        LoginPrompt={LoginPrompt} // Passa o componente LoginPrompt
-                        setActiveView={setActiveView} // Passa setActiveView
+                        LoginPrompt={LoginPrompt}
+                        setActiveView={setActiveView}
                     />
                 );
             case 'profile':
@@ -202,12 +198,31 @@ const ClientDashboard: React.FC = () => {
             {modalState?.isOpen && <ConfirmationModal title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onCancel={() => setModalState(null)} />}
             {reviewModal.isOpen && <ReviewModal isOpen={reviewModal.isOpen} onClose={() => setReviewModal({ isOpen: false })} appointment={reviewModal.appointment!} onSubmit={handleSubmitReview} />}
             
-            {/* showLoginPrompt foi removido daqui pois o LoginPrompt agora é inline */}
+            <ClientSideNav 
+                activeView={activeView} 
+                setActiveView={setActiveView} 
+                logout={logout} 
+                userProfile={userProfile}
+                isOpen={isMobileNavOpen}      // NOVO: Passa o estado de abertura
+                setIsOpen={setIsMobileNavOpen}  // NOVO: Passa a função para alterar o estado
+            />
             
-            <ClientSideNav activeView={activeView} setActiveView={setActiveView} logout={logout} userProfile={userProfile} />
-            
-            <main className="flex-grow p-4 sm:p-6 md:p-8 ml-72">
+            {/* O conteúdo principal agora tem uma margem esquerda em telas de desktop (md) para acomodar o SideNav */}
+            <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
                 <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
+                    
+                    {/* NOVO: Header para o menu mobile */}
+                    <div className="md:hidden flex justify-between items-center mb-6">
+                        <button
+                          onClick={() => setIsMobileNavOpen(true)}
+                          className="text-gray-300 hover:text-white"
+                          aria-label="Abrir menu"
+                        >
+                          <MenuIcon size={28} />
+                        </button>
+                        <span className="text-xl font-bold text-white">Stylo</span>
+                    </div>
+
                     {renderContent()}
                 </div>
             </main>

@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+// src/components/ServiceProviderDashboard.tsx
+
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../firebase/config";
 import {
@@ -8,9 +10,11 @@ import {
   onSnapshot,
   doc,
   getDoc,
+  updateDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { Link } from "react-router-dom";
-import type { Appointment } from "../types";
+import type { Appointment, Professional } from "../types";
 import logo from "../assets/stylo-logo.png";
 import {
   LayoutDashboard,
@@ -27,10 +31,11 @@ import {
   CheckCircle,
   AlertTriangle,
   Menu,
+  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useToast } from "../context/ToastContext"; // Importar useToast
+import { useToast } from "../context/ToastContext";
 
 // Importando os seus componentes de gerenciamento existentes
 import ProfileManagement from "./ServiceProvider/ProfileManagement";
@@ -77,12 +82,13 @@ const ConfirmationModal = ({
 // --- Subcomponente de Modal para Confirmar Serviço com Preço ---
 const CompleteServiceModal = ({ isOpen, appointment, onClose, onConfirm }) => {
   const [price, setPrice] = useState<string>("");
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (isOpen && appointment?.totalPrice) {
       setPrice(appointment.totalPrice.toFixed(2));
     } else if (isOpen) {
-      setPrice(""); // Limpa o preço ao abrir para um novo agendamento
+      setPrice("");
     }
   }, [isOpen, appointment]);
 
@@ -91,11 +97,11 @@ const CompleteServiceModal = ({ isOpen, appointment, onClose, onConfirm }) => {
   const handleSubmit = () => {
     const finalPrice = parseFloat(price);
     if (isNaN(finalPrice) || finalPrice < 0) {
-      // Poderia usar um toast aqui para informar o usuário sobre o preço inválido
-      alert("Por favor, insira um valor de preço válido."); // Temporário, substituir por Toast
+      showToast("Por favor, insira um valor de preço válido.", "error");
       return;
     }
-    onConfirm(appointment.id, finalPrice);
+    // Passa o objeto de agendamento completo de volta
+    onConfirm(appointment, finalPrice);
   };
 
   return (
@@ -140,7 +146,7 @@ const CompleteServiceModal = ({ isOpen, appointment, onClose, onConfirm }) => {
             onClick={handleSubmit}
             className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
           >
-            Concluir e Registrar
+            Concluir e Registar
           </button>
         </div>
       </div>
@@ -183,7 +189,6 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
                    ${isOpen ? "translate-x-0" : "-translate-x-full"}
                   `}
       >
-        {/* A div do logo, agora com o botão de fechar */}
         <div className="flex items-center justify-between mb-10 px-2">
           <Link to="/">
             <img className="h-10 w-auto" src={logo} alt="Stylo" />
@@ -273,10 +278,98 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
   );
 };
 
+const ProfessionalSelector = ({
+  professionals,
+  selectedProfId,
+  setSelectedProfId,
+  includeAllOption = false,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedProfessionalName =
+    selectedProfId === "todos"
+      ? "Todos os Profissionais"
+      : professionals.find((p) => p.id === selectedProfId)?.name ||
+        "Selecione um Profissional";
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative w-full sm:w-64" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-gray-800 border border-gray-700 p-3 rounded-lg flex justify-between items-center text-left focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520] transition-all"
+      >
+        <span className="flex items-center gap-3">
+          <User className="text-[#daa520]" size={20} />
+          <span className="font-semibold text-white">
+            {selectedProfessionalName}
+          </span>
+        </span>
+        <ChevronDown
+          size={20}
+          className={`text-gray-400 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {isOpen && (
+        <div className="absolute top-full mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 animate-fade-in-down max-h-60 overflow-y-auto">
+          {includeAllOption && (
+            <div
+              onClick={() => {
+                setSelectedProfId("todos");
+                setIsOpen(false);
+              }}
+              className="p-3 hover:bg-gray-700 cursor-pointer flex items-center gap-3 text-white"
+            >
+              <Users size={20} />
+              Todos os Profissionais
+            </div>
+          )}
+          {professionals.map((prof) => (
+            <div
+              key={prof.id}
+              onClick={() => {
+                setSelectedProfId(prof.id);
+                setIsOpen(false);
+              }}
+              className="p-3 hover:bg-gray-700 cursor-pointer flex items-center gap-3 text-white"
+            >
+              {prof.photoURL ? (
+                <img
+                  src={prof.photoURL}
+                  alt={prof.name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <User className="w-8 h-8 p-1 bg-gray-600 rounded-full" />
+              )}
+              {prof.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Componente para a Agenda
 const AgendaView = () => {
   const { userProfile, updateAppointmentStatus } = useAuth();
-  const { showToast } = useToast(); // Usar o toast aqui
+  const { showToast } = useToast();
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmationModalState, setConfirmationModalState] = useState<{
@@ -299,11 +392,19 @@ const AgendaView = () => {
     dateEnd: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10; // Quantos itens por página
+  const ITEMS_PER_PAGE = 10;
+
+  const [selectedProfessionalId, setSelectedProfessionalId] =
+    useState<string>(() => {
+      return localStorage.getItem("selectedProfessionalId_v2") || "todos";
+    });
+
+  useEffect(() => {
+    localStorage.setItem("selectedProfessionalId_v2", selectedProfessionalId);
+  }, [selectedProfessionalId]);
 
   useEffect(() => {
     if (!userProfile?.uid) return;
-    // Adiciona um listener em tempo real para os agendamentos
     const q = query(
       collection(db, "appointments"),
       where("serviceProviderId", "==", userProfile.uid)
@@ -316,15 +417,12 @@ const AgendaView = () => {
           (doc) => ({ id: doc.id, ...doc.data() } as Appointment)
         );
 
-        // Mapeia e busca detalhes adicionais para cada agendamento
         const appointmentsWithDetails = await Promise.all(
           apptsData.map(async (appt) => {
-            // Busca o perfil do cliente
             const clientDocRef = doc(db, "users", appt.clientId);
             const clientSnap = await getDoc(clientDocRef);
             const clientProfile = clientSnap.data();
 
-            // Encontra o profissional e calcula o preço total dos serviços
             const professional = userProfile.professionals?.find(
               (p) => p.id === appt.professionalId
             );
@@ -339,7 +437,7 @@ const AgendaView = () => {
                     totalPrice += service.price;
                     return service.name;
                   }
-                  return "Serviço Removido"; // Caso o serviço não seja encontrado
+                  return "Serviço Removido";
                 })
                 .join(", ") || "N/A";
 
@@ -349,7 +447,7 @@ const AgendaView = () => {
               professionalName:
                 professional?.name || "Profissional Desconhecido",
               serviceName: serviceNames,
-              totalPrice: appt.totalPrice || totalPrice, // Usa o totalPrice salvo se existir, senão calcula
+              totalPrice: appt.totalPrice || totalPrice,
             };
           })
         );
@@ -363,13 +461,17 @@ const AgendaView = () => {
       }
     );
 
-    return () => unsubscribe(); // Limpa o listener ao desmontar o componente
+    return () => unsubscribe();
   }, [userProfile, showToast]);
 
   const { upcomingAppointments, historyAppointments } = useMemo(() => {
     const now = new Date();
+    const filtered = allAppointments.filter((app) => {
+      if (selectedProfessionalId === "todos") return true;
+      return app.professionalId === selectedProfessionalId;
+    });
 
-    const upcoming = allAppointments
+    const upcoming = filtered
       .filter((app) => {
         const [year, month, day] = app.date.split("-").map(Number);
         const [hour, minute] = app.time.split(":").map(Number);
@@ -385,39 +487,32 @@ const AgendaView = () => {
         return dateA.getTime() - dateB.getTime();
       });
 
-    const history = allAppointments
+    const history = filtered
       .filter((app) => {
         const [year, month, day] = app.date.split("-").map(Number);
         const [hour, minute] = app.time.split(":").map(Number);
         const appDateTime = new Date(year, month - 1, day, hour, minute);
         return (
           appDateTime < now ||
-          app.status === "completed" ||
-          app.status === "cancelled" ||
-          app.status === "no-show"
+          ["completed", "cancelled", "no-show"].includes(app.status)
         );
       })
       .sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB.getTime() - dateA.getTime(); // Ordem decrescente
+        return dateB.getTime() - dateA.getTime();
       });
 
     return { upcomingAppointments: upcoming, historyAppointments: history };
-  }, [allAppointments]);
+  }, [allAppointments, selectedProfessionalId]);
 
-  // 2. AGORA QUE `historyAppointments` EXISTE, podemos usá-la para criar a lista filtrada.
   const filteredHistoryAppointments = useMemo(() => {
-    let filtered = historyAppointments; // Agora isso funciona!
-
-    // Filtrar por profissional
+    let filtered = historyAppointments;
     if (historyFilters.professionalId !== "todos") {
       filtered = filtered.filter(
         (app) => app.professionalId === historyFilters.professionalId
       );
     }
-
-    // Filtrar por nome do cliente
     if (historyFilters.clientName) {
       filtered = filtered.filter((app) =>
         app.clientName
@@ -425,8 +520,6 @@ const AgendaView = () => {
           .includes(historyFilters.clientName.toLowerCase())
       );
     }
-
-    // Filtrar por intervalo de datas
     if (historyFilters.dateStart) {
       const startDate = new Date(historyFilters.dateStart + "T00:00:00");
       filtered = filtered.filter((app) => new Date(app.date) >= startDate);
@@ -435,22 +528,21 @@ const AgendaView = () => {
       const endDate = new Date(historyFilters.dateEnd + "T23:59:59");
       filtered = filtered.filter((app) => new Date(app.date) <= endDate);
     }
-
     return filtered;
   }, [historyAppointments, historyFilters]);
 
-  // 3. POR FIM, com a lista filtrada pronta, criamos a paginação.
   const totalPages = Math.ceil(
     filteredHistoryAppointments.length / ITEMS_PER_PAGE
   );
   const paginatedHistory = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return filteredHistoryAppointments.slice(startIndex, endIndex);
+    return filteredHistoryAppointments.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
+    );
   }, [currentPage, filteredHistoryAppointments]);
 
-  // Função para abrir o modal de confirmação genérico
-  const handleConfirmation = (
+  const handleAction = (
     action: () => void,
     title: string,
     message: string
@@ -466,70 +558,58 @@ const AgendaView = () => {
     });
   };
 
-  // Função para confirmar o serviço como concluído (abre o modal de preço)
   const handleCompleteServiceClick = (appointment: Appointment) => {
-    handleConfirmation(
+    handleAction(
       () => setCompleteServiceModalState({ isOpen: true, appointment }),
       "Confirmar Conclusão",
-      `Tem a certeza de que pretende marcar o serviço de "${appointment.serviceName}" como concluído?`
+      `Tem certeza que deseja marcar o serviço de "${appointment.serviceName}" como concluído?`
     );
   };
 
-  // Função chamada após o preço ser inserido no modal de conclusão
+  // LÓGICA ATUALIZADA PARA SALVAR DADOS FINANCEIROS
   const handleConfirmCompleteService = async (
-    appointmentId: string,
+    appointment: Appointment,
     finalPrice: number
   ) => {
     if (!userProfile?.uid) return;
-    await updateAppointmentStatus(
-      appointmentId,
-      userProfile.uid,
-      "completed",
-      finalPrice
-    );
-    setCompleteServiceModalState(null); // Fecha o modal de preço
+    
+    const appointmentRef = doc(db, 'appointments', appointment.id);
+
+    try {
+      await updateDoc(appointmentRef, {
+        status: 'completed',
+        totalPrice: finalPrice,
+        // Novos campos para o financeiro
+        professionalName: appointment.professionalName,
+        serviceName: appointment.serviceName,
+        completedAt: Timestamp.now(), // Salva a data e hora exata da conclusão
+      });
+      showToast('Agendamento concluído e registrado no financeiro!', 'success');
+    } catch (error) {
+      console.error("Erro ao concluir agendamento: ", error);
+      showToast('Erro ao registrar conclusão.', 'error');
+    } finally {
+      setCompleteServiceModalState(null);
+    }
   };
 
-  // Função para marcar como "não compareceu"
-  const handleNoShowClick = (appointment: Appointment) => {
-    handleConfirmation(
+  const handleUpdateStatus = (
+    appointment: Appointment,
+    status: "confirmed" | "cancelled" | "no-show",
+    title: string,
+    message: string
+  ) => {
+    handleAction(
       () => {
         if (userProfile?.uid) {
-          updateAppointmentStatus(appointment.id, userProfile.uid, "no-show");
+          updateAppointmentStatus(appointment.id, userProfile.uid, status);
         }
       },
-      "Confirmar Não Comparecimento",
-      `Tem certeza que deseja marcar o agendamento de "${appointment.clientName}" para "${appointment.serviceName}" como "Não Compareceu"?`
+      title,
+      message
     );
   };
 
-  // Função para confirmar agendamento
-  const handleConfirmAppointment = (appointment: Appointment) => {
-    handleConfirmation(
-      () => {
-        if (userProfile?.uid) {
-          updateAppointmentStatus(appointment.id, userProfile.uid, "confirmed");
-        }
-      },
-      "Confirmar Agendamento",
-      `Tem certeza que deseja confirmar o agendamento de "${appointment.clientName}" para "${appointment.serviceName}"?`
-    );
-  };
-
-  // Função para cancelar agendamento
-  const handleCancelAppointment = (appointment: Appointment) => {
-    handleConfirmation(
-      () => {
-        if (userProfile?.uid) {
-          updateAppointmentStatus(appointment.id, userProfile.uid, "cancelled");
-        }
-      },
-      "Cancelar Agendamento",
-      `Tem certeza que deseja cancelar o agendamento de "${appointment.clientName}" para "${appointment.serviceName}"? Esta ação não pode ser desfeita.`
-    );
-  };
-
-  // Helper para exibir informações de status
   const getStatusInfo = (status: Appointment["status"], isPast: boolean) => {
     switch (status) {
       case "pending":
@@ -573,54 +653,38 @@ const AgendaView = () => {
     }
   };
 
-  // Cálculo das estatísticas dos cards do dashboard
   const overviewStats = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd"); // Formato YYYY-MM-DD para comparação
-
+    const today = format(new Date(), "yyyy-MM-dd");
     const todayAppointments = allAppointments.filter(
       (app) => app.date === today
     );
-
-    const totalToday = todayAppointments.length;
-    const confirmedToday = todayAppointments.filter(
-      (app) => app.status === "confirmed"
-    ).length;
-    const pendingToday = todayAppointments.filter(
-      (app) => app.status === "pending"
-    ).length;
-
-    // Atrasados: Agendamentos confirmados cuja data/hora já passou, mas que não foram marcados como concluídos/cancelados/no-show
     const pastDueAppointments = allAppointments.filter((app) => {
-      const [year, month, day] = app.date.split("-").map(Number);
-      const [hour, minute] = app.time.split(":").map(Number);
-      const appDateTime = new Date(year, month - 1, day, hour, minute); // Mês é 0-indexado
-
+      const appDateTime = new Date(`${app.date}T${app.time}`);
       return app.status === "confirmed" && appDateTime < new Date();
-    }).length;
+    });
 
     return {
-      total: totalToday,
-      confirmed: confirmedToday,
-      pending: pendingToday,
-      pastDue: pastDueAppointments,
+      total: todayAppointments.length,
+      confirmed: todayAppointments.filter((app) => app.status === "confirmed")
+        .length,
+      pending: todayAppointments.filter((app) => app.status === "pending")
+        .length,
+      pastDue: pastDueAppointments.length,
     };
   }, [allAppointments]);
 
-  const renderAppointmentList = (list) => {
+  const renderAppointmentList = (list: Appointment[]) => {
+    if (list.length === 0) {
+      return (
+        <p className="text-center text-gray-400 py-10">
+          Nenhum agendamento encontrado.
+        </p>
+      );
+    }
     return (
       <ul className="space-y-4">
         {list.map((app) => {
-          // Cria a data no fuso horário local para exibição e comparação
-          const [year, month, day] = app.date.split("-").map(Number);
-          const [hour, minute] = app.time.split(":").map(Number);
-          const appointmentDateTime = new Date(
-            year,
-            month - 1,
-            day,
-            hour,
-            minute
-          ); // Mês é 0-indexado
-
+          const appointmentDateTime = new Date(`${app.date}T${app.time}`);
           const isPast = appointmentDateTime < new Date();
           const statusInfo = getStatusInfo(app.status, isPast);
           return (
@@ -631,7 +695,6 @@ const AgendaView = () => {
               <div className="flex items-center mb-4 md:mb-0 flex-grow">
                 <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
                   <p className="text-2xl font-bold text-white">{app.time}</p>
-                  {/* Usa a data construída localmente para formatar */}
                   <p className="text-sm text-gray-400">
                     {format(appointmentDateTime, "dd/MMM", { locale: ptBR })}
                   </p>
@@ -661,18 +724,31 @@ const AgendaView = () => {
                   <span>{statusInfo.text}</span>
                 </div>
                 <div className="flex items-center justify-center gap-2 flex-grow">
-                  {/* Botões para agendamentos PENDENTES */}
                   {app.status === "pending" && (
                     <>
                       <button
-                        onClick={() => handleConfirmAppointment(app)}
+                        onClick={() =>
+                          handleUpdateStatus(
+                            app,
+                            "confirmed",
+                            "Confirmar Agendamento",
+                            `Tem certeza que deseja confirmar o agendamento de "${app.clientName}"?`
+                          )
+                        }
                         className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white transition-colors"
                         title="Confirmar Agendamento"
                       >
                         <Check size={16} />
                       </button>
                       <button
-                        onClick={() => handleCancelAppointment(app)}
+                        onClick={() =>
+                          handleUpdateStatus(
+                            app,
+                            "cancelled",
+                            "Cancelar Agendamento",
+                            `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`
+                          )
+                        }
                         className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"
                         title="Cancelar Agendamento"
                       >
@@ -680,11 +756,17 @@ const AgendaView = () => {
                       </button>
                     </>
                   )}
-                  {/* Botões para agendamentos CONFIRMADOS que já passaram */}
                   {app.status === "confirmed" && isPast && (
                     <>
                       <button
-                        onClick={() => handleNoShowClick(app)}
+                        onClick={() =>
+                          handleUpdateStatus(
+                            app,
+                            "no-show",
+                            "Confirmar Não Comparecimento",
+                            `Tem certeza que deseja marcar o agendamento de "${app.clientName}" como "Não Compareceu"?`
+                          )
+                        }
                         className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"
                         title="Marcar como Não Compareceu"
                       >
@@ -699,10 +781,16 @@ const AgendaView = () => {
                       </button>
                     </>
                   )}
-                  {/* Botão de cancelamento para agendamentos confirmados futuros (opcional, se permitido) */}
                   {app.status === "confirmed" && !isPast && (
                     <button
-                      onClick={() => handleCancelAppointment(app)}
+                      onClick={() =>
+                        handleUpdateStatus(
+                          app,
+                          "cancelled",
+                          "Cancelar Agendamento",
+                          `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`
+                        )
+                      }
                       className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"
                       title="Cancelar Agendamento"
                     >
@@ -737,11 +825,20 @@ const AgendaView = () => {
         />
       )}
 
-      <h2 className="text-3xl font-bold text-white mb-6">
-        Agenda e Solicitações
-      </h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+        <h2 className="text-3xl font-bold text-white mb-4 sm:mb-0">
+          Agenda e Solicitações
+        </h2>
+        <ProfessionalSelector
+          professionals={userProfile?.professionals || []}
+          selectedProfId={selectedProfessionalId}
+          setSelectedProfId={setSelectedProfessionalId}
+          includeAllOption={true}
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Cards de estatísticas */}
         <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-400">Total de Hoje</p>
@@ -811,9 +908,7 @@ const AgendaView = () => {
         renderAppointmentList(upcomingAppointments)
       ) : (
         <div>
-          {/* --- BARRA DE FILTROS --- */}
           <div className="bg-gray-800/50 p-4 rounded-xl mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            {/* Filtro por Profissional */}
             <div>
               <label className="text-sm text-gray-400">Profissional</label>
               <select
@@ -823,7 +918,7 @@ const AgendaView = () => {
                     ...prev,
                     professionalId: e.target.value,
                   }));
-                  setCurrentPage(1); // Reseta a página ao mudar o filtro
+                  setCurrentPage(1);
                 }}
                 className="w-full bg-gray-700 p-2 rounded-md mt-1"
               >
@@ -835,8 +930,6 @@ const AgendaView = () => {
                 ))}
               </select>
             </div>
-
-            {/* Filtro por Cliente */}
             <div>
               <label className="text-sm text-gray-400">Cliente</label>
               <input
@@ -853,8 +946,6 @@ const AgendaView = () => {
                 className="w-full bg-gray-700 p-2 rounded-md mt-1"
               />
             </div>
-
-            {/* Filtro por Data */}
             <div className="md:col-span-2 grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm text-gray-400">De</label>
@@ -886,16 +977,9 @@ const AgendaView = () => {
               </div>
             </div>
           </div>
-
-          {/* --- LISTA E CONTROLES DE PAGINAÇÃO --- */}
-          {loading ? (
-            <p className="text-center text-gray-400 py-10">
-              Carregando histórico...
-            </p>
-          ) : paginatedHistory.length > 0 ? (
+          {paginatedHistory.length > 0 ? (
             <>
               {renderAppointmentList(paginatedHistory)}
-              {/* Controles de Paginação */}
               <div className="flex justify-center items-center mt-6 gap-4">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
@@ -920,7 +1004,7 @@ const AgendaView = () => {
             </>
           ) : (
             <p className="text-center text-gray-400 py-10">
-              Nenhum registro encontrado para os filtros selecionados.
+              Nenhum registo encontrado para os filtros selecionados.
             </p>
           )}
         </div>
@@ -931,7 +1015,6 @@ const AgendaView = () => {
 
 // --- Componente Principal do Dashboard ---
 const ServiceProviderDashboard = () => {
-  const { logout, userProfile } = useAuth();
   const [activeView, setActiveView] = useState("agenda");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
@@ -952,13 +1035,12 @@ const ServiceProviderDashboard = () => {
       case "reviews":
         return <ReviewsManagement />;
       default:
-        return <div></div>;
+        return <AgendaView />; // Padrão para a agenda
     }
   };
 
   return (
     <div className="flex min-h-screen bg-black text-gray-200 font-sans">
-      {/* O modal de confirmação agora é gerenciado dentro de AgendaView */}
       <SideNav
         activeView={activeView}
         setActiveView={setActiveView}
@@ -967,7 +1049,6 @@ const ServiceProviderDashboard = () => {
       />
       <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
         <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
-          {/* --- BOTÃO HAMBÚRGUER --- */}
           <div className="md:hidden flex justify-between items-center mb-6">
             <button
               onClick={() => setIsMobileNavOpen(true)}
@@ -975,10 +1056,8 @@ const ServiceProviderDashboard = () => {
             >
               <Menu size={28} />
             </button>
-            {/* Opcional: Adicionar logo ou nome da página aqui */}
             <span className="text-xl font-bold text-white">Stylo</span>
           </div>
-
           {renderContent()}
         </div>
       </main>

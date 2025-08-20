@@ -143,7 +143,93 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     setSelectedProfessional(null);
   };
 
-  useEffect(() => {
+
+  // COPIE E COLE ESTE BLOCO NO LUGAR DO SEU useEffect ATUAL EM Booking.tsx
+
+useEffect(() => {
+    // Nova função para gerar os horários, compatível com múltiplos intervalos
+    const generateTimeSlots = (
+      workIntervals: { start: string; end: string }[],
+      breakIntervals: { start: string; end: string }[],
+      bookedIntervals: { start: Date; end: Date }[],
+      serviceDuration: number,
+      date: Date
+    ) => {
+      const slots: TimeSlot[] = [];
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+
+      if (!workIntervals || workIntervals.length === 0) {
+        return [];
+      }
+
+      // 1. Itera sobre cada intervalo de TRABALHO do dia
+      workIntervals.forEach(workInterval => {
+        if (!workInterval.start || !workInterval.end) return;
+
+        const workStartTime = new Date(date);
+        const [startHour, startMinute] = workInterval.start.split(':').map(Number);
+        workStartTime.setHours(startHour, startMinute, 0, 0);
+
+        const workEndTime = new Date(date);
+        const [endHour, endMinute] = workInterval.end.split(':').map(Number);
+        workEndTime.setHours(endHour, endMinute, 0, 0);
+
+        let currentTime = new Date(workStartTime);
+
+        while (currentTime < workEndTime) {
+          const slotStartTime = new Date(currentTime);
+          const slotEndTime = new Date(slotStartTime.getTime() + serviceDuration * 60000);
+
+          if (slotEndTime > workEndTime) {
+            break;
+          }
+
+          const timeString = slotStartTime.toTimeString().substring(0, 5);
+          let status: TimeSlot['status'] = 'available';
+
+          // 2. Verifica se o horário já passou
+          if (isToday && slotStartTime < now) {
+            status = 'past';
+          } else {
+            // 3. Verifica se o horário colide com ALGUM intervalo de PAUSA
+            const isInBreak = breakIntervals.some(breakInterval => {
+              if (!breakInterval.start || !breakInterval.end) return false;
+
+              const breakStartTimeObj = new Date(date);
+              const [breakStartHour, breakStartMinute] = breakInterval.start.split(':').map(Number);
+              breakStartTimeObj.setHours(breakStartHour, breakStartMinute, 0, 0);
+
+              const breakEndTimeObj = new Date(date);
+              const [breakEndHour, breakEndMinute] = breakInterval.end.split(':').map(Number);
+              breakEndTimeObj.setHours(breakEndHour, breakEndMinute, 0, 0);
+
+              return slotStartTime < breakEndTimeObj && slotEndTime > breakStartTimeObj;
+            });
+
+            if (isInBreak) status = 'break';
+            
+            // 4. Verifica se o horário colide com ALGUM agendamento existente
+            const isOverlapping = bookedIntervals.some(bookedInterval =>
+              slotStartTime < bookedInterval.end && slotEndTime > bookedInterval.start
+            );
+
+            if (isOverlapping) status = 'booked';
+          }
+          
+          slots.push({ time: timeString, status });
+          currentTime.setMinutes(currentTime.getMinutes() + 15); // Intervalo de verificação de slots
+        }
+      });
+
+      // Remove horários duplicados caso os intervalos de trabalho sejam sobrepostos
+      const uniqueSlots = slots.filter((slot, index, self) =>
+          index === self.findIndex((s) => s.time === slot.time)
+      );
+
+      return uniqueSlots;
+    };
+
     const fetchAvailableTimes = async () => {
       setTimeSlots([]);
       setSelectedTime('');
@@ -157,38 +243,23 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       }
 
       setLoadingTimes(true);
-
       try {
-        const dayKey = (selectedDate as Date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof Availability;
-        const dayAvailability = selectedProfessional.availability?.[dayKey];
+        // LÓGICA CORRIGIDA PARA LER A DISPONIBILIDADE EM FORMATO DE ARRAY
+        const dayKey = (selectedDate as Date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        
+        // Assegura que estamos tratando a disponibilidade como um array
+        const professionalAvailability = selectedProfessional.availability as unknown as DayAvailability[]; // DayAvailability de types.ts
+        const dayAvailability = professionalAvailability?.find(d => d.dayOfWeek === dayKey);
 
-        if (!dayAvailability || !dayAvailability.active) {
+        // A propriedade correta é `isDayOff`, não `active`
+        if (!dayAvailability || dayAvailability.isDayOff) {
           setAvailabilityMessage('O profissional não atende neste dia da semana.');
+          setTimeSlots([]);
+          setLoadingTimes(false);
           return;
         }
 
-        const [startHour, startMinute] = dayAvailability.startTime.split(':').map(Number);
-        const [endHour, endMinute] = dayAvailability.endTime.split(':').map(Number);
-
-        const slots: TimeSlot[] = [];
-        let currentTime = new Date(selectedDate as Date);
-        currentTime.setHours(startHour, startMinute, 0, 0);
-
-        let endTime = new Date(selectedDate as Date);
-        endTime.setHours(endHour, endMinute, 0, 0);
-
-        let breakStartTimeObj: Date | null = null;
-        let breakEndTimeObj: Date | null = null;
-        if (dayAvailability.breakStartTime && dayAvailability.breakEndTime) {
-          const [breakStartHour, breakStartMinute] = dayAvailability.breakStartTime.split(':').map(Number);
-          breakStartTimeObj = new Date(selectedDate as Date);
-          breakStartTimeObj.setHours(breakStartHour, breakStartMinute, 0, 0);
-
-          const [breakEndHour, breakEndMinute] = dayAvailability.breakEndTime.split(':').map(Number);
-          breakEndTimeObj = new Date(selectedDate as Date);
-          breakEndTimeObj.setHours(breakEndHour, breakEndMinute, 0, 0);
-        }
-
+        // Busca os agendamentos existentes para aquele dia
         const q = query(
           collection(db, 'appointments'),
           where('serviceProviderId', '==', establishment.uid),
@@ -196,59 +267,38 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
           where('date', '==', (selectedDate as Date).toISOString().split('T')[0])
         );
         const querySnapshot = await getDocs(q);
-
-        const bookedIntervals: { start: Date, end: Date }[] = [];
+        const bookedIntervals: { start: Date; end: Date }[] = [];
         querySnapshot.docs.forEach(doc => {
-          const appointment = doc.data() as Appointment;
-          const professionalForBooking = (establishment.professionals as ProfessionalWithAvailability[])?.find(p => p.id === appointment.professionalId);
-          const durationOfBooking = appointment.serviceIds.reduce((acc, serviceId) => {
-            const service = professionalForBooking?.services.find(s => s.id === serviceId);
-            return acc + (service?.duration || 0);
-          }, 0);
+            const appointment = doc.data() as Appointment;
+            const durationOfBooking = appointment.serviceIds.reduce((acc, serviceId) => {
+                const service = allServices.find(s => s.id === serviceId);
+                return acc + (service?.duration || 0);
+            }, 0);
 
-          if (durationOfBooking > 0) {
-            const [hour, minute] = appointment.time.split(':').map(Number);
-            const startDate = new Date(selectedDate as Date);
-            startDate.setHours(hour, minute, 0, 0);
-            const endDate = new Date(startDate.getTime() + durationOfBooking * 60000);
-            bookedIntervals.push({ start: startDate, end: endDate });
-          }
+            if (durationOfBooking > 0) {
+                const [hour, minute] = appointment.time.split(':').map(Number);
+                const startDate = new Date(selectedDate as Date);
+                startDate.setHours(hour, minute, 0, 0);
+                const endDate = new Date(startDate.getTime() + durationOfBooking * 60000);
+                bookedIntervals.push({ start: startDate, end: endDate });
+            }
         });
 
-        const now = new Date();
-        const isToday = (selectedDate as Date).toDateString() === now.toDateString();
+        // Chama a nova função para gerar os horários, passando os intervalos corretos
+        const finalSlots = generateTimeSlots(
+          dayAvailability.workIntervals,
+          dayAvailability.breakIntervals,
+          bookedIntervals,
+          totalDuration,
+          selectedDate as Date
+        );
 
-        while (currentTime.getTime() < endTime.getTime()) {
-          const timeString = currentTime.toTimeString().substring(0, 5);
-          const slotEndTime = new Date(currentTime.getTime() + totalDuration * 60000);
+        setTimeSlots(finalSlots);
 
-          const isInBreak = breakStartTimeObj && breakEndTimeObj && (
-            (currentTime.getTime() < breakEndTimeObj.getTime() && slotEndTime.getTime() > breakStartTimeObj.getTime())
-          );
-
-          const isOverlapping = bookedIntervals.some(interval =>
-            currentTime.getTime() < interval.end.getTime() && slotEndTime.getTime() > interval.start.getTime()
-          );
-
-          const isPast = isToday && currentTime.getTime() < now.getTime();
-
-          let status: 'available' | 'booked' | 'break' | 'past' = 'available';
-          if (isPast) status = 'past';
-          else if (isOverlapping) status = 'booked';
-          else if (isInBreak) status = 'break';
-
-          if (slotEndTime.getTime() <= endTime.getTime()) {
-            slots.push({ time: timeString, status: status });
-          }
-
-          currentTime.setMinutes(currentTime.getMinutes() + 15);
-        }
-
-        if (slots.filter(s => s.status === 'available').length === 0) {
+        if (finalSlots.filter(s => s.status === 'available').length === 0) {
           setAvailabilityMessage('Não foram encontrados horários disponíveis para este dia e duração.');
         }
 
-        setTimeSlots(slots);
       } catch (error) {
         console.error("Erro ao procurar horários:", error);
         setAvailabilityMessage('Ocorreu um erro ao carregar os horários.');
@@ -258,7 +308,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     };
 
     fetchAvailableTimes();
-  }, [selectedDate, selectedServices, selectedProfessional, establishment, totalDuration]);
+}, [selectedDate, selectedServices, selectedProfessional, establishment, totalDuration, allServices]);
 
   const handleBookAppointment = useCallback(async () => {
     // CORREÇÃO: Verifica tanto o usuário de autenticação quanto o perfil do app.

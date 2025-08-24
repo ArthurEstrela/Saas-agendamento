@@ -15,7 +15,7 @@ import "../Calendar.css"; // Mantenha seu CSS customizado para o calendário
 import { useToast } from "../context/ToastContext";
 import type { UserProfile, Service, Appointment, Professional } from "../types";
 import { useNavigate, useLocation } from "react-router-dom";
-import LoginModal from './LoginModal';
+import LoginModal from "./LoginModal";
 import {
   ArrowLeft,
   User,
@@ -33,9 +33,10 @@ import {
 } from "lucide-react";
 
 interface DayAvailability {
-    dayOfWeek: string; isDayOff: boolean;
-    workIntervals: { start: string; end: string }[];
-    breakIntervals: { start: string; end: string }[];
+  dayOfWeek: string;
+  isDayOff: boolean;
+  workIntervals: { start: string; end: string }[];
+  breakIntervals: { start: string; end: string }[];
 }
 
 // Interfaces locais para compatibilidade com a estrutura de dados usada no seu projeto
@@ -58,7 +59,8 @@ interface Availability {
 }
 
 interface ProfessionalWithAvailability extends Professional {
-    services: Service[]; availability?: DayAvailability[];
+  services: Service[];
+  availability?: DayAvailability[];
 }
 
 // Tipos para o calendário
@@ -67,24 +69,26 @@ type Value = ValuePiece | [ValuePiece, ValuePiece];
 
 // Interface para um slot de horário
 interface TimeSlot {
-  time: string; status: 'available' | 'booked' | 'break' | 'past';
+  time: string;
+  status: "available" | "booked" | "break" | "past";
 }
 
 // Propriedades do componente Booking
 interface BookingProps {
-  professional: UserProfile; onBack?: () => void;
+  professional: UserProfile;
+  onBack?: () => void;
 }
 
 // Definição das etapas do agendamento
 const bookingSteps = [
-  { id: 1, name: 'Serviços', icon: Scissors },
-  { id: 2, name: 'Profissional', icon: User },
-  { id: 3, name: 'Data & Hora', icon: CalendarIcon },
-  { id: 4, name: 'Confirmar', icon: CheckCircle },
+  { id: 1, name: "Serviços", icon: Scissors },
+  { id: 2, name: "Profissional", icon: User },
+  { id: 3, name: "Data & Hora", icon: CalendarIcon },
+  { id: 4, name: "Confirmar", icon: CheckCircle },
 ];
 
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
-  const { currentUser, userProfile } = useAuth(); 
+  const { currentUser, userProfile } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -93,41 +97,55 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isAwaitingLogin, setIsAwaitingLogin] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [selectedProfessional, setSelectedProfessional] = useState<ProfessionalWithAvailability | null>(null);
+  const [selectedProfessional, setSelectedProfessional] =
+    useState<ProfessionalWithAvailability | null>(null);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState<Value>(new Date());
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
-  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [selectedTime, setSelectedTime] = useState<string>("");
   const [isBooking, setIsBooking] = useState(false);
-  const [availabilityMessage, setAvailabilityMessage] = useState('');
+  const [availabilityMessage, setAvailabilityMessage] = useState("");
 
   const { totalDuration, totalPrice } = useMemo(() => {
-    return selectedServices.reduce((acc, service) => {
+    return selectedServices.reduce(
+      (acc, service) => {
         acc.totalDuration += service.duration || 0;
         acc.totalPrice += service.price || 0;
         return acc;
-      }, { totalDuration: 0, totalPrice: 0 });
+      },
+      { totalDuration: 0, totalPrice: 0 }
+    );
   }, [selectedServices]);
-  
- const allServices = useMemo(() => {
+
+  const allServices = useMemo(() => {
     if (!establishment?.professionals) return [];
     const serviceMap = new Map<string, Service>();
-    (establishment.professionals as ProfessionalWithAvailability[]).forEach(prof => {
-      (prof.services || []).forEach(service => {
-        if (!serviceMap.has(service.id)) serviceMap.set(service.id, service);
-      });
-    });
+    (establishment.professionals as ProfessionalWithAvailability[]).forEach(
+      (prof) => {
+        (prof.services || []).forEach((service) => {
+          if (!serviceMap.has(service.id)) serviceMap.set(service.id, service);
+        });
+      }
+    );
     return Array.from(serviceMap.values());
   }, [establishment]);
 
-    const professionalsForSelectedServices = useMemo(() => {
-    if (!establishment?.professionals || selectedServices.length === 0) return (establishment.professionals as ProfessionalWithAvailability[]) || [];
-    return (establishment.professionals as ProfessionalWithAvailability[]).filter(prof =>
-      selectedServices.every(selService => (prof.services || []).some(profService => profService.id === selService.id))
+  const professionalsForSelectedServices = useMemo(() => {
+    if (!establishment?.professionals || selectedServices.length === 0)
+      return (
+        (establishment.professionals as ProfessionalWithAvailability[]) || []
+      );
+    return (
+      establishment.professionals as ProfessionalWithAvailability[]
+    ).filter((prof) =>
+      selectedServices.every((selService) =>
+        (prof.services || []).some(
+          (profService) => profService.id === selService.id
+        )
+      )
     );
   }, [establishment, selectedServices]);
-
 
   useEffect(() => {
     setSelectedDate(new Date());
@@ -136,12 +154,14 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     setAvailabilityMessage("");
   }, [selectedProfessional]);
 
-   const handleToggleService = (service: Service) => {
-    setSelectedServices(prev => {
-      const isSelected = prev.some(s => s.id === service.id);
-      return isSelected ? prev.filter(s => s.id !== service.id) : [...prev, service];
+  const handleToggleService = (service: Service) => {
+    setSelectedServices((prev) => {
+      const isSelected = prev.some((s) => s.id === service.id);
+      return isSelected
+        ? prev.filter((s) => s.id !== service.id)
+        : [...prev, service];
     });
-    setSelectedTime('');
+    setSelectedTime("");
     setSelectedProfessional(null);
   };
 
@@ -253,10 +273,16 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
           .toLocaleDateString("en-US", { weekday: "long" })
           .toLowerCase();
 
-        const professionalAvailability =
-          selectedProfessional.availability as unknown as DayAvailability[];
-        const dayAvailability = professionalAvailability?.find(
-          (d) => d.dayOfWeek === dayKey
+        const professionalAvailability = selectedProfessional.availability;
+
+        const availabilityArray = Array.isArray(professionalAvailability)
+          ? professionalAvailability
+          : professionalAvailability
+          ? [professionalAvailability]
+          : [];
+
+        const dayAvailability = availabilityArray.find(
+          (d) => d.dayOfWeek.toLowerCase() === dayKey
         );
 
         if (!dayAvailability || dayAvailability.isDayOff) {
@@ -325,57 +351,80 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     allServices,
   ]);
 
-     const handleBookAppointment = useCallback(async () => {
+  const handleBookAppointment = useCallback(async () => {
     if (!currentUser || !userProfile) {
-      showToast("Faça login para finalizar o agendamento.", 'info');
+      showToast("Faça login para finalizar o agendamento.", "info");
       setIsAwaitingLogin(true);
       setIsLoginModalOpen(true);
       return;
     }
 
-    if (!selectedProfessional || selectedServices.length === 0 || !selectedTime || !selectedDate || Array.isArray(selectedDate)) {
-      showToast("Por favor, preencha todos os campos necessários.", 'error');
+    if (
+      !selectedProfessional ||
+      selectedServices.length === 0 ||
+      !selectedTime ||
+      !selectedDate ||
+      Array.isArray(selectedDate)
+    ) {
+      showToast("Por favor, preencha todos os campos necessários.", "error");
       return;
     }
 
     setIsBooking(true);
-    const startTime = new Date(`${(selectedDate as Date).toISOString().split('T')[0]}T${selectedTime}`);
+    const startTime = new Date(
+      `${(selectedDate as Date).toISOString().split("T")[0]}T${selectedTime}`
+    );
     const endTime = new Date(startTime.getTime() + totalDuration * 60000);
 
-    const newAppointmentData: Omit<Appointment, 'id'> = {
+    const newAppointmentData: Omit<Appointment, "id"> = {
       clientId: userProfile.uid,
       serviceProviderId: establishment.uid,
       professionalId: selectedProfessional.id,
-      serviceIds: selectedServices.map(s => s.id),
-      date: (selectedDate as Date).toISOString().split('T')[0],
+      serviceIds: selectedServices.map((s) => s.id),
+      date: (selectedDate as Date).toISOString().split("T")[0],
       startTime: selectedTime,
       endTime: endTime.toTimeString().substring(0, 5),
-      status: 'scheduled',
-      createdAt: Timestamp.now(), 
+      status: "scheduled",
+      createdAt: Timestamp.now(),
       price: totalPrice,
-      serviceName: selectedServices.map(s => s.name).join(', '),
+      serviceName: selectedServices.map((s) => s.name).join(", "),
       professionalName: selectedProfessional.name,
-      clientName: userProfile.name || userProfile.displayName || 'Cliente',
+      clientName: userProfile.name || userProfile.displayName || "Cliente",
       duration: totalDuration,
     };
 
     try {
-      await addDoc(collection(db, 'appointments'), newAppointmentData);
-      showToast('Agendamento realizado com sucesso!', 'success');
+      await addDoc(collection(db, "appointments"), newAppointmentData);
+      showToast("Agendamento realizado com sucesso!", "success");
       // --- CORREÇÃO NA NAVEGAÇÃO ---
       // Garante que o estado seja passado corretamente para o ClientDashboard
-      navigate('/booking', { state: { view: 'myAppointments' }, replace: true });
+      navigate("/booking", {
+        state: { view: "myAppointments" },
+        replace: true,
+      });
     } catch (error) {
       console.error("Erro ao agendar:", error);
-      showToast('Erro ao agendar. Tente novamente.', 'error');
+      showToast("Erro ao agendar. Tente novamente.", "error");
     } finally {
       setIsBooking(false);
     }
-  }, [currentUser, userProfile, establishment.uid, navigate, selectedDate, selectedProfessional, selectedServices, selectedTime, showToast, totalDuration, totalPrice]);
+  }, [
+    currentUser,
+    userProfile,
+    establishment.uid,
+    navigate,
+    selectedDate,
+    selectedProfessional,
+    selectedServices,
+    selectedTime,
+    showToast,
+    totalDuration,
+    totalPrice,
+  ]);
 
-   useEffect(() => {
+  useEffect(() => {
     if (isAwaitingLogin && currentUser && userProfile) {
-      showToast('Finalizando seu agendamento...', 'info');
+      showToast("Finalizando seu agendamento...", "info");
       setIsAwaitingLogin(false);
       handleBookAppointment();
     }
@@ -821,7 +870,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
 
   return (
     <>
-    <LoginModal 
+      <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => {
           setIsLoginModalOpen(false);
@@ -831,107 +880,107 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
           // A lógica de finalização agora está no useEffect
         }}
       />
-    <div className="min-h-screen bg-gray-950 text-gray-200 font-sans p-4 md:p-8">
-      {onBack && (
-        <header className="flex items-center mb-10">
-          <button
-            onClick={onBack}
-            className="flex items-center space-x-2 text-[#daa520] hover:text-yellow-300 font-semibold transition-colors duration-200"
-          >
-            <ArrowLeft className="h-6 w-6" />
-            <span>Voltar para a Busca</span>
-          </button>
-        </header>
-      )}
+      <div className="min-h-screen bg-gray-950 text-gray-200 font-sans p-4 md:p-8">
+        {onBack && (
+          <header className="flex items-center mb-10">
+            <button
+              onClick={onBack}
+              className="flex items-center space-x-2 text-[#daa520] hover:text-yellow-300 font-semibold transition-colors duration-200"
+            >
+              <ArrowLeft className="h-6 w-6" />
+              <span>Voltar para a Busca</span>
+            </button>
+          </header>
+        )}
 
-      <main className="max-w-3xl mx-auto bg-gray-900 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 animate-fade-in-down">
-        <div className="text-center mb-8">
-          <img
-            src={
-              establishment.photoURL ||
-              "https://placehold.co/150x150/1F2937/4B5563?text=Foto"
-            }
-            alt={`Foto de ${establishment.companyName}`}
-            className="h-28 w-28 rounded-full object-cover mx-auto mb-4 border-4 border-[#daa520] shadow-lg shadow-[#daa520]/20"
-          />
-          <h1 className="text-3xl font-bold text-white">Agendar em</h1>
-          <p className="text-2xl text-[#daa520] font-semibold">
-            {establishment.companyName}
-          </p>
-        </div>
+        <main className="max-w-3xl mx-auto bg-gray-900 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 animate-fade-in-down">
+          <div className="text-center mb-8">
+            <img
+              src={
+                establishment.photoURL ||
+                "https://placehold.co/150x150/1F2937/4B5563?text=Foto"
+              }
+              alt={`Foto de ${establishment.companyName}`}
+              className="h-28 w-28 rounded-full object-cover mx-auto mb-4 border-4 border-[#daa520] shadow-lg shadow-[#daa520]/20"
+            />
+            <h1 className="text-3xl font-bold text-white">Agendar em</h1>
+            <p className="text-2xl text-[#daa520] font-semibold">
+              {establishment.companyName}
+            </p>
+          </div>
 
-        <div className="mb-10 relative flex justify-between items-center after:absolute after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-1 after:bg-gray-700 after:z-0">
-          <div
-            className="absolute top-1/2 left-0 h-1 bg-[#daa520] z-10 transition-all duration-500 ease-in-out rounded-full"
-            style={{ width: `${progressPercentage}%` }}
-          ></div>
-          {bookingSteps.map((step) => {
-            const isActive = currentStep >= step.id;
-            return (
-              <div key={step.id} className="flex flex-col items-center z-20">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold transition-all duration-300 ease-in-out transform ${
-                    isActive
-                      ? "bg-[#daa520] scale-110 shadow-md shadow-[#daa520]/30"
-                      : "bg-gray-700 scale-100 border-2 border-gray-600"
-                  }`}
-                >
-                  <step.icon
-                    className={`h-5 w-5 ${
-                      isActive ? "text-gray-900" : "text-gray-400"
+          <div className="mb-10 relative flex justify-between items-center after:absolute after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-1 after:bg-gray-700 after:z-0">
+            <div
+              className="absolute top-1/2 left-0 h-1 bg-[#daa520] z-10 transition-all duration-500 ease-in-out rounded-full"
+              style={{ width: `${progressPercentage}%` }}
+            ></div>
+            {bookingSteps.map((step) => {
+              const isActive = currentStep >= step.id;
+              return (
+                <div key={step.id} className="flex flex-col items-center z-20">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold transition-all duration-300 ease-in-out transform ${
+                      isActive
+                        ? "bg-[#daa520] scale-110 shadow-md shadow-[#daa520]/30"
+                        : "bg-gray-700 scale-100 border-2 border-gray-600"
                     }`}
-                  />
+                  >
+                    <step.icon
+                      className={`h-5 w-5 ${
+                        isActive ? "text-gray-900" : "text-gray-400"
+                      }`}
+                    />
+                  </div>
+                  <p
+                    className={`text-xs mt-2 font-semibold transition-colors duration-300 ${
+                      isActive ? "text-[#daa520]" : "text-gray-400"
+                    }`}
+                  >
+                    {step.name}
+                  </p>
                 </div>
-                <p
-                  className={`text-xs mt-2 font-semibold transition-colors duration-300 ${
-                    isActive ? "text-[#daa520]" : "text-gray-400"
-                  }`}
-                >
-                  {step.name}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
 
-        <div className="bg-gray-800 p-6 md:p-8 rounded-xl border border-gray-700 shadow-xl min-h-[400px] flex flex-col justify-between">
-          {renderStepContent()}
-        </div>
+          <div className="bg-gray-800 p-6 md:p-8 rounded-xl border border-gray-700 shadow-xl min-h-[400px] flex flex-col justify-between">
+            {renderStepContent()}
+          </div>
 
-        <div className="flex justify-between mt-8">
-          {currentStep > 1 && (
-            <button
-              onClick={handlePreviousStep}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2"
-            >
-              <ArrowLeft size={20} /> Anterior
-            </button>
-          )}
-          {currentStep < bookingSteps.length && (
-            <button
-              onClick={handleNextStep}
-              className={`ml-auto bg-[#daa520] hover:bg-[#c8961e] text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2 shadow-md shadow-[#daa520]/20 transform hover:scale-105`}
-            >
-              Próximo <ChevronRight size={20} />
-            </button>
-          )}
-          {currentStep === bookingSteps.length && (
-            <button
-              onClick={handleBookAppointment}
-              disabled={isBooking}
-              className="ml-auto bg-[#daa520] hover:bg-[#c8961e] text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2 shadow-md shadow-[#daa520]/20 transform hover:scale-105 disabled:bg-gray-500 disabled:text-gray-300"
-            >
-              {isBooking ? (
-                <Loader2 className="animate-spin h-5 w-5" />
-              ) : (
-                <CheckCircle className="h-5 w-5" />
-              )}
-              {isBooking ? "Agendando..." : "Confirmar e Agendar"}
-            </button>
-          )}
-        </div>
-      </main>
-    </div>
+          <div className="flex justify-between mt-8">
+            {currentStep > 1 && (
+              <button
+                onClick={handlePreviousStep}
+                className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2"
+              >
+                <ArrowLeft size={20} /> Anterior
+              </button>
+            )}
+            {currentStep < bookingSteps.length && (
+              <button
+                onClick={handleNextStep}
+                className={`ml-auto bg-[#daa520] hover:bg-[#c8961e] text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2 shadow-md shadow-[#daa520]/20 transform hover:scale-105`}
+              >
+                Próximo <ChevronRight size={20} />
+              </button>
+            )}
+            {currentStep === bookingSteps.length && (
+              <button
+                onClick={handleBookAppointment}
+                disabled={isBooking}
+                className="ml-auto bg-[#daa520] hover:bg-[#c8961e] text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2 shadow-md shadow-[#daa520]/20 transform hover:scale-105 disabled:bg-gray-500 disabled:text-gray-300"
+              >
+                {isBooking ? (
+                  <Loader2 className="animate-spin h-5 w-5" />
+                ) : (
+                  <CheckCircle className="h-5 w-5" />
+                )}
+                {isBooking ? "Agendando..." : "Confirmar e Agendar"}
+              </button>
+            )}
+          </div>
+        </main>
+      </div>
     </>
   );
 };

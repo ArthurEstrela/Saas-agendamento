@@ -473,6 +473,10 @@ const AgendaView = () => {
 
     const upcoming = filtered
       .filter((app) => {
+        // Add this check to prevent the error
+        if (!app.date || !app.time) {
+          return false;
+        }
         const [year, month, day] = app.date.split("-").map(Number);
         const [hour, minute] = app.time.split(":").map(Number);
         const appDateTime = new Date(year, month - 1, day, hour, minute);
@@ -489,6 +493,10 @@ const AgendaView = () => {
 
     const history = filtered
       .filter((app) => {
+        // Add this check here as well
+        if (!app.date || !app.time) {
+          return false;
+        }
         const [year, month, day] = app.date.split("-").map(Number);
         const [hour, minute] = app.time.split(":").map(Number);
         const appDateTime = new Date(year, month - 1, day, hour, minute);
@@ -505,7 +513,6 @@ const AgendaView = () => {
 
     return { upcomingAppointments: upcoming, historyAppointments: history };
   }, [allAppointments, selectedProfessionalId]);
-
   const filteredHistoryAppointments = useMemo(() => {
     let filtered = historyAppointments;
     if (historyFilters.professionalId !== "todos") {

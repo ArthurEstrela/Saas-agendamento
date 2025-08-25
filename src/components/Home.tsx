@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { TrendingUp } from 'lucide-react';
+
 
 // Componente Wrapper para Animação de Scroll
 const AnimateOnScroll = ({ children, delay = 0, className = '' }) => {
@@ -75,7 +75,8 @@ const FeatureCard = ({ icon, title, description }) => (
 );
 
 const Home = () => {
-  const { currentUser } = useAuth();
+  
+
   
   return (
     <div className="bg-black text-white overflow-x-hidden">

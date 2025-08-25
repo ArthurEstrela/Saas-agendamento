@@ -1,75 +1,147 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import MainAppContent from './components/MainAppContent';
-import PublicBookingPage from './components/PublicBookingPage';
-import Home from './components/Home';
-import Login from './components/Login';
-import AppLayout from './components/AppLayout';
-import Dashboard from './components/Dashboard';
-import TermsOfUse from './components/TermsOfUse';
-import PrivacyPolicy from './components/PrivacyPolicy';
-import FAQ from './components/FAQ';
-import AboutUs from './components/AboutUs';
-import Contact from './components/Contact';
-import ClientDashboard from './components/ClientDashboard';
+// src/App.tsx
 
-// Componente para proteger rotas que exigem autenticação
-const ProtectedRoute = ({ children }) => {
-  const { currentUser } = useAuth();
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase/config'; // Revertido para caminho relativo
+import { useAuthStore } from './store/authStore'; // Revertido para caminho relativo
+import type { UserProfile } from './types'; // Revertido para caminho relativo
+
+// Importação dos seus componentes de página
+import Home from './components/Home'; // Revertido
+import Login from './components/Login'; // Revertido
+import AppLayout from './components/AppLayout'; // Revertido
+import Dashboard from './components/Dashboard'; // Revertido
+import TermsOfUse from './components/TermsOfUse'; // Revertido
+import PrivacyPolicy from './components/PrivacyPolicy'; // Revertido
+import FAQ from './components/FAQ'; // Revertido
+import AboutUs from './components/AboutUs'; // Revertido
+import Contact from './components/Contact'; // Revertido
+import ClientDashboard from './components/ClientDashboard'; // Revertido
+import PublicBookingPage from './components/PublicBookingPage'; // Revertido
+
+/**
+ * Componente para proteger rotas que exigem autenticação.
+ * Ele verifica o estado do usuário no store do Zustand.
+ */
+const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+  const currentUser = useAuthStore((state) => state.user);
+  const loading = useAuthStore((state) => state.loading);
+
+  if (loading) {
+    // Enquanto verifica a autenticação, não renderiza nada ou mostra um loader
+    return null; 
+  }
+
   if (!currentUser) {
-    // Redireciona para a página de login se o usuário não estiver autenticado
+    // Se não houver usuário após a verificação, redireciona para o login
     return <Navigate to="/login" replace />;
   }
+
+  // Se o usuário estiver autenticado, renderiza o componente filho
   return children;
 };
 
-// Componente para redirecionar usuários autenticados da página de login
+/**
+ * Componente para a rota de login.
+ * Se o usuário já estiver logado, redireciona para o dashboard.
+ */
 const LoginRedirect = () => {
-  const { currentUser } = useAuth();
+  const currentUser = useAuthStore((state) => state.user);
+  const loading = useAuthStore((state) => state.loading);
+
+  if (loading) {
+    return null; // Evita piscar a tela de login enquanto carrega
+  }
+
   if (currentUser) {
-    // Redireciona para o dashboard se o usuário já estiver autenticado
+    // Se o usuário já estiver logado, redireciona
     return <Navigate to="/dashboard" replace />;
   }
+
+  // Caso contrário, mostra a página de login
   return <Login />;
 };
 
+/**
+ * Componente principal da aplicação.
+ * Gerencia o listener de autenticação e define as rotas.
+ */
 const App = () => {
+  // Pega as ações e o estado de 'loading' do nosso store
+  const { setUser, setUserProfile, setLoading, loading } = useAuthStore();
+
+  // Este useEffect é o coração da autenticação.
+  // Ele roda apenas uma vez e monitora o estado do usuário.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // 1. Usuário está logado. Define o usuário no store.
+        setUser(user);
+        
+        // 2. Busca o perfil do usuário no Firestore.
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          // 3. Se o perfil existe, salva no store.
+          setUserProfile(userDocSnap.data() as UserProfile);
+        } else {
+          // Perfil não encontrado (pode ser um novo usuário ou um erro).
+          console.warn("Documento do usuário não encontrado no Firestore!");
+          setUserProfile(null);
+        }
+      } else {
+        // Usuário deslogou. Limpa todos os dados do usuário no store.
+        setUser(null);
+        setUserProfile(null);
+      }
+      // 4. Finaliza o estado de carregamento inicial.
+      setLoading(false);
+    });
+
+    // Função de limpeza para remover o listener quando o componente desmontar.
+    return () => unsubscribe();
+  }, [setUser, setUserProfile, setLoading]); // Dependências do useEffect
+
+  // Mostra um loader global enquanto a verificação inicial está acontecendo.
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-950 text-white">
+        Carregando...
+      </div>
+    );
+  }
+
+  // Após a verificação, renderiza as rotas da aplicação.
   return (
-    <AuthProvider>
-      <Routes>
-        {/* Rotas Públicas com Header e Footer (páginas de marketing, etc.) */}
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/termos-de-uso" element={<TermsOfUse />} />
-          <Route path="/privacidade" element={<PrivacyPolicy />} />
-          <Route path="/faq" element={<FAQ />} />
-          <Route path="/sobre-nos" element={<AboutUs />} />
-          <Route path="/contato" element={<Contact />} />
-        </Route>
+    <Routes>
+      {/* Rotas Públicas com o layout principal (Header/Footer) */}
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/termos-de-uso" element={<TermsOfUse />} />
+        <Route path="/privacidade" element={<PrivacyPolicy />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/sobre-nos" element={<AboutUs />} />
+        <Route path="/contato" element={<Contact />} />
+      </Route>
 
-        {/* Rotas da Aplicação (sem o layout de marketing) */}
-        <Route path="/login" element={<LoginRedirect />} />
-        
-        {/* Rota principal para o cliente (convidado ou logado) */}
-        {/* Agora, /booking leva ao ClientDashboard, onde a funcionalidade de agendamento é integrada */}
-        <Route path="/booking" element={<ClientDashboard />} />
-
-        {/* Rota de Agendamento para um profissional específico (pública) */}
-        {/* Esta rota permanece para permitir que usuários não autenticados agendem diretamente via um link público */}
-        <Route path="/agendar/:professionalId" element={<PublicBookingPage />} />
-        
-        {/* Rota Protegida para o Dashboard (decide entre cliente e profissional) */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } 
-        />
-        
-      </Routes>
-    </AuthProvider>
+      {/* Rotas que não usam o AppLayout padrão */}
+      <Route path="/login" element={<LoginRedirect />} />
+      <Route path="/booking" element={<ClientDashboard />} />
+      <Route path="/agendar/:professionalId" element={<PublicBookingPage />} />
+      
+      {/* Rota Protegida para o Dashboard */}
+      <Route 
+        path="/dashboard" 
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+    </Routes>
   );
 };
 

@@ -8,6 +8,8 @@ import { useToast } from '../../context/ToastContext';
 import type { Appointment, UserProfile, Professional, Service } from '../../types';
 import ClientAppointmentCard from './ClientAppointmentCard';
 import { Loader2 } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
+
 
 interface ClientMyAppointmentsSectionProps {
   handleCancelAppointment: (appointmentId: string) => void;
@@ -20,7 +22,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
   handleOpenReviewModal,
   setActiveView,
 }) => {
-  const { currentUser } = useAuth();
+  const currentUser = useAuthStore((state) => state.user);
   const { showToast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);

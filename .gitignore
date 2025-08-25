@@ -29,6 +29,8 @@ dist-ssr
 .firebase
 firebase-debug.log
 
+firebase-messaging-sw.js
+
 # Firebase Functions
 functions/node_modules
 functions/lib

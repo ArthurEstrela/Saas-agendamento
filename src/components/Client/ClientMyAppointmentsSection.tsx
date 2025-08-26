@@ -3,12 +3,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
 import type { Appointment, UserProfile, Professional, Service } from '../../types';
 import ClientAppointmentCard from './ClientAppointmentCard';
 import { Loader2 } from 'lucide-react';
-import { useAuthStore } from '../../store/authStore';
 
 
 interface ClientMyAppointmentsSectionProps {
@@ -22,21 +21,21 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
   handleOpenReviewModal,
   setActiveView,
 }) => {
-  const currentUser = useAuthStore((state) => state.user);
+  const user = useAuthStore((state) => state.user);
   const { showToast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   const [appointmentSubTab, setAppointmentSubTab] = useState<'upcoming' | 'history'>('upcoming');
 
   useEffect(() => {
-    if (!currentUser?.uid) {
+    if (!user?.uid) {
       setAppointments([]);
       setLoadingAppointments(false);
       return;
     }
 
     setLoadingAppointments(true);
-    const q = query(collection(db, 'appointments'), where('clientId', '==', currentUser.uid));
+    const q = query(collection(db, 'appointments'), where('clientId', '==', user.uid));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       try {
@@ -85,7 +84,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
     });
 
     return () => unsubscribe();
-  }, [currentUser, showToast]);
+  }, [user, showToast]);
 
   // --- CORREÇÃO PRINCIPAL: LÓGICA DE FILTRAGEM ---
   // Movemos o filtro para ser calculado diretamente antes de renderizar.

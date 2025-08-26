@@ -1,10 +1,10 @@
 // src/components/Dashboard.tsx
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 import ServiceProviderDashboard from './ServiceProviderDashboard';
 import { Navigate } from 'react-router-dom';
 
 const Dashboard = () => {
-  const { userProfile, loading } = useAuth();
+  const { userProfile, loading } = useAuthStore();
 
   if (loading || !userProfile) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-yellow-500">A carregar perfil...</div>;

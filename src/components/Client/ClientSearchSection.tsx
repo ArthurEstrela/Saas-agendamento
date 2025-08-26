@@ -7,7 +7,7 @@ import type { UserProfile } from '../../types'; // Ajuste o caminho
 import ClientProfessionalCard from './ClientProfessionalCard'; // Importa o novo componente
 
 interface ClientSearchSectionProps {
-  currentUser: any; // Firebase User
+  user: any; // Firebase User
   userProfile: UserProfile | null;
   handleProtectedAction: (action: () => void) => void;
   toggleFavorite: (professionalId: string) => Promise<void>;
@@ -30,7 +30,7 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
 };
 
 const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
-  currentUser,
+  user,
   userProfile,
   handleProtectedAction,
   toggleFavorite,

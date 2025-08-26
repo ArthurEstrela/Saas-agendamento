@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 import logo from '../assets/stylo-logo.png';
 
 // Ícones para o menu mobile
@@ -14,10 +14,10 @@ const CloseIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
   </svg>
-);
+);  
 
 const Header = () => {
-  const { currentUser, logout } = useAuth();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -59,7 +59,7 @@ const Header = () => {
           </div>
           <nav className="hidden md:flex items-center space-x-8">
             {navLinks}
-            {currentUser ? (
+            {user ? (
               <>
                 <Link to="/dashboard" className="bg-[#daa520] text-black hover:bg-[#c8961e] font-bold py-2 px-4 rounded-lg transition-colors duration-300">
                   Dashboard
@@ -86,7 +86,7 @@ const Header = () => {
           <nav className="container mx-auto px-4 flex flex-col space-y-4 text-center">
             {navLinks}
             <div className="border-t border-[#daa520]/20 pt-4 flex flex-col space-y-4">
-              {currentUser ? (
+              {user ? (
                 <>
                   <Link to="/dashboard" className="bg-[#daa520] text-black hover:bg-[#c8961e] font-bold py-2 px-4 rounded-lg transition-colors duration-300">
                     Dashboard

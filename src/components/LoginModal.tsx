@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 import { useToast } from '../context/ToastContext';
 import { X, Loader2, Mail, Lock, User, Building } from 'lucide-react';
 import styloLogo from '../assets/stylo-logo.png';
@@ -11,7 +11,7 @@ interface LoginModalProps {
 }
 
 const LoginModal = ({ isOpen, onClose, onLoginSuccess }: LoginModalProps) => {
-  const { login, register, loginWithGoogle } = useAuth();
+  const { login, register, loginWithGoogle } = useAuthStore();
   const { showToast } = useToast();
   
   const [isLoginView, setIsLoginView] = useState(true);

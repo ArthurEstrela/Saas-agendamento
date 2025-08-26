@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuthStore } from "../store/authStore";
 import { db } from "../firebase/config";
 import {
   collection,
@@ -88,7 +88,7 @@ const bookingSteps = [
 ];
 
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
-  const { currentUser, userProfile } = useAuth();
+  const { user, userProfile } = useAuthStore();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -352,7 +352,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   ]);
 
   const handleBookAppointment = useCallback(async () => {
-    if (!currentUser || !userProfile) {
+    if (!user || !userProfile) {
       showToast("Faça login para finalizar o agendamento.", "info");
       setIsAwaitingLogin(true);
       setIsLoginModalOpen(true);
@@ -409,7 +409,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       setIsBooking(false);
     }
   }, [
-    currentUser,
+    user,
     userProfile,
     establishment.uid,
     navigate,
@@ -423,17 +423,17 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   ]);
 
   useEffect(() => {
-    if (isAwaitingLogin && currentUser && userProfile) {
+    if (isAwaitingLogin && user && userProfile) {
       showToast("Finalizando seu agendamento...", "info");
       setIsAwaitingLogin(false);
       handleBookAppointment();
     }
-  }, [isAwaitingLogin, currentUser, userProfile, handleBookAppointment]);
+  }, [isAwaitingLogin, user, userProfile, handleBookAppointment]);
 
   // USEEFFECT PARA RECUPERAR O AGENDAMENTO DO LOCALSTORAGE APÓS O LOGIN
   useEffect(() => {
     if (
-      currentUser &&
+      user &&
       userProfile &&
       establishment?.uid &&
       allServices.length > 0
@@ -494,7 +494,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       }
     }
   }, [
-    currentUser,
+    user,
     userProfile,
     establishment,
     allServices,
@@ -503,7 +503,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   ]);
 
   useEffect(() => {
-    if (currentUser && userProfile && establishment?.uid) {
+    if (user && userProfile && establishment?.uid) {
       const pendingBookingRaw = sessionStorage.getItem("pendingBooking");
 
       if (pendingBookingRaw) {
@@ -560,7 +560,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       }
     }
   }, [
-    currentUser,
+    user,
     userProfile,
     establishment,
     allServices,

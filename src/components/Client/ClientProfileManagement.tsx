@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -15,7 +15,7 @@ interface ClientProfileManagementProps {
 }
 
 const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBack, LoginPrompt, handleLoginAction }) => {
-  const { currentUser, userProfile, updateUserProfile, uploadImage } = useAuth();
+  const { user, userProfile, updateUserProfile, uploadImage } = useAuthStore();
   const { showToast } = useToast();
   const [formData, setFormData] = useState<Partial<UserProfile>>({});
   const [loading, setLoading] = useState(true);
@@ -25,7 +25,7 @@ const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBac
 
   useEffect(() => {
     const fetchProfileData = async () => {
-      if (currentUser && userProfile) {
+      if (user && userProfile) {
         setFormData({
           displayName: userProfile.displayName || '',
           phoneNumber: userProfile.phoneNumber || '',
@@ -40,7 +40,7 @@ const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBac
     };
 
     fetchProfileData();
-  }, [currentUser, userProfile]);
+  }, [user, userProfile]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -74,7 +74,7 @@ const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBac
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) {
+    if (!user) {
       showToast("Você precisa estar logado para atualizar seu perfil.", 'error');
       return;
     }
@@ -84,7 +84,7 @@ const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBac
 
     try {
       if (photoFile) {
-        const path = `profile_pictures/${currentUser.uid}/${photoFile.name}`;
+        const path = `profile_pictures/${user.uid}/${photoFile.name}`;
         newPhotoURL = await uploadImage(photoFile, path);
       }
 
@@ -102,7 +102,7 @@ const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBac
     return <p className="text-center text-gray-400 py-10">A carregar perfil...</p>;
   }
 
-  if (!currentUser) {
+  if (!user) {
     return <LoginPrompt message="Edite aqui o seu perfil." onAction={handleLoginAction} />;
   }
 
@@ -138,7 +138,7 @@ const ClientProfileManagement: React.FC<ClientProfileManagementProps> = ({ onBac
           </div>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-            <input type="email" id="email" name="email" value={currentUser?.email || ''} disabled className="w-full bg-gray-700 p-3 rounded-md border border-gray-600 cursor-not-allowed" />
+            <input type="email" id="email" name="email" value={user?.email || ''} disabled className="w-full bg-gray-700 p-3 rounded-md border border-gray-600 cursor-not-allowed" />
           </div>
           <div>
             <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-300 mb-1">Telefone</label>

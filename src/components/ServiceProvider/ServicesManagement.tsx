@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { db } from '../../firebase/config'; 
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
@@ -86,7 +86,7 @@ const ServiceModal = ({ isOpen, mode, service, professionalId, onClose, onSave }
 
 // --- Componente Principal ---
 const ServicesManagement = () => {
-    const { userProfile, setUserProfile } = useAuth();
+    const { userProfile, setUserProfile } = useAuthStore();
     const { showToast } = useToast();
     const [modal, setModal] = useState<{ isOpen: boolean; mode: ModalMode; service?: Service; professionalId: string; }>({ isOpen: false, mode: 'add', professionalId: '' });
 

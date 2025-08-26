@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { db } from '../../firebase/config'; 
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { Appointment, Professional, Service } from '../../types';
@@ -17,7 +17,7 @@ interface RevenueData {
 }
 
 const RevenueManagement = () => {
-  const { userProfile } = useAuth();
+  const { userProfile } = useAuthStore();
   const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({

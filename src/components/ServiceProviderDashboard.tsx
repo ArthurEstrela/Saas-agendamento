@@ -1,7 +1,7 @@
 // src/components/ServiceProviderDashboard.tsx
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuthStore } from "../store/authStore";
 import { db } from "../firebase/config";
 import {
   collection,
@@ -173,7 +173,7 @@ const NavItem = ({ icon: Icon, text, active, onClick }) => (
 );
 
 const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
-  const { logout, userProfile } = useAuth();
+  const { logout, userProfile } = useAuthStore();
   return (
     <>
       <div
@@ -368,7 +368,7 @@ const ProfessionalSelector = ({
 
 // Componente para a Agenda
 const AgendaView = () => {
-  const { userProfile, updateAppointmentStatus } = useAuth();
+  const { userProfile, updateAppointmentStatus } = useAuthStore();
   const { showToast } = useToast();
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);

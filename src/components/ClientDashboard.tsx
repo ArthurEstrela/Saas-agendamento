@@ -1,6 +1,6 @@
 // src/components/ClientDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import type { Appointment, UserProfile } from '../types';
 import { Star, Menu as MenuIcon } from 'lucide-react'; // Importa o ícone de Menu
@@ -92,7 +92,7 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
 
 
 const ClientDashboard: React.FC = () => {
-    const { currentUser, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuth();
+    const { user, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuthStore();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking'>('search');
     
@@ -106,7 +106,7 @@ const ClientDashboard: React.FC = () => {
     const handleLoginAction = () => navigate('/login');
     
     const handleProtectedAction = (action: () => void) => {
-        if (!currentUser) {
+        if (!user) {
             handleLoginAction();
         } else {
             action();
@@ -120,8 +120,8 @@ const ClientDashboard: React.FC = () => {
     const handleOpenReviewModal = (appointment: Appointment) => setReviewModal({ isOpen: true, appointment });
     
     const handleSubmitReview = (rating: number, comment: string) => {
-        if (reviewModal.appointment && currentUser) {
-            submitReview({ serviceProviderId: reviewModal.appointment.serviceProviderId, appointmentId: reviewModal.appointment.id, rating, comment, clientId: currentUser.uid, serviceIds: reviewModal.appointment.serviceIds });
+        if (reviewModal.appointment && user) {
+            submitReview({ serviceProviderId: reviewModal.appointment.serviceProviderId, appointmentId: reviewModal.appointment.id, rating, comment, clientId: user.uid, serviceIds: reviewModal.appointment.serviceIds });
         }
         setReviewModal({ isOpen: false });
     };
@@ -141,7 +141,7 @@ const ClientDashboard: React.FC = () => {
             return <Booking professional={selectedProfessionalForBooking} onBack={handleBackFromBooking} />;
         }
         
-        if (!currentUser && (activeView === 'myAppointments' || activeView === 'favorites' || activeView === 'profile')) {
+        if (!user && (activeView === 'myAppointments' || activeView === 'favorites' || activeView === 'profile')) {
             let message = "";
             switch (activeView) {
                 case 'myAppointments': message = "Veja aqui os seus próximos agendamentos."; break;
@@ -155,7 +155,7 @@ const ClientDashboard: React.FC = () => {
             case 'search':
                 return (
                     <ClientSearchSection
-                        currentUser={currentUser}
+                        user={user}
                         userProfile={userProfile}
                         handleProtectedAction={handleProtectedAction}
                         toggleFavorite={toggleFavorite}
@@ -165,7 +165,7 @@ const ClientDashboard: React.FC = () => {
             case 'myAppointments':
                 return (
                     <ClientMyAppointmentsSection
-                        currentUser={currentUser}
+                        user={user}
                         handleLoginAction={handleLoginAction}
                         handleCancelAppointment={handleCancelAppointment}
                         handleOpenReviewModal={handleOpenReviewModal}
@@ -176,7 +176,7 @@ const ClientDashboard: React.FC = () => {
             case 'favorites':
                 return (
                     <ClientFavoritesSection
-                        currentUser={currentUser}
+                        user={user}
                         userProfile={userProfile}
                         handleLoginAction={handleLoginAction}
                         handleProtectedAction={handleProtectedAction}

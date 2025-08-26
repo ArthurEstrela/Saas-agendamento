@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from '../../firebase/config'; // Ajuste o caminho
-import { useAuth } from '../../context/AuthContext'; // Ajuste o caminho
+import { useAuthStore } from '../../store/authStore'; // Ajuste o caminho
 import type { UserProfile } from '../../types'; // Ajuste o caminho
 import ClientProfessionalCard from './ClientProfessionalCard'; // Importa o novo componente
 import { Heart } from 'lucide-react';
 
 interface ClientFavoritesSectionProps {
-  currentUser: any; // Firebase User
+  user: any; // Firebase User
   userProfile: UserProfile | null;
   handleLoginAction: () => void;
   handleProtectedAction: (action: () => void) => void;
@@ -19,7 +19,7 @@ interface ClientFavoritesSectionProps {
 }
 
 const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
-  currentUser,
+  user,
   userProfile,
   handleLoginAction,
   handleProtectedAction,
@@ -50,12 +50,12 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
         setLoadingFavorites(false);
       }
     };
-    if (currentUser) { // Fetch favorites whenever currentUser changes
+    if (user) { // Fetch favorites whenever user changes
       fetchFavorites();
     }
-  }, [currentUser, userProfile?.favoriteProfessionals]);
+  }, [user, userProfile?.favoriteProfessionals]);
 
-  // Removido o condicional if (!currentUser) aqui, será tratado no ClientDashboard pai
+  // Removido o condicional if (!user) aqui, será tratado no ClientDashboard pai
 
   return (
     <div>

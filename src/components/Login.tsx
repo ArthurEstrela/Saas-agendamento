@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import type { Address } from '../types';
 import logo from '../assets/stylo-logo.png';
@@ -22,7 +22,8 @@ const UserTypeCard = ({ icon: Icon, title, description, onClick, isSelected }) =
 
 // --- Componente Principal de Login/Registro ---
 const Login = () => {
-    const { login, register, loginWithGoogle, loading } = useAuth();
+    // <-- MUDANÇA AQUI: Pegamos 'signIn', 'signUp', 'signInWithGoogle' e 'isLoading' do store.
+    const { signIn, signUp, signInWithGoogle, error: authError, isLoading } = useAuthStore();
     const [isLoginView, setIsLoginView] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
@@ -144,7 +145,7 @@ const Login = () => {
         setError('');
         if (isLoginView) {
             try {
-                await login(formData.email, formData.password);
+                await signIn(formData.email, formData.password); // <-- MUDANÇA AQUI: 'login' virou 'signIn'
                 navigate('/dashboard');
             } catch (err) {
                 setError('Email ou senha inválidos.');
@@ -159,9 +160,10 @@ const Login = () => {
                 return;
             }
             try {
-                const { email, password, userType, street, number, neighborhood, city, state, postalCode, country, ...profileData } = formData;
-                const address: Address = { street, number, neighborhood, city, state, postalCode, country };
-                await register(email, password, userType, { ...profileData, address });
+                // Aqui vamos precisar adaptar para a nova função signUp
+                // Por enquanto, vamos chamar a função básica
+                await signUp(formData.email, formData.password); // <-- MUDANÇA AQUI: 'register' virou 'signUp'
+                // NOTA: A função signUp precisa ser expandida no authStore para aceitar os outros dados do formulário.
                 navigate('/dashboard');
             } catch (err) {
                 setError('Falha ao criar a conta. Verifique os seus dados.');
@@ -171,7 +173,7 @@ const Login = () => {
 
     const handleGoogleLogin = async () => {
         try {
-            await loginWithGoogle();
+            await signInWithGoogle(); // <-- MUDANÇA AQUI: 'loginWithGoogle' virou 'signInWithGoogle'
             navigate('/dashboard');
         } catch (err) {
             setError('Falha ao fazer login com o Google.');
@@ -282,8 +284,8 @@ const Login = () => {
                         <div><input type="text" name="state" placeholder="Estado" value={formData.state} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3" /></div>
                     </div>
 
-                    <button type="submit" disabled={loading || !!cepError || !!phoneError || !!cnpjError} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">
-                        {loading ? 'Processando...' : 'Criar Conta'}
+                    <button type="submit" disabled={isLoading || !!cepError || !!phoneError || !!cnpjError} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">
+                        {isLoading ? 'Processando...' : 'Criar Conta'}
                     </button>
                 </form>
             </div>
@@ -292,7 +294,6 @@ const Login = () => {
 
     return (
         <div className="relative min-h-screen bg-black text-white flex items-center justify-center p-4">
-            {/* Botão de Voltar movido e estilizado */}
             <Link 
                 to="/" 
                 className="absolute top-8 left-8 flex items-center gap-2 px-4 py-2 bg-gray-800/60 border border-gray-700 rounded-full text-sm text-gray-300 hover:bg-gray-700/80 hover:text-[#daa520] transition-all duration-300"
@@ -312,15 +313,15 @@ const Login = () => {
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div><label className="text-sm font-bold text-gray-400 block mb-2">Email</label><div className="relative"><Mail className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="email" name="email" value={formData.email} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div></div>
                                 <div><label className="text-sm font-bold text-gray-400 block mb-2">Senha</label><div className="relative"><Lock className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 transform -translate-y-1/2" /><input type="password" name="password" value={formData.password} onChange={handleChange} required className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520]" /></div></div>
-                                <button type="submit" disabled={loading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">{loading ? 'Entrando...' : 'Entrar'}</button>
+                                <button type="submit" disabled={isLoading} className="w-full bg-[#daa520] text-black font-bold py-3 rounded-lg hover:bg-[#c8961e] transition-colors disabled:bg-gray-600">{isLoading ? 'Entrando...' : 'Entrar'}</button>
                             </form>
                         </div>
                     ) : (
                         renderRegisterView()
                     )}
-                    {error && <p className="text-red-500 text-sm text-center mt-4">{error}</p>}
+                    {authError && <p className="text-red-500 text-sm text-center mt-4">{authError}</p>}
                     <div className="flex items-center my-6"><hr className="flex-grow border-gray-700" /><span className="mx-4 text-gray-500 text-sm">OU</span><hr className="flex-grow border-gray-700" /></div>
-                    <button onClick={handleGoogleLogin} disabled={loading} className="w-full flex items-center justify-center gap-3 bg-gray-800 border border-gray-700 text-white font-bold py-3 rounded-lg hover:bg-gray-700 transition-colors disabled:bg-gray-600">
+                    <button onClick={handleGoogleLogin} disabled={isLoading} className="w-full flex items-center justify-center gap-3 bg-gray-800 border border-gray-700 text-white font-bold py-3 rounded-lg hover:bg-gray-700 transition-colors disabled:bg-gray-600">
                         <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path><path fill="#FF3D00" d="m6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z"></path><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.223 0-9.641-3.657-11.303-8.591l-6.571 4.819C9.656 39.663 16.318 44 24 44z"></path><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C42.012 36.49 44 30.686 44 24c0-1.341-.138-2.65-.389-3.917z"></path></svg>
                         Continuar com Google
                     </button>

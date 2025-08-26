@@ -1,6 +1,6 @@
 // src/components/ServiceProvider/FinancialManagement.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { db } from '../../firebase/config';
 import { collection, query, where, addDoc, Timestamp, deleteDoc, doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -114,7 +114,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 // --- Componente Principal ---
 const FinancialManagement = () => {
-    const { userProfile } = useAuth();
+    const { userProfile } = useAuthStore();
     const { showToast } = useToast();
     const [transactions, setTransactions] = useState<(Appointment | Expense)[]>([]);
     const [loading, setLoading] = useState(true);

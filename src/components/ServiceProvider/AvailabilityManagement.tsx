@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { db } from '../../firebase/config';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
@@ -263,7 +263,7 @@ const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({ isOpen, onClo
 
 
 const AvailabilityManagement = () => {
-    const { userProfile, loading } = useAuth();
+    const { userProfile, loading } = useAuthStore();
     const { showToast } = useToast();
     const [selectedProfId, setSelectedProfId] = useState<string | null>(null);
     const [availability, setAvailability] = useState<DayAvailability[] | null>(null);

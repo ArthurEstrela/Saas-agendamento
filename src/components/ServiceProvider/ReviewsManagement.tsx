@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { db } from '../../firebase/config'; 
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import type { Review } from '../../types';
@@ -33,7 +33,7 @@ const StarRating = ({ rating, size = 5 }) => (
 
 // --- Componente Principal ---
 const ReviewsManagement = () => {
-    const { userProfile } = useAuth();
+    const { userProfile } = useAuthStore();
     const [reviews, setReviews] = useState<Review[]>([]);
     const [loading, setLoading] = useState(true);
     const [professionalFilter, setProfessionalFilter] = useState('todos');

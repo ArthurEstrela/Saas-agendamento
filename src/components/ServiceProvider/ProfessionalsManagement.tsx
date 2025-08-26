@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { db } from '../../firebase/config'; 
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
@@ -93,7 +93,7 @@ const ProfessionalModal = ({ isOpen, mode, professional, onClose, onSave }: { is
 
 // --- Componente Principal ---
 const ProfessionalsManagement = () => {
-    const { userProfile, setUserProfile, uploadImage } = useAuth(); // Adicionar `uploadImage` do contexto
+    const { userProfile, setUserProfile, uploadImage } = useAuthStore(); // Adicionar `uploadImage` do contexto
     const { showToast } = useToast();
     const [modal, setModal] = useState<{ isOpen: boolean; mode: ModalMode; professional?: Professional; }>({ isOpen: false, mode: 'add' });
     const [isUploading, setIsUploading] = useState(false);

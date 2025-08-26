@@ -1,6 +1,6 @@
 // src/components/MainAppContent.tsx
 import { useState, useEffect } from 'react';
-import { useAuth  } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 import { messaging } from '../firebase/config'; 
 import { onMessage } from 'firebase/messaging';
 import Dashboard from './Dashboard';
@@ -28,11 +28,11 @@ const NotificationToast = ({ title, body, onClose }: { title: string; body: stri
 
 
 const MainAppContent = () => {
-  const { currentUser, requestFCMToken } = useAuth();
+  const { user, requestFCMToken } = useAuthStore();
   const [notification, setNotification] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
-    if (currentUser) {
+    if (user) {
       const requestToken = async () => {
         try {
           const permission = await Notification.requestPermission();
@@ -45,10 +45,10 @@ const MainAppContent = () => {
       };
       requestToken();
     }
-  }, [currentUser, requestFCMToken]);
+  }, [user, requestFCMToken]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (user) {
       const unsubscribe = onMessage(messaging, (payload) => {
         console.log('Mensagem recebida em primeiro plano: ', payload);
         const { title, body } = payload.notification || {};
@@ -60,7 +60,7 @@ const MainAppContent = () => {
       
       return () => unsubscribe();
     }
-  }, [currentUser]);
+  }, [user]);
 
 
   return (

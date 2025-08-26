@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
 import type { UserProfile, Address } from '../../types';
 import { Building, Phone, Tag, Instagram, MapPin, Save, Lock, Camera, ArrowLeft, FileText, Search } from 'lucide-react';
@@ -56,7 +56,7 @@ const geocodeAddress = async (address: Partial<Address>): Promise<{ latitude: nu
 
 // --- Componente Principal ---
 const ProfileManagement = ({ onBack }: { onBack: () => void; }) => {
-    const { userProfile, updateUserProfile, uploadImage, changePassword } = useAuth();
+    const { userProfile, updateUserProfile, uploadImage, changePassword } = useAuthStore();
     const { showToast } = useToast();
     const [formData, setFormData] = useState<Partial<UserProfile>>({});
     const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });

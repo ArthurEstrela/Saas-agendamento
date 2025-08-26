@@ -1,21 +1,20 @@
-// src/components/ClientDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import type { Appointment, UserProfile } from '../types';
-import { Star, Menu as MenuIcon } from 'lucide-react'; // Importa o ícone de Menu
+import { Star, Menu as MenuIcon } from 'lucide-react';
 import Booking from './Booking';
 
-// Importa os novos subcomponentes
+// Importa os subcomponentes
 import ClientSideNav from './Client/ClientSideNav';
 import ClientSearchSection from './Client/ClientSearchSection';
 import ClientMyAppointmentsSection from './Client/ClientMyAppointmentsSection';
 import ClientFavoritesSection from './Client/ClientFavoritesSection';
 import ClientProfileManagement from './Client/ClientProfileManagement';
 import LoginPrompt from './Common/LoginPrompt';
+import Notifications from './Common/Notifications'; 
 
 // ... (Mantenha os componentes ConfirmationModal e ReviewModal como estão no seu arquivo original)
-
 const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; }) => (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
         <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
@@ -94,25 +93,16 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit }: { isOpen: boole
 const ClientDashboard: React.FC = () => {
     const { user, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuthStore();
     const navigate = useNavigate();
-    const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking'>('search');
+    // Adiciona 'notifications' ao tipo do estado activeView
+    const [activeView, setActiveView] = useState<'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking' | 'notifications'>('search');
     
-    // NOVO: Estado para controlar a visibilidade do menu no mobile
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-
     const [selectedProfessionalForBooking, setSelectedProfessionalForBooking] = useState<UserProfile | null>(null);
     const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; } | null>(null);
     const [reviewModal, setReviewModal] = useState<{ isOpen: boolean; appointment?: Appointment }>({ isOpen: false });
 
     const handleLoginAction = () => navigate('/login');
     
-    const handleProtectedAction = (action: () => void) => {
-        if (!user) {
-            handleLoginAction();
-        } else {
-            action();
-        }
-    };
-
     const handleCancelAppointment = (appointmentId: string) => {
         setModalState({ isOpen: true, title: 'Cancelar Agendamento', message: 'Tem a certeza de que pretende cancelar este agendamento?', onConfirm: () => { cancelAppointment(appointmentId); setModalState(null); } });
     };
@@ -141,53 +131,29 @@ const ClientDashboard: React.FC = () => {
             return <Booking professional={selectedProfessionalForBooking} onBack={handleBackFromBooking} />;
         }
         
-        if (!user && (activeView === 'myAppointments' || activeView === 'favorites' || activeView === 'profile')) {
+        // Se o usuário não estiver logado, mostra o LoginPrompt para as seções protegidas
+        if (!user && (activeView === 'myAppointments' || activeView === 'favorites' || activeView === 'profile' || activeView === 'notifications')) {
             let message = "";
             switch (activeView) {
                 case 'myAppointments': message = "Veja aqui os seus próximos agendamentos."; break;
                 case 'favorites': message = "Guarde aqui os seus profissionais favoritos."; break;
                 case 'profile': message = "Edite aqui o seu perfil."; break;
+                case 'notifications': message = "Veja aqui as suas notificações."; break;
             }
             return <LoginPrompt message={message} onAction={handleLoginAction} />;
         }
 
         switch (activeView) {
             case 'search':
-                return (
-                    <ClientSearchSection
-                        user={user}
-                        userProfile={userProfile}
-                        handleProtectedAction={handleProtectedAction}
-                        toggleFavorite={toggleFavorite}
-                        handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
-                    />
-                );
+                return <ClientSearchSection onSelectProfessional={handleSelectProfessionalForBooking} />;
             case 'myAppointments':
-                return (
-                    <ClientMyAppointmentsSection
-                        user={user}
-                        handleLoginAction={handleLoginAction}
-                        handleCancelAppointment={handleCancelAppointment}
-                        handleOpenReviewModal={handleOpenReviewModal}
-                        LoginPrompt={LoginPrompt}
-                        setActiveView={setActiveView}
-                    />
-                );
+                return <ClientMyAppointmentsSection handleCancelAppointment={handleCancelAppointment} handleOpenReviewModal={handleOpenReviewModal} setActiveView={setActiveView} />;
             case 'favorites':
-                return (
-                    <ClientFavoritesSection
-                        user={user}
-                        userProfile={userProfile}
-                        handleLoginAction={handleLoginAction}
-                        handleProtectedAction={handleProtectedAction}
-                        toggleFavorite={toggleFavorite}
-                        handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
-                        LoginPrompt={LoginPrompt}
-                        setActiveView={setActiveView}
-                    />
-                );
+                return <ClientFavoritesSection onSelectProfessional={handleSelectProfessionalForBooking} />;
             case 'profile':
-                return <ClientProfileManagement onBack={() => setActiveView('search')} LoginPrompt={LoginPrompt} handleLoginAction={handleLoginAction} />;
+                return <ClientProfileManagement onBack={() => setActiveView('search')} />;
+            case 'notifications': // <-- NOVO CASE para renderizar o componente de notificações
+                return <Notifications />;
             default:
                 return null;
         }
@@ -203,22 +169,20 @@ const ClientDashboard: React.FC = () => {
                 setActiveView={setActiveView} 
                 logout={logout} 
                 userProfile={userProfile}
-                isOpen={isMobileNavOpen}      // NOVO: Passa o estado de abertura
-                setIsOpen={setIsMobileNavOpen}  // NOVO: Passa a função para alterar o estado
+                isOpen={isMobileNavOpen}
+                setIsOpen={setIsMobileNavOpen}
             />
             
-            {/* O conteúdo principal agora tem uma margem esquerda em telas de desktop (md) para acomodar o SideNav */}
             <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
                 <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
                     
-                    {/* NOVO: Header para o menu mobile */}
                     <div className="md:hidden flex justify-between items-center mb-6">
                         <button
-                          onClick={() => setIsMobileNavOpen(true)}
-                          className="text-gray-300 hover:text-white"
-                          aria-label="Abrir menu"
+                            onClick={() => setIsMobileNavOpen(true)}
+                            className="text-gray-300 hover:text-white"
+                            aria-label="Abrir menu"
                         >
-                          <MenuIcon size={28} />
+                            <MenuIcon size={28} />
                         </button>
                         <span className="text-xl font-bold text-white">Stylo</span>
                     </div>

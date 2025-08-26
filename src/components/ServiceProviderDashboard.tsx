@@ -1,5 +1,3 @@
-// src/components/ServiceProviderDashboard.tsx
-
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuthStore } from "../store/authStore";
 import { db } from "../firebase/config";
@@ -23,6 +21,7 @@ import {
   Users,
   Clock,
   DollarSign,
+  Bell,
   Star,
   LogOut,
   Check,
@@ -44,6 +43,7 @@ import ProfessionalsManagement from "./ServiceProvider/ProfessionalsManagement";
 import AvailabilityManagement from "./ServiceProvider/AvailabilityManagement";
 import FinancialManagement from "./ServiceProvider/FinancialManagement";
 import ReviewsManagement from "./ServiceProvider/ReviewsManagement";
+import Notifications from './common/Notifications'; // Corrigido o caminho
 
 // --- Subcomponente de Modal de Confirmação ---
 const ConfirmationModal = ({
@@ -100,7 +100,6 @@ const CompleteServiceModal = ({ isOpen, appointment, onClose, onConfirm }) => {
       showToast("Por favor, insira um valor de preço válido.", "error");
       return;
     }
-    // Passa o objeto de agendamento completo de volta
     onConfirm(appointment, finalPrice);
   };
 
@@ -184,10 +183,10 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
       ></div>
       <div
         className={`w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0 z-40
-                   transition-transform duration-300 ease-in-out 
-                   md:translate-x-0 
-                   ${isOpen ? "translate-x-0" : "-translate-x-full"}
-                  `}
+                       transition-transform duration-300 ease-in-out 
+                       md:translate-x-0 
+                       ${isOpen ? "translate-x-0" : "-translate-x-full"}
+                      `}
       >
         <div className="flex items-center justify-between mb-10 px-2">
           <Link to="/">
@@ -224,6 +223,12 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
             text="Disponibilidade"
             active={activeView === "availability"}
             onClick={() => setActiveView("availability")}
+          />
+           <NavItem
+            icon={Bell}
+            text="Notificações"
+            active={activeView === "notifications"}
+            onClick={() => setActiveView("notifications")}
           />
           <NavItem
             icon={DollarSign}
@@ -473,7 +478,6 @@ const AgendaView = () => {
 
     const upcoming = filtered
       .filter((app) => {
-        // Add this check to prevent the error
         if (!app.date || !app.time) {
           return false;
         }
@@ -493,7 +497,6 @@ const AgendaView = () => {
 
     const history = filtered
       .filter((app) => {
-        // Add this check here as well
         if (!app.date || !app.time) {
           return false;
         }
@@ -573,7 +576,6 @@ const AgendaView = () => {
     );
   };
 
-  // LÓGICA ATUALIZADA PARA SALVAR DADOS FINANCEIROS
   const handleConfirmCompleteService = async (
     appointment: Appointment,
     finalPrice: number
@@ -586,10 +588,9 @@ const AgendaView = () => {
       await updateDoc(appointmentRef, {
         status: 'completed',
         totalPrice: finalPrice,
-        // Novos campos para o financeiro
         professionalName: appointment.professionalName,
         serviceName: appointment.serviceName,
-        completedAt: Timestamp.now(), // Salva a data e hora exata da conclusão
+        completedAt: Timestamp.now(),
       });
       showToast('Agendamento concluído e registrado no financeiro!', 'success');
     } catch (error) {
@@ -609,7 +610,7 @@ const AgendaView = () => {
     handleAction(
       () => {
         if (userProfile?.uid) {
-          updateAppointmentStatus(appointment.id, userProfile.uid, status);
+          updateAppointmentStatus(appointment.id, status);
         }
       },
       title,
@@ -620,73 +621,38 @@ const AgendaView = () => {
   const getStatusInfo = (status: Appointment["status"], isPast: boolean) => {
     switch (status) {
       case "pending":
-        return {
-          text: "Pendente",
-          color: "bg-yellow-500/20 text-yellow-300",
-          icon: <Clock size={14} />,
-        };
+        return { text: "Pendente", color: "bg-yellow-500/20 text-yellow-300", icon: <Clock size={14} /> };
       case "confirmed":
-        return {
-          text: "Confirmado",
-          color: isPast
-            ? "bg-orange-500/20 text-orange-300"
-            : "bg-green-500/20 text-green-300",
-          icon: isPast ? <AlertTriangle size={14} /> : <Check size={14} />,
-        };
+        return { text: "Confirmado", color: isPast ? "bg-orange-500/20 text-orange-300" : "bg-green-500/20 text-green-300", icon: isPast ? <AlertTriangle size={14} /> : <Check size={14} /> };
       case "completed":
-        return {
-          text: "Concluído",
-          color: "bg-blue-500/20 text-blue-300",
-          icon: <CheckCircle size={14} />,
-        };
+        return { text: "Concluído", color: "bg-blue-500/20 text-blue-300", icon: <CheckCircle size={14} /> };
       case "no-show":
-        return {
-          text: "Não Compareceu",
-          color: "bg-red-500/20 text-red-300",
-          icon: <UserX size={14} />,
-        };
+        return { text: "Não Compareceu", color: "bg-red-500/20 text-red-300", icon: <UserX size={14} /> };
       case "cancelled":
-        return {
-          text: "Cancelado",
-          color: "bg-gray-500/20 text-gray-300",
-          icon: <X size={14} />,
-        };
+        return { text: "Cancelado", color: "bg-gray-500/20 text-gray-300", icon: <X size={14} /> };
       default:
-        return {
-          text: "Desconhecido",
-          color: "bg-gray-500/20 text-gray-300",
-          icon: <AlertTriangle size={14} />,
-        };
+        return { text: "Desconhecido", color: "bg-gray-500/20 text-gray-300", icon: <AlertTriangle size={14} /> };
     }
   };
 
   const overviewStats = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
-    const todayAppointments = allAppointments.filter(
-      (app) => app.date === today
-    );
+    const todayAppointments = allAppointments.filter((app) => app.date === today);
     const pastDueAppointments = allAppointments.filter((app) => {
       const appDateTime = new Date(`${app.date}T${app.time}`);
       return app.status === "confirmed" && appDateTime < new Date();
     });
-
     return {
       total: todayAppointments.length,
-      confirmed: todayAppointments.filter((app) => app.status === "confirmed")
-        .length,
-      pending: todayAppointments.filter((app) => app.status === "pending")
-        .length,
+      confirmed: todayAppointments.filter((app) => app.status === "confirmed").length,
+      pending: todayAppointments.filter((app) => app.status === "pending").length,
       pastDue: pastDueAppointments.length,
     };
   }, [allAppointments]);
 
   const renderAppointmentList = (list: Appointment[]) => {
     if (list.length === 0) {
-      return (
-        <p className="text-center text-gray-400 py-10">
-          Nenhum agendamento encontrado.
-        </p>
-      );
+      return <p className="text-center text-gray-400 py-10">Nenhum agendamento encontrado.</p>;
     }
     return (
       <ul className="space-y-4">
@@ -695,114 +661,39 @@ const AgendaView = () => {
           const isPast = appointmentDateTime < new Date();
           const statusInfo = getStatusInfo(app.status, isPast);
           return (
-            <li
-              key={app.id}
-              className="bg-gray-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 hover:border-[#daa520]/50 transition-colors duration-300"
-            >
+            <li key={app.id} className="bg-gray-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 hover:border-[#daa520]/50 transition-colors">
               <div className="flex items-center mb-4 md:mb-0 flex-grow">
                 <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
                   <p className="text-2xl font-bold text-white">{app.time}</p>
-                  <p className="text-sm text-gray-400">
-                    {format(appointmentDateTime, "dd/MMM", { locale: ptBR })}
-                  </p>
+                  <p className="text-sm text-gray-400">{format(appointmentDateTime, "dd/MMM", { locale: ptBR })}</p>
                 </div>
                 <div>
-                  <p className="font-bold text-lg text-white">
-                    {app.serviceName}
-                  </p>
-                  <p className="text-sm text-gray-300">
-                    Cliente: {app.clientName}
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    Profissional: {app.professionalName}
-                  </p>
-                  {app.totalPrice && (
-                    <p className="text-sm text-gray-300">
-                      Valor Estimado: R$ {app.totalPrice?.toFixed(2)}
-                    </p>
-                  )}
+                  <p className="font-bold text-lg text-white">{app.serviceName}</p>
+                  <p className="text-sm text-gray-300">Cliente: {app.clientName}</p>
+                  <p className="text-sm text-gray-400">Profissional: {app.professionalName}</p>
+                  {app.totalPrice && <p className="text-sm text-gray-300">Valor Estimado: R$ {app.totalPrice?.toFixed(2)}</p>}
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full border-t border-gray-700 pt-4 mt-4 md:border-none md:pt-0 md:mt-0 md:w-auto">
-                <div
-                  className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg ${statusInfo.color}`}
-                >
+                <div className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg ${statusInfo.color}`}>
                   {statusInfo.icon}
                   <span>{statusInfo.text}</span>
                 </div>
                 <div className="flex items-center justify-center gap-2 flex-grow">
                   {app.status === "pending" && (
                     <>
-                      <button
-                        onClick={() =>
-                          handleUpdateStatus(
-                            app,
-                            "confirmed",
-                            "Confirmar Agendamento",
-                            `Tem certeza que deseja confirmar o agendamento de "${app.clientName}"?`
-                          )
-                        }
-                        className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white transition-colors"
-                        title="Confirmar Agendamento"
-                      >
-                        <Check size={16} />
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleUpdateStatus(
-                            app,
-                            "cancelled",
-                            "Cancelar Agendamento",
-                            `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`
-                          )
-                        }
-                        className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"
-                        title="Cancelar Agendamento"
-                      >
-                        <X size={16} />
-                      </button>
+                      <button onClick={() => handleUpdateStatus(app, "confirmed", "Confirmar Agendamento", `Tem certeza que deseja confirmar o agendamento de "${app.clientName}"?`)} className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white" title="Confirmar"><Check size={16} /></button>
+                      <button onClick={() => handleUpdateStatus(app, "cancelled", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
                     </>
                   )}
                   {app.status === "confirmed" && isPast && (
                     <>
-                      <button
-                        onClick={() =>
-                          handleUpdateStatus(
-                            app,
-                            "no-show",
-                            "Confirmar Não Comparecimento",
-                            `Tem certeza que deseja marcar o agendamento de "${app.clientName}" como "Não Compareceu"?`
-                          )
-                        }
-                        className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"
-                        title="Marcar como Não Compareceu"
-                      >
-                        <UserX size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleCompleteServiceClick(app)}
-                        className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white transition-colors"
-                        title="Marcar como Concluído"
-                      >
-                        <CheckCircle size={16} />
-                      </button>
+                      <button onClick={() => handleUpdateStatus(app, "no-show", "Confirmar Não Comparecimento", `Tem certeza que deseja marcar o agendamento de "${app.clientName}" como "Não Compareceu"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Não Compareceu"><UserX size={16} /></button>
+                      <button onClick={() => handleCompleteServiceClick(app)} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white" title="Concluído"><CheckCircle size={16} /></button>
                     </>
                   )}
                   {app.status === "confirmed" && !isPast && (
-                    <button
-                      onClick={() =>
-                        handleUpdateStatus(
-                          app,
-                          "cancelled",
-                          "Cancelar Agendamento",
-                          `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`
-                        )
-                      }
-                      className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white transition-colors"
-                      title="Cancelar Agendamento"
-                    >
-                      <X size={16} />
-                    </button>
+                    <button onClick={() => handleUpdateStatus(app, "cancelled", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
                   )}
                 </div>
               </div>
@@ -815,205 +706,46 @@ const AgendaView = () => {
 
   return (
     <div className="animate-fade-in-down">
-      {confirmationModalState?.isOpen && (
-        <ConfirmationModal
-          title={confirmationModalState.title}
-          message={confirmationModalState.message}
-          onConfirm={confirmationModalState.onConfirm}
-          onCancel={() => setConfirmationModalState(null)}
-        />
-      )}
-      {completeServiceModalState?.isOpen && (
-        <CompleteServiceModal
-          isOpen={completeServiceModalState.isOpen}
-          appointment={completeServiceModalState.appointment}
-          onClose={() => setCompleteServiceModalState(null)}
-          onConfirm={handleConfirmCompleteService}
-        />
-      )}
+      {confirmationModalState?.isOpen && <ConfirmationModal title={confirmationModalState.title} message={confirmationModalState.message} onConfirm={confirmationModalState.onConfirm} onCancel={() => setConfirmationModalState(null)} />}
+      {completeServiceModalState?.isOpen && <CompleteServiceModal isOpen={completeServiceModalState.isOpen} appointment={completeServiceModalState.appointment} onClose={() => setCompleteServiceModalState(null)} onConfirm={handleConfirmCompleteService} />}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-4 sm:mb-0">
-          Agenda e Solicitações
-        </h2>
-        <ProfessionalSelector
-          professionals={userProfile?.professionals || []}
-          selectedProfId={selectedProfessionalId}
-          setSelectedProfId={setSelectedProfessionalId}
-          includeAllOption={true}
-        />
+        <h2 className="text-3xl font-bold text-white mb-4 sm:mb-0">Agenda e Solicitações</h2>
+        <ProfessionalSelector professionals={userProfile?.professionals || []} selectedProfId={selectedProfessionalId} setSelectedProfId={setSelectedProfessionalId} includeAllOption={true} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Cards de estatísticas */}
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-400">Total de Hoje</p>
-            <p className="text-3xl font-bold text-white mt-1">
-              {overviewStats.total}
-            </p>
-          </div>
-          <LayoutDashboard className="h-10 w-10 text-gray-600" />
-        </div>
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-400">Confirmados Hoje</p>
-            <p className="text-3xl font-bold text-green-400 mt-1">
-              {overviewStats.confirmed}
-            </p>
-          </div>
-          <CheckCircle className="h-10 w-10 text-green-600" />
-        </div>
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-400">Pendentes Hoje</p>
-            <p className="text-3xl font-bold text-yellow-400 mt-1">
-              {overviewStats.pending}
-            </p>
-          </div>
-          <Clock className="h-10 w-10 text-yellow-600" />
-        </div>
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-400">Atrasados</p>
-            <p className="text-3xl font-bold text-orange-400 mt-1">
-              {overviewStats.pastDue}
-            </p>
-          </div>
-          <AlertTriangle className="h-10 w-10 text-orange-600" />
-        </div>
+        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Total de Hoje</p><p className="text-3xl font-bold text-white mt-1">{overviewStats.total}</p></div><LayoutDashboard className="h-10 w-10 text-gray-600" /></div>
+        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Confirmados Hoje</p><p className="text-3xl font-bold text-green-400 mt-1">{overviewStats.confirmed}</p></div><CheckCircle className="h-10 w-10 text-green-600" /></div>
+        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Pendentes Hoje</p><p className="text-3xl font-bold text-yellow-400 mt-1">{overviewStats.pending}</p></div><Clock className="h-10 w-10 text-yellow-600" /></div>
+        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Atrasados</p><p className="text-3xl font-bold text-orange-400 mt-1">{overviewStats.pastDue}</p></div><AlertTriangle className="h-10 w-10 text-orange-600" /></div>
       </div>
 
       <div className="mb-6 flex space-x-2 border-b border-gray-800">
-        <button
-          onClick={() => setAgendaTab("upcoming")}
-          className={`py-2 px-4 font-semibold transition-colors duration-300 ${
-            agendaTab === "upcoming"
-              ? "text-[#daa520] border-b-2 border-[#daa520]"
-              : "text-gray-500 hover:text-white"
-          }`}
-        >
-          Próximos Agendamentos
-        </button>
-        <button
-          onClick={() => setAgendaTab("history")}
-          className={`py-2 px-4 font-semibold transition-colors duration-300 ${
-            agendaTab === "history"
-              ? "text-[#daa520] border-b-2 border-[#daa520]"
-              : "text-gray-500 hover:text-white"
-          }`}
-        >
-          Histórico de Agendamentos
-        </button>
+        <button onClick={() => setAgendaTab("upcoming")} className={`py-2 px-4 font-semibold transition-colors ${agendaTab === "upcoming" ? "text-[#daa520] border-b-2 border-[#daa520]" : "text-gray-500 hover:text-white"}`}>Próximos Agendamentos</button>
+        <button onClick={() => setAgendaTab("history")} className={`py-2 px-4 font-semibold transition-colors ${agendaTab === "history" ? "text-[#daa520] border-b-2 border-[#daa520]" : "text-gray-500 hover:text-white"}`}>Histórico de Agendamentos</button>
       </div>
 
-      {loading ? (
-        <p className="text-center text-gray-400 py-10">
-          A carregar agendamentos...
-        </p>
-      ) : agendaTab === "upcoming" ? (
-        renderAppointmentList(upcomingAppointments)
-      ) : (
+      {loading ? <p className="text-center text-gray-400 py-10">A carregar agendamentos...</p> : agendaTab === "upcoming" ? renderAppointmentList(upcomingAppointments) : (
         <div>
           <div className="bg-gray-800/50 p-4 rounded-xl mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
-              <label className="text-sm text-gray-400">Profissional</label>
-              <select
-                value={historyFilters.professionalId}
-                onChange={(e) => {
-                  setHistoryFilters((prev) => ({
-                    ...prev,
-                    professionalId: e.target.value,
-                  }));
-                  setCurrentPage(1);
-                }}
-                className="w-full bg-gray-700 p-2 rounded-md mt-1"
-              >
-                <option value="todos">Todos</option>
-                {userProfile?.professionals?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm text-gray-400">Cliente</label>
-              <input
-                type="text"
-                placeholder="Nome do cliente..."
-                value={historyFilters.clientName}
-                onChange={(e) => {
-                  setHistoryFilters((prev) => ({
-                    ...prev,
-                    clientName: e.target.value,
-                  }));
-                  setCurrentPage(1);
-                }}
-                className="w-full bg-gray-700 p-2 rounded-md mt-1"
-              />
-            </div>
+            <div><label className="text-sm text-gray-400">Profissional</label><select value={historyFilters.professionalId} onChange={(e) => { setHistoryFilters(prev => ({ ...prev, professionalId: e.target.value })); setCurrentPage(1); }} className="w-full bg-gray-700 p-2 rounded-md mt-1"><option value="todos">Todos</option>{userProfile?.professionals?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            <div><label className="text-sm text-gray-400">Cliente</label><input type="text" placeholder="Nome do cliente..." value={historyFilters.clientName} onChange={(e) => { setHistoryFilters(prev => ({ ...prev, clientName: e.target.value })); setCurrentPage(1); }} className="w-full bg-gray-700 p-2 rounded-md mt-1" /></div>
             <div className="md:col-span-2 grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-400">De</label>
-                <input
-                  type="date"
-                  value={historyFilters.dateStart}
-                  onChange={(e) =>
-                    setHistoryFilters((prev) => ({
-                      ...prev,
-                      dateStart: e.target.value,
-                    }))
-                  }
-                  className="w-full bg-gray-700 p-2 rounded-md mt-1"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-400">Até</label>
-                <input
-                  type="date"
-                  value={historyFilters.dateEnd}
-                  onChange={(e) =>
-                    setHistoryFilters((prev) => ({
-                      ...prev,
-                      dateEnd: e.target.value,
-                    }))
-                  }
-                  className="w-full bg-gray-700 p-2 rounded-md mt-1"
-                />
-              </div>
+              <div><label className="text-sm text-gray-400">De</label><input type="date" value={historyFilters.dateStart} onChange={e => setHistoryFilters(prev => ({ ...prev, dateStart: e.target.value }))} className="w-full bg-gray-700 p-2 rounded-md mt-1" /></div>
+              <div><label className="text-sm text-gray-400">Até</label><input type="date" value={historyFilters.dateEnd} onChange={e => setHistoryFilters(prev => ({ ...prev, dateEnd: e.target.value }))} className="w-full bg-gray-700 p-2 rounded-md mt-1" /></div>
             </div>
           </div>
           {paginatedHistory.length > 0 ? (
             <>
               {renderAppointmentList(paginatedHistory)}
               <div className="flex justify-center items-center mt-6 gap-4">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="bg-gray-700 px-4 py-2 rounded-md disabled:opacity-50"
-                >
-                  Anterior
-                </button>
-                <span className="text-gray-400">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(p + 1, totalPages))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="bg-gray-700 px-4 py-2 rounded-md disabled:opacity-50"
-                >
-                  Próxima
-                </button>
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="bg-gray-700 px-4 py-2 rounded-md disabled:opacity-50">Anterior</button>
+                <span className="text-gray-400">Página {currentPage} de {totalPages}</span>
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="bg-gray-700 px-4 py-2 rounded-md disabled:opacity-50">Próxima</button>
               </div>
             </>
-          ) : (
-            <p className="text-center text-gray-400 py-10">
-              Nenhum registo encontrado para os filtros selecionados.
-            </p>
-          )}
+          ) : <p className="text-center text-gray-400 py-10">Nenhum registo encontrado para os filtros selecionados.</p>}
         </div>
       )}
     </div>
@@ -1041,6 +773,8 @@ const ServiceProviderDashboard = () => {
         return <FinancialManagement />;
       case "reviews":
         return <ReviewsManagement />;
+      case "notifications":
+        return <Notifications />;
       default:
         return <AgendaView />; // Padrão para a agenda
     }

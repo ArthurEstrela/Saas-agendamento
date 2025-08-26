@@ -1,100 +1,123 @@
-// src/components/Client/ClientSideNav.tsx
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Calendar, Heart, User, LogOut, X } from 'lucide-react'; // Adicionado ícone X
+import { Link, useNavigate } from 'react-router-dom';
+import { Home, Calendar, Star, User, LogOut, X, Bell } from 'lucide-react'; // Adicionado Bell
 import logo from '../../assets/stylo-logo.png';
 import type { UserProfile } from '../../types';
 
 interface ClientSideNavProps {
-  activeView: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking';
-  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking') => void;
-  logout: () => Promise<void>;
+  activeView: string;
+  // Adicionado 'notifications' às opções de view
+  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'notifications') => void;
+  logout: () => void;
   userProfile: UserProfile | null;
-  isOpen: boolean;      // NOVO: Recebe o estado de abertura
-  setIsOpen: (isOpen: boolean) => void; // NOVO: Recebe a função para fechar
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
 }
 
+const navItems = [
+  { icon: Home, label: 'Procurar', view: 'search' },
+  { icon: Calendar, label: 'Meus Agendamentos', view: 'myAppointments' },
+  { icon: Star, label: 'Favoritos', view: 'favorites' },
+  { icon: Bell, label: 'Notificações', view: 'notifications' }, // <-- NOVO ITEM
+  { icon: User, label: 'Meu Perfil', view: 'profile' },
+];
+
 const ClientSideNav: React.FC<ClientSideNavProps> = ({ activeView, setActiveView, logout, userProfile, isOpen, setIsOpen }) => {
-  
-  // Função para lidar com cliques nos itens do menu
-  const handleItemClick = (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking') => {
-    setActiveView(view);
-    setIsOpen(false); // Fecha o menu após clicar em um item no mobile
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
   };
+
+  const NavLink = ({ item }) => (
+    <button
+      onClick={() => {
+        setActiveView(item.view);
+        setIsOpen(false); // Fecha o menu ao clicar num item
+      }}
+      className={`flex items-center w-full px-4 py-3 text-left text-sm font-medium rounded-lg transition-colors duration-200 ${
+        activeView === item.view
+          ? 'bg-[#daa520] text-black shadow-lg'
+          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+      }`}
+    >
+      <item.icon className="w-6 h-6 mr-4" />
+      <span>{item.label}</span>
+    </button>
+  );
+
+  const navContent = (
+    <div className="flex flex-col h-full">
+      <div className="p-4 flex justify-between items-center md:justify-start">
+        <Link to="/" className="flex items-center gap-2">
+          <img src={logo} alt="Stylo" className="h-10 w-auto" />
+          <span className="text-2xl font-bold text-white hidden md:block">Stylo</span>
+        </Link>
+        <button onClick={() => setIsOpen(false)} className="md:hidden text-gray-400 hover:text-white">
+          <X size={24} />
+        </button>
+      </div>
+
+      <div className="p-4 mt-4">
+        {userProfile ? (
+          <div className="flex items-center gap-3">
+            <img
+              src={userProfile.photoURL || `https://ui-avatars.com/api/?name=${userProfile.displayName}&background=daa520&color=000`}
+              alt="User"
+              className="h-12 w-12 rounded-full object-cover border-2 border-[#daa520]"
+            />
+            <div>
+              <p className="font-semibold text-white">{userProfile.displayName}</p>
+              <p className="text-xs text-gray-400">{userProfile.email}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+             <div className="h-12 w-12 rounded-full bg-gray-700 flex items-center justify-center">
+                <User className="text-gray-400" />
+             </div>
+             <div>
+                <p className="font-semibold text-white">Visitante</p>
+             </div>
+          </div>
+        )}
+      </div>
+
+      <nav className="flex-grow px-4 mt-6 space-y-2">
+        {navItems.map((item) => (
+          <NavLink key={item.label} item={item} />
+        ))}
+      </nav>
+
+      <div className="p-4 mt-auto">
+        <button
+          onClick={handleLogout}
+          className="flex items-center w-full px-4 py-3 text-left text-sm font-medium text-gray-300 rounded-lg hover:bg-red-800/50 hover:text-white transition-colors duration-200"
+        >
+          <LogOut className="w-6 h-6 mr-4" />
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {/* Overlay para fechar o menu no mobile */}
-      <div 
-        className={`fixed inset-0 bg-black/60 z-30 md:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      {/* Overlay for mobile */}
+      <div
+        className={`fixed inset-0 bg-black bg-opacity-50 z-30 transition-opacity md:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsOpen(false)}
       ></div>
 
-      <nav className={`fixed left-0 top-0 h-full w-72 bg-gray-950 p-6 flex flex-col shadow-lg z-40
-                       transition-transform duration-300 ease-in-out 
-                       md:translate-x-0 
-                       ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-                      `}>
-        <div className="flex items-center justify-between mb-10">
-          <Link to="/" onClick={() => setIsOpen(false)}>
-            <img src={logo} alt="Stylo Logo" className="h-10 w-auto mr-3" />
-          </Link>
-          <button 
-            onClick={() => setIsOpen(false)}
-            className="md:hidden text-gray-400 hover:text-white"
-            aria-label="Fechar menu"
-          >
-            <X size={24} />
-          </button>
-        </div>
-        <ul className="space-y-3 flex-grow">
-          <li>
-            <button onClick={() => handleItemClick('search')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'search' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
-              <Search className="w-5 h-5 mr-3" />
-              Pesquisar
-            </button>
-          </li>
-          <li>
-            <button onClick={() => handleItemClick('myAppointments')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'myAppointments' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
-              <Calendar className="w-5 h-5 mr-3" />
-              Meus Agendamentos
-            </button>
-          </li>
-          <li>
-            <button onClick={() => handleItemClick('favorites')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'favorites' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
-              <Heart className="w-5 h-5 mr-3" />
-              Favoritos
-            </button>
-          </li>
-        </ul>
-        <div className="mt-auto">
-          <div className="border-t border-gray-800 pt-4">
-            {userProfile && (
-              <div className="flex items-center px-2 mb-4">
-                <img src={userProfile.photoURL || 'https://placehold.co/150x150/111827/4B5563?text=Foto'} alt="Sua foto de perfil" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-gray-700" />
-                <div>
-                  <p className="text-sm font-semibold text-white truncate">{userProfile.displayName || 'Nome do Cliente'}</p>
-                  <p className="text-xs text-gray-400">Cliente</p>
-                </div>
-              </div>
-            )}
-            <ul className="space-y-2">
-              <li>
-                <button onClick={() => handleItemClick('profile')} className={`flex items-center w-full p-3 rounded-lg text-lg font-medium transition-colors duration-200 ${activeView === 'profile' ? 'bg-[#daa520] text-gray-900' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
-                  <User className="w-5 h-5 mr-3" />
-                  Meu Perfil
-                </button>
-              </li>
-              <li>
-                <button onClick={logout} className="flex items-center w-full p-3 rounded-lg text-lg font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors duration-200">
-                  <LogOut className="w-5 h-5 mr-3" />
-                  Sair
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </nav>
+      {/* SideNav */}
+      <aside
+        className={`fixed top-0 left-0 h-full w-72 bg-gray-900 border-r border-gray-800 z-40 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {navContent}
+      </aside>
     </>
   );
 };

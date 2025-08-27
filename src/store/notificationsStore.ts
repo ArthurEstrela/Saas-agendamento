@@ -9,6 +9,7 @@ interface Notification {
   message: string;
   isRead: boolean;
   createdAt: any;
+  unreadCount: number;
 }
 
 interface NotificationState {
@@ -24,9 +25,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   loading: true,
   unsubscribe: null,
+  unreadCount: 0,
 
   fetchNotifications: (userId) => {
-    get().unsubscribe?.(); // Cancela a subscrição anterior
+    get().unsubscribe?.(); 
 
     const q = query(
       collection(db, 'notifications'),
@@ -36,7 +38,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-      set({ notifications: notificationsData, loading: false });
+      const unread = notificationsData.filter(n => !n.isRead).length;
+      set({ notifications: notificationsData, loading: false, unreadCount: unread });
     }, (error) => {
       console.error("Erro ao buscar notificações:", error);
       set({ loading: false });

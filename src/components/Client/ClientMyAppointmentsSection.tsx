@@ -1,6 +1,5 @@
 // src/components/Client/ClientMyAppointmentsSection.tsx
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuthStore } from '../../store/authStore';
@@ -9,11 +8,10 @@ import type { Appointment, UserProfile, Professional, Service } from '../../type
 import ClientAppointmentCard from './ClientAppointmentCard';
 import { Loader2 } from 'lucide-react';
 
-
 interface ClientMyAppointmentsSectionProps {
   handleCancelAppointment: (appointmentId: string) => void;
   handleOpenReviewModal: (appointment: Appointment) => void;
-  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile') => void;
+  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking' | 'notifications') => void;
 }
 
 const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = ({
@@ -56,17 +54,19 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
 
           return {
             ...appt,
-            establishmentName: providerProfile?.companyName,
-            professionalName: professional?.name,
-            serviceName: serviceNames || appt.serviceName,
+            // CORREÇÃO: Usamos o nome do estabelecimento do perfil do prestador, mais confiável.
+            establishmentName: providerProfile?.companyName || appt.establishmentName || 'Estabelecimento Não Encontrado',
+            professionalName: professional?.name || appt.professionalName || 'Profissional Não Encontrado',
+            serviceName: serviceNames || appt.serviceName || 'Serviço Não Encontrado',
+            // NOVO: Adicionamos o photoURL do prestador para exibição no card
+            providerPhotoURL: providerProfile?.photoURL || null,
           };
         }));
 
         appointmentsWithDetails.sort((a, b) => {
-          // Usando `startTime` e com fallback `|| '00:00'` para não quebrar
           const appDateTimeA = new Date(`${a.date}T${a.startTime || '00:00'}`);
           const appDateTimeB = new Date(`${b.date}T${b.startTime || '00:00'}`);
-          return appDateTimeB.getTime() - appDateTimeA.getTime(); // Mais recente primeiro
+          return appDateTimeB.getTime() - appDateTimeA.getTime();
         });
         
         setAppointments(appointmentsWithDetails);
@@ -86,26 +86,22 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
     return () => unsubscribe();
   }, [user, showToast]);
 
-  // --- CORREÇÃO PRINCIPAL: LÓGICA DE FILTRAGEM ---
-  // Movemos o filtro para ser calculado diretamente antes de renderizar.
-  // Isso evita o erro de "Cannot access before initialization".
   const now = new Date();
   const upcomingAppointments = appointments.filter(app => {
     const appDateTime = new Date(`${app.date}T${app.startTime || '00:00'}`);
-    // O status correto é 'scheduled', como estamos salvando no Booking.tsx
-    return appDateTime >= now && app.status === 'scheduled';
+    return appDateTime >= now && (app.status === 'scheduled' || app.status === 'confirmed');
   });
 
   const historyAppointments = appointments.filter(app => {
     const appDateTime = new Date(`${app.date}T${app.startTime || '00:00'}`);
-    return appDateTime < now || app.status === 'completed' || app.status === 'cancelled';
+    return appDateTime < now || app.status === 'completed' || app.status === 'cancelled' || app.status === 'no-show';
   });
 
   const renderContent = () => {
     if (loadingAppointments) {
       return (
         <div className="flex justify-center items-center py-10">
-            <Loader2 className="animate-spin h-8 w-8 text-[#daa520]" />
+            <Loader2 className="animate-spin h-8 w-8 text-yellow-500" />
             <p className="ml-3 text-gray-400">A carregar...</p>
         </div>
       );
@@ -113,7 +109,7 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
 
     if (appointmentSubTab === 'upcoming') {
       return upcomingAppointments.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-down">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-down">
           {upcomingAppointments.map(app => (
             <ClientAppointmentCard
               key={app.id}
@@ -126,14 +122,13 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
       ) : (
         <div className="text-center text-gray-400 py-10">
           <p className="mb-4">Nenhum agendamento futuro.</p>
-          <button onClick={() => setActiveView('search')} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">Procurar Profissionais</button>
+          <button onClick={() => setActiveView('search')} className="bg-yellow-500 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-400 transition-colors">Procurar Profissionais</button>
         </div>
       );
     }
 
-    // else (history)
     return historyAppointments.length > 0 ? (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-down">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-down">
         {historyAppointments.map(app => (
           <ClientAppointmentCard
             key={app.id}
@@ -144,16 +139,32 @@ const ClientMyAppointmentsSection: React.FC<ClientMyAppointmentsSectionProps> = 
         ))}
       </div>
     ) : (
-      <p className="text-center text-gray-400 py-10">O seu histórico de agendamentos está vazio.</p>
+      <div className="text-center text-gray-400 py-10">
+          <p className="mb-4">O seu histórico de agendamentos está vazio.</p>
+      </div>
     );
   };
 
   return (
     <div>
       <h2 className="text-3xl font-bold text-white mb-6">Meus Agendamentos</h2>
-      <div className="mb-6 flex space-x-2 border-b border-gray-800">
-        <button onClick={() => setAppointmentSubTab('upcoming')} className={`py-2 px-4 font-semibold transition-colors duration-300 ${appointmentSubTab === 'upcoming' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-500 hover:text-white'}`}>Próximos</button>
-        <button onClick={() => setAppointmentSubTab('history')} className={`py-2 px-4 font-semibold transition-colors duration-300 ${appointmentSubTab === 'history' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-500 hover:text-white'}`}>Histórico</button>
+      <div className="mb-6 flex space-x-4 border-b-2 border-gray-800">
+        <button
+          onClick={() => setAppointmentSubTab('upcoming')}
+          className={`py-2 px-4 font-semibold transition-colors duration-300 ${
+            appointmentSubTab === 'upcoming' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'
+          }`}
+        >
+          Próximos
+        </button>
+        <button
+          onClick={() => setAppointmentSubTab('history')}
+          className={`py-2 px-4 font-semibold transition-colors duration-300 ${
+            appointmentSubTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'
+          }`}
+        >
+          Histórico
+        </button>
       </div>
       {renderContent()}
     </div>

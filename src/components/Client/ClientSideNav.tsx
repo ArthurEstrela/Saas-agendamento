@@ -66,8 +66,10 @@ const ClientSideNav: React.FC<ClientSideNavProps> = ({
     >
       <item.icon className="w-6 h-6 mr-4" />
       <span>{item.label}</span>
-      {item.view === 'notifications' && unreadCount > 0 && (
-        <span className="ml-auto bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">{unreadCount}</span>
+      {item.view === "notifications" && unreadCount > 0 && (
+        <span className="ml-auto bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+          {unreadCount}
+        </span>
       )}
     </button>
   );
@@ -77,9 +79,6 @@ const ClientSideNav: React.FC<ClientSideNavProps> = ({
       <div className="p-4 flex justify-between items-center md:justify-start">
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Stylo" className="h-10 w-auto" />
-          <span className="text-2xl font-bold text-white hidden md:block">
-            Stylo
-          </span>
         </Link>
         <button
           onClick={() => setIsOpen(false)}

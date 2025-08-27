@@ -4,11 +4,17 @@ import { Heart, Instagram, Star, MapPin } from "lucide-react";
 import type { UserProfile } from "../../types";
 
 interface ClientProfessionalCardProps {
+  // O objeto completo do profissional
   prof: UserProfile;
+  // A distância do profissional até o usuário, calculada no componente pai
   distance: number | null;
+  // Estado de favorito, para renderizar o ícone corretamente
   isFavorite: boolean;
+  // Função que envolve a ação em um mecanismo de proteção de login
   handleProtectedAction: (action: () => void) => void;
+  // Ação real de favoritar/desfavoritar
   toggleFavorite: (professionalId: string) => Promise<void>;
+  // Função para iniciar o fluxo de agendamento
   handleSelectProfessionalForBooking: (prof: UserProfile) => void;
 }
 
@@ -20,10 +26,16 @@ const ClientProfessionalCard: React.FC<ClientProfessionalCardProps> = ({
   toggleFavorite,
   handleSelectProfessionalForBooking,
 }) => {
+  // Lógica para construir a URL do Instagram
   const getInstagramUrl = (usernameOrUrl: string) =>
     usernameOrUrl.startsWith("http")
       ? usernameOrUrl
       : `https://instagram.com/${usernameOrUrl.replace("@", "")}`;
+
+  // Função para lidar com o clique no botão de favoritar, usando a função de proteção
+  const handleFavoriteClick = () => {
+    handleProtectedAction(() => toggleFavorite(prof.uid));
+  };
 
   return (
     <div
@@ -49,7 +61,6 @@ const ClientProfessionalCard: React.FC<ClientProfessionalCardProps> = ({
           {typeof distance === "number" && (
             <div className="flex items-center gap-1 mt-1 text-sm text-cyan-400">
               <MapPin size={14} />
-              {/* Usamos toFixed(1) para uma casa decimal, ou toFixed(0) para arredondar para o inteiro mais próximo */}
               <span>
                 Aprox.{" "}
                 {distance < 1
@@ -85,7 +96,7 @@ const ClientProfessionalCard: React.FC<ClientProfessionalCardProps> = ({
           </a>
         )}
         <button
-          onClick={() => handleProtectedAction(() => toggleFavorite(prof.uid))}
+          onClick={handleFavoriteClick}
           title={
             isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"
           }

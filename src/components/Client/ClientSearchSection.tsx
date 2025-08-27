@@ -1,20 +1,19 @@
 // src/components/Client/ClientSearchSection.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
-import { Search, SlidersHorizontal, MapPin, Tag, X, Heart, Calendar, LocateFixed } from 'lucide-react'; // Adicionado Calendar
-import { db } from '../../firebase/config'; // Ajuste o caminho
-import type { UserProfile } from '../../types'; // Ajuste o caminho
-import ClientProfessionalCard from './ClientProfessionalCard'; // Importa o novo componente
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { Search, SlidersHorizontal, MapPin, Tag, X, Calendar, LocateFixed } from 'lucide-react';
+import { db } from '../../firebase/config';
+import type { UserProfile } from '../../types';
+import ClientProfessionalCard from './ClientProfessionalCard';
 
 interface ClientSearchSectionProps {
-  user: any; // Firebase User
   userProfile: UserProfile | null;
   handleProtectedAction: (action: () => void) => void;
   toggleFavorite: (professionalId: string) => Promise<void>;
   handleSelectProfessionalForBooking: (prof: UserProfile) => void;
 }
 
-const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+const getDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
 
   const R = 6371; // Raio da Terra em km
@@ -29,34 +28,38 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return distance;
 };
 
-const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
-  user,
+const ClientSearchSection = ({
   userProfile,
   handleProtectedAction,
   toggleFavorite,
   handleSelectProfessionalForBooking,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [allProviders, setAllProviders] = useState<UserProfile[]>([]);
+  const [allProviders, setAllProviders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({ segment: '', city: '', date: '' });
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userLocation, setUserLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
 
   // Fetch de todos os prestadores (público)
   useEffect(() => {
     const fetchProviders = async () => {
       setIsLoading(true);
-      const q = query(collection(db, 'users'), where('userType', '==', 'serviceProvider'));
-      const querySnapshot = await getDocs(q);
-      const providersData = querySnapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile));
-      setAllProviders(providersData);
-      setIsLoading(false);
+      try {
+        const q = query(collection(db, 'users'), where('userType', '==', 'serviceProvider'));
+        const querySnapshot = await getDocs(q);
+        const providersData = querySnapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id }));
+        setAllProviders(providersData);
+      } catch (error) {
+        console.error("Erro ao buscar prestadores: ", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     fetchProviders();
   }, []);
 
-   const handleGetLocation = () => {
+  const handleGetLocation = () => {
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -98,7 +101,7 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
     if (filters.city) {
       results = results.filter(provider => provider.address?.city?.toLowerCase().includes(filters.city.toLowerCase()));
     }
-    
+
     // Ordena por distância se a localização do usuário estiver disponível
     if (userLocation) {
       results.sort((a, b) => {
@@ -111,8 +114,7 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
     return results;
   }, [searchTerm, filters, allProviders, userLocation]);
 
-
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleFilterChange = (e) => setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const clearFilters = () => { setSearchTerm(''); setFilters({ segment: '', city: '', date: '' }); setUserLocation(null); };
 
   return (
@@ -142,12 +144,11 @@ const ClientSearchSection: React.FC<ClientSearchSectionProps> = ({
         </details>
         <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
           <button onClick={handleGetLocation} disabled={locationLoading} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
-                <LocateFixed size={16}/>
-                {locationLoading ? 'Buscando...' : 'Usar minha localização'}
-            </button>
+            <LocateFixed size={16}/>
+            {locationLoading ? 'Buscando...' : 'Usar minha localização'}
+          </button>
         </div>
       </div>
-
       {isLoading ? <p className="text-center text-gray-400 py-10">A carregar profissionais...</p> : filteredResults.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredResults.map(prof => (

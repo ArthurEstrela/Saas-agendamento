@@ -1,3 +1,4 @@
+// src/components/ClientDashboard.tsx
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
 import { useNavigate } from "react-router-dom";
@@ -216,6 +217,7 @@ const ClientDashboard: React.FC = () => {
 
   const handleProtectedAction = (action: () => void) => {
     if (!user) {
+      // Redireciona para a página de login
       handleLoginAction();
     } else {
       action();
@@ -232,13 +234,8 @@ const ClientDashboard: React.FC = () => {
       );
     }
 
-    if (
-      !user &&
-      (activeView === "myAppointments" ||
-        activeView === "favorites" ||
-        activeView === "profile" ||
-        activeView === "notifications")
-    ) {
+    // Usando LoginPrompt para renderizar a mensagem correta caso o usuário não esteja logado
+    if (!user && (activeView === "myAppointments" || activeView === "favorites" || activeView === "profile" || activeView === "notifications")) {
       let message = "";
       switch (activeView) {
         case "myAppointments":
@@ -261,9 +258,8 @@ const ClientDashboard: React.FC = () => {
       case "search":
         return (
           <ClientSearchSection
-            onSelectProfessional={handleSelectProfessionalForBooking}
+            handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
             handleProtectedAction={handleProtectedAction}
-            toggleFavorite={toggleFavorite}
           />
         );
       case "myAppointments":
@@ -277,7 +273,14 @@ const ClientDashboard: React.FC = () => {
       case "favorites":
         return (
           <ClientFavoritesSection
-            onSelectProfessional={handleSelectProfessionalForBooking}
+            handleProtectedAction={handleProtectedAction}
+            toggleFavorite={toggleFavorite}
+            handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
+            user={user}
+            userProfile={userProfile}
+            handleLoginAction={handleLoginAction}
+            LoginPrompt={LoginPrompt}
+            setActiveView={setActiveView}
           />
         );
       case "profile":

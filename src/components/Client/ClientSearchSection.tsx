@@ -5,11 +5,10 @@ import { Search, SlidersHorizontal, MapPin, Tag, X, Calendar, LocateFixed } from
 import { db } from '../../firebase/config';
 import type { UserProfile } from '../../types';
 import ClientProfessionalCard from './ClientProfessionalCard';
+import { useAuthStore } from '../../store/authStore'; // Importe o authStore aqui
 
 interface ClientSearchSectionProps {
-  userProfile: UserProfile | null;
   handleProtectedAction: (action: () => void) => void;
-  toggleFavorite: (professionalId: string) => Promise<void>;
   handleSelectProfessionalForBooking: (prof: UserProfile) => void;
 }
 
@@ -29,17 +28,18 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const ClientSearchSection = ({
-  userProfile,
   handleProtectedAction,
-  toggleFavorite,
   handleSelectProfessionalForBooking,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [allProviders, setAllProviders] = useState([]);
+  const [allProviders, setAllProviders] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({ segment: '', city: '', date: '' });
   const [userLocation, setUserLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  
+  // Pega o userProfile do Zustand para ter acesso aos favoritos.
+  const { userProfile, toggleFavorite } = useAuthStore();
 
   // Fetch de todos os prestadores (público)
   useEffect(() => {
@@ -49,7 +49,7 @@ const ClientSearchSection = ({
         const q = query(collection(db, 'users'), where('userType', '==', 'serviceProvider'));
         const querySnapshot = await getDocs(q);
         const providersData = querySnapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id }));
-        setAllProviders(providersData);
+        setAllProviders(providersData as UserProfile[]);
       } catch (error) {
         console.error("Erro ao buscar prestadores: ", error);
       } finally {
@@ -156,9 +156,9 @@ const ClientSearchSection = ({
               key={prof.uid}
               prof={prof}
               distance={prof.distance}
-              isFavorite={userProfile?.favoriteProfessionals?.includes(prof.uid) || false}
+              isFavorite={userProfile?.favorites?.includes(prof.uid) || false} // Agora o `isFavorite` é calculado aqui e passado como prop
               handleProtectedAction={handleProtectedAction}
-              toggleFavorite={toggleFavorite}
+              toggleFavorite={toggleFavorite} // A função de alternar favoritagem é passada diretamente
               handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
             />
           ))}

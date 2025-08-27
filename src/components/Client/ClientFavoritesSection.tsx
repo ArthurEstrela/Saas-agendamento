@@ -1,10 +1,9 @@
 // src/components/Client/ClientFavoritesSection.tsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
-import { db } from '../../firebase/config'; // Ajuste o caminho
-import { useAuthStore } from '../../store/authStore'; // Ajuste o caminho
-import type { UserProfile } from '../../types'; // Ajuste o caminho
-import ClientProfessionalCard from './ClientProfessionalCard'; // Importa o novo componente
+import { db } from '../../firebase/config';
+import type { UserProfile } from '../../types';
+import ClientProfessionalCard from './ClientProfessionalCard';
 import { Heart } from 'lucide-react';
 
 interface ClientFavoritesSectionProps {
@@ -15,7 +14,7 @@ interface ClientFavoritesSectionProps {
   toggleFavorite: (professionalId: string) => Promise<void>;
   handleSelectProfessionalForBooking: (prof: UserProfile) => void;
   LoginPrompt: React.ComponentType<{ message: string; onAction: () => void }>;
-  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking') => void; // Adicionado setActiveView
+  setActiveView: (view: 'search' | 'myAppointments' | 'favorites' | 'profile' | 'booking') => void;
 }
 
 const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
@@ -26,36 +25,40 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
   toggleFavorite,
   handleSelectProfessionalForBooking,
   LoginPrompt,
-  setActiveView, // Recebe setActiveView
+  setActiveView,
 }) => {
   const [favoriteProfessionals, setFavoriteProfessionals] = useState<UserProfile[]>([]);
-  const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [loadingFavorites, setLoadingFavorites] = useState(true);
 
-  // Fetch de favoritos (apenas para utilizadores logados)
   useEffect(() => {
     const fetchFavorites = async () => {
-      if (!userProfile?.favoriteProfessionals || userProfile.favoriteProfessionals.length === 0) {
+      setLoadingFavorites(true);
+      // CORREÇÃO: Usando a propriedade 'favorites'
+      if (!userProfile?.favorites || userProfile.favorites.length === 0) {
         setFavoriteProfessionals([]);
+        setLoadingFavorites(false);
         return;
       }
-      setLoadingFavorites(true);
+
       try {
-        const q = query(collection(db, 'users'), where(documentId(), 'in', userProfile.favoriteProfessionals));
+        const q = query(collection(db, 'users'), where(documentId(), 'in', userProfile.favorites));
         const querySnapshot = await getDocs(q);
         const favsData = querySnapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile));
         setFavoriteProfessionals(favsData);
       } catch (error) {
-        console.error("Erro ao procurar favoritos:", error);
+        console.error("Erro ao buscar favoritos:", error);
       } finally {
         setLoadingFavorites(false);
       }
     };
-    if (user) { // Fetch favorites whenever user changes
-      fetchFavorites();
-    }
-  }, [user, userProfile?.favoriteProfessionals]);
 
-  // Removido o condicional if (!user) aqui, será tratado no ClientDashboard pai
+    if (user) {
+      fetchFavorites();
+    } else {
+      setFavoriteProfessionals([]);
+      setLoadingFavorites(false);
+    }
+  }, [user, userProfile?.favorites]);
 
   return (
     <div>
@@ -66,7 +69,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
             <ClientProfessionalCard
               key={prof.uid}
               prof={prof}
-              isFavorite={userProfile?.favoriteProfessionals?.includes(prof.uid) || false}
+              isFavorite={userProfile?.favorites?.includes(prof.uid) || false}
               handleProtectedAction={handleProtectedAction}
               toggleFavorite={toggleFavorite}
               handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}

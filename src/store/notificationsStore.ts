@@ -1,3 +1,4 @@
+// src/store/notificationsStore.ts
 import { create } from 'zustand';
 import { db } from '../firebase/config';
 import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -9,13 +10,13 @@ interface Notification {
   message: string;
   isRead: boolean;
   createdAt: any;
-  unreadCount: number;
 }
 
 interface NotificationState {
   notifications: Notification[];
   loading: boolean;
   unsubscribe: () => void | null;
+  unreadCount: number;
   fetchNotifications: (userId: string) => void;
   markAsRead: (notificationId: string) => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
@@ -30,9 +31,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   fetchNotifications: (userId) => {
     get().unsubscribe?.(); 
 
+    // CORREÇÃO: Aponte para a subcoleção dentro do documento do usuário
     const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userId),
+      collection(db, 'users', userId, 'notifications'),
       orderBy('createdAt', 'desc')
     );
 
@@ -49,7 +50,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   markAsRead: async (notificationId) => {
-    const notifRef = doc(db, 'notifications', notificationId);
+    const { user } = useAuthStore.getState();
+    if (!user) {
+      console.error("Usuário não autenticado.");
+      return;
+    }
+    // CORREÇÃO: Use o caminho completo para a subcoleção
+    const notifRef = doc(db, 'users', user.uid, 'notifications', notificationId);
     try {
       await updateDoc(notifRef, { isRead: true });
     } catch (error) {
@@ -58,7 +65,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   deleteNotification: async (notificationId) => {
-    const notifRef = doc(db, 'notifications', notificationId);
+    const { user } = useAuthStore.getState();
+    if (!user) {
+      console.error("Usuário não autenticado.");
+      return;
+    }
+    // CORREÇÃO: Use o caminho completo para a subcoleção
+    const notifRef = doc(db, 'users', user.uid, 'notifications', notificationId);
     try {
       await deleteDoc(notifRef);
     } catch (error) {

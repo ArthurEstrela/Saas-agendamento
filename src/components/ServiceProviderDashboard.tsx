@@ -31,6 +31,8 @@ import {
   AlertTriangle,
   Menu,
   ChevronDown,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -44,6 +46,23 @@ import AvailabilityManagement from "./ServiceProvider/AvailabilityManagement";
 import FinancialManagement from "./ServiceProvider/FinancialManagement";
 import ReviewsManagement from "./ServiceProvider/ReviewsManagement";
 import Notifications from './common/Notifications'; // Corrigido o caminho
+
+// --- Subcomponente de Card de Estatísticas ---
+const StatCard = ({ title, value, icon: Icon, colorClass, prefix = "" }) => (
+    <div className={`relative bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10 overflow-hidden shadow-lg transition-all duration-300 hover:border-amber-400/50 hover:shadow-amber-400/10`}>
+        <div className={`absolute top-0 left-0 h-1 w-full ${colorClass}`}></div>
+        <div className="flex items-start justify-between">
+            <div>
+                <p className="text-sm text-gray-400">{title}</p>
+                <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mt-2">{prefix}{value}</p>
+            </div>
+            <div className={`p-3 rounded-full ${colorClass} shadow-lg`}>
+                <Icon className="h-6 w-6 text-black" />
+            </div>
+        </div>
+    </div>
+);
+
 
 // --- Subcomponente de Modal de Confirmação ---
 const ConfirmationModal = ({
@@ -183,8 +202,8 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
       ></div>
       <div
         className={`w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0 z-40
-                       transition-transform duration-300 ease-in-out 
-                       md:translate-x-0 
+                       transition-transform duration-300 ease-in-out
+                       md:translate-x-0
                        ${isOpen ? "translate-x-0" : "-translate-x-full"}
                       `}
       >
@@ -256,7 +275,7 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
               />
               <div>
                 <p className="text-sm font-semibold text-white truncate">
-                  {userProfile?.establishmentName || "Nome do Salão"}
+                  {userProfile?.companyName || "Nome do Salão"}
                 </p>
                 <p className="text-xs text-gray-400">Prestador de Serviço</p>
               </div>
@@ -433,9 +452,9 @@ const AgendaView = () => {
             );
             let totalPrice = 0;
             const serviceNames =
-              appt.serviceIds
+              (appt.serviceIds || [])
                 ?.map((serviceId) => {
-                  const service = professional?.services.find(
+                  const service = professional?.services?.find(
                     (s) => s.id === serviceId
                   );
                   if (service) {
@@ -478,39 +497,39 @@ const AgendaView = () => {
 
     const upcoming = filtered
       .filter((app) => {
-        if (!app.date || !app.time) {
+        if (!app.date || !app.startTime) {
           return false;
         }
         const [year, month, day] = app.date.split("-").map(Number);
-        const [hour, minute] = app.time.split(":").map(Number);
+        const [hour, minute] = app.startTime.split(":").map(Number);
         const appDateTime = new Date(year, month - 1, day, hour, minute);
         return (
           appDateTime >= now &&
-          (app.status === "pending" || app.status === "confirmed")
+          (app.status === "scheduled" || app.status === "confirmed")
         );
       })
       .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
+        const dateA = new Date(`${a.date}T${a.startTime}`);
+        const dateB = new Date(`${b.date}T${b.startTime}`);
         return dateA.getTime() - dateB.getTime();
       });
 
     const history = filtered
       .filter((app) => {
-        if (!app.date || !app.time) {
+        if (!app.date || !app.startTime) {
           return false;
         }
         const [year, month, day] = app.date.split("-").map(Number);
-        const [hour, minute] = app.time.split(":").map(Number);
+        const [hour, minute] = app.startTime.split(":").map(Number);
         const appDateTime = new Date(year, month - 1, day, hour, minute);
         return (
           appDateTime < now ||
-          ["completed", "cancelled", "no-show"].includes(app.status)
+          ["completed", "canceledByClient", "canceledByProvider", "noShow"].includes(app.status)
         );
       })
       .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
+        const dateA = new Date(`${a.date}T${a.startTime}`);
+        const dateB = new Date(`${b.date}T${b.startTime}`);
         return dateB.getTime() - dateA.getTime();
       });
 
@@ -581,7 +600,7 @@ const AgendaView = () => {
     finalPrice: number
   ) => {
     if (!userProfile?.uid) return;
-    
+
     const appointmentRef = doc(db, 'appointments', appointment.id);
 
     try {
@@ -603,7 +622,7 @@ const AgendaView = () => {
 
   const handleUpdateStatus = (
     appointment: Appointment,
-    status: "confirmed" | "cancelled" | "no-show",
+    status: "confirmed" | "canceledByProvider" | "noShow",
     title: string,
     message: string
   ) => {
@@ -620,15 +639,17 @@ const AgendaView = () => {
 
   const getStatusInfo = (status: Appointment["status"], isPast: boolean) => {
     switch (status) {
-      case "pending":
+      case "scheduled":
         return { text: "Pendente", color: "bg-yellow-500/20 text-yellow-300", icon: <Clock size={14} /> };
       case "confirmed":
         return { text: "Confirmado", color: isPast ? "bg-orange-500/20 text-orange-300" : "bg-green-500/20 text-green-300", icon: isPast ? <AlertTriangle size={14} /> : <Check size={14} /> };
       case "completed":
         return { text: "Concluído", color: "bg-blue-500/20 text-blue-300", icon: <CheckCircle size={14} /> };
-      case "no-show":
+      case "noShow":
         return { text: "Não Compareceu", color: "bg-red-500/20 text-red-300", icon: <UserX size={14} /> };
-      case "cancelled":
+      case "canceledByClient":
+        return { text: "Cancelado pelo Cliente", color: "bg-gray-500/20 text-gray-300", icon: <X size={14} /> };
+      case "canceledByProvider":
         return { text: "Cancelado", color: "bg-gray-500/20 text-gray-300", icon: <X size={14} /> };
       default:
         return { text: "Desconhecido", color: "bg-gray-500/20 text-gray-300", icon: <AlertTriangle size={14} /> };
@@ -639,13 +660,13 @@ const AgendaView = () => {
     const today = format(new Date(), "yyyy-MM-dd");
     const todayAppointments = allAppointments.filter((app) => app.date === today);
     const pastDueAppointments = allAppointments.filter((app) => {
-      const appDateTime = new Date(`${app.date}T${app.time}`);
+      const appDateTime = new Date(`${app.date}T${app.startTime}`);
       return app.status === "confirmed" && appDateTime < new Date();
     });
     return {
       total: todayAppointments.length,
       confirmed: todayAppointments.filter((app) => app.status === "confirmed").length,
-      pending: todayAppointments.filter((app) => app.status === "pending").length,
+      pending: todayAppointments.filter((app) => app.status === "scheduled").length,
       pastDue: pastDueAppointments.length,
     };
   }, [allAppointments]);
@@ -657,14 +678,14 @@ const AgendaView = () => {
     return (
       <ul className="space-y-4">
         {list.map((app) => {
-          const appointmentDateTime = new Date(`${app.date}T${app.time}`);
+          const appointmentDateTime = new Date(`${app.date}T${app.startTime}`);
           const isPast = appointmentDateTime < new Date();
           const statusInfo = getStatusInfo(app.status, isPast);
           return (
             <li key={app.id} className="bg-gray-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 hover:border-[#daa520]/50 transition-colors">
               <div className="flex items-center mb-4 md:mb-0 flex-grow">
                 <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
-                  <p className="text-2xl font-bold text-white">{app.time}</p>
+                  <p className="text-2xl font-bold text-white">{app.startTime}</p>
                   <p className="text-sm text-gray-400">{format(appointmentDateTime, "dd/MMM", { locale: ptBR })}</p>
                 </div>
                 <div>
@@ -680,20 +701,20 @@ const AgendaView = () => {
                   <span>{statusInfo.text}</span>
                 </div>
                 <div className="flex items-center justify-center gap-2 flex-grow">
-                  {app.status === "pending" && (
+                  {app.status === "scheduled" && (
                     <>
                       <button onClick={() => handleUpdateStatus(app, "confirmed", "Confirmar Agendamento", `Tem certeza que deseja confirmar o agendamento de "${app.clientName}"?`)} className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white" title="Confirmar"><Check size={16} /></button>
-                      <button onClick={() => handleUpdateStatus(app, "cancelled", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
+                      <button onClick={() => handleUpdateStatus(app, "canceledByProvider", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
                     </>
                   )}
                   {app.status === "confirmed" && isPast && (
                     <>
-                      <button onClick={() => handleUpdateStatus(app, "no-show", "Confirmar Não Comparecimento", `Tem certeza que deseja marcar o agendamento de "${app.clientName}" como "Não Compareceu"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Não Compareceu"><UserX size={16} /></button>
+                      <button onClick={() => handleUpdateStatus(app, "noShow", "Confirmar Não Comparecimento", `Tem certeza que deseja marcar o agendamento de "${app.clientName}" como "Não Compareceu"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Não Compareceu"><UserX size={16} /></button>
                       <button onClick={() => handleCompleteServiceClick(app)} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white" title="Concluído"><CheckCircle size={16} /></button>
                     </>
                   )}
                   {app.status === "confirmed" && !isPast && (
-                    <button onClick={() => handleUpdateStatus(app, "cancelled", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
+                    <button onClick={() => handleUpdateStatus(app, "canceledByProvider", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
                   )}
                 </div>
               </div>
@@ -715,10 +736,10 @@ const AgendaView = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Total de Hoje</p><p className="text-3xl font-bold text-white mt-1">{overviewStats.total}</p></div><LayoutDashboard className="h-10 w-10 text-gray-600" /></div>
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Confirmados Hoje</p><p className="text-3xl font-bold text-green-400 mt-1">{overviewStats.confirmed}</p></div><CheckCircle className="h-10 w-10 text-green-600" /></div>
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Pendentes Hoje</p><p className="text-3xl font-bold text-yellow-400 mt-1">{overviewStats.pending}</p></div><Clock className="h-10 w-10 text-yellow-600" /></div>
-        <div className="bg-black/30 p-6 rounded-xl border border-white/10 shadow-lg flex items-center justify-between"><div><p className="text-sm text-gray-400">Atrasados</p><p className="text-3xl font-bold text-orange-400 mt-1">{overviewStats.pastDue}</p></div><AlertTriangle className="h-10 w-10 text-orange-600" /></div>
+        <StatCard title="Total de Hoje" value={overviewStats.total} icon={LayoutDashboard} colorClass="bg-gradient-to-r from-blue-500 to-cyan-500" prefix="" />
+        <StatCard title="Confirmados Hoje" value={overviewStats.confirmed} icon={CheckCircle} colorClass="bg-gradient-to-r from-green-500 to-emerald-500" prefix="" />
+        <StatCard title="Pendentes Hoje" value={overviewStats.pending} icon={Clock} colorClass="bg-gradient-to-r from-yellow-500 to-amber-500" prefix="" />
+        <StatCard title="Atrasados" value={overviewStats.pastDue} icon={AlertTriangle} colorClass="bg-gradient-to-r from-orange-500 to-red-500" prefix="" />
       </div>
 
       <div className="mb-6 flex space-x-2 border-b border-gray-800">

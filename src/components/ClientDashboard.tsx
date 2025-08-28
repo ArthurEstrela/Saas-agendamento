@@ -1,7 +1,7 @@
 // src/components/ClientDashboard.tsx
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import type { Appointment, UserProfile } from "../types";
 import { Star, Menu as MenuIcon } from "lucide-react";
 import Booking from "./Booking";
@@ -151,6 +151,7 @@ const ClientDashboard: React.FC = () => {
     submitReview,
   } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeView, setActiveView] = useState<
     | "search"
     | "myAppointments"
@@ -173,6 +174,13 @@ const ClientDashboard: React.FC = () => {
     isOpen: boolean;
     appointment?: Appointment;
   }>({ isOpen: false });
+
+  useEffect(() => {
+    if (location.state?.view) {
+      setActiveView(location.state.view);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleLoginAction = () => navigate("/login");
 
@@ -235,7 +243,13 @@ const ClientDashboard: React.FC = () => {
     }
 
     // Usando LoginPrompt para renderizar a mensagem correta caso o usuário não esteja logado
-    if (!user && (activeView === "myAppointments" || activeView === "favorites" || activeView === "profile" || activeView === "notifications")) {
+    if (
+      !user &&
+      (activeView === "myAppointments" ||
+        activeView === "favorites" ||
+        activeView === "profile" ||
+        activeView === "notifications")
+    ) {
       let message = "";
       switch (activeView) {
         case "myAppointments":
@@ -258,7 +272,9 @@ const ClientDashboard: React.FC = () => {
       case "search":
         return (
           <ClientSearchSection
-            handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
+            handleSelectProfessionalForBooking={
+              handleSelectProfessionalForBooking
+            }
             handleProtectedAction={handleProtectedAction}
           />
         );
@@ -275,7 +291,9 @@ const ClientDashboard: React.FC = () => {
           <ClientFavoritesSection
             handleProtectedAction={handleProtectedAction}
             toggleFavorite={toggleFavorite}
-            handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
+            handleSelectProfessionalForBooking={
+              handleSelectProfessionalForBooking
+            }
             user={user}
             userProfile={userProfile}
             handleLoginAction={handleLoginAction}

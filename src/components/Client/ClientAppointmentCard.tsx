@@ -65,7 +65,7 @@ const ClientAppointmentCard: React.FC<ClientAppointmentCardProps> = ({
         </div>
         <div className="flex items-center gap-2 text-gray-400">
           <Clock size={20} />
-          <p className="font-medium">{app.time}</p>
+          <p className="font-medium">{app.startTime}</p>
         </div>
       </div>
 

@@ -115,19 +115,9 @@ export interface Expense {
   id: string;
   serviceProviderId: string;
   description: string;
-  category:
-    | "Aluguel"
-    | "Água"
-    | "Luz"
-    | "Salários"
-    | "Produtos"
-    | "Marketing"
-    | "Outros";
+  category: string;
   amount: number;
-  isFixed: boolean;
-  recurringDay?: number; // Dia do mês para recorrência (1-31)
-  date: string; // 'YYYY-MM-DD'
-  createdAt: Timestamp;
+  date: string; // Formato 'YYYY-MM-DD'
 }
 
 // Interface para Avaliações

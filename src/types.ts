@@ -16,11 +16,12 @@ export interface Address {
 // Interface para Serviços, mantida detalhada para associar aos profissionais
 export interface Service {
   id: string;
-  name:string;
+  serviceProviderId: string;
+  name: string;
   price: number;
-  duration: number; // em minutos
-  description?: string;
-  professionalIds: string[]; // Associa quais profissionais realizam o serviço
+  duration: number; // Duração em minutos
+  description: string;
+  professionalIds: string[]; // MUDANÇA: de professionalId para um array de IDs
 }
 
 // Estrutura para os intervalos de tempo (trabalho e pausa)

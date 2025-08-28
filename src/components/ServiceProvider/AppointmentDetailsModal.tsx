@@ -1,9 +1,11 @@
 // src/components/ServiceProvider/AppointmentDetailsModal.tsx
-import React from 'react';
-import { X, Clock, User, Scissors, DollarSign, Calendar, Edit, Trash2, Info } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Clock, User, Scissors, DollarSign, Calendar, Edit, Trash2, Info, Check, Loader } from 'lucide-react';
 import type { Appointment, Professional } from '../../types';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { db } from '../../firebase/config';
+import { doc, updateDoc } from 'firebase/firestore';
 
 // --- Tipos e Constantes ---
 const statusConfig = {
@@ -21,28 +23,43 @@ interface ModalProps {
 }
 
 const AppointmentDetailsModal = ({ appointment, onClose, professionals }: ModalProps) => {
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+
   if (!appointment) return null;
 
   const professionalName = professionals.find(p => p.id === appointment.professionalId)?.name || 'Profissional não encontrado';
   const status = statusConfig[appointment.status] || statusConfig.pendente;
 
-  // --- Função para evitar que o clique no modal feche-o ---
+  const handleStatusUpdate = async (newStatus: Appointment['status']) => {
+    if(newStatus === 'confirmado') setIsConfirming(true);
+    if(newStatus === 'cancelado') setIsCanceling(true);
+
+    try {
+      const appointmentRef = doc(db, 'appointments', appointment.id);
+      await updateDoc(appointmentRef, { status: newStatus });
+      onClose();
+    } catch (error) {
+      console.error(`Erro ao atualizar status para ${newStatus}:`, error);
+    } finally {
+      setIsConfirming(false);
+      setIsCanceling(false);
+    }
+  };
+
   const handleModalContentClick = (e: React.MouseEvent) => {
     e.stopPropagation();
   };
   
   return (
-    // Backdrop
     <div 
       className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4"
       onClick={onClose}
     >
-      {/* Modal Content */}
       <div 
         className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-700"
         onClick={handleModalContentClick}
       >
-        {/* Header */}
         <div className="flex justify-between items-center p-5 border-b border-gray-700">
           <h2 className="text-xl font-bold text-white">Detalhes do Agendamento</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
@@ -50,7 +67,6 @@ const AppointmentDetailsModal = ({ appointment, onClose, professionals }: ModalP
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 space-y-5">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-amber-400">{appointment.clientName}</h3>
@@ -73,11 +89,27 @@ const AppointmentDetailsModal = ({ appointment, onClose, professionals }: ModalP
           )}
         </div>
         
-        {/* Footer / Actions */}
         <div className="flex justify-end items-center p-5 border-t border-gray-700 gap-3">
-          <button className="px-4 py-2 text-sm font-semibold bg-red-500/80 text-white rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2">
-            <Trash2 size={16} /> Cancelar
+          <button 
+            onClick={() => handleStatusUpdate('cancelado')}
+            disabled={isCanceling || appointment.status === 'cancelado' || appointment.status === 'concluido'}
+            className="px-4 py-2 text-sm font-semibold bg-red-500/80 text-white rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCanceling ? <Loader size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            Cancelar
           </button>
+          
+          {appointment.status === 'pendente' && (
+            <button 
+              onClick={() => handleStatusUpdate('confirmado')}
+              disabled={isConfirming}
+              className="px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isConfirming ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+              Confirmar
+            </button>
+          )}
+
           <button className="px-4 py-2 text-sm font-semibold bg-amber-500 text-black rounded-lg hover:bg-amber-400 transition-colors flex items-center gap-2">
             <Edit size={16} /> Editar
           </button>
@@ -87,7 +119,6 @@ const AppointmentDetailsModal = ({ appointment, onClose, professionals }: ModalP
   );
 };
 
-// --- Componente Auxiliar para Itens de Informação ---
 const InfoItem = ({ icon: Icon, label, value }) => (
   <div className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
     <Icon className="text-amber-400 mt-1 flex-shrink-0" size={18} />

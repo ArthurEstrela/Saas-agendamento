@@ -8,11 +8,11 @@ import {
   ChevronRight, 
   Plus, 
   Clock, 
-  User, 
   Scissors, 
   Loader,
   CalendarDays,
-  Inbox
+  Inbox,
+  Users
 } from 'lucide-react';
 import { 
   format, 
@@ -25,15 +25,16 @@ import {
   eachDayOfInterval,
   isToday,
   subMonths,
-  addMonths
+  addMonths,
+  isSameMonth,
+  endOfWeek
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuthStore } from '../../store/authStore';
 import type { Appointment, Professional } from '../../types';
 import { db } from '../../firebase/config';
-
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import AppointmentDetailsModal from './AppointmentDetailsModal';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 // --- Tipos e Constantes ---
 type ViewMode = 'semanal' | 'diaria' | 'mensal' | 'lista';
@@ -54,6 +55,7 @@ const AgendaView = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [professionalFilter, setProfessionalFilter] = useState<string>('all');
 
   // --- Busca de Dados em Tempo Real ---
   useEffect(() => {
@@ -77,10 +79,17 @@ const AgendaView = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe(); // Limpa o listener ao desmontar o componente
+    return () => unsubscribe();
   }, [userProfile]);
 
   const professionals = useMemo(() => userProfile?.professionals || [], [userProfile]);
+
+  const filteredProfessionals = useMemo(() => {
+    if (professionalFilter === 'all') {
+      return professionals;
+    }
+    return professionals.filter(p => p.id === professionalFilter);
+  }, [professionals, professionalFilter]);
 
   // --- Funções de Navegação de Data ---
   const handleNext = () => {
@@ -111,6 +120,19 @@ const AgendaView = () => {
         <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 text-sm font-semibold bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors">Hoje</button>
       </div>
       <div className="flex items-center gap-2">
+        <div className="relative">
+          <select
+            value={professionalFilter}
+            onChange={(e) => setProfessionalFilter(e.target.value)}
+            className="appearance-none bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            <option value="all">Todos Profissionais</option>
+            {professionals.map(prof => (
+              <option key={prof.id} value={prof.id}>{prof.name}</option>
+            ))}
+          </select>
+          <Users size={16} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
         <div className="flex items-center bg-gray-800 rounded-lg p-1">
           {(['semanal', 'diaria', 'mensal', 'lista'] as ViewMode[]).map(mode => {
             const icons = { semanal: LayoutGrid, diaria: Calendar, mensal: CalendarDays, lista: List };
@@ -161,7 +183,7 @@ const AgendaView = () => {
             {format(day, 'EEE', { locale: ptBR })} <span className="block text-sm">{format(day, 'dd/MM')}</span>
           </div>
         ))}
-        {professionals.map(prof => (
+        {filteredProfessionals.map(prof => (
           <React.Fragment key={prof.id}>
             <div className="p-2 border-b border-r border-gray-700 font-semibold">{prof.name}</div>
             {days.map(day => {
@@ -182,7 +204,7 @@ const AgendaView = () => {
     const dayAppointments = appointments.filter(a => isSameDay(parseISO(a.date), currentDate));
     return (
       <div className="space-y-4">
-        {professionals.map(prof => {
+        {filteredProfessionals.map(prof => {
           const profAppointments = dayAppointments.filter(a => a.professionalId === prof.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
           if(profAppointments.length === 0) return null;
           return (
@@ -194,7 +216,7 @@ const AgendaView = () => {
             </div>
           )
         })}
-        {dayAppointments.length === 0 && <EmptyState />}
+        {dayAppointments.filter(a => professionalFilter === 'all' || a.professionalId === professionalFilter).length === 0 && <EmptyState />}
       </div>
     );
   };
@@ -210,7 +232,10 @@ const AgendaView = () => {
           <div key={day} className="text-center font-bold p-2 border-b border-r border-gray-700">{day}</div>
         ))}
         {days.map(day => {
-          const dayAppointments = appointments.filter(a => isSameDay(parseISO(a.date), day));
+          const dayAppointments = appointments.filter(a => 
+            isSameDay(parseISO(a.date), day) && 
+            (professionalFilter === 'all' || a.professionalId === professionalFilter)
+          );
           return (
             <div key={day.toString()} className={`p-2 border-b border-r border-gray-700 min-h-[120px] ${!isSameMonth(day, currentDate) ? 'bg-gray-800/50' : ''}`}>
               <span className={`font-semibold ${isToday(day) ? 'text-amber-400' : ''}`}>{format(day, 'd')}</span>
@@ -226,14 +251,13 @@ const AgendaView = () => {
       </div>
     );
   };
-  
-  // Funções auxiliares para renderMensalView
-  const isSameMonth = (day, date) => format(day, 'MM') === format(date, 'MM');
-  const endOfWeek = (date, options) => addDays(startOfWeek(date, options), 6);
 
   const renderListaView = () => {
     const upcomingAppointments = appointments
-      .filter(a => parseISO(a.date) >= new Date())
+      .filter(a => 
+        parseISO(a.date) >= new Date() &&
+        (professionalFilter === 'all' || a.professionalId === professionalFilter)
+      )
       .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime() || a.startTime.localeCompare(b.startTime));
     
     if (upcomingAppointments.length === 0) return <EmptyState message="Nenhum agendamento futuro encontrado." />;
@@ -280,7 +304,7 @@ const AppointmentCard = ({ appointment, onClick }: { appointment: Appointment, o
   );
 };
 
-const EmptyState = ({ message = "Nenhum agendamento para este dia." }) => (
+const EmptyState = ({ message = "Nenhum agendamento encontrado." }) => (
   <div className="flex flex-col items-center justify-center h-96 text-gray-500">
     <Inbox size={48} />
     <p className="mt-4 text-lg font-semibold">{message}</p>

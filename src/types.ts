@@ -96,9 +96,8 @@ export interface Appointment {
   date: string; // 'YYYY-MM-DD'
   startTime: string; // 'HH:mm'
   endTime: string; // 'HH:mm'
-  status: "scheduled" | "completed" | "canceledByClient" | "canceledByProvider" | "noShow";
+   status: "pendente" | "confirmado" | "concluido" | "cancelado" | "nao_compareceu";
   createdAt: Timestamp;
-
   serviceName: string;
   professionalName: string;
   clientName: string;
@@ -142,4 +141,15 @@ export interface Review {
   rating: number; // 1 a 5
   comment: string;
   createdAt: Timestamp;
+}
+
+export interface RecurringAppointment {
+  id: string;
+  professionalId: string;
+  clientId: string;
+  serviceId: string;
+  startDate: string; // 'YYYY-MM-DD'
+  endDate: string; // 'YYYY-MM-DD'
+  startTime: string; // 'HH:mm'
+  recurrence: 'semanal' | 'quinzenal' | 'mensal';
 }

@@ -37,6 +37,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "../context/ToastContext";
+import AgendaView from "./ServiceProvider/AgendaView";
 
 // Importando os seus componentes de gerenciamento existentes
 import ProfileManagement from "./ServiceProvider/ProfileManagement";
@@ -45,24 +46,28 @@ import ProfessionalsManagement from "./ServiceProvider/ProfessionalsManagement";
 import AvailabilityManagement from "./ServiceProvider/AvailabilityManagement";
 import FinancialManagement from "./ServiceProvider/FinancialManagement";
 import ReviewsManagement from "./ServiceProvider/ReviewsManagement";
-import Notifications from './common/Notifications'; // Corrigido o caminho
+import Notifications from "./common/Notifications"; // Corrigido o caminho
 
 // --- Subcomponente de Card de Estatísticas ---
 const StatCard = ({ title, value, icon: Icon, colorClass, prefix = "" }) => (
-    <div className={`relative bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10 overflow-hidden shadow-lg transition-all duration-300 hover:border-amber-400/50 hover:shadow-amber-400/10`}>
-        <div className={`absolute top-0 left-0 h-1 w-full ${colorClass}`}></div>
-        <div className="flex items-start justify-between">
-            <div>
-                <p className="text-sm text-gray-400">{title}</p>
-                <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mt-2">{prefix}{value}</p>
-            </div>
-            <div className={`p-3 rounded-full ${colorClass} shadow-lg`}>
-                <Icon className="h-6 w-6 text-black" />
-            </div>
-        </div>
+  <div
+    className={`relative bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10 overflow-hidden shadow-lg transition-all duration-300 hover:border-amber-400/50 hover:shadow-amber-400/10`}
+  >
+    <div className={`absolute top-0 left-0 h-1 w-full ${colorClass}`}></div>
+    <div className="flex items-start justify-between">
+      <div>
+        <p className="text-sm text-gray-400">{title}</p>
+        <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mt-2">
+          {prefix}
+          {value}
+        </p>
+      </div>
+      <div className={`p-3 rounded-full ${colorClass} shadow-lg`}>
+        <Icon className="h-6 w-6 text-black" />
+      </div>
     </div>
+  </div>
 );
-
 
 // --- Subcomponente de Modal de Confirmação ---
 const ConfirmationModal = ({
@@ -243,7 +248,7 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
             active={activeView === "availability"}
             onClick={() => setActiveView("availability")}
           />
-           <NavItem
+          <NavItem
             icon={Bell}
             text="Notificações"
             active={activeView === "notifications"}
@@ -390,389 +395,6 @@ const ProfessionalSelector = ({
   );
 };
 
-// Componente para a Agenda
-const AgendaView = () => {
-  const { userProfile, updateAppointmentStatus } = useAuthStore();
-  const { showToast } = useToast();
-  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmationModalState, setConfirmationModalState] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
-  const [completeServiceModalState, setCompleteServiceModalState] = useState<{
-    isOpen: boolean;
-    appointment: Appointment | null;
-  } | null>(null);
-  const [agendaTab, setAgendaTab] = useState<"upcoming" | "history">(
-    "upcoming"
-  );
-  const [historyFilters, setHistoryFilters] = useState({
-    professionalId: "todos",
-    clientName: "",
-    dateStart: "",
-    dateEnd: "",
-  });
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
-
-  const [selectedProfessionalId, setSelectedProfessionalId] =
-    useState<string>(() => {
-      return localStorage.getItem("selectedProfessionalId_v2") || "todos";
-    });
-
-  useEffect(() => {
-    localStorage.setItem("selectedProfessionalId_v2", selectedProfessionalId);
-  }, [selectedProfessionalId]);
-
-  useEffect(() => {
-    if (!userProfile?.uid) return;
-    const q = query(
-      collection(db, "appointments"),
-      where("serviceProviderId", "==", userProfile.uid)
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      async (snapshot) => {
-        setLoading(true);
-        const apptsData = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as Appointment)
-        );
-
-        const appointmentsWithDetails = await Promise.all(
-          apptsData.map(async (appt) => {
-            const clientDocRef = doc(db, "users", appt.clientId);
-            const clientSnap = await getDoc(clientDocRef);
-            const clientProfile = clientSnap.data();
-
-            const professional = userProfile.professionals?.find(
-              (p) => p.id === appt.professionalId
-            );
-            let totalPrice = 0;
-            const serviceNames =
-              (appt.serviceIds || [])
-                ?.map((serviceId) => {
-                  const service = professional?.services?.find(
-                    (s) => s.id === serviceId
-                  );
-                  if (service) {
-                    totalPrice += service.price;
-                    return service.name;
-                  }
-                  return "Serviço Removido";
-                })
-                .join(", ") || "N/A";
-
-            return {
-              ...appt,
-              clientName: clientProfile?.displayName || "Cliente Desconhecido",
-              professionalName:
-                professional?.name || "Profissional Desconhecido",
-              serviceName: serviceNames,
-              totalPrice: appt.totalPrice || totalPrice,
-            };
-          })
-        );
-        setAllAppointments(appointmentsWithDetails);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Erro ao carregar agendamentos:", error);
-        showToast("Erro ao carregar agendamentos.", "error");
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [userProfile, showToast]);
-
-  const { upcomingAppointments, historyAppointments } = useMemo(() => {
-    const now = new Date();
-    const filtered = allAppointments.filter((app) => {
-      if (selectedProfessionalId === "todos") return true;
-      return app.professionalId === selectedProfessionalId;
-    });
-
-    const upcoming = filtered
-      .filter((app) => {
-        if (!app.date || !app.startTime) {
-          return false;
-        }
-        const [year, month, day] = app.date.split("-").map(Number);
-        const [hour, minute] = app.startTime.split(":").map(Number);
-        const appDateTime = new Date(year, month - 1, day, hour, minute);
-        return (
-          appDateTime >= now &&
-          (app.status === "scheduled" || app.status === "confirmed")
-        );
-      })
-      .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.startTime}`);
-        const dateB = new Date(`${b.date}T${b.startTime}`);
-        return dateA.getTime() - dateB.getTime();
-      });
-
-    const history = filtered
-      .filter((app) => {
-        if (!app.date || !app.startTime) {
-          return false;
-        }
-        const [year, month, day] = app.date.split("-").map(Number);
-        const [hour, minute] = app.startTime.split(":").map(Number);
-        const appDateTime = new Date(year, month - 1, day, hour, minute);
-        return (
-          appDateTime < now ||
-          ["completed", "canceledByClient", "canceledByProvider", "noShow"].includes(app.status)
-        );
-      })
-      .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.startTime}`);
-        const dateB = new Date(`${b.date}T${b.startTime}`);
-        return dateB.getTime() - dateA.getTime();
-      });
-
-    return { upcomingAppointments: upcoming, historyAppointments: history };
-  }, [allAppointments, selectedProfessionalId]);
-  const filteredHistoryAppointments = useMemo(() => {
-    let filtered = historyAppointments;
-    if (historyFilters.professionalId !== "todos") {
-      filtered = filtered.filter(
-        (app) => app.professionalId === historyFilters.professionalId
-      );
-    }
-    if (historyFilters.clientName) {
-      filtered = filtered.filter((app) =>
-        app.clientName
-          .toLowerCase()
-          .includes(historyFilters.clientName.toLowerCase())
-      );
-    }
-    if (historyFilters.dateStart) {
-      const startDate = new Date(historyFilters.dateStart + "T00:00:00");
-      filtered = filtered.filter((app) => new Date(app.date) >= startDate);
-    }
-    if (historyFilters.dateEnd) {
-      const endDate = new Date(historyFilters.dateEnd + "T23:59:59");
-      filtered = filtered.filter((app) => new Date(app.date) <= endDate);
-    }
-    return filtered;
-  }, [historyAppointments, historyFilters]);
-
-  const totalPages = Math.ceil(
-    filteredHistoryAppointments.length / ITEMS_PER_PAGE
-  );
-  const paginatedHistory = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredHistoryAppointments.slice(
-      startIndex,
-      startIndex + ITEMS_PER_PAGE
-    );
-  }, [currentPage, filteredHistoryAppointments]);
-
-  const handleAction = (
-    action: () => void,
-    title: string,
-    message: string
-  ) => {
-    setConfirmationModalState({
-      isOpen: true,
-      title,
-      message,
-      onConfirm: () => {
-        action();
-        setConfirmationModalState(null);
-      },
-    });
-  };
-
-  const handleCompleteServiceClick = (appointment: Appointment) => {
-    handleAction(
-      () => setCompleteServiceModalState({ isOpen: true, appointment }),
-      "Confirmar Conclusão",
-      `Tem certeza que deseja marcar o serviço de "${appointment.serviceName}" como concluído?`
-    );
-  };
-
-  const handleConfirmCompleteService = async (
-    appointment: Appointment,
-    finalPrice: number
-  ) => {
-    if (!userProfile?.uid) return;
-
-    const appointmentRef = doc(db, 'appointments', appointment.id);
-
-    try {
-      await updateDoc(appointmentRef, {
-        status: 'completed',
-        totalPrice: finalPrice,
-        professionalName: appointment.professionalName,
-        serviceName: appointment.serviceName,
-        completedAt: Timestamp.now(),
-      });
-      showToast('Agendamento concluído e registrado no financeiro!', 'success');
-    } catch (error) {
-      console.error("Erro ao concluir agendamento: ", error);
-      showToast('Erro ao registrar conclusão.', 'error');
-    } finally {
-      setCompleteServiceModalState(null);
-    }
-  };
-
-  const handleUpdateStatus = (
-    appointment: Appointment,
-    status: "confirmed" | "canceledByProvider" | "noShow",
-    title: string,
-    message: string
-  ) => {
-    handleAction(
-      () => {
-        if (userProfile?.uid) {
-          updateAppointmentStatus(appointment.id, status);
-        }
-      },
-      title,
-      message
-    );
-  };
-
-  const getStatusInfo = (status: Appointment["status"], isPast: boolean) => {
-    switch (status) {
-      case "scheduled":
-        return { text: "Pendente", color: "bg-yellow-500/20 text-yellow-300", icon: <Clock size={14} /> };
-      case "confirmed":
-        return { text: "Confirmado", color: isPast ? "bg-orange-500/20 text-orange-300" : "bg-green-500/20 text-green-300", icon: isPast ? <AlertTriangle size={14} /> : <Check size={14} /> };
-      case "completed":
-        return { text: "Concluído", color: "bg-blue-500/20 text-blue-300", icon: <CheckCircle size={14} /> };
-      case "noShow":
-        return { text: "Não Compareceu", color: "bg-red-500/20 text-red-300", icon: <UserX size={14} /> };
-      case "canceledByClient":
-        return { text: "Cancelado pelo Cliente", color: "bg-gray-500/20 text-gray-300", icon: <X size={14} /> };
-      case "canceledByProvider":
-        return { text: "Cancelado", color: "bg-gray-500/20 text-gray-300", icon: <X size={14} /> };
-      default:
-        return { text: "Desconhecido", color: "bg-gray-500/20 text-gray-300", icon: <AlertTriangle size={14} /> };
-    }
-  };
-
-  const overviewStats = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const todayAppointments = allAppointments.filter((app) => app.date === today);
-    const pastDueAppointments = allAppointments.filter((app) => {
-      const appDateTime = new Date(`${app.date}T${app.startTime}`);
-      return app.status === "confirmed" && appDateTime < new Date();
-    });
-    return {
-      total: todayAppointments.length,
-      confirmed: todayAppointments.filter((app) => app.status === "confirmed").length,
-      pending: todayAppointments.filter((app) => app.status === "scheduled").length,
-      pastDue: pastDueAppointments.length,
-    };
-  }, [allAppointments]);
-
-  const renderAppointmentList = (list: Appointment[]) => {
-    if (list.length === 0) {
-      return <p className="text-center text-gray-400 py-10">Nenhum agendamento encontrado.</p>;
-    }
-    return (
-      <ul className="space-y-4">
-        {list.map((app) => {
-          const appointmentDateTime = new Date(`${app.date}T${app.startTime}`);
-          const isPast = appointmentDateTime < new Date();
-          const statusInfo = getStatusInfo(app.status, isPast);
-          return (
-            <li key={app.id} className="bg-gray-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 hover:border-[#daa520]/50 transition-colors">
-              <div className="flex items-center mb-4 md:mb-0 flex-grow">
-                <div className="text-center border-r-2 border-gray-700 pr-4 mr-4">
-                  <p className="text-2xl font-bold text-white">{app.startTime}</p>
-                  <p className="text-sm text-gray-400">{format(appointmentDateTime, "dd/MMM", { locale: ptBR })}</p>
-                </div>
-                <div>
-                  <p className="font-bold text-lg text-white">{app.serviceName}</p>
-                  <p className="text-sm text-gray-300">Cliente: {app.clientName}</p>
-                  <p className="text-sm text-gray-400">Profissional: {app.professionalName}</p>
-                  {app.totalPrice && <p className="text-sm text-gray-300">Valor Estimado: R$ {app.totalPrice?.toFixed(2)}</p>}
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full border-t border-gray-700 pt-4 mt-4 md:border-none md:pt-0 md:mt-0 md:w-auto">
-                <div className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg ${statusInfo.color}`}>
-                  {statusInfo.icon}
-                  <span>{statusInfo.text}</span>
-                </div>
-                <div className="flex items-center justify-center gap-2 flex-grow">
-                  {app.status === "scheduled" && (
-                    <>
-                      <button onClick={() => handleUpdateStatus(app, "confirmed", "Confirmar Agendamento", `Tem certeza que deseja confirmar o agendamento de "${app.clientName}"?`)} className="p-2 bg-green-600/80 hover:bg-green-600 rounded-md text-white" title="Confirmar"><Check size={16} /></button>
-                      <button onClick={() => handleUpdateStatus(app, "canceledByProvider", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
-                    </>
-                  )}
-                  {app.status === "confirmed" && isPast && (
-                    <>
-                      <button onClick={() => handleUpdateStatus(app, "noShow", "Confirmar Não Comparecimento", `Tem certeza que deseja marcar o agendamento de "${app.clientName}" como "Não Compareceu"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Não Compareceu"><UserX size={16} /></button>
-                      <button onClick={() => handleCompleteServiceClick(app)} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white" title="Concluído"><CheckCircle size={16} /></button>
-                    </>
-                  )}
-                  {app.status === "confirmed" && !isPast && (
-                    <button onClick={() => handleUpdateStatus(app, "canceledByProvider", "Cancelar Agendamento", `Tem certeza que deseja cancelar o agendamento de "${app.clientName}"?`)} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white" title="Cancelar"><X size={16} /></button>
-                  )}
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  };
-
-  return (
-    <div className="animate-fade-in-down">
-      {confirmationModalState?.isOpen && <ConfirmationModal title={confirmationModalState.title} message={confirmationModalState.message} onConfirm={confirmationModalState.onConfirm} onCancel={() => setConfirmationModalState(null)} />}
-      {completeServiceModalState?.isOpen && <CompleteServiceModal isOpen={completeServiceModalState.isOpen} appointment={completeServiceModalState.appointment} onClose={() => setCompleteServiceModalState(null)} onConfirm={handleConfirmCompleteService} />}
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-4 sm:mb-0">Agenda e Solicitações</h2>
-        <ProfessionalSelector professionals={userProfile?.professionals || []} selectedProfId={selectedProfessionalId} setSelectedProfId={setSelectedProfessionalId} includeAllOption={true} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Total de Hoje" value={overviewStats.total} icon={LayoutDashboard} colorClass="bg-gradient-to-r from-blue-500 to-cyan-500" prefix="" />
-        <StatCard title="Confirmados Hoje" value={overviewStats.confirmed} icon={CheckCircle} colorClass="bg-gradient-to-r from-green-500 to-emerald-500" prefix="" />
-        <StatCard title="Pendentes Hoje" value={overviewStats.pending} icon={Clock} colorClass="bg-gradient-to-r from-yellow-500 to-amber-500" prefix="" />
-        <StatCard title="Atrasados" value={overviewStats.pastDue} icon={AlertTriangle} colorClass="bg-gradient-to-r from-orange-500 to-red-500" prefix="" />
-      </div>
-
-      <div className="mb-6 flex space-x-2 border-b border-gray-800">
-        <button onClick={() => setAgendaTab("upcoming")} className={`py-2 px-4 font-semibold transition-colors ${agendaTab === "upcoming" ? "text-[#daa520] border-b-2 border-[#daa520]" : "text-gray-500 hover:text-white"}`}>Próximos Agendamentos</button>
-        <button onClick={() => setAgendaTab("history")} className={`py-2 px-4 font-semibold transition-colors ${agendaTab === "history" ? "text-[#daa520] border-b-2 border-[#daa520]" : "text-gray-500 hover:text-white"}`}>Histórico de Agendamentos</button>
-      </div>
-
-      {loading ? <p className="text-center text-gray-400 py-10">A carregar agendamentos...</p> : agendaTab === "upcoming" ? renderAppointmentList(upcomingAppointments) : (
-        <div>
-          <div className="bg-gray-800/50 p-4 rounded-xl mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div><label className="text-sm text-gray-400">Profissional</label><select value={historyFilters.professionalId} onChange={(e) => { setHistoryFilters(prev => ({ ...prev, professionalId: e.target.value })); setCurrentPage(1); }} className="w-full bg-gray-700 p-2 rounded-md mt-1"><option value="todos">Todos</option>{userProfile?.professionals?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-            <div><label className="text-sm text-gray-400">Cliente</label><input type="text" placeholder="Nome do cliente..." value={historyFilters.clientName} onChange={(e) => { setHistoryFilters(prev => ({ ...prev, clientName: e.target.value })); setCurrentPage(1); }} className="w-full bg-gray-700 p-2 rounded-md mt-1" /></div>
-            <div className="md:col-span-2 grid grid-cols-2 gap-4">
-              <div><label className="text-sm text-gray-400">De</label><input type="date" value={historyFilters.dateStart} onChange={e => setHistoryFilters(prev => ({ ...prev, dateStart: e.target.value }))} className="w-full bg-gray-700 p-2 rounded-md mt-1" /></div>
-              <div><label className="text-sm text-gray-400">Até</label><input type="date" value={historyFilters.dateEnd} onChange={e => setHistoryFilters(prev => ({ ...prev, dateEnd: e.target.value }))} className="w-full bg-gray-700 p-2 rounded-md mt-1" /></div>
-            </div>
-          </div>
-          {paginatedHistory.length > 0 ? (
-            <>
-              {renderAppointmentList(paginatedHistory)}
-              <div className="flex justify-center items-center mt-6 gap-4">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="bg-gray-700 px-4 py-2 rounded-md disabled:opacity-50">Anterior</button>
-                <span className="text-gray-400">Página {currentPage} de {totalPages}</span>
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="bg-gray-700 px-4 py-2 rounded-md disabled:opacity-50">Próxima</button>
-              </div>
-            </>
-          ) : <p className="text-center text-gray-400 py-10">Nenhum registo encontrado para os filtros selecionados.</p>}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // --- Componente Principal do Dashboard ---
 const ServiceProviderDashboard = () => {
   const [activeView, setActiveView] = useState("agenda");
@@ -797,7 +419,7 @@ const ServiceProviderDashboard = () => {
       case "notifications":
         return <Notifications />;
       default:
-        return <AgendaView />; // Padrão para a agenda
+        return <AgendaView />;
     }
   };
 

@@ -21,3 +21,15 @@
     border-image-source: linear-gradient(to right, #FBBF24, #F59E0B);
   }
 }
+
+/* Esconde as setas no Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Esconde as setas no Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}

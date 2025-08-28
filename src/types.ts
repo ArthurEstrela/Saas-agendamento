@@ -30,6 +30,14 @@ export interface TimeInterval {
   end: string;   // "HH:mm"
 }
 
+export interface WorkSchedule {
+  [dayOfWeek: string]: {
+    active: boolean;
+    intervals: TimeInterval[];
+  };
+  // Ex: "monday": { active: true, intervals: [{ start: "09:00", end: "18:00" }] }
+}
+
 // Disponibilidade por dia da semana, mais flexível para cada profissional
 export interface DayAvailability {
   dayOfWeek: 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
@@ -53,6 +61,7 @@ export interface Professional {
   photoURL?: string;
   availability: DayAvailability[]; // Cada profissional tem sua agenda
   unavailability?: Unavailability[]; // Campo para folgas e imprevistos
+  workSchedule?: WorkSchedule;
 }
 
 // Perfil do Usuário unificado e atualizado
@@ -128,10 +137,11 @@ export interface Review {
   clientId: string;
   clientName: string;
   clientPhotoURL?: string;
-  appointmentId: string;
-  rating: number; // 1 a 5
+  professionalId: string;
+  serviceName: string;
+  rating: number;
   comment: string;
-  createdAt: Timestamp;
+  date: string;
 }
 
 export interface RecurringAppointment {

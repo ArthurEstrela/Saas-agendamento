@@ -106,7 +106,7 @@ export interface Appointment {
   date: string; // 'YYYY-MM-DD'
   startTime: string; // 'HH:mm'
   endTime: string; // 'HH:mm'
-   status: "pendente" | "confirmado" | "concluido" | "cancelado" | "nao_compareceu";
+  status: "pendente" | "confirmado" | "concluido" | "cancelado" | "nao_compareceu";
   createdAt: Timestamp;
   serviceName: string;
   professionalName: string;
@@ -118,6 +118,8 @@ export interface Appointment {
   cancellationReason?: string;
   notes?: string;
   hasBeenReviewed?: boolean;
+  serviceProviderName: string;      // NOVO CAMPO (ou garantir que exista)
+  serviceProviderPhotoURL?: string; // NOVO CAMPO OPCIONAL
 }
 
 // Interface para Despesas

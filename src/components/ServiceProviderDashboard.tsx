@@ -280,7 +280,7 @@ const SideNav = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
               />
               <div>
                 <p className="text-sm font-semibold text-white truncate">
-                  {userProfile?.companyName || "Nome do Salão"}
+                  {userProfile?.establishmentName || "Nome do Salão"}
                 </p>
                 <p className="text-xs text-gray-400">Prestador de Serviço</p>
               </div>

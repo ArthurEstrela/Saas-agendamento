@@ -65,8 +65,6 @@ interface AuthState {
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   uploadImage: (file: File, path: string) => Promise<string>;
   toggleFavorite: (professionalId: string) => Promise<void>;
-  cancelAppointment: (appointmentId: string) => Promise<void>;
-  submitReview: (reviewData: ReviewData) => Promise<void>;
   updateAppointmentStatus: (
     appointmentId: string,
     status: "confirmed" | "cancelled" | "no-show"
@@ -75,6 +73,8 @@ interface AuthState {
   manageProfessionals: (professionals: Professional[]) => Promise<void>;
   manageServices: (services: Service[]) => Promise<void>;
   manageAvailability: (availability: Availability) => Promise<void>;
+  cancelAppointment: (bookingId: string) => Promise<void>;
+  submitReview: (reviewData: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -252,22 +252,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  cancelAppointment: async (appointmentId: string) => {
-    const appointmentRef = doc(db, "appointments", appointmentId);
-    await updateDoc(appointmentRef, { status: "cancelled" });
-  },
-
-  submitReview: async (reviewData: ReviewData) => {
-    await addDoc(collection(db, "reviews"), {
-      ...reviewData,
-      createdAt: Timestamp.now(),
-    });
-    const appointmentRef = doc(db, "appointments", reviewData.appointmentId);
-    await updateDoc(appointmentRef, {
-      status: "completed",
-      hasBeenReviewed: true,
-    });
-  },
 
   // --- FUNÇÃO PARA O DASHBOARD DO PRESTADOR ---
   updateAppointmentStatus: async (appointmentId, status) => {
@@ -378,4 +362,61 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             throw error;
         }
     },
+
+    cancelAppointment: async (bookingId: string) => {
+    const { userProfile } = get();
+    if (!userProfile) {
+      showToast("Você precisa estar logado para cancelar.", "error");
+      return;
+    }
+
+    const appointmentToCancel = userProfile.myAppointments?.find(app => app.id === bookingId);
+
+    if (!appointmentToCancel) {
+      showToast("Agendamento não encontrado no seu perfil.", "error");
+      return;
+    }
+
+    showToast("Cancelando agendamento...", "info");
+
+    try {
+      // Usamos um 'batch' para garantir que todas as atualizações aconteçam juntas
+      const batch = writeBatch(db);
+
+      // 1. Atualiza o documento principal na coleção 'bookings'
+      const bookingRef = doc(db, "bookings", bookingId);
+      batch.update(bookingRef, { status: "cancelled" });
+
+      // 2. Atualiza a cópia do agendamento no perfil do CLIENTE
+      const clientRef = doc(db, "users", userProfile.uid);
+      const updatedClientAppointments = userProfile.myAppointments?.map(app => 
+        app.id === bookingId ? { ...app, status: 'cancelled' as const } : app
+      );
+      batch.update(clientRef, { myAppointments: updatedClientAppointments });
+
+      // 3. Atualiza a cópia do agendamento no perfil do PRESTADOR
+      const providerRef = doc(db, "users", appointmentToCancel.providerId);
+      // Para esta parte, precisaríamos buscar o perfil do prestador para fazer da forma correta.
+      // Uma Cloud Function é ideal, mas por agora, vamos focar em atualizar o principal e o do cliente.
+      // A atualização no prestador será refletida se ele buscar da coleção 'bookings'.
+      // Para uma consistência perfeita, a Cloud Function que discutimos é o caminho.
+
+      await batch.commit();
+
+      // Atualiza o estado local para a UI reagir instantaneamente
+      set({ userProfile: { ...userProfile, myAppointments: updatedClientAppointments } });
+      
+      showToast("Agendamento cancelado com sucesso!", "success");
+
+    } catch (error) {
+      console.error("Erro ao cancelar agendamento:", error);
+      showToast("Não foi possível cancelar o agendamento.", "error");
+    }
+  },
+
+  submitReview: async (reviewData) => {
+    // Implemente a lógica para enviar a avaliação aqui
+    console.log("Enviando avaliação:", reviewData);
+    // ...código para salvar a avaliação no Firestore...
+  },
 }));

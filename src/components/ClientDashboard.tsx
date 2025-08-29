@@ -1,363 +1,174 @@
 // src/components/ClientDashboard.tsx
-import React, { useState, useEffect } from "react";
-import { useAuthStore } from "../store/authStore";
-import { useNavigate, useLocation } from "react-router-dom";
-import type { Appointment, UserProfile } from "../types";
-import { Star, Menu as MenuIcon } from "lucide-react";
-import Booking from "./Booking";
 
-import ClientSideNav from "./Client/ClientSideNav";
-import ClientSearchSection from "./Client/ClientSearchSection";
-import ClientMyAppointmentsSection from "./Client/ClientMyAppointmentsSection";
-import ClientFavoritesSection from "./Client/ClientFavoritesSection";
-import ClientProfileManagement from "./Client/ClientProfileManagement";
-import LoginPrompt from "./Common/LoginPrompt";
-import Notifications from "./Common/Notifications";
+import React, { useState, useEffect } from 'react';
+import { useAuthStore } from '../store/authStore';
+import { useLocation, useNavigate } from 'react-router-dom';
+import type { Booking as Appointment, UserProfile, Review } from '../types'; // Renomeando para consistência
+import { Menu as MenuIcon } from 'lucide-react';
 
-const ConfirmationModal = ({
-  title,
-  message,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) => (
-  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-    <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
-      <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-      <p className="text-gray-300 mb-6">{message}</p>
-      <div className="flex justify-center space-x-4">
-        <button
-          onClick={onCancel}
-          className="px-5 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onConfirm}
-          className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-        >
-          Confirmar
-        </button>
-      </div>
-    </div>
-  </div>
-);
+// Importando todos os componentes necessários
+import ClientSideNav from './Client/ClientSideNav';
+import ClientSearchSection from './Client/ClientSearchSection';
+import ClientMyAppointmentsSection from './Client/ClientMyAppointmentsSection';
+import ClientFavoritesSection from './Client/ClientFavoritesSection';
+import ClientProfileManagement from './Client/ClientProfileManagement';
+import Booking from './Booking';
+import LoginPrompt from './Common/LoginPrompt';
+import Notifications from './Common/Notifications';
+import ReviewModal from './Common/ReviewModal';
+import ConfirmationModal from './Common/ConfirmationModal';
 
-const ReviewModal = ({
-  isOpen,
-  onClose,
-  appointment,
-  onSubmit,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  appointment: Appointment;
-  onSubmit: (rating: number, comment: string) => void;
-}) => {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
 
-  useEffect(() => {
-    if (!isOpen) {
-      setRating(0);
-      setComment("");
-    }
-  }, [isOpen]);
-
-  const handleSubmit = () => {
-    if (rating === 0) {
-      alert("Por favor, dê uma classificação."); // Substituir por Toast
-      return;
-    }
-    onSubmit(rating, comment);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-md w-full animate-scale-in">
-        <h3 className="text-2xl font-bold text-white mb-4 text-center">
-          Avaliar Agendamento
-        </h3>
-        <p className="text-gray-300 mb-6 text-center">
-          Compartilhe sua experiência com {appointment?.establishmentName}.
-        </p>
-
-        <div className="mb-6 text-center">
-          <p className="text-gray-400 mb-2">Sua classificação:</p>
-          <div className="flex justify-center space-x-1">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Star
-                key={star}
-                className={`w-10 h-10 cursor-pointer transition-transform duration-200 ${
-                  rating >= star
-                    ? "text-yellow-400 fill-current transform scale-110"
-                    : "text-gray-500 hover:text-yellow-300"
-                }`}
-                onClick={() => setRating(star)}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <label
-            htmlFor="comment"
-            className="block text-gray-300 text-sm font-medium mb-2"
-          >
-            Comentário (opcional):
-          </label>
-          <textarea
-            id="comment"
-            className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-[#daa520] focus:border-[#daa520] resize-y"
-            rows={4}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Deixe seu comentário sobre o serviço..."
-          ></textarea>
-        </div>
-
-        <div className="flex justify-end space-x-4">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-6 py-2 bg-[#daa520] text-gray-900 font-semibold rounded-lg hover:bg-[#c8961e] transition-colors"
-          >
-            Enviar Avaliação
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Definindo os tipos de visualização para mais clareza
+type ActiveView = "search" | "myAppointments" | "favorites" | "profile" | "notifications";
 
 const ClientDashboard: React.FC = () => {
-  const {
-    user,
-    userProfile,
-    logout,
-    toggleFavorite,
-    cancelAppointment,
-    submitReview,
-  } = useAuthStore();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [activeView, setActiveView] = useState<
-    | "search"
-    | "myAppointments"
-    | "favorites"
-    | "profile"
-    | "booking"
-    | "notifications"
-  >("search");
+    const { user, userProfile, logout, toggleFavorite, cancelAppointment, submitReview } = useAuthStore();
+    const navigate = useNavigate();
+    const location = useLocation();
 
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [selectedProfessionalForBooking, setSelectedProfessionalForBooking] =
-    useState<UserProfile | null>(null);
-  const [modalState, setModalState] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
-  const [reviewModal, setReviewModal] = useState<{
-    isOpen: boolean;
-    appointment?: Appointment;
-  }>({ isOpen: false });
+    // --- STATE MANAGEMENT ---
+    const [activeView, setActiveView] = useState<ActiveView>("search");
+    const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+    
+    // Estado para o fluxo de agendamento
+    const [bookingTarget, setBookingTarget] = useState<UserProfile | null>(null);
 
-  useEffect(() => {
-    if (location.state?.view) {
-      setActiveView(location.state.view);
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state]);
-
-  const handleLoginAction = () => navigate("/login");
-
-  const handleCancelAppointment = (appointmentId: string) => {
-    setModalState({
-      isOpen: true,
-      title: "Cancelar Agendamento",
-      message: "Tem a certeza de que pretende cancelar este agendamento?",
-      onConfirm: () => {
-        cancelAppointment(appointmentId);
-        setModalState(null);
-      },
+    // Estado unificado para modais
+    const [modals, setModals] = useState({
+        confirmation: { isOpen: false, title: '', message: '', onConfirm: () => {} },
+        review: { isOpen: false, appointment: null as Appointment | null },
     });
-  };
 
-  const handleOpenReviewModal = (appointment: Appointment) =>
-    setReviewModal({ isOpen: true, appointment });
+    // Efeito para navegar para uma view específica (ex: vindo de outra página)
+    useEffect(() => {
+        if (location.state?.view) {
+            setActiveView(location.state.view);
+            window.history.replaceState({}, document.title); // Limpa o state para não reativar
+        }
+    }, [location.state]);
 
-  const handleSubmitReview = (rating: number, comment: string) => {
-    if (reviewModal.appointment && user) {
-      submitReview({
-        serviceProviderId: reviewModal.appointment.serviceProviderId,
-        appointmentId: reviewModal.appointment.id,
-        rating,
-        comment,
-        clientId: user.uid,
-        serviceIds: reviewModal.appointment.serviceIds,
-      });
-    }
-    setReviewModal({ isOpen: false });
-  };
+    // --- HANDLERS DE AÇÕES ---
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
 
-  const handleSelectProfessionalForBooking = (prof: UserProfile) => {
-    setSelectedProfessionalForBooking(prof);
-    setActiveView("booking");
-  };
+    const handleStartBooking = (professional: UserProfile) => {
+        if (!user) {
+            navigate('/login'); // Se não estiver logado, vai para a página de login
+        } else {
+            setBookingTarget(professional); // Abre o modal de agendamento
+        }
+    };
 
-  const handleBackFromBooking = () => {
-    setSelectedProfessionalForBooking(null);
-    setActiveView("search");
-  };
+    const handleCloseBooking = () => {
+        setBookingTarget(null);
+        setActiveView("myAppointments"); // Volta para "Meus Agendamentos" após agendar
+    };
 
-  const handleProtectedAction = (action: () => void) => {
-    if (!user) {
-      // Redireciona para a página de login
-      handleLoginAction();
-    } else {
-      action();
-    }
-  };
+    const handleCancelAppointment = (appointmentId: string) => {
+        setModals(prev => ({ ...prev, confirmation: {
+            isOpen: true,
+            title: "Cancelar Agendamento",
+            message: "Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.",
+            onConfirm: async () => {
+                await cancelAppointment(appointmentId);
+                setModals(prev => ({ ...prev, confirmation: { ...prev.confirmation, isOpen: false } }));
+            },
+        }}));
+    };
 
-  const renderContent = () => {
-    if (activeView === "booking" && selectedProfessionalForBooking) {
-      return (
-        <Booking
-          professional={selectedProfessionalForBooking}
-          onBack={handleBackFromBooking}
-        />
-      );
-    }
+    const handleOpenReviewModal = (appointment: Appointment) => {
+        setModals(prev => ({ ...prev, review: { isOpen: true, appointment } }));
+    };
 
-    // Usando LoginPrompt para renderizar a mensagem correta caso o usuário não esteja logado
-    if (
-      !user &&
-      (activeView === "myAppointments" ||
-        activeView === "favorites" ||
-        activeView === "profile" ||
-        activeView === "notifications")
-    ) {
-      let message = "";
-      switch (activeView) {
-        case "myAppointments":
-          message = "Veja aqui os seus próximos agendamentos.";
-          break;
-        case "favorites":
-          message = "Guarde aqui os seus profissionais favoritos.";
-          break;
-        case "profile":
-          message = "Edite aqui o seu perfil.";
-          break;
-        case "notifications":
-          message = "Veja aqui as suas notificações.";
-          break;
-      }
-      return <LoginPrompt message={message} onAction={handleLoginAction} />;
-    }
+    const handleSubmitReview = async (rating: number, comment: string) => {
+        if (modals.review.appointment && user) {
+            const reviewData: Omit<Review, 'id' | 'createdAt'> = {
+                providerId: modals.review.appointment.providerId,
+                bookingId: modals.review.appointment.id,
+                clientId: user.uid,
+                clientName: userProfile?.displayName || user.displayName || 'Anônimo',
+                clientPhotoURL: userProfile?.photoURL || user.photoURL || '',
+                rating,
+                comment,
+            };
+            await submitReview(reviewData);
+        }
+        setModals(prev => ({ ...prev, review: { isOpen: false, appointment: null } }));
+    };
 
-    switch (activeView) {
-      case "search":
-        return (
-          <ClientSearchSection
-            handleSelectProfessionalForBooking={
-              handleSelectProfessionalForBooking
-            }
-            handleProtectedAction={handleProtectedAction}
-          />
-        );
-      case "myAppointments":
-        return (
-          <ClientMyAppointmentsSection
-            handleCancelAppointment={handleCancelAppointment}
-            handleOpenReviewModal={handleOpenReviewModal}
-            setActiveView={setActiveView}
-          />
-        );
-      case "favorites":
-        return (
-          <ClientFavoritesSection
-            handleProtectedAction={handleProtectedAction}
-            toggleFavorite={toggleFavorite}
-            handleSelectProfessionalForBooking={
-              handleSelectProfessionalForBooking
-            }
-            user={user}
-            userProfile={userProfile}
-            handleLoginAction={handleLoginAction}
-            LoginPrompt={LoginPrompt}
-            setActiveView={setActiveView}
-          />
-        );
-      case "profile":
-        return (
-          <ClientProfileManagement onBack={() => setActiveView("search")} />
-        );
-      case "notifications":
-        return <Notifications />;
-      default:
-        return null;
-    }
-  };
+    // --- RENDERIZAÇÃO DE CONTEÚDO ---
+    const renderContent = () => {
+        // Se o usuário não estiver logado, mostra a tela de login para seções protegidas
+        if (!user && (activeView === "myAppointments" || activeView === "favorites" || activeView === "profile")) {
+            return <LoginPrompt onAction={() => navigate('/login')} />;
+        }
+        
+        switch (activeView) {
+            case "search":
+                return <ClientSearchSection onSelectProfessional={handleStartBooking} />;
+            case "myAppointments":
+                return <ClientMyAppointmentsSection onCancel={handleCancelAppointment} onReview={handleOpenReviewModal} />;
+            case "favorites":
+                return <ClientFavoritesSection onSelectProfessional={handleStartBooking} />;
+            case "profile":
+                return <ClientProfileManagement />;
+            case "notifications":
+                return <Notifications />;
+            default:
+                return <ClientSearchSection onSelectProfessional={handleStartBooking} />;
+        }
+    };
 
-  return (
-    <div className="flex min-h-screen bg-black text-gray-200 font-sans">
-      {modalState?.isOpen && (
-        <ConfirmationModal
-          title={modalState.title}
-          message={modalState.message}
-          onConfirm={modalState.onConfirm}
-          onCancel={() => setModalState(null)}
-        />
-      )}
-      {reviewModal.isOpen && (
-        <ReviewModal
-          isOpen={reviewModal.isOpen}
-          onClose={() => setReviewModal({ isOpen: false })}
-          appointment={reviewModal.appointment!}
-          onSubmit={handleSubmitReview}
-        />
-      )}
+    return (
+        <div className="flex min-h-screen bg-black text-gray-200">
+            {/* MODAIS */}
+            {modals.confirmation.isOpen && (
+                <ConfirmationModal
+                    title={modals.confirmation.title}
+                    message={modals.confirmation.message}
+                    onConfirm={modals.confirmation.onConfirm}
+                    onCancel={() => setModals(prev => ({...prev, confirmation: {...prev.confirmation, isOpen: false}}))}
+                />
+            )}
+            {modals.review.isOpen && modals.review.appointment && (
+                <ReviewModal
+                    isOpen={modals.review.isOpen}
+                    onClose={() => setModals(prev => ({...prev, review: {isOpen: false, appointment: null}}))}
+                    appointment={modals.review.appointment}
+                    onSubmit={handleSubmitReview}
+                />
+            )}
+            {bookingTarget && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-down">
+                    <Booking professional={bookingTarget} onBack={handleCloseBooking} />
+                </div>
+            )}
 
-      <ClientSideNav
-        activeView={activeView}
-        setActiveView={setActiveView}
-        logout={logout}
-        userProfile={userProfile}
-        isOpen={isMobileNavOpen}
-        setIsOpen={setIsMobileNavOpen}
-      />
-
-      <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
-        <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
-          <div className="md:hidden flex justify-between items-center mb-6">
-            <button
-              onClick={() => setIsMobileNavOpen(true)}
-              className="text-gray-300 hover:text-white"
-              aria-label="Abrir menu"
-            >
-              <MenuIcon size={28} />
-            </button>
-            <span className="text-xl font-bold text-white">Stylo</span>
-          </div>
-
-          {renderContent()}
+            {/* NAVEGAÇÃO E CONTEÚDO */}
+            <ClientSideNav
+                activeView={activeView}
+                setActiveView={setActiveView}
+                logout={handleLogout}
+                userProfile={userProfile}
+                isOpen={isMobileNavOpen}
+                setIsOpen={setIsMobileNavOpen}
+            />
+            <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
+                <div className="bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800 min-h-full">
+                    <div className="md:hidden flex justify-between items-center mb-6">
+                        <button onClick={() => setIsMobileNavOpen(true)} className="text-gray-300 hover:text-white" aria-label="Abrir menu">
+                            <MenuIcon size={28} />
+                        </button>
+                        <span className="text-xl font-bold text-white">Stylo</span>
+                    </div>
+                    {renderContent()}
+                </div>
+            </main>
         </div>
-      </main>
-    </div>
-  );
+    );
 };
 
 export default ClientDashboard;

@@ -156,3 +156,19 @@ export interface RecurringAppointment {
   startTime: string; // 'HH:mm'
   recurrence: 'semanal' | 'quinzenal' | 'mensal';
 }
+
+export interface Booking {
+  id: string;
+  clientId: string;
+  clientName: string;
+  providerId: string;
+  services: Service[];
+  professionalId: string | null;
+  professionalName: string;
+  date: Date | Timestamp | string; // O Firestore pode retornar diferentes tipos
+  totalPrice: number;
+  totalDuration: number; // em minutos
+  status: 'confirmed' | 'pending' | 'cancelled';
+  createdAt: Timestamp;
+  reviewId?: string | null; // ID da avaliação, se houver
+}

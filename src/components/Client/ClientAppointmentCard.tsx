@@ -4,10 +4,28 @@ import React from 'react';
 import type { Booking } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, Tag, DollarSign, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Timestamp } from 'firebase/firestore';
+import { 
+    Calendar, 
+    Clock, 
+    Tag, 
+    DollarSign, 
+    CheckCircle, 
+    XCircle, 
+    AlertCircle,
+    Star
+} from 'lucide-react';
 
-// Função para obter o ícone e a cor do status
-const getStatusProps = (status: 'confirmed' | 'pending' | 'cancelled') => {
+// --- Helper para converter data (Timestamp, string, etc.) para Date ---
+const convertToDate = (date: any): Date => {
+  if (date instanceof Timestamp) {
+    return date.toDate();
+  }
+  return new Date(date);
+};
+
+// --- Helper para o Status ---
+const getStatusProps = (status: Booking['status']) => {
   switch (status) {
     case 'confirmed':
       return { icon: <CheckCircle size={16} />, color: 'text-green-400', label: 'Confirmado' };
@@ -19,30 +37,49 @@ const getStatusProps = (status: 'confirmed' | 'pending' | 'cancelled') => {
   }
 };
 
-const ClientAppointmentCard = ({ booking }: { booking: Booking }) => {
+// --- Props do Componente ---
+interface ClientAppointmentCardProps {
+  booking: Booking;
+  // Funções recebidas do ClientDashboard
+  onCancel: (bookingId: string) => void;
+  onReview: (booking: Booking) => void;
+}
+
+const ClientAppointmentCard = ({ booking, onCancel, onReview }: ClientAppointmentCardProps) => {
   const { icon, color, label } = getStatusProps(booking.status);
-  const bookingDate = new Date(booking.date);
+  const bookingDate = convertToDate(booking.date);
+  const isPast = new Date() > bookingDate;
+
+  // Assume que o objeto booking foi enriquecido com os dados do prestador.
+  // Isso é uma ótima prática de performance para evitar buscas repetidas no banco.
+  const providerName = booking.professionalName || 'Prestador de Serviço';
+  const providerPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(providerName)}&background=1f2937&color=daa520`;
 
   return (
-    <div className="bg-gray-800/50 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300 transform hover:-translate-y-1">
+    <div className="bg-gray-800/50 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300 transform hover:-translate-y-1 shadow-lg">
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         {/* Informações do Prestador e Data */}
-        <div className="flex items-center gap-4">
-           {/* Idealmente, teríamos a foto do prestador aqui. Usando um fallback por enquanto. */}
-           <div className="h-16 w-16 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center border-2 border-gray-600">
-               <span className="text-2xl font-bold text-[#daa520]">{booking.clientName.charAt(0).toUpperCase()}</span>
-           </div>
+        <div className="flex items-center gap-4 flex-grow">
+          <img 
+            src={providerPhoto} 
+            alt={providerName}
+            className="h-16 w-16 rounded-full object-cover border-2 border-gray-600 flex-shrink-0"
+          />
           <div>
-            <h3 className="text-xl font-bold text-white">{booking.professionalName}</h3>
-            <div className="flex items-center gap-4 text-gray-400 mt-1">
-              <span className="flex items-center gap-2 text-sm"><Calendar size={14} /> {format(bookingDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
-              <span className="flex items-center gap-2 text-sm"><Clock size={14} /> {format(bookingDate, "HH:mm")}</span>
+            <h3 className="text-xl font-bold text-white">{providerName}</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 text-gray-400 mt-1">
+              <span className="flex items-center gap-2 text-sm">
+                <Calendar size={14} /> {format(bookingDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
+              </span>
+              <span className="flex items-center gap-2 text-sm">
+                <Clock size={14} /> {format(bookingDate, "HH:mm")}h
+              </span>
             </div>
           </div>
         </div>
         
         {/* Status */}
-        <div className={`flex items-center gap-2 font-semibold text-sm px-3 py-1 rounded-full ${color} bg-opacity-10`}>
+        <div className={`flex items-center gap-2 font-semibold text-sm px-3 py-1 rounded-full ${color} bg-current/10 flex-shrink-0`}>
           {icon}
           <span>{label}</span>
         </div>
@@ -68,14 +105,26 @@ const ClientAppointmentCard = ({ booking }: { booking: Booking }) => {
         <span className="text-2xl font-bold text-[#daa520]">R$ {booking.totalPrice.toFixed(2)}</span>
       </div>
 
-      {/* Ações (ex: Cancelar, Reagendar) podem ser adicionadas aqui no futuro */}
-       {booking.status !== 'cancelled' && new Date() < bookingDate && (
-         <div className="mt-4 flex justify-end">
-             <button className="text-sm bg-red-600/20 text-red-400 hover:bg-red-600/40 px-4 py-2 rounded-lg transition-colors">
-                 Cancelar Agendamento
-             </button>
-         </div>
-       )}
+      {/* Ações Condicionais (Cancelar / Avaliar) */}
+      <div className="mt-4 flex justify-end gap-3">
+        {!isPast && booking.status === 'confirmed' && (
+          <button 
+            onClick={() => onCancel(booking.id)}
+            className="text-sm bg-red-600/20 text-red-400 hover:bg-red-600/40 px-4 py-2 rounded-lg transition-colors font-semibold"
+          >
+            Cancelar Agendamento
+          </button>
+        )}
+        
+        {isPast && booking.status === 'confirmed' && !booking.reviewId && (
+           <button 
+             onClick={() => onReview(booking)}
+             className="text-sm bg-[#daa520]/20 text-[#daa520] hover:bg-[#daa520]/40 px-4 py-2 rounded-lg transition-colors font-semibold flex items-center gap-2"
+           >
+             <Star size={14}/> Avaliar Serviço
+           </button>
+        )}
+      </div>
     </div>
   );
 };

@@ -4,22 +4,46 @@ import React, { useState, useMemo } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import ClientAppointmentCard from './ClientAppointmentCard';
 import { CalendarX2 } from 'lucide-react';
+import type { Booking } from '../../types';
+import { Timestamp } from 'firebase/firestore';
 
-const ClientMyAppointmentsSection = () => {
+// --- Helper para converter data (Timestamp, string, etc.) para Date ---
+const convertToDate = (date: any): Date => {
+  if (date instanceof Timestamp) {
+    return date.toDate();
+  }
+  return new Date(date);
+};
+
+// --- Props do Componente ---
+interface ClientMyAppointmentsSectionProps {
+  onCancel: (appointmentId: string) => void;
+  onReview: (appointment: Booking) => void;
+}
+
+const ClientMyAppointmentsSection = ({ onCancel, onReview }: ClientMyAppointmentsSectionProps) => {
   const { userProfile } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
+  // Memoiza a separação e ordenação dos agendamentos para melhor performance
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
     if (!userProfile?.myAppointments) {
       return { upcomingAppointments: [], pastAppointments: [] };
     }
 
     const now = new Date();
-    // Ordena os agendamentos do mais recente para o mais antigo
-    const sortedAppointments = [...userProfile.myAppointments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const allAppointments = userProfile.myAppointments.map(app => ({
+        ...app,
+        date: convertToDate(app.date) // Garante que a data é um objeto Date
+    }));
 
-    const upcoming = sortedAppointments.filter(app => new Date(app.date) >= now);
-    const past = sortedAppointments.filter(app => new Date(app.date) < now);
+    const upcoming = allAppointments
+        .filter(app => app.date >= now)
+        .sort((a, b) => a.date.getTime() - b.date.getTime()); // Mais próximos primeiro
+
+    const past = allAppointments
+        .filter(app => app.date < now)
+        .sort((a, b) => b.date.getTime() - a.date.getTime()); // Mais recentes primeiro
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
   }, [userProfile?.myAppointments]);
@@ -35,15 +59,17 @@ const ClientMyAppointmentsSection = () => {
       <div className="flex border-b border-gray-700 mb-6">
         <button
           onClick={() => setActiveTab('upcoming')}
-          className={`px-6 py-3 font-semibold transition-colors ${activeTab === 'upcoming' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-400 hover:text-white'}`}
+          className={`px-6 py-3 font-semibold transition-colors relative ${activeTab === 'upcoming' ? 'text-[#daa520]' : 'text-gray-400 hover:text-white'}`}
         >
           Próximos ({upcomingAppointments.length})
+          {activeTab === 'upcoming' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#daa520] rounded-full"></div>}
         </button>
         <button
           onClick={() => setActiveTab('past')}
-          className={`px-6 py-3 font-semibold transition-colors ${activeTab === 'past' ? 'text-[#daa520] border-b-2 border-[#daa520]' : 'text-gray-400 hover:text-white'}`}
+          className={`px-6 py-3 font-semibold transition-colors relative ${activeTab === 'past' ? 'text-[#daa520]' : 'text-gray-400 hover:text-white'}`}
         >
           Anteriores ({pastAppointments.length})
+          {activeTab === 'past' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#daa520] rounded-full"></div>}
         </button>
       </div>
 
@@ -51,7 +77,12 @@ const ClientMyAppointmentsSection = () => {
       <div className="space-y-6">
         {appointmentsToShow.length > 0 ? (
           appointmentsToShow.map(booking => (
-            <ClientAppointmentCard key={booking.id} booking={booking} />
+            <ClientAppointmentCard 
+                key={booking.id} 
+                booking={booking} 
+                onCancel={onCancel}
+                onReview={onReview}
+            />
           ))
         ) : (
           <div className="text-center text-gray-400 py-16 bg-black/30 rounded-xl border border-dashed border-gray-700">

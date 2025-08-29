@@ -21,8 +21,8 @@ import {
   collection,
   Timestamp,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import type { UserProfile, Appointment, Review } from "../types";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import type { UserProfile, Appointment, Review, Professional } from "../types";
 
 // Interfaces para os dados que as funções recebem
 interface ReviewData {
@@ -66,6 +66,7 @@ interface AuthState {
     status: "confirmed" | "cancelled" | "no-show"
   ) => Promise<void>;
   updateProfessionals: (professionals: Professional[]) => Promise<void>;
+  manageProfessionals: (professionals: Professional[]) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -211,12 +212,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }));
   },
 
-  uploadImage: async (file: File, path: string) => {
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
-  },
-
   toggleFavorite: async (professionalId: string) => {
     const { user, userProfile } = get();
     if (!user || !userProfile) throw new Error("Utilizador não autenticado");
@@ -303,6 +298,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error("Erro ao atualizar profissionais:", error);
       // Aqui você pode lançar o erro ou lidar com ele
       throw new Error("Falha ao salvar o profissional.");
+    }
+  },
+
+  uploadImage: async (file, path) => {
+    const storage = getStorage();
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(storageRef);
+    return downloadURL;
+  },
+
+  manageProfessionals: async (professionals) => {
+    const { userProfile } = get();
+    if (!userProfile?.uid) throw new Error("Usuário não autenticado.");
+
+    const userDocRef = doc(db, "users", userProfile.uid);
+
+    try {
+      // 1. Atualiza o documento no Firestore
+      await updateDoc(userDocRef, { professionals });
+
+      // 2. Atualiza o estado local no Zustand
+      set((state) => ({
+        userProfile: state.userProfile
+          ? { ...state.userProfile, professionals }
+          : null,
+      }));
+    } catch (error) {
+      console.error("Erro ao gerenciar profissionais:", error);
+      throw new Error("Não foi possível atualizar a lista de profissionais.");
     }
   },
 }));

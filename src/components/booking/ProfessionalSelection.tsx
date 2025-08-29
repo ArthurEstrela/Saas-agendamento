@@ -1,89 +1,118 @@
+// src/components/booking/ProfessionalSelection.tsx
+
 import React, { useMemo } from 'react';
 import { useBookingStore } from '../../store/bookingStore';
-import type { UserProfile, Service, Professional } from '../../types';
+import type { Professional } from '../../types';
+import { Users, CheckCircle2, UserCheck } from 'lucide-react';
 
-// Define as propriedades que o componente vai receber
-interface ProfessionalSelectionProps {
-  establishment: UserProfile; // O perfil do estabelecimento
-}
-
-const ProfessionalSelection = ({ establishment }: ProfessionalSelectionProps) => {
-  // Pega o estado e as ações necessárias do nosso store de agendamento
-  const {
-    selectedServices,
-    selectedProfessional,
-    selectProfessional,
-    totalPrice,
-    totalDuration,
+const ProfessionalSelection = () => {
+  // Pegamos as informações necessárias do store
+  const { 
+    serviceProvider, 
+    selectedServices, 
+    selectedProfessional, 
+    setProfessional 
   } = useBookingStore();
 
-  // Filtra a lista de profissionais para mostrar apenas aqueles
-  // que podem realizar TODOS os serviços selecionados.
+  // A MÁGICA ACONTECE AQUI: Filtramos os profissionais
   const availableProfessionals = useMemo(() => {
-    if (!establishment?.professionals || selectedServices.length === 0) {
-      return (establishment.professionals as Professional[]) || [];
+    if (!serviceProvider || !selectedServices || selectedServices.length === 0) {
+      return [];
     }
-    return (establishment.professionals as Professional[]).filter((prof) =>
-      selectedServices.every((selService) =>
-        (prof.services || []).some(
-          (profService) => profService.id === selService.id
-        )
-      )
-    );
-  }, [establishment, selectedServices]);
+
+    // Cria um conjunto (Set) com os IDs de todos os profissionais que podem realizar os serviços selecionados.
+    // Usar um Set é eficiente para evitar duplicados.
+    const professionalIds = new Set<string>();
+    
+    // Itera sobre cada serviço selecionado
+    selectedServices.forEach(service => {
+      // Itera sobre os IDs dos profissionais associados a esse serviço
+      service.assignedProfessionals?.forEach(profId => {
+        professionalIds.add(profId);
+      });
+    });
+
+    // Filtra a lista completa de profissionais do estabelecimento,
+    // mantendo apenas aqueles cujos IDs estão no nosso conjunto.
+    return serviceProvider.professionals.filter(prof => professionalIds.has(prof.id));
+
+  }, [serviceProvider, selectedServices]);
+
+  const handleSelectProfessional = (professional: Professional | null) => {
+    setProfessional(professional);
+  };
 
   return (
-    <div className="animate-fade-in-up">
-      <h2 className="text-2xl font-bold text-white mb-6">
-        2. Escolha o Profissional
-      </h2>
-
-      {/* Resumo do Pedido */}
-      <div className="border-y border-gray-700 py-4 mb-6">
-        <h3 className="text-xl font-bold text-white mb-2">
-          Resumo dos Serviços
-        </h3>
-        <div className="flex justify-between items-center text-gray-300">
-          <span>Duração total:</span>
-          <span className="font-bold text-[#daa520]">
-            {totalDuration} minutos
-          </span>
-        </div>
-        <div className="flex justify-between items-center text-gray-300 mt-1">
-          <span>Preço total:</span>
-          <span className="font-bold text-[#daa520]">
-            R$ {totalPrice.toFixed(2)}
-          </span>
-        </div>
+    <div className="animate-fade-in-down">
+      <div className="text-center mb-6">
+        <h2 className="text-3xl font-bold text-white">Escolha o Profissional</h2>
+        <p className="text-gray-400 mt-1">Selecione com quem você gostaria de ser atendido.</p>
       </div>
 
-      {/* Lista de Profissionais */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {availableProfessionals.length > 0 ? (
-          availableProfessionals.map((prof) => (
-            <button
-              key={prof.id}
-              onClick={() => selectProfessional(prof)}
-              className={`w-full text-left p-4 rounded-xl transition-all duration-300 border-2 flex items-center gap-4 ${
-                selectedProfessional?.id === prof.id
-                  ? "bg-[#daa520]/20 border-[#daa520] shadow-lg shadow-[#daa520]/10"
-                  : "bg-gray-800 border-gray-700 hover:border-[#daa520]/50"
-              }`}
-            >
+      <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
+        {/* Opção "Qualquer Profissional" */}
+        <div
+          onClick={() => handleSelectProfessional(null)}
+          className={`relative flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+            selectedProfessional === null
+              ? 'border-[#daa520] bg-[#daa520]/10'
+              : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
+          }`}
+        >
+          {selectedProfessional === null && (
+            <div className="absolute top-2 right-2 text-[#daa520]">
+              <CheckCircle2 size={20} />
+            </div>
+          )}
+          <div className="flex items-center gap-4">
+            <div className="bg-gray-700 h-12 w-12 rounded-full flex items-center justify-center">
+              <Users className="text-white" size={24} />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white text-lg">Qualquer Profissional</h3>
+              <p className="text-gray-400 text-sm">Deixe-nos escolher o melhor profissional disponível para você.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de Profissionais Disponíveis */}
+        {availableProfessionals.map((prof) => (
+          <div
+            key={prof.id}
+            onClick={() => handleSelectProfessional(prof)}
+            className={`relative flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+              selectedProfessional?.id === prof.id
+                ? 'border-[#daa520] bg-[#daa520]/10'
+                : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
+            }`}
+          >
+            {selectedProfessional?.id === prof.id && (
+              <div className="absolute top-2 right-2 text-[#daa520]">
+                <CheckCircle2 size={20} />
+              </div>
+            )}
+            <div className="flex items-center gap-4">
               <img
-                src={prof.photoURL || "https://placehold.co/150x150/1F2937/4B5563?text=Prof"}
+                src={prof.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=2d3748&color=ffffff`}
                 alt={prof.name}
-                className="h-14 w-14 rounded-full object-cover border-2 border-gray-600"
+                className="h-12 w-12 rounded-full object-cover"
               />
               <div>
-                <p className="font-semibold text-white text-lg">{prof.name}</p>
+                <h3 className="font-semibold text-white text-lg">{prof.name}</h3>
+                {/* Você pode adicionar uma especialidade aqui se tiver no seu tipo `Professional` */}
+                {/* <p className="text-gray-400 text-sm">Especialista em Cabelo</p> */}
               </div>
-            </button>
-          ))
-        ) : (
-          <p className="text-gray-500 col-span-full text-center py-8">
-            Nenhum profissional oferece todos os serviços selecionados.
-          </p>
+            </div>
+          </div>
+        ))}
+        
+        {/* Mensagem se nenhum profissional puder realizar o serviço */}
+        {availableProfessionals.length === 0 && (
+            <div className="text-center text-gray-400 py-10 bg-black/20 rounded-lg">
+                <UserCheck size={40} className="mx-auto text-gray-600 mb-4"/>
+                <p className="font-semibold text-white">Nenhum profissional específico encontrado</p>
+                <p className="text-sm">Nenhum profissional está associado a todos os serviços selecionados. A opção "Qualquer Profissional" foi selecionada.</p>
+            </div>
         )}
       </div>
     </div>

@@ -20,7 +20,7 @@ import {
 
 // Propriedades do componente Booking
 interface BookingProps {
-  professional: UserProfile; // O perfil do estabelecimento
+  professional: UserProfile;
   onBack?: () => void;
 }
 
@@ -36,6 +36,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const {
     currentStep,
     resetBooking,
+    selectedServices,
     goToNextStep,
     goToPreviousStep,
     setServiceProvider,
@@ -46,12 +47,26 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     if (establishment) {
       setServiceProvider(establishment);
     }
-  }, [establishment, resetBooking, setServiceProvider]);
+    return () => {
+      resetBooking();
+    };
+  }, [establishment, setServiceProvider, resetBooking]);
+
+  const isNextStepEnabled = () => {
+    switch (currentStep) {
+      case 1:
+        // Agora `selectedServices` existe e a função funciona
+        return selectedServices.length > 0;
+      // case 2: ...
+      default:
+        return true;
+    }
+  };
 
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return <ServiceSelection onNext={goToNextStep} />;
+        return <ServiceSelection />;
       case 2:
         return <ProfessionalSelection establishment={establishment} />;
       case 3:
@@ -59,7 +74,7 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       case 4:
         return <Confirmation establishment={establishment} />;
       default:
-        return null;
+        return <div>Etapa não encontrada</div>;
     }
   };
 
@@ -138,15 +153,16 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
         {currentStep < bookingSteps.length && (
           <div className="flex justify-between mt-8">
             <button
-              onClick={goToPreviousStep}
-              disabled={currentStep === 1}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={currentStep === 1 ? onBack : goToPreviousStep}
+              className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center gap-2"
             >
-              <ArrowLeft size={20} /> Anterior
+              <ArrowLeft size={20} />
+              {currentStep === 1 ? "Cancelar" : "Voltar"}
             </button>
             <button
               onClick={goToNextStep}
-              className="bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors flex items-center gap-2"
+              disabled={!isNextStepEnabled()}
+              className="bg-[#daa520] hover:bg-[#c8961e] text-black font-bold py-3 px-6 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-2"
             >
               Próximo <ChevronRight size={20} />
             </button>

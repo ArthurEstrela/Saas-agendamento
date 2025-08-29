@@ -22,7 +22,13 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import type { UserProfile, Appointment, Review, Professional } from "../types";
+import type {
+  UserProfile,
+  Appointment,
+  Review,
+  Professional,
+  Service,
+} from "../types";
 
 // Interfaces para os dados que as funções recebem
 interface ReviewData {
@@ -67,6 +73,7 @@ interface AuthState {
   ) => Promise<void>;
   updateProfessionals: (professionals: Professional[]) => Promise<void>;
   manageProfessionals: (professionals: Professional[]) => Promise<void>;
+  manageServices: (services: Service[]) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -328,6 +335,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error("Erro ao gerenciar profissionais:", error);
       throw new Error("Não foi possível atualizar a lista de profissionais.");
+    }
+  },
+
+  manageServices: async (services) => {
+    const { userProfile } = get();
+    if (!userProfile?.uid) throw new Error("Usuário não autenticado.");
+
+    const userDocRef = doc(db, "users", userProfile.uid);
+
+    try {
+      // 1. Atualiza o documento no Firestore
+      await updateDoc(userDocRef, { services });
+
+      // 2. Atualiza o estado local no Zustand para manter tudo sincronizado
+      set((state) => ({
+        userProfile: state.userProfile
+          ? { ...state.userProfile, services }
+          : null,
+      }));
+    } catch (error) {
+      console.error("Erro ao gerenciar serviços:", error);
+      throw new Error("Não foi possível atualizar a lista de serviços.");
     }
   },
 }));

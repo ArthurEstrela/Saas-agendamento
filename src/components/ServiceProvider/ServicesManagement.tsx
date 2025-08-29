@@ -1,212 +1,304 @@
-// src/components/ServiceProvider/ServicesManagement.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { db } from '../../firebase/config';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { useToast } from '../../context/ToastContext';
 import type { Service, Professional } from '../../types';
-import { Plus, Loader, Scissors, Clock, DollarSign, Users, Trash2, Edit, X } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import { PlusCircle, Edit, Trash2, Tag, Clock, DollarSign, X, Users, AlertTriangle, Loader2 } from 'lucide-react';
 
-// --- Componente Principal de Gestão de Serviços ---
-const ServicesManagement = () => {
-  const { userProfile } = useAuthStore();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
+// --- TIPOS E INTERFACES ---
+type ModalMode = 'add' | 'edit' | 'delete';
 
-  const professionals = useMemo(() => userProfile?.professionals || [], [userProfile]);
+interface ModalState {
+  isOpen: boolean;
+  mode: ModalMode;
+  service?: Service;
+}
+
+// --- VALORES INICIAIS ---
+const INITIAL_SERVICE_STATE: Omit<Service, 'id'> = {
+  name: '',
+  description: '',
+  price: 0,
+  duration: 0,
+  assignedProfessionals: [],
+};
+
+// --- COMPONENTE DO MODAL (MAIS INTELIGENTE) ---
+const ServiceModal = ({
+  state,
+  onClose,
+  onConfirm,
+  isLoading,
+  availableProfessionals,
+}: {
+  state: ModalState;
+  onClose: () => void;
+  onConfirm: (service: Service | string) => void;
+  isLoading: boolean;
+  availableProfessionals: Professional[];
+}) => {
+  const [serviceData, setServiceData] = useState<Omit<Service, 'id'>>(INITIAL_SERVICE_STATE);
+  const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!userProfile?.uid) {
-      setLoading(false);
+    if (state.isOpen) {
+      if ((state.mode === 'edit' || state.mode === 'delete') && state.service) {
+        setServiceData(state.service);
+        setSelectedProfessionals(state.service.assignedProfessionals || []);
+      } else {
+        setServiceData(INITIAL_SERVICE_STATE);
+        setSelectedProfessionals([]);
+      }
+    }
+  }, [state]);
+
+  if (!state.isOpen) return null;
+
+  const handleProfessionalToggle = (professionalId: string) => {
+    setSelectedProfessionals(prev =>
+      prev.includes(professionalId)
+        ? prev.filter(id => id !== professionalId)
+        : [...prev, professionalId]
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Validação
+    if (!serviceData.name.trim() || serviceData.price <= 0 || serviceData.duration <= 0) {
+      alert("Por favor, preencha todos os campos obrigatórios com valores válidos.");
       return;
     }
-    setLoading(true);
-    const servicesQuery = collection(db, 'services');
-    const unsubscribe = onSnapshot(servicesQuery, (snapshot) => {
-      const fetchedServices = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Service))
-        .filter(service => service.serviceProviderId === userProfile.uid);
-      setServices(fetchedServices);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [userProfile]);
 
-  const handleOpenModal = (service: Service | null = null) => {
-    setEditingService(service);
-    setIsModalOpen(true);
+    const finalService: Service = {
+      id: state.mode === 'edit' && state.service ? state.service.id : uuidv4(),
+      ...serviceData,
+      price: Number(serviceData.price),
+      duration: Number(serviceData.duration),
+      assignedProfessionals: selectedProfessionals,
+    };
+    onConfirm(finalService);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingService(null);
+  const renderContent = () => {
+    if (state.mode === 'delete' && state.service) {
+      return (
+        <div className="text-center">
+          <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
+          <h3 className="text-2xl font-bold text-white mb-2">Confirmar Exclusão</h3>
+          <p className="text-gray-300 mb-6">
+            Tem certeza que deseja excluir o serviço <strong>"{state.service.name}"</strong>?
+          </p>
+          <div className="flex justify-center gap-4">
+            <button onClick={onClose} disabled={isLoading} className="bg-gray-700 hover:bg-gray-600 font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={() => onConfirm(state.service!.id)} disabled={isLoading} className="bg-red-600 hover:bg-red-500 text-white font-semibold px-6 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Sim, Excluir'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-2xl font-bold text-white">{state.mode === 'add' ? 'Adicionar Novo Serviço' : 'Editar Serviço'}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Nome, Preço, Duração... */}
+          <div className="grid grid-cols-1 gap-4">
+            {/* Nome */}
+            <div className="relative">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input type="text" placeholder="Nome do Serviço" value={serviceData.name} onChange={e => setServiceData(s => ({...s, name: e.target.value}))} required className="w-full bg-gray-800 p-3 pl-10 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700" />
+            </div>
+            {/* Preço */}
+            <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input type="number" placeholder="Preço (R$)" min="0.01" step="0.01" value={serviceData.price || ''} onChange={e => setServiceData(s => ({...s, price: Number(e.target.value)}))} required className="w-full bg-gray-800 p-3 pl-10 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700" />
+            </div>
+             {/* Duração */}
+            <div className="relative">
+                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input type="number" placeholder="Duração (minutos)" min="5" step="5" value={serviceData.duration || ''} onChange={e => setServiceData(s => ({...s, duration: Number(e.target.value)}))} required className="w-full bg-gray-800 p-3 pl-10 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700" />
+            </div>
+          </div>
+          {/* Descrição */}
+          <div>
+            <textarea placeholder="Descrição do serviço (opcional)" value={serviceData.description} onChange={e => setServiceData(s => ({...s, description: e.target.value}))} className="w-full bg-gray-800 p-3 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700 min-h-[80px]"></textarea>
+          </div>
+          {/* Profissionais */}
+          <div>
+            <h4 className="text-lg font-semibold text-white mb-2 flex items-center gap-2"><Users size={20}/> Profissionais que realizam</h4>
+            <div className="max-h-40 overflow-y-auto space-y-2 p-2 bg-gray-800 rounded-md border border-gray-700">
+                {availableProfessionals.length > 0 ? availableProfessionals.map(prof => (
+                    <label key={prof.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer transition-colors">
+                        <input type="checkbox" checked={selectedProfessionals.includes(prof.id)} onChange={() => handleProfessionalToggle(prof.id)} className="h-5 w-5 rounded bg-gray-700 border-gray-600 text-[#daa520] focus:ring-[#c8961e]" />
+                        <span className="text-white">{prof.name}</span>
+                    </label>
+                )) : <p className="text-gray-400 text-center p-4">Nenhum profissional cadastrado.</p>}
+            </div>
+          </div>
+          {/* Botões */}
+          <div className="flex justify-end gap-4 pt-4">
+            <button type="button" onClick={onClose} disabled={isLoading} className="bg-gray-700 hover:bg-gray-600 font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50">Cancelar</button>
+            <button type="submit" disabled={isLoading} className="bg-[#daa520] hover:bg-[#c8961e] text-black font-semibold px-6 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </>
+    );
   };
 
-  const handleSaveService = async (serviceData: Omit<Service, 'id' | 'serviceProviderId'>) => {
-    if (!userProfile?.uid) return;
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-down">
+      <div className="bg-gray-900/80 p-6 sm:p-8 rounded-2xl w-full max-w-lg border border-[#daa520]/30 shadow-2xl shadow-[#daa520]/10">
+        {renderContent()}
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL ---
+const ServicesManagement = () => {
+  const { userProfile, manageServices } = useAuthStore();
+  const { showToast } = useToast();
+  const [modalState, setModalState] = useState<ModalState>({ isOpen: false, mode: 'add' });
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Memoize para evitar re-cálculos desnecessários
+  const services = useMemo(() => userProfile?.services || [], [userProfile?.services]);
+  const professionals = useMemo(() => userProfile?.professionals || [], [userProfile?.professionals]);
+
+  // Função unificada que lida com salvar, editar e deletar
+  const handleModalConfirm = async (data: Service | string) => {
+    if (modalState.mode === 'delete') {
+      await handleDeleteService(data as string);
+    } else {
+      await handleSaveService(data as Service);
+    }
+  };
+
+  const handleSaveService = async (serviceData: Service) => {
+    setIsLoading(true);
     try {
-      if (editingService) {
-        // Atualizar serviço existente
-        const serviceRef = doc(db, 'services', editingService.id);
-        await updateDoc(serviceRef, serviceData);
-      } else {
-        // Adicionar novo serviço
-        await addDoc(collection(db, 'services'), {
-          ...serviceData,
-          serviceProviderId: userProfile.uid,
-        });
-      }
-      handleCloseModal();
+      const isEditing = modalState.mode === 'edit';
+      const updatedServices = isEditing
+        ? services.map(s => (s.id === serviceData.id ? serviceData : s))
+        : [...services, serviceData];
+
+      await manageServices(updatedServices);
+
+      showToast(`Serviço ${isEditing ? 'atualizado' : 'adicionado'} com sucesso!`, 'success');
+      setModalState({ isOpen: false, mode: 'add' });
     } catch (error) {
-      console.error("Erro ao salvar serviço:", error);
+      showToast('Ocorreu um erro ao salvar o serviço.', 'error');
+      console.error(error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDeleteService = async (serviceId: string) => {
-    // Usando um modal customizado em vez de window.confirm
-    // A lógica de confirmação deve ser implementada em um componente de modal
+    setIsLoading(true);
     try {
-      await deleteDoc(doc(db, 'services', serviceId));
+      const updatedServices = services.filter(s => s.id !== serviceId);
+      await manageServices(updatedServices);
+      showToast('Serviço excluído com sucesso!', 'success');
+      setModalState({ isOpen: false, mode: 'add' });
     } catch (error) {
-      console.error("Erro ao excluir serviço:", error);
+      showToast('Ocorreu um erro ao excluir o serviço.', 'error');
+      console.error(error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (loading) {
-    return <div className="flex justify-center items-center h-96"><Loader className="animate-spin text-amber-500" size={40} /></div>;
-  }
-
   return (
-    <div className="p-6 bg-gray-900 text-white rounded-lg space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Gestão de Serviços</h1>
-          <p className="text-gray-400 mt-1">Crie e gerencie os serviços oferecidos no seu estabelecimento.</p>
-        </div>
-        <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-amber-500 text-black rounded-lg hover:bg-amber-400 flex items-center gap-2 font-semibold transition-colors">
-          <Plus size={20} /> Criar Serviço
+    <div className="p-4 sm:p-6">
+      <ServiceModal
+        state={modalState}
+        onClose={() => setModalState({ isOpen: false, mode: 'add' })}
+        onConfirm={handleModalConfirm}
+        isLoading={isLoading}
+        availableProfessionals={professionals}
+      />
+      
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <h2 className="text-3xl font-bold text-white">Gerenciamento de Serviços</h2>
+        <button
+          onClick={() => setModalState({ isOpen: true, mode: 'add' })}
+          className="flex items-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors shadow-lg shadow-[#daa520]/20"
+        >
+          <PlusCircle className="h-5 w-5" />
+          Adicionar Serviço
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {services.map(service => (
-          <ServiceCard 
-            key={service.id} 
-            service={service} 
-            professionals={professionals} 
-            onEdit={() => handleOpenModal(service)}
-            onDelete={() => handleDeleteService(service.id)}
-          />
-        ))}
-      </div>
+      {services.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {services.map(service => {
+            const assignedProfObjects = professionals.filter(p => 
+                service.assignedProfessionals?.includes(p.id)
+            );
 
-      {services.length === 0 && !loading && (
-        <div className="text-center py-16 text-gray-500">
-          <Scissors size={48} className="mx-auto" />
-          <h3 className="mt-4 text-xl font-semibold">Nenhum serviço cadastrado</h3>
-          <p className="mt-1">Clique em "Criar Serviço" para começar.</p>
-        </div>
-      )}
-
-      {isModalOpen && (
-        <ServiceModal 
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          onSave={handleSaveService}
-          professionals={professionals}
-          initialData={editingService}
-        />
-      )}
-    </div>
-  );
-};
-
-// --- Componente Card do Serviço ---
-const ServiceCard = ({ service, professionals, onEdit, onDelete }) => {
-  const assignedProfessionals = useMemo(() => {
-    return professionals.filter(p => service.professionalIds.includes(p.id));
-  }, [service, professionals]);
-
-  return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col justify-between p-6 transition-all hover:border-amber-500 hover:shadow-lg">
-      <div>
-        <h3 className="text-xl font-bold text-white mb-3">{service.name}</h3>
-        <div className="flex items-center text-gray-400 text-sm mb-2 gap-4">
-          <span className="flex items-center gap-1.5"><DollarSign size={14} /> R$ {service.price.toFixed(2).replace('.', ',')}</span>
-          <span className="flex items-center gap-1.5"><Clock size={14} /> {service.duration} min</span>
-        </div>
-        <p className="text-gray-400 text-sm mb-4 h-10">{service.description}</p>
-        
-        <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2"><Users size={16} /> Profissionais</h4>
-          <div className="flex items-center space-x-2">
-            {assignedProfessionals.map(p => (
-              <div key={p.id} className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold" title={p.name}>
-                {p.name.charAt(0)}
+            return (
+              <div key={service.id} className="group relative bg-gray-800/80 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300 transform hover:-translate-y-1">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-xl font-bold text-white mb-1">{service.name}</h3>
+                        <p className="text-sm text-gray-400 max-w-xs truncate">{service.description || 'Sem descrição'}</p>
+                    </div>
+                    <div className="text-lg font-bold text-[#daa520]">
+                        R${service.price.toFixed(2)}
+                    </div>
+                </div>
+                <div className="border-t border-gray-700 my-4"></div>
+                <div className="flex justify-between items-center text-sm text-gray-300">
+                    <span className="flex items-center gap-2"><Clock size={16}/> {service.duration} min</span>
+                    
+                    <div className="flex items-center">
+                        {assignedProfObjects.length > 0 ? (
+                            <div className="flex items-center -space-x-3">
+                                {assignedProfObjects.slice(0, 3).map(prof => (
+                                    <img
+                                        key={prof.id}
+                                        src={prof.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=1f2937&color=daa520`}
+                                        alt={prof.name}
+                                        title={prof.name}
+                                        className="h-8 w-8 rounded-full object-cover border-2 border-gray-900"
+                                    />
+                                ))}
+                                {assignedProfObjects.length > 3 && (
+                                    <div className="h-8 w-8 rounded-full bg-gray-700 border-2 border-gray-900 flex items-center justify-center text-xs font-bold text-white z-10">
+                                        +{assignedProfObjects.length - 3}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <span className="text-xs text-gray-500">Nenhum prof.</span>
+                        )}
+                    </div>
+                </div>
+                <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <button onClick={() => setModalState({ isOpen: true, mode: 'edit', service })} className="p-2 bg-blue-600/80 hover:bg-blue-600 rounded-md text-white"><Edit size={16} /></button>
+                  <button onClick={() => setModalState({ isOpen: true, mode: 'delete', service })} className="p-2 bg-red-600/80 hover:bg-red-600 rounded-md text-white"><Trash2 size={16} /></button>
+                </div>
               </div>
-            ))}
-            {assignedProfessionals.length === 0 && <p className="text-xs text-gray-500">Nenhum</p>}
-          </div>
+            )
+          })}
         </div>
-      </div>
-      <div className="flex items-center gap-2 mt-4 border-t border-gray-700 pt-4">
-        <button onClick={onDelete} className="w-full text-sm font-semibold text-red-400 hover:text-red-300 flex items-center justify-center gap-2 p-2 rounded-lg hover:bg-red-500/10 transition-colors"><Trash2 size={16} /></button>
-        <button onClick={onEdit} className="w-full text-sm font-semibold bg-gray-700 text-white hover:bg-gray-600 flex items-center justify-center gap-2 p-2 rounded-lg transition-colors"><Edit size={16} /> Editar</button>
-      </div>
-    </div>
-  );
-};
-
-// --- Componente Modal de Serviço ---
-const ServiceModal = ({ isOpen, onClose, onSave, professionals, initialData }) => {
-  const [name, setName] = useState(initialData?.name || '');
-  const [price, setPrice] = useState(initialData?.price || '');
-  const [duration, setDuration] = useState(initialData?.duration || '');
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>(initialData?.professionalIds || []);
-
-  const handleProfessionalToggle = (id: string) => {
-    setSelectedProfessionals(prev => 
-      prev.includes(id) ? prev.filter(pId => pId !== id) : [...prev, id]
-    );
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ name, price: parseFloat(price), duration: parseInt(duration), description, professionalIds: selectedProfessionals });
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center" onClick={onClose}>
-      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center p-5 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">{initialData ? 'Editar Serviço' : 'Criar Novo Serviço'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={24} /></button>
+      ) : (
+        <div className="text-center text-gray-400 py-16 bg-black/30 rounded-xl border border-dashed border-gray-700">
+          <Tag size={48} className="mx-auto text-gray-600 mb-4" />
+          <h3 className="text-lg font-semibold text-white">Nenhum serviço cadastrado</h3>
+          <p className="text-sm mt-2">Comece adicionando os serviços que você oferece.</p>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div><label className="text-sm font-medium text-gray-300">Nome do Serviço</label><input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" required /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-sm font-medium text-gray-300">Preço (R$)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} className="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" required /></div>
-            <div><label className="text-sm font-medium text-gray-300">Duração (minutos)</label><input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" required /></div>
-          </div>
-          <div><label className="text-sm font-medium text-gray-300">Descrição</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea></div>
-          <div>
-            <label className="text-sm font-medium text-gray-300">Profissionais que realizam este serviço</label>
-            <div className="mt-2 grid grid-cols-2 gap-2 p-3 bg-gray-900/50 rounded-lg">
-              {professionals.map(prof => (
-                <label key={prof.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer">
-                  <input type="checkbox" checked={selectedProfessionals.includes(prof.id)} onChange={() => handleProfessionalToggle(prof.id)} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-amber-500 focus:ring-amber-500" />
-                  <span className="text-white">{prof.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-end pt-4 border-t border-gray-700 mt-6"><button type="submit" className="px-6 py-2 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition-colors">Salvar</button></div>
-        </form>
-      </div>
+      )}
     </div>
   );
 };

@@ -1,246 +1,262 @@
-// functions/src/index.ts
+/**
+ * Import function triggers from their respective submodules:
+ *
+ * import {onCall} from "firebase-functions/v2/https";
+ * import {onDocumentWritten} from "firebase-functions/v2/firestore";
+ *
+ * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ */
 
-import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import * as admin from "firebase-admin";
 import {
   onDocumentCreated,
   onDocumentUpdated,
-  // Importa os tipos corretos que precisamos
   FirestoreEvent,
-  QueryDocumentSnapshot,
   Change,
+  QueryDocumentSnapshot,
 } from "firebase-functions/v2/firestore";
-import { onSchedule } from "firebase-functions/v2/scheduler";
 
+// Inicialização do Firebase Admin
 admin.initializeApp();
-
 const db = admin.firestore();
-const messaging = admin.messaging();
+const messaging = admin.messaging(); // <--- INICIALIZAR O MESSAGING
 
 const REGION = "southamerica-east1";
 
-// --- FUNÇÃO 1: ATUALIZA PERFIS QUANDO UM AGENDAMENTO É CRIADO ---
+// Função auxiliar para enviar notificações
+const sendNotification = async (userId: string, title: string, body: string) => {
+  try {
+    const userRef = db.collection("users").doc(userId);
+    const userSnap = await userRef.get();
+    const userData = userSnap.data();
+
+    // Verifica se o usuário existe e tem um fcmToken
+    if (userData && userData.fcmToken) {
+      const message = {
+        notification: { title, body },
+        token: userData.fcmToken,
+      };
+      await messaging.send(message);
+      logger.info(`Notificação enviada com sucesso para ${userId}`);
+    } else {
+      logger.warn(`Usuário ${userId} não encontrado ou não possui fcmToken.`);
+    }
+  } catch (error) {
+    logger.error(`Erro ao enviar notificação para ${userId}:`, error);
+  }
+};
+
+
+// Start writing functions
+// https://firebase.google.com/docs/functions/typescript
+
+export const helloWorld = onCall((request) => {
+  logger.info("Hello logs!", { structuredData: true });
+  return { message: "Hello from Firebase!", data: request.data };
+});
+
 export const onBookingCreate = onDocumentCreated(
   {
     document: "bookings/{bookingId}",
     region: REGION,
   },
-  async (event: FirestoreEvent<QueryDocumentSnapshot | undefined>) => {
-    const bookingData = event.data?.data();
-
-    if (!bookingData) {
-      logger.warn(
-        `Nenhum dado encontrado no agendamento ${event.params.bookingId}.`
-      );
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.log("No data associated with the event");
       return;
     }
+    const bookingData = snapshot.data();
+    const bookingId = event.params.bookingId; // Obter o ID do documento
 
-    const { providerId, clientId } = bookingData;
+    const { providerId, clientId, clientName, serviceName, date, time } = bookingData;
 
-    // Atualiza o perfil do prestador
+    // Adicionar o ID do documento aos dados do agendamento
+    const bookingDataWithId = { ...bookingData, id: bookingId };
+
+    // Atualizar o perfil do prestador de serviço
     if (providerId) {
       const providerRef = db.collection("users").doc(providerId);
-      try {
-        await providerRef.update({
-          bookings: admin.firestore.FieldValue.arrayUnion(bookingData),
-        });
-        logger.info(
-          `Perfil do prestador ${providerId} atualizado com o agendamento ${event.params.bookingId}.`
-        );
-      } catch (error) {
-        logger.error(`Falha ao atualizar o prestador ${providerId}:`, error);
-      }
+      await providerRef.update({
+        bookings: admin.firestore.FieldValue.arrayUnion(bookingDataWithId),
+      });
+      logger.log(`Booking ${bookingId} added to provider ${providerId}`);
+      
+      // --- LÓGICA DE NOTIFICAÇÃO ---
+      const notificationTitle = "Novo Agendamento!";
+      const notificationBody = `${clientName} agendou ${serviceName} para ${date} às ${time}.`;
+      await sendNotification(providerId, notificationTitle, notificationBody);
     }
 
-    // Atualiza o perfil do cliente
+    // Atualizar o perfil do cliente
     if (clientId) {
       const clientRef = db.collection("users").doc(clientId);
-      try {
-        await clientRef.update({
-          myAppointments: admin.firestore.FieldValue.arrayUnion(bookingData),
-        });
-        logger.info(
-          `Perfil do cliente ${clientId} atualizado com o agendamento ${event.params.bookingId}.`
-        );
-      } catch (error) {
-        logger.error(`Falha ao atualizar o cliente ${clientId}:`, error);
-      }
+      await clientRef.update({
+        myAppointments:
+          admin.firestore.FieldValue.arrayUnion(bookingDataWithId),
+      });
+      logger.log(`Booking ${bookingId} added to client ${clientId}`);
     }
   }
 );
 
-// --- FUNÇÃO 2: ENVIA NOTIFICAÇÃO DE CONFIRMAÇÃO ---
-export const sendBookingConfirmationNotification = onDocumentUpdated(
+// --- ATUALIZA PERFIS QUANDO UM AGENDAMENTO MUDA ---
+export const onBookingUpdate = onDocumentUpdated(
   {
     document: "bookings/{bookingId}",
     region: REGION,
   },
   async (event: FirestoreEvent<Change<QueryDocumentSnapshot> | undefined>) => {
-    // Agora 'event.data' tem as propriedades 'before' e 'after'
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
 
     if (!beforeData || !afterData) {
-      logger.warn("Dados do agendamento antes ou depois estão ausentes.");
+      logger.warn(
+        `Dados de agendamento ausentes no evento de atualização para ${event.params.bookingId}.`
+      );
       return;
     }
 
-    if (beforeData.status !== "confirmed" && afterData.status === "confirmed") {
+    // Se não houve mudança relevante, não faz nada.
+    if (beforeData.status === afterData.status) {
       logger.info(
-        `Agendamento ${event.params.bookingId} confirmado. Enviando notificação.`
+        `Status do agendamento ${event.params.bookingId} não mudou. Nenhuma ação necessária.`
       );
-      const { clientId, providerId, date } = afterData;
+      return;
+    }
 
-      const clientSnap = await db.collection("users").doc(clientId).get();
-      const providerSnap = await db.collection("users").doc(providerId).get();
-      const clientData = clientSnap.data();
-      const providerData = providerSnap.data();
+    const { providerId, clientId, clientName, serviceName, date, time } = afterData;
 
-      if (!clientData || !providerData || !clientData.fcmTokens?.length) {
-        logger.error(
-          `Dados do cliente/prestador ou tokens FCM não encontrados para ${event.params.bookingId}.`
+    // --- LÓGICA DE NOTIFICAÇÃO DE CANCELAMENTO ---
+    if (afterData.status === "cancelled") {
+        const notificationTitle = "Agendamento Cancelado";
+        const notificationBody = `O agendamento de ${clientName} para ${serviceName} em ${date} às ${time} foi cancelado.`;
+        await sendNotification(providerId, notificationTitle, notificationBody);
+    }
+
+    // --- Atualiza o perfil do prestador ---
+    if (providerId) {
+      const providerRef = db.collection("users").doc(providerId);
+      const providerSnap = await providerRef.get();
+      if (providerSnap.exists) {
+        const providerData = providerSnap.data();
+        const existingBookings = providerData?.bookings || [];
+
+        const updatedBookings = existingBookings.map((booking: any) => {
+          if (booking.id === event.params.bookingId) {
+            return { ...booking, ...afterData };
+          }
+          return booking;
+        });
+
+        await providerRef.update({ bookings: updatedBookings });
+        logger.info(
+          `Perfil do prestador ${providerId} atualizado para o agendamento ${event.params.bookingId}.`
         );
-        return;
       }
+    }
 
-      const establishmentName =
-        providerData.displayName || "Seu estabelecimento";
-      const formattedDate = new Date(date.toDate()).toLocaleDateString(
-        "pt-BR",
-        { day: "2-digit", month: "long" }
-      );
-      const formattedTime = new Date(date.toDate()).toLocaleTimeString(
-        "pt-BR",
-        { hour: "2-digit", minute: "2-digit" }
-      );
+    // --- Atualiza o perfil do cliente ---
+    if (clientId) {
+      const clientRef = db.collection("users").doc(clientId);
+      const clientSnap = await clientRef.get();
+      if (clientSnap.exists) {
+        const clientData = clientSnap.data();
+        const existingAppointments = clientData?.myAppointments || [];
 
-      // CORREÇÃO: Removemos a anotação ': Message' para deixar o TypeScript inferir o tipo
-      const payload = {
-        notification: {
-          title: "Seu agendamento foi confirmado! ✅",
-          body: `${establishmentName} confirmou seu horário para ${formattedDate} às ${formattedTime}.`,
-        },
-        webpush: {
-          notification: {
-            icon:
-              providerData.photoURL ||
-              "https://stylo-agendamento.web.app/stylo.svg",
-          },
-        },
-      };
-      await sendNotificationAndCleanup(
-        clientData.fcmTokens,
-        payload,
-        clientSnap.ref
-      );
+        const updatedAppointments = existingAppointments.map(
+          (appointment: any) => {
+            if (appointment.id === event.params.bookingId) {
+              return { ...appointment, ...afterData };
+            }
+            return appointment;
+          }
+        );
+
+        await clientRef.update({ myAppointments: updatedAppointments });
+        logger.info(
+          `Perfil do cliente ${clientId} atualizado para o agendamento ${event.params.bookingId}.`
+        );
+      }
     }
   }
 );
 
-// --- FUNÇÃO 3: ENVIA LEMBRETES DE AGENDAMENTO ---
-export const sendBookingReminders = onSchedule(
+// Adicione aqui suas outras funções, como a de criação de usuário, se tiver.
+export const onUserCreate = onDocumentCreated(
   {
-    schedule: "every 15 minutes",
-    timeZone: "America/Sao_Paulo",
+    document: "users/{userId}",
     region: REGION,
   },
-  async () => {
-    // ... (esta função não precisava de alterações)
-    const now = new Date();
-    const windowStart = new Date(now.getTime() + 60 * 60 * 1000);
-    const windowEnd = new Date(now.getTime() + 75 * 60 * 1000);
-
-    logger.log(
-      `Buscando agendamentos entre ${windowStart.toISOString()} e ${windowEnd.toISOString()}`
-    );
-    const bookings = await db
-      .collection("bookings")
-      .where("status", "==", "confirmed")
-      .where("date", ">=", admin.firestore.Timestamp.fromDate(windowStart))
-      .where("date", "<", admin.firestore.Timestamp.fromDate(windowEnd))
-      .get();
-
-    if (bookings.empty) {
-      logger.log("Nenhum agendamento para lembrar neste intervalo.");
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.log("No data associated with the user creation event");
       return;
     }
+    const userId = event.params.userId;
 
-    for (const doc of bookings.docs) {
-      const bookingData = doc.data();
-      const { clientId, providerId, date } = bookingData;
-      const clientSnap = await db.collection("users").doc(clientId).get();
-      const providerSnap = await db.collection("users").doc(providerId).get();
-      const clientData = clientSnap.data();
-      const providerData = providerSnap.data();
+    // Exemplo: Definir campos padrão no perfil do usuário
+    const defaultFields = {
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-      if (!clientData || !providerData || !clientData.fcmTokens?.length) {
-        logger.warn(`Pulando lembrete para ${doc.id}: faltam dados ou token.`);
-        continue;
-      }
+    const userRef = db.collection("users").doc(userId);
+    await userRef.update(defaultFields);
 
-      const establishmentName =
-        providerData.displayName || "Seu estabelecimento";
-      const formattedTime = new Date(date.toDate()).toLocaleTimeString(
-        "pt-BR",
-        { hour: "2-digit", minute: "2-digit" }
+    logger.log(`User profile for ${userId} initialized.`);
+  }
+);
+
+export const createStripeCheckout = onCall(
+  { region: REGION },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Você precisa estar autenticado."
       );
+    }
 
-      // CORREÇÃO: Removemos a anotação ': Message'
-      const payload = {
-        notification: {
-          title: "Lembrete de Agendamento ⏰",
-          body: `Seu horário com ${establishmentName} é hoje às ${formattedTime}! Não se atrase.`,
-        },
-        webpush: {
-          notification: {
-            icon:
-              providerData.photoURL ||
-              "https://stylo-agendamento.web.app/stylo.svg",
+    const { priceId, successUrl, cancelUrl } = request.data;
+    if (!priceId || !successUrl || !cancelUrl) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Dados da requisição incompletos."
+      );
+    }
+
+    // Lazy load do Stripe para não carregar em todas as functions
+    const { default: Stripe } = await import("stripe");
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+      // CORREÇÃO: Atualizado para a versão que a biblioteca espera.
+      apiVersion: "2025-08-27.basil",
+    });
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
           },
-        },
-      };
-      await sendNotificationAndCleanup(
-        clientData.fcmTokens,
-        payload,
-        clientSnap.ref
+        ],
+        mode: "subscription",
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        customer_email: request.auth.token.email,
+      });
+
+      return { sessionId: session.id };
+    } catch (error) {
+      logger.error("Erro ao criar sessão de checkout do Stripe:", error);
+      throw new HttpsError(
+        "internal",
+        "Não foi possível criar a sessão de checkout."
       );
     }
   }
 );
-
-// --- FUNÇÃO AUXILIAR: ENVIA NOTIFICAÇÕES E LIMPA TOKENS INVÁLIDOS ---
-async function sendNotificationAndCleanup(
-  tokens: string[],
-  payload: admin.messaging.MessagingPayload, // Usamos um tipo mais genérico aqui
-  userRef: admin.firestore.DocumentReference
-) {
-  try {
-    const response = await messaging.sendToDevice(tokens, payload);
-    logger.info(
-      `Notificação enviada para ${response.successCount} de ${tokens.length} tokens.`
-    );
-
-    const tokensToRemove: string[] = [];
-    response.results.forEach((result, index) => {
-      const error = result.error;
-      if (error) {
-        logger.error(`Falha ao enviar para token: ${tokens[index]}`, error);
-        if (
-          error.code === "messaging/invalid-registration-token" ||
-          error.code === "messaging/registration-token-not-registered"
-        ) {
-          tokensToRemove.push(tokens[index]);
-        }
-      }
-    });
-
-    if (tokensToRemove.length > 0) {
-      logger.info("Removendo tokens inválidos:", tokensToRemove);
-      await userRef.update({
-        fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokensToRemove),
-      });
-    }
-  } catch (error) {
-    logger.error("Erro geral ao enviar notificação:", error);
-  }
-}

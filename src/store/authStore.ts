@@ -74,7 +74,7 @@ interface AuthState {
   manageServices: (services: Service[]) => Promise<void>;
   manageAvailability: (availability: Availability) => Promise<void>;
   cancelAppointment: (bookingId: string) => Promise<void>;
-  submitReview: (reviewData: Omit<Review, 'id' | 'createdAt'>) => Promise<void>;
+  submitReview: (reviewData: Omit<Review, "id" | "createdAt">) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -252,7 +252,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-
   // --- FUNÇÃO PARA O DASHBOARD DO PRESTADOR ---
   updateAppointmentStatus: async (appointmentId, status) => {
     const appointmentRef = doc(db, "appointments", appointmentId);
@@ -344,73 +343,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error("Não foi possível atualizar a lista de serviços.");
     }
   },
-   manageAvailability: async (availability) => {
-        const { user } = get();
-        if (!user) {
-            throw new Error("Usuário não autenticado.");
-        }
-        try {
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, { availability });
-            set((state) => ({
-                userProfile: state.userProfile
-                    ? { ...state.userProfile, availability }
-                    : null,
-            }));
-        } catch (error) {
-            console.error("Erro ao salvar disponibilidade:", error);
-            throw error;
-        }
-    },
+  manageAvailability: async (availability) => {
+    const { user } = get();
+    if (!user) {
+      throw new Error("Usuário não autenticado.");
+    }
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { availability });
+      set((state) => ({
+        userProfile: state.userProfile
+          ? { ...state.userProfile, availability }
+          : null,
+      }));
+    } catch (error) {
+      console.error("Erro ao salvar disponibilidade:", error);
+      throw error;
+    }
+  },
 
-    cancelAppointment: async (bookingId: string) => {
+  cancelAppointment: async (bookingId: string) => {
     const { userProfile } = get();
     if (!userProfile) {
-      showToast("Você precisa estar logado para cancelar.", "error");
+      // Idealmente, use um sistema de toast/notificação aqui
+      console.error("Você precisa estar logado para cancelar.");
       return;
     }
 
-    const appointmentToCancel = userProfile.myAppointments?.find(app => app.id === bookingId);
-
-    if (!appointmentToCancel) {
-      showToast("Agendamento não encontrado no seu perfil.", "error");
-      return;
-    }
-
-    showToast("Cancelando agendamento...", "info");
+    console.log("Cancelando agendamento:", bookingId); // Log para depuração
 
     try {
-      // Usamos um 'batch' para garantir que todas as atualizações aconteçam juntas
-      const batch = writeBatch(db);
-
-      // 1. Atualiza o documento principal na coleção 'bookings'
+      // A única responsabilidade agora é atualizar o status no documento principal.
       const bookingRef = doc(db, "bookings", bookingId);
-      batch.update(bookingRef, { status: "cancelled" });
+      await updateDoc(bookingRef, { status: "cancelled" });
 
-      // 2. Atualiza a cópia do agendamento no perfil do CLIENTE
-      const clientRef = doc(db, "users", userProfile.uid);
-      const updatedClientAppointments = userProfile.myAppointments?.map(app => 
-        app.id === bookingId ? { ...app, status: 'cancelled' as const } : app
-      );
-      batch.update(clientRef, { myAppointments: updatedClientAppointments });
+      // A Cloud Function 'onBookingUpdate' cuidará de atualizar os perfis.
+      // O 'onSnapshot' no seu componente de agendamentos irá refletir a mudança automaticamente.
 
-      // 3. Atualiza a cópia do agendamento no perfil do PRESTADOR
-      const providerRef = doc(db, "users", appointmentToCancel.providerId);
-      // Para esta parte, precisaríamos buscar o perfil do prestador para fazer da forma correta.
-      // Uma Cloud Function é ideal, mas por agora, vamos focar em atualizar o principal e o do cliente.
-      // A atualização no prestador será refletida se ele buscar da coleção 'bookings'.
-      // Para uma consistência perfeita, a Cloud Function que discutimos é o caminho.
-
-      await batch.commit();
-
-      // Atualiza o estado local para a UI reagir instantaneamente
-      set({ userProfile: { ...userProfile, myAppointments: updatedClientAppointments } });
-      
-      showToast("Agendamento cancelado com sucesso!", "success");
-
+      // showToast("Agendamento cancelado com sucesso!", "success"); // Se tiver toast
+      console.log("Agendamento cancelado com sucesso no documento principal!");
     } catch (error) {
       console.error("Erro ao cancelar agendamento:", error);
-      showToast("Não foi possível cancelar o agendamento.", "error");
+      // showToast("Não foi possível cancelar o agendamento.", "error"); // Se tiver toast
     }
   },
 

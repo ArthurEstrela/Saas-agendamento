@@ -1,98 +1,81 @@
 // src/components/Client/ClientAppointmentCard.tsx
+
 import React from 'react';
+import type { Booking } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle, History, XCircle, Clock, Star, CalendarDays, User, Tag, ClipboardList } from 'lucide-react';
-import type { Appointment } from '../../types';
+import { Calendar, Clock, Tag, DollarSign, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
-// NOVO: Adicionei a nova propriedade `providerPhotoURL`
-interface ClientAppointmentCardProps {
-  app: Appointment & { providerPhotoURL?: string | null };
-  handleOpenReviewModal: (appointment: Appointment) => void;
-  handleCancelAppointment: (appointmentId: string) => void;
-}
+// Função para obter o ícone e a cor do status
+const getStatusProps = (status: 'confirmed' | 'pending' | 'cancelled') => {
+  switch (status) {
+    case 'confirmed':
+      return { icon: <CheckCircle size={16} />, color: 'text-green-400', label: 'Confirmado' };
+    case 'cancelled':
+      return { icon: <XCircle size={16} />, color: 'text-red-400', label: 'Cancelado' };
+    case 'pending':
+    default:
+      return { icon: <AlertCircle size={16} />, color: 'text-yellow-400', label: 'Pendente' };
+  }
+};
 
-const ClientAppointmentCard: React.FC<ClientAppointmentCardProps> = ({
-  app,
-  handleOpenReviewModal,
-  handleCancelAppointment,
-}) => {
-  const getStatusInfo = (status: Appointment['status']) => {
-    switch (status) {
-      case 'confirmed': return { text: 'Confirmado', color: 'text-green-500', icon: <CheckCircle size={16} /> };
-      case 'completed': return { text: 'Concluído', color: 'text-blue-500', icon: <History size={16} /> };
-      case 'cancelled':
-      case 'no-show': return { text: 'Cancelado', color: 'text-red-500', icon: <XCircle size={16} /> };
-      default: return { text: 'Pendente', color: 'text-yellow-500', icon: <Clock size={16} /> };
-    }
-  };
-  const statusInfo = getStatusInfo(app.status);
-
-  // Cria a data no fuso horário local para exibição
-  const [year, month, day] = app.date.split('-').map(Number);
-  const localDate = new Date(year, month - 1, day);
+const ClientAppointmentCard = ({ booking }: { booking: Booking }) => {
+  const { icon, color, label } = getStatusProps(booking.status);
+  const bookingDate = new Date(booking.date);
 
   return (
-    <div className="bg-gray-900/50 p-6 rounded-xl border border-gray-800 backdrop-blur-sm transition-all duration-300 hover:border-yellow-500 hover:shadow-lg hover:shadow-yellow-500/5">
-      <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
-        <div className="flex items-center gap-2 text-yellow-500 font-bold">
-          <CalendarDays size={20} />
-          <span className="text-sm">{format(localDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</span>
+    <div className="bg-gray-800/50 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300 transform hover:-translate-y-1">
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+        {/* Informações do Prestador e Data */}
+        <div className="flex items-center gap-4">
+           {/* Idealmente, teríamos a foto do prestador aqui. Usando um fallback por enquanto. */}
+           <div className="h-16 w-16 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center border-2 border-gray-600">
+               <span className="text-2xl font-bold text-[#daa520]">{booking.clientName.charAt(0).toUpperCase()}</span>
+           </div>
+          <div>
+            <h3 className="text-xl font-bold text-white">{booking.professionalName}</h3>
+            <div className="flex items-center gap-4 text-gray-400 mt-1">
+              <span className="flex items-center gap-2 text-sm"><Calendar size={14} /> {format(bookingDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
+              <span className="flex items-center gap-2 text-sm"><Clock size={14} /> {format(bookingDate, "HH:mm")}</span>
+            </div>
+          </div>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full bg-black/20 ${statusInfo.color}`}>
-          {statusInfo.icon}
-          <span>{statusInfo.text}</span>
-        </div>
-      </div>
-      
-      <div className="flex items-center mb-4">
-        {/* NOVO: Imagem do prestador de serviço */}
-        <img
-          src={app.providerPhotoURL || "https://placehold.co/60x60/1f2937/d1d5db?text=S"}
-          alt={`Foto de ${app.establishmentName}`}
-          className="h-16 w-16 rounded-full object-cover mr-4 border-2 border-gray-700"
-        />
-        <div>
-          <p className="font-bold text-lg text-white">{app.establishmentName}</p>
-          <p className="text-sm text-gray-400">com {app.professionalName}</p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 gap-2">
-        <div className="flex items-center gap-2 text-gray-400">
-          <ClipboardList size={20} />
-          <p className="font-medium">{app.serviceName}</p>
-        </div>
-        <div className="flex items-center gap-2 text-gray-400">
-          <Clock size={20} />
-          <p className="font-medium">{app.startTime}</p>
+        
+        {/* Status */}
+        <div className={`flex items-center gap-2 font-semibold text-sm px-3 py-1 rounded-full ${color} bg-opacity-10`}>
+          {icon}
+          <span>{label}</span>
         </div>
       </div>
 
-      <div className="mt-6 pt-4 border-t border-gray-700 flex justify-end gap-2">
-        {app.status === 'completed' && app.hasBeenReviewed ? (
-          <span className="text-blue-500 font-semibold py-2 px-4 text-sm rounded-lg flex items-center gap-1">
-            <Star size={16} /> Avaliado
-          </span>
-        ) : (
-          app.status === 'completed' && !app.hasBeenReviewed && (
-            <button
-              onClick={() => handleOpenReviewModal(app)}
-              className="bg-yellow-500 text-gray-900 font-semibold py-2 px-4 text-sm rounded-lg flex items-center gap-1 hover:bg-yellow-400 transition-colors"
-            >
-              <Star size={16} /> Avaliar
-            </button>
-          )
-        )}
-        {(app.status === 'pending' || app.status === 'confirmed') && (
-          <button
-            onClick={() => handleCancelAppointment(app.id)}
-            className="bg-red-600/80 hover:bg-red-600 text-white font-semibold py-2 px-4 text-sm rounded-lg transition-colors"
-          >
-            Cancelar
-          </button>
-        )}
+      <div className="border-t border-gray-700 my-4"></div>
+      
+      {/* Detalhes dos Serviços e Preço */}
+      <div className="space-y-3">
+        <h4 className="font-semibold text-white flex items-center gap-2"><Tag size={16}/> Serviços</h4>
+        {booking.services.map(service => (
+          <div key={service.id} className="flex justify-between items-center text-gray-300 text-sm">
+            <span>{service.name}</span>
+            <span className="font-mono">R$ {service.price.toFixed(2)}</span>
+          </div>
+        ))}
       </div>
+
+      <div className="border-t border-gray-700 my-4"></div>
+
+      <div className="flex justify-between items-center">
+        <span className="font-semibold text-white flex items-center gap-2"><DollarSign size={18}/> Valor Total</span>
+        <span className="text-2xl font-bold text-[#daa520]">R$ {booking.totalPrice.toFixed(2)}</span>
+      </div>
+
+      {/* Ações (ex: Cancelar, Reagendar) podem ser adicionadas aqui no futuro */}
+       {booking.status !== 'cancelled' && new Date() < bookingDate && (
+         <div className="mt-4 flex justify-end">
+             <button className="text-sm bg-red-600/20 text-red-400 hover:bg-red-600/40 px-4 py-2 rounded-lg transition-colors">
+                 Cancelar Agendamento
+             </button>
+         </div>
+       )}
     </div>
   );
 };

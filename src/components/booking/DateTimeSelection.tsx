@@ -1,15 +1,25 @@
 // src/components/booking/DateTimeSelection.tsx
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useBookingStore } from '../../store/bookingStore';
 import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css'; // Estilo padrão
-import '../../Calendar.css'; // Seu CSS customizado para o calendário
+import 'react-calendar/dist/Calendar.css';
+import '../../Calendar.css';
 import { addMinutes, format, getDay, isEqual, parse, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Clock, AlertTriangle } from 'lucide-react';
+import { Timestamp } from 'firebase/firestore';
 
-// --- COMPONENTE PRINCIPAL ---
+const convertToDate = (date: any): Date | null => {
+  if (!date) return null;
+  if (date instanceof Timestamp) return date.toDate();
+  if (typeof date === 'string' || typeof date === 'number') {
+    const d = new Date(date);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
+
 const DateTimeSelection = () => {
   const {
     serviceProvider,
@@ -20,75 +30,74 @@ const DateTimeSelection = () => {
     setTime,
   } = useBookingStore();
   
-  // Reseta a hora selecionada sempre que a data muda
   const handleDateChange = (date: Date | null) => {
     if (date) {
-      setDate(startOfDay(date)); // Garante que a data não tenha horas/minutos
+      setDate(startOfDay(date));
       setTime(null);
     }
   };
 
-  // --- CÁLCULOS E LÓGICA ---
-
-  // 1. Calcula a duração total dos serviços selecionados
   const totalDuration = useMemo(() => {
     return selectedServices.reduce((acc, service) => acc + service.duration, 0);
   }, [selectedServices]);
 
-  // 2. Gera os horários disponíveis para o dia selecionado
   const availableTimeSlots = useMemo(() => {
-    if (!selectedDate || !serviceProvider?.availability) {
+    if (!selectedDate || !serviceProvider?.availability?.weekdays) {
       return [];
     }
 
-    // Mapeia o dia da semana (domingo = 0, segunda = 1, etc.)
     const dayOfWeek = getDay(selectedDate);
+    // CORREÇÃO FINAL: Usamos os nomes em minúsculo, que agora correspondem ao que salvamos
     const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayMapping[dayOfWeek] as keyof typeof serviceProvider.availability.weekdays;
-
     const daySchedule = serviceProvider.availability.weekdays[dayName];
 
-    // Se o estabelecimento está fechado, retorna uma lista vazia
     if (!daySchedule || !daySchedule.isOpen) {
       return [];
     }
 
-    // Converte os horários de início e fim para objetos Date
-    const startTime = parse(daySchedule.startTime, 'HH:mm', selectedDate);
-    const endTime = parse(daySchedule.endTime, 'HH:mm', selectedDate);
-    
-    // Filtra os agendamentos existentes para o dia selecionado
-    const bookingsForDay = serviceProvider.bookings?.filter(booking => 
-        isEqual(startOfDay(new Date(booking.date)), selectedDate)
-    ) || [];
+    try {
+        const startTime = parse(daySchedule.startTime, 'HH:mm', selectedDate);
+        const endTime = parse(daySchedule.endTime, 'HH:mm', selectedDate);
+        
+        const bookingsForDay = (serviceProvider.bookings || [])
+          .map(booking => {
+            const bookingDate = convertToDate(booking.date);
+            if (!bookingDate || !isEqual(startOfDay(bookingDate), selectedDate)) return null;
+            return {
+              ...booking,
+              startDate: bookingDate,
+            };
+          })
+          .filter((b): b is NonNullable<typeof b> => b !== null);
 
-    const slots = [];
-    let currentTime = startTime;
+        const slots = [];
+        let currentTime = startTime;
 
-    // Gera os horários desde a abertura até o fechamento
-    while (addMinutes(currentTime, totalDuration) <= endTime) {
-      const slotEnd = addMinutes(currentTime, totalDuration);
+        while (addMinutes(currentTime, totalDuration) <= endTime) {
+            const slotEnd = addMinutes(currentTime, totalDuration);
 
-      // Verifica se o horário atual conflita com algum agendamento existente
-      const isOccupied = bookingsForDay.some(booking => {
-        const bookingStart = new Date(booking.date);
-        const bookingEnd = addMinutes(bookingStart, booking.totalDuration);
-        // Conflito existe se: (SlotStart < BookingEnd) e (SlotEnd > BookingStart)
-        return (currentTime < bookingEnd) && (slotEnd > bookingStart);
-      });
+            const isOccupied = bookingsForDay.some(booking => {
+              const bookingStart = booking.startDate;
+              const bookingEnd = addMinutes(bookingStart, booking.totalDuration);
+              return (currentTime < bookingEnd) && (slotEnd > bookingStart);
+            });
 
-      if (!isOccupied) {
-        slots.push(format(currentTime, 'HH:mm'));
-      }
-      
-      // Incrementa o tempo pelo intervalo definido (ex: 15 minutos)
-      currentTime = addMinutes(currentTime, serviceProvider.availability.slotInterval || 15);
+            if (!isOccupied) {
+                slots.push(format(currentTime, 'HH:mm'));
+            }
+            
+            currentTime = addMinutes(currentTime, serviceProvider.availability.slotInterval || 15);
+        }
+        
+        return slots;
+
+    } catch (error) {
+        console.error("Erro ao gerar horários:", error);
+        return [];
     }
-
-    return slots;
   }, [selectedDate, serviceProvider, totalDuration]);
 
-  // --- RENDERIZAÇÃO ---
   return (
     <div className="animate-fade-in-down">
       <div className="text-center mb-6">
@@ -96,42 +105,26 @@ const DateTimeSelection = () => {
         <p className="text-gray-400 mt-1">Selecione o melhor dia e horário para você.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
-        {/* Lado Esquerdo: Calendário */}
-        <div className="flex flex-col items-center">
-          <div className="w-full max-w-sm">
-            <Calendar
-              onChange={(value) => handleDateChange(value as Date)}
-              value={selectedDate}
-              minDate={new Date()} // Impede a seleção de datas passadas
-              locale="pt-BR"
-              tileClassName={({ date, view }) => 
-                view === 'month' && date.getDay() === 0 ? 'sunday-tile' : ''
-              }
-            />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+        <div className="w-full max-w-sm mx-auto">
+          <Calendar
+            onChange={(value) => handleDateChange(value as Date)}
+            value={selectedDate}
+            minDate={new Date()}
+            locale="pt-BR"
+          />
         </div>
 
-        {/* Lado Direito: Horários Disponíveis */}
         <div className="max-h-[40vh] overflow-y-auto pr-2">
           <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
             <Clock size={22}/>
             Horários para {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : '...'}
           </h3>
-
           {selectedDate ? (
             availableTimeSlots.length > 0 ? (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {availableTimeSlots.map(time => (
-                  <button
-                    key={time}
-                    onClick={() => setTime(time)}
-                    className={`p-3 rounded-lg font-semibold transition-all duration-200 ${
-                      selectedTime === time
-                        ? 'bg-[#daa520] text-black shadow-lg'
-                        : 'bg-gray-700 hover:bg-gray-600 text-white'
-                    }`}
-                  >
+                  <button key={time} onClick={() => setTime(time)} className={`p-3 rounded-lg font-semibold transition-all duration-200 ${selectedTime === time ? 'bg-[#daa520] text-black shadow-lg' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}>
                     {time}
                   </button>
                 ))}

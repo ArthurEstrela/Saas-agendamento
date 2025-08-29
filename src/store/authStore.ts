@@ -74,6 +74,7 @@ interface AuthState {
   updateProfessionals: (professionals: Professional[]) => Promise<void>;
   manageProfessionals: (professionals: Professional[]) => Promise<void>;
   manageServices: (services: Service[]) => Promise<void>;
+  manageAvailability: (availability: Availability) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -359,4 +360,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error("Não foi possível atualizar a lista de serviços.");
     }
   },
+   manageAvailability: async (availability) => {
+        const { user } = get();
+        if (!user) {
+            throw new Error("Usuário não autenticado.");
+        }
+        try {
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, { availability });
+            set((state) => ({
+                userProfile: state.userProfile
+                    ? { ...state.userProfile, availability }
+                    : null,
+            }));
+        } catch (error) {
+            console.error("Erro ao salvar disponibilidade:", error);
+            throw error;
+        }
+    },
 }));

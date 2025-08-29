@@ -281,8 +281,8 @@ const ClientDashboard: React.FC = () => {
       case "myAppointments":
         return (
           <ClientMyAppointmentsSection
-            handleCancelAppointment={handleCancelAppointment}
-            handleOpenReviewModal={handleOpenReviewModal}
+            onCancel={handleCancelAppointment}
+            onReview={handleOpenReviewModal}
             setActiveView={setActiveView}
           />
         );

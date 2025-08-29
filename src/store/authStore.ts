@@ -20,6 +20,9 @@ import {
   addDoc,
   collection,
   Timestamp,
+  query,
+  where,
+  onSnapshot,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import type {
@@ -28,6 +31,7 @@ import type {
   Review,
   Professional,
   Service,
+  Availability,
 } from "../types";
 
 // Interfaces para os dados que as funções recebem
@@ -52,7 +56,10 @@ interface AuthState {
   userProfile: UserProfile | null;
   isLoading: boolean;
   error: string | null;
+  userAppointments: Appointment[];
+  unsubscribeAppointments: Unsubscribe | null;
   checkAuth: () => () => void;
+  fetchUserAppointments: (userId: string) => void;
   signUp: (
     email: string,
     password: string,
@@ -82,6 +89,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   userProfile: null,
   isLoading: true,
   error: null,
+  userAppointments: [],
+  unsubscribeAppointments: null,
 
   checkAuth: () => {
     set({ isLoading: true });
@@ -93,11 +102,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           if (userDoc.exists()) {
             const profile = userDoc.data() as UserProfile;
             set({ user, userProfile: profile, isLoading: false, error: null });
+            get().fetchUserAppointments(user.uid); // <-- CHAME A FUNÇÃO AQUI
           } else {
             set({ user, userProfile: null, isLoading: false, error: null });
           }
         } else {
-          set({ user: null, userProfile: null, isLoading: false, error: null });
+          // Se não há usuário, limpe tudo
+          get().logout();
         }
       } catch (err: any) {
         set({
@@ -109,6 +120,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     });
     return unsubscribe;
+  },
+
+  fetchUserAppointments: (userId) => {
+    const existingUnsubscribe = get().unsubscribeAppointments;
+    if (existingUnsubscribe) {
+      existingUnsubscribe(); // Cancela o ouvinte anterior para evitar duplicatas
+    }
+
+    const q = query(
+      collection(db, "bookings"),
+      where("clientId", "==", userId)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const appointments = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Appointment[];
+        // Ordena os agendamentos, por exemplo, por data (opcional)
+        appointments.sort(
+          (a, b) => b.startTime.toMillis() - a.startTime.toMillis()
+        );
+        set({ userAppointments: appointments });
+      },
+      (error) => {
+        console.error("Erro ao buscar agendamentos em tempo real:", error);
+        set({ error: "Não foi possível carregar os agendamentos." });
+      }
+    );
+
+    set({ unsubscribeAppointments: unsubscribe }); // Salva o novo ouvinte
   },
 
   signUp: async (email, password, userType, profileData) => {
@@ -195,10 +239,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // Primeiro, cancele o ouvinte de agendamentos
+    const { unsubscribeAppointments } = get();
+    if (unsubscribeAppointments) {
+      unsubscribeAppointments();
+    }
+
     set({ isLoading: true });
     try {
       await signOut(auth);
-      set({ user: null, userProfile: null, isLoading: false });
+      // Limpa todo o estado do usuário
+      set({
+        user: null,
+        userProfile: null,
+        userAppointments: [],
+        unsubscribeAppointments: null,
+        isLoading: false,
+        error: null,
+      });
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
     }
@@ -365,26 +423,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   cancelAppointment: async (bookingId: string) => {
     const { userProfile } = get();
     if (!userProfile) {
-      // Idealmente, use um sistema de toast/notificação aqui
       console.error("Você precisa estar logado para cancelar.");
       return;
     }
-
-    console.log("Cancelando agendamento:", bookingId); // Log para depuração
-
     try {
-      // A única responsabilidade agora é atualizar o status no documento principal.
       const bookingRef = doc(db, "bookings", bookingId);
       await updateDoc(bookingRef, { status: "cancelled" });
-
-      // A Cloud Function 'onBookingUpdate' cuidará de atualizar os perfis.
-      // O 'onSnapshot' no seu componente de agendamentos irá refletir a mudança automaticamente.
-
-      // showToast("Agendamento cancelado com sucesso!", "success"); // Se tiver toast
-      console.log("Agendamento cancelado com sucesso no documento principal!");
+      // Não precisa fazer mais nada aqui!
+      // O onSnapshot vai pegar a mudança e atualizar a UI sozinho.
+      console.log("Status do agendamento atualizado para 'cancelled'");
     } catch (error) {
       console.error("Erro ao cancelar agendamento:", error);
-      // showToast("Não foi possível cancelar o agendamento.", "error"); // Se tiver toast
+      // Aqui você pode usar um toast para notificar o usuário do erro
     }
   },
 

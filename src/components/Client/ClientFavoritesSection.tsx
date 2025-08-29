@@ -1,5 +1,6 @@
 // src/components/Client/ClientFavoritesSection.tsx
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../../context/ToastContext';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import type { UserProfile } from '../../types';
@@ -29,6 +30,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
 }) => {
   const [favoriteProfessionals, setFavoriteProfessionals] = useState<UserProfile[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(true);
+   const { showToast } = useToast();
 
   useEffect(() => {
     const fetchFavorites = async () => {
@@ -47,6 +49,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
         setFavoriteProfessionals(favsData);
       } catch (error) {
         console.error("Erro ao buscar favoritos:", error);
+        showToast("Ops! Não conseguimos carregar seus favoritos. Tente novamente mais tarde."+ "error");
       } finally {
         setLoadingFavorites(false);
       }
@@ -58,7 +61,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
       setFavoriteProfessionals([]);
       setLoadingFavorites(false);
     }
-  }, [user, userProfile?.favorites]);
+  }, [user, userProfile?.favorites, showToast]);
 
   return (
     <div>
@@ -72,8 +75,7 @@ const ClientFavoritesSection: React.FC<ClientFavoritesSectionProps> = ({
               isFavorite={userProfile?.favorites?.includes(prof.uid) || false}
               handleProtectedAction={handleProtectedAction}
               toggleFavorite={toggleFavorite}
-              handleSelectProfessionalForBooking={handleSelectProfessionalForBooking}
-            />
+              handleSelectProfessionalForBooking={handleSelectProfessionalForBooking} distance={null}            />
           ))}
         </div>
       ) : (

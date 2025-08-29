@@ -163,7 +163,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const userDocRef = doc(db, "users", user.uid);
     
-    // Garante que o array `favorites` existe
     const currentFavorites = userProfile.favorites || [];
     const isFavorite = currentFavorites.includes(professionalId);
     

@@ -6,10 +6,10 @@ import type { UserProfile } from '../types';
 import { 
   ArrowLeft, 
   ChevronRight,
-  ListTodo,      // Ícone para Serviços
-  Users,         // Ícone para Profissional
-  CalendarClock, // Ícone para Data e Hora
-  CheckCircle    // Ícone para Confirmação
+  ListTodo,
+  Users,
+  CalendarClock,
+  CheckCircle
 } from 'lucide-react';
 
 // Importe os componentes de cada etapa
@@ -19,8 +19,8 @@ import DateTimeSelection from './booking/DateTimeSelection';
 import Confirmation from './booking/Confirmation';
 
 interface BookingProps {
-  professional: UserProfile; // Este é o UserProfile do estabelecimento/prestador
-  onBack: () => void; // Esta é a função para fechar o modal
+  professional: UserProfile; // Este é o UserProfile do estabelecimento
+  onBack: () => void;
 }
 
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
@@ -36,7 +36,6 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
     resetBooking
   } = useBookingStore();
 
-  // Define os ícones para cada etapa
   const bookingSteps = [
     { step: 1, title: 'Serviços', icon: ListTodo },
     { step: 2, title: 'Profissional', icon: Users },
@@ -83,29 +82,31 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   };
 
   return (
+    // O componente em si não se centraliza, o "pai" dele faz isso (veja Passo 2)
     <div className="bg-gray-900/80 p-6 sm:p-8 rounded-2xl w-full max-w-3xl border border-[#daa520]/30 shadow-2xl shadow-[#daa520]/10">
       <div className="mb-8">
-          <h2 className="text-2xl font-bold text-center text-white mb-2">Faça seu Agendamento</h2>
+          <h2 className="text-2xl font-bold text-center text-white mb-4">Faça seu Agendamento</h2>
           
-          {/* FOTO E NOME DO PRESTADOR */}
-          <div className="flex items-center justify-center gap-3 mb-6">
+          {/* FOTO E NOME DO ESTABELECIMENTO - AJUSTADO */}
+          <div className="flex flex-col items-center justify-center gap-3 mb-8">
               <img
-                  src={establishment.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(establishment.displayName)}&background=2d3748&color=ffffff`}
+                  src={establishment.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(establishment.displayName)}&background=1f2937&color=daa520&size=128`}
                   alt={establishment.displayName}
-                  className="h-14 w-14 rounded-full object-cover border-2 border-[#daa520]"
+                  // FOTO MAIOR
+                  className="h-20 w-20 rounded-full object-cover border-2 border-[#daa520]"
               />
-              <span className="text-xl font-semibold text-white">{establishment.displayName}</span>
+              {/* NOME MAIOR */}
+              <span className="text-2xl font-semibold text-white">{establishment.displayName}</span>
           </div>
 
-          {/* INDICADOR DE ETAPAS (AGORA COM ÍCONES) */}
           <div className="flex justify-between items-center max-w-md mx-auto">
               {bookingSteps.map((step, index) => {
-                  const IconComponent = step.icon; // Pega o componente do ícone
+                  const IconComponent = step.icon;
                   return (
                       <React.Fragment key={step.step}>
                           <div className="flex flex-col items-center text-center">
                               <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold border-2 transition-all duration-300 ${currentStep >= step.step ? 'bg-[#daa520] text-black border-[#daa520]' : 'bg-gray-700 text-white border-gray-600'}`}>
-                                  <IconComponent size={20} /> {/* Renderiza o ícone */}
+                                  <IconComponent size={20} />
                               </div>
                               <p className={`mt-2 text-sm font-semibold transition-all duration-300 ${currentStep >= step.step ? 'text-white' : 'text-gray-500'}`}>{step.title}</p>
                           </div>

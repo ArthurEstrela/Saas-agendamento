@@ -5,7 +5,7 @@ import { useBookingStore } from '../../store/bookingStore';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../../Calendar.css';
-import { addMinutes, format, getDay, isEqual, parse, startOfDay } from 'date-fns';
+import { addMinutes, format, getDay, isEqual, parse, startOfDay, isToday } from 'date-fns'; // Importa o isToday
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Clock, AlertTriangle } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
@@ -45,9 +45,13 @@ const DateTimeSelection = () => {
     if (!selectedDate || !serviceProvider?.availability?.weekdays) {
       return [];
     }
+    
+    // Pega a data e hora atuais para comparação
+    const now = new Date();
+    // Verifica se a data selecionada no calendário é o dia de hoje
+    const isSelectedDateToday = isToday(selectedDate);
 
     const dayOfWeek = getDay(selectedDate);
-    // CORREÇÃO FINAL: Usamos os nomes em minúsculo, que agora correspondem ao que salvamos
     const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayMapping[dayOfWeek] as keyof typeof serviceProvider.availability.weekdays;
     const daySchedule = serviceProvider.availability.weekdays[dayName];
@@ -75,6 +79,14 @@ const DateTimeSelection = () => {
         let currentTime = startTime;
 
         while (addMinutes(currentTime, totalDuration) <= endTime) {
+            // ----> A NOVA LÓGICA ESTÁ AQUI <----
+            // Se o dia selecionado é hoje, verifica se o horário já passou.
+            // Se já passou, simplesmente pula para a próxima iteração do loop.
+            if (isSelectedDateToday && currentTime < now) {
+                currentTime = addMinutes(currentTime, serviceProvider.availability.slotInterval || 15);
+                continue; // Pula este horário
+            }
+
             const slotEnd = addMinutes(currentTime, totalDuration);
 
             const isOccupied = bookingsForDay.some(booking => {
@@ -105,7 +117,7 @@ const DateTimeSelection = () => {
         <p className="text-gray-400 mt-1">Selecione o melhor dia e horário para você.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+      <div className="grid grid-cols-1 gap-8 items-start">
         <div className="w-full max-w-sm mx-auto">
           <Calendar
             onChange={(value) => handleDateChange(value as Date)}

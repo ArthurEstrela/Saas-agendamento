@@ -1,46 +1,48 @@
 // src/components/Booking.tsx
-import React, { useEffect } from "react";
-import { useBookingStore } from "../store/bookingStore";
-import type { UserProfile } from "../types";
 
-// Importa os novos componentes de cada etapa
-import ServiceSelection from "./booking/ServiceSelection";
-import ProfessionalSelection from "./booking/ProfessionalSelection";
-import DateTimeSelection from "./booking/DateTimeSelection";
-import Confirmation from "./booking/Confirmation";
-
-import {
-  Scissors,
-  User,
-  Calendar as CalendarIcon,
-  CheckCircle,
-  ArrowLeft,
+import React, { useEffect } from 'react';
+import { useBookingStore } from '../store/bookingStore';
+import type { UserProfile } from '../types';
+import { 
+  ArrowLeft, 
   ChevronRight,
-} from "lucide-react";
+  ListTodo,      // Ícone para Serviços
+  Users,         // Ícone para Profissional
+  CalendarClock, // Ícone para Data e Hora
+  CheckCircle    // Ícone para Confirmação
+} from 'lucide-react';
 
-// Propriedades do componente Booking
+// Importe os componentes de cada etapa
+import ServiceSelection from './booking/ServiceSelection';
+import ProfessionalSelection from './booking/ProfessionalSelection';
+import DateTimeSelection from './booking/DateTimeSelection';
+import Confirmation from './booking/Confirmation';
+
 interface BookingProps {
-  professional: UserProfile;
-  onBack?: () => void;
+  professional: UserProfile; // Este é o UserProfile do estabelecimento/prestador
+  onBack: () => void; // Esta é a função para fechar o modal
 }
-
-// Definição das etapas
-const bookingSteps = [
-  { id: 1, name: "Serviços", icon: Scissors },
-  { id: 2, name: "Profissional", icon: User },
-  { id: 3, name: "Data & Hora", icon: CalendarIcon },
-  { id: 4, name: "Confirmar", icon: CheckCircle },
-];
 
 const Booking = ({ professional: establishment, onBack }: BookingProps) => {
   const {
     currentStep,
-    resetBooking,
     selectedServices,
+    selectedProfessional,
+    selectedDate,
+    selectedTime,
+    setServiceProvider,
     goToNextStep,
     goToPreviousStep,
-    setServiceProvider,
+    resetBooking
   } = useBookingStore();
+
+  // Define os ícones para cada etapa
+  const bookingSteps = [
+    { step: 1, title: 'Serviços', icon: ListTodo },
+    { step: 2, title: 'Profissional', icon: Users },
+    { step: 3, title: 'Data e Hora', icon: CalendarClock },
+    { step: 4, title: 'Confirmação', icon: CheckCircle }
+  ];
 
   useEffect(() => {
     resetBooking();
@@ -48,16 +50,18 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       setServiceProvider(establishment);
     }
     return () => {
-      resetBooking();
-    };
+        resetBooking();
+    }
   }, [establishment, setServiceProvider, resetBooking]);
 
   const isNextStepEnabled = () => {
     switch (currentStep) {
       case 1:
-        // Agora `selectedServices` existe e a função funciona
         return selectedServices.length > 0;
-      // case 2: ...
+      case 2:
+        return !!selectedProfessional || selectedProfessional === null;
+      case 3:
+        return !!selectedDate && !!selectedTime;
       default:
         return true;
     }
@@ -68,107 +72,73 @@ const Booking = ({ professional: establishment, onBack }: BookingProps) => {
       case 1:
         return <ServiceSelection />;
       case 2:
-        return <ProfessionalSelection establishment={establishment} />;
+        return <ProfessionalSelection />;
       case 3:
         return <DateTimeSelection />;
       case 4:
-        return <Confirmation establishment={establishment} />;
+        return <Confirmation onBookingConfirmed={onBack} />;
       default:
         return <div>Etapa não encontrada</div>;
     }
   };
 
-  const progressPercentage =
-    ((currentStep - 1) / (bookingSteps.length - 1)) * 100;
-
   return (
-    // Adiciona o fade-in na página inteira
-    <div className="min-h-screen bg-gray-950 text-gray-200 p-4 md:p-8 animate-fade-in-down">
-      {onBack && (
-        <header className="flex items-center mb-10">
-          <button
-            onClick={onBack}
-            className="flex items-center space-x-2 text-[#daa520] hover:text-yellow-300 font-semibold"
-          >
-            <ArrowLeft className="h-6 w-6" />
-            <span>Voltar</span>
-          </button>
-        </header>
-      )}
-
-      <main className="max-w-3xl mx-auto bg-gray-900 p-6 md:p-8 rounded-xl shadow-2xl border border-gray-800">
-        <div className="text-center mb-8">
-          <div className="flex flex-col items-center">
-            {/* Foto do Prestador de Serviço */}
-            <img
-              src={
-                establishment.photoURL ||
-                "https://placehold.co/120x120/1f2937/d1d5db?text=Logo"
-              }
-              alt={`Foto de ${establishment.companyName}`}
-              className="h-24 w-24 rounded-full object-cover border-4 border-yellow-500 shadow-md mb-4"
-            />
-            {/* Título e nome do estabelecimento centralizados e bem-organizados */}
-            <h1 className="text-xl font-semibold text-gray-400">Agendar em</h1>
-            <p className="text-3xl text-yellow-500 font-bold mt-1">
-              {establishment.companyName}
-            </p>
+    <div className="bg-gray-900/80 p-6 sm:p-8 rounded-2xl w-full max-w-3xl border border-[#daa520]/30 shadow-2xl shadow-[#daa520]/10">
+      <div className="mb-8">
+          <h2 className="text-2xl font-bold text-center text-white mb-2">Faça seu Agendamento</h2>
+          
+          {/* FOTO E NOME DO PRESTADOR */}
+          <div className="flex items-center justify-center gap-3 mb-6">
+              <img
+                  src={establishment.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(establishment.displayName)}&background=2d3748&color=ffffff`}
+                  alt={establishment.displayName}
+                  className="h-14 w-14 rounded-full object-cover border-2 border-[#daa520]"
+              />
+              <span className="text-xl font-semibold text-white">{establishment.displayName}</span>
           </div>
-        </div>
 
-        <div className="mb-10 relative flex justify-between items-center after:absolute after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-1 after:bg-gray-700 after:z-0">
-          <div
-            className="absolute top-1/2 left-0 h-1 bg-yellow-500 z-10 transition-all duration-500"
-            style={{ width: `${progressPercentage}%` }}
-          ></div>
-          {bookingSteps.map((step) => {
-            const isActive = currentStep >= step.id;
-            return (
-              <div key={step.id} className="flex flex-col items-center z-20">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 ${
-                    isActive
-                      ? "bg-yellow-500 text-gray-900"
-                      : "bg-gray-700 text-white"
-                  }`}
-                >
-                  <step.icon className="h-5 w-5" />
-                </div>
-                <p
-                  className={`text-xs mt-2 font-semibold ${
-                    isActive ? "text-yellow-500" : "text-gray-400"
-                  }`}
-                >
-                  {step.name}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+          {/* INDICADOR DE ETAPAS (AGORA COM ÍCONES) */}
+          <div className="flex justify-between items-center max-w-md mx-auto">
+              {bookingSteps.map((step, index) => {
+                  const IconComponent = step.icon; // Pega o componente do ícone
+                  return (
+                      <React.Fragment key={step.step}>
+                          <div className="flex flex-col items-center text-center">
+                              <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold border-2 transition-all duration-300 ${currentStep >= step.step ? 'bg-[#daa520] text-black border-[#daa520]' : 'bg-gray-700 text-white border-gray-600'}`}>
+                                  <IconComponent size={20} /> {/* Renderiza o ícone */}
+                              </div>
+                              <p className={`mt-2 text-sm font-semibold transition-all duration-300 ${currentStep >= step.step ? 'text-white' : 'text-gray-500'}`}>{step.title}</p>
+                          </div>
+                          {index < bookingSteps.length - 1 && <div className={`flex-1 h-1 mx-2 ${currentStep > index + 1 ? 'bg-[#daa520]' : 'bg-gray-700'}`}></div>}
+                      </React.Fragment>
+                  );
+              })}
+          </div>
+      </div>
+      
+      <div className="mt-8 min-h-[450px]">
+        {renderStepContent()}
+      </div>
 
-        <div className="bg-gray-800 p-6 md:p-8 rounded-xl border border-gray-700 min-h-[400px]">
-          {renderStepContent()}
-        </div>
+      <div className="flex justify-between mt-8">
+        <button
+            onClick={currentStep === 1 ? onBack : goToPreviousStep}
+            className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center gap-2"
+        >
+            <ArrowLeft size={20} />
+            {currentStep === 1 ? "Cancelar" : "Voltar"}
+        </button>
 
         {currentStep < bookingSteps.length && (
-          <div className="flex justify-between mt-8">
             <button
-              onClick={currentStep === 1 ? onBack : goToPreviousStep}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center gap-2"
+                onClick={goToNextStep}
+                disabled={!isNextStepEnabled()}
+                className="bg-[#daa520] hover:bg-[#c8961e] text-black font-bold py-3 px-6 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              <ArrowLeft size={20} />
-              {currentStep === 1 ? "Cancelar" : "Voltar"}
+                Próximo <ChevronRight size={20} />
             </button>
-            <button
-              onClick={goToNextStep}
-              disabled={!isNextStepEnabled()}
-              className="bg-[#daa520] hover:bg-[#c8961e] text-black font-bold py-3 px-6 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              Próximo <ChevronRight size={20} />
-            </button>
-          </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

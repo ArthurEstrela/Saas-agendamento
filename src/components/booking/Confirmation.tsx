@@ -1,122 +1,117 @@
-import React, { useState, useCallback } from 'react';
+// src/components/booking/Confirmation.tsx
+
+import React, { useMemo, useState } from 'react';
 import { useBookingStore } from '../../store/bookingStore';
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
-import { useNavigate } from 'react-router-dom';
-import { db } from '../../firebase/config';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
-import type { UserProfile, Appointment } from '../../types';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Calendar, Clock, User, Tag, DollarSign, Loader2, CheckCircle } from 'lucide-react';
+import { addBooking } from '../../firebase/bookingService';
 
-interface ConfirmationProps {
-  establishment: UserProfile;
-}
-
-const Confirmation = ({ establishment }: ConfirmationProps) => {
-  // Pega os dados do agendamento do bookingStore
+const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }) => {
   const {
+    serviceProvider,
     selectedServices,
     selectedProfessional,
     selectedDate,
     selectedTime,
-    totalPrice,
-    totalDuration,
   } = useBookingStore();
-
-  // Pega os dados do usuário e o perfil do authStore
-  const { user, userProfile } = useAuthStore();
+  const { userProfile } = useAuthStore();
   const { showToast } = useToast();
-  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [isBooking, setIsBooking] = useState(false);
+  // Calcula o valor total e a duração total
+  const { totalPrice, totalDuration } = useMemo(() => {
+    const price = selectedServices.reduce((acc, service) => acc + service.price, 0);
+    const duration = selectedServices.reduce((acc, service) => acc + service.duration, 0);
+    return { totalPrice: price, totalDuration: duration };
+  }, [selectedServices]);
 
-  const handleBookAppointment = useCallback(async () => {
-    // Validação para garantir que todos os dados necessários estão presentes
-    if (!user || !userProfile) {
-      showToast("Por favor, faça login para completar o agendamento.", "info");
-      // Idealmente, redirecionar para o login guardando o estado
-      navigate('/login');
+  const handleConfirmBooking = async () => {
+    if (!userProfile || !serviceProvider || !selectedDate || !selectedTime) {
+      showToast('Faltam informações para completar o agendamento.', 'error');
       return;
     }
-
-    if (!selectedProfessional || selectedServices.length === 0 || !selectedTime || !selectedDate || Array.isArray(selectedDate)) {
-      showToast("Faltam informações para o agendamento. Por favor, volte e verifique.", "error");
-      return;
-    }
-
-    setIsBooking(true);
+    setIsLoading(true);
     try {
-      const startTime = new Date(`${selectedDate.toISOString().split("T")[0]}T${selectedTime}`);
-      const endTime = new Date(startTime.getTime() + totalDuration * 60000);
-
-      const newAppointmentData: Omit<Appointment, "id"> = {
-        clientId: user.uid,
-        serviceProviderId: establishment.uid,
-        professionalId: selectedProfessional.id,
-        serviceIds: selectedServices.map((s) => s.id),
-        date: selectedDate.toISOString().split("T")[0],
-        startTime: selectedTime,
-        endTime: endTime.toTimeString().substring(0, 5),
-        status: "scheduled",
-        createdAt: Timestamp.now(),
-        price: totalPrice,
-        serviceName: selectedServices.map((s) => s.name).join(", "),
-        professionalName: selectedProfessional.name,
-        clientName: userProfile.displayName || user.displayName || "Cliente",
-        duration: totalDuration,
+      const bookingData = {
+        clientId: userProfile.uid,
+        clientName: userProfile.displayName,
+        providerId: serviceProvider.uid,
+        services: selectedServices,
+        professionalId: selectedProfessional?.id || null,
+        professionalName: selectedProfessional?.name || 'Qualquer Profissional',
+        date: format(new Date(`${format(selectedDate, 'yyyy-MM-dd')}T${selectedTime}`), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"),
+        totalPrice,
+        totalDuration,
+        status: 'confirmed' as const,
       };
 
-      await addDoc(collection(db, "appointments"), newAppointmentData);
-      showToast("Agendamento realizado com sucesso!", "success");
-      navigate("/booking", { state: { view: "myAppointments" }, replace: true });
-
+      await addBooking(bookingData);
+      showToast('Agendamento confirmado com sucesso!', 'success');
+      onBookingConfirmed(); // Chama a função para fechar o modal ou ir para outra tela
     } catch (error) {
-      console.error("Erro ao agendar:", error);
-      showToast("Ocorreu um erro ao confirmar o agendamento.", "error");
+      console.error("Erro ao confirmar agendamento:", error);
+      showToast('Não foi possível confirmar o agendamento.', 'error');
     } finally {
-      setIsBooking(false);
+      setIsLoading(false);
     }
-  }, [user, userProfile, selectedProfessional, selectedServices, selectedDate, selectedTime, totalDuration, totalPrice, establishment.uid, navigate, showToast]);
-
-
-  if (!selectedProfessional || selectedServices.length === 0 || !selectedDate || Array.isArray(selectedDate) || !selectedTime) {
-    return (
-        <div className="text-center text-gray-400 py-8">
-            <p>Por favor, preencha as etapas anteriores para ver o resumo.</p>
-        </div>
-    );
+  };
+  
+  if (!selectedDate || !selectedTime) {
+      return <div>Carregando informações...</div>
   }
 
   return (
-    <div className="animate-fade-in-up">
-      <h2 className="text-2xl font-bold text-white mb-6">4. Confirmar Agendamento</h2>
-      <div className="bg-gray-800 p-6 rounded-xl border border-[#daa520]">
-        <h3 className="text-xl font-bold text-white mb-4">Detalhes do Agendamento</h3>
-        <div className="space-y-3 text-gray-300">
-          <div className="flex justify-between"><span>Estabelecimento:</span><span className="font-semibold text-white">{establishment.companyName}</span></div>
-          <div className="flex justify-between"><span>Profissional:</span><span className="font-semibold text-white">{selectedProfessional.name}</span></div>
-          <div className="flex justify-between"><span>Data:</span><span className="font-semibold text-white">{(selectedDate as Date).toLocaleDateString("pt-BR")}</span></div>
-          <div className="flex justify-between"><span>Horário:</span><span className="font-semibold text-white">{selectedTime}</span></div>
-          <div className="border-t border-gray-700 pt-3">
-            <span className="font-semibold text-white">Serviços:</span>
-            <ul className="list-disc list-inside mt-2 text-sm space-y-1">
-              {selectedServices.map(s => <li key={s.id}>{s.name}</li>)}
-            </ul>
-          </div>
-          <div className="border-t border-gray-700 pt-3 flex justify-between font-bold text-xl">
-            <span className="text-[#daa520]">Total:</span>
-            <span className="text-[#daa520]">R$ {totalPrice.toFixed(2)}</span>
-          </div>
+    <div className="animate-fade-in-down">
+      <div className="text-center mb-6">
+        <h2 className="text-3xl font-bold text-white">Confirme seu Agendamento</h2>
+        <p className="text-gray-400 mt-1">Revise os detalhes abaixo antes de confirmar.</p>
+      </div>
+
+      <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 space-y-4">
+        {/* Detalhes do Agendamento */}
+        <div className="flex justify-between items-center">
+            <span className="flex items-center gap-3 text-gray-300"><Calendar size={18}/> Data</span>
+            <span className="font-bold text-white">{format(selectedDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
+        </div>
+        <div className="flex justify-between items-center">
+            <span className="flex items-center gap-3 text-gray-300"><Clock size={18}/> Horário</span>
+            <span className="font-bold text-white">{selectedTime}</span>
+        </div>
+        <div className="flex justify-between items-center">
+            <span className="flex items-center gap-3 text-gray-300"><User size={18}/> Profissional</span>
+            <span className="font-bold text-white">{selectedProfessional?.name || 'Qualquer Profissional'}</span>
+        </div>
+
+        {/* Detalhes dos Serviços e Preços */}
+        <div className="border-t border-gray-700 pt-4 mt-4 space-y-3">
+             <h3 className="text-lg font-semibold text-white flex items-center gap-3"><Tag size={18}/> Serviços Selecionados</h3>
+             {selectedServices.map(service => (
+                 <div key={service.id} className="flex justify-between items-center text-gray-300">
+                     <span>{service.name}</span>
+                     <span className="font-semibold text-white">R$ {service.price.toFixed(2)}</span>
+                 </div>
+             ))}
+        </div>
+
+        {/* Valor Total */}
+        <div className="border-t border-gray-600 pt-4 mt-4">
+            <div className="flex justify-between items-center text-xl">
+                <span className="flex items-center gap-3 font-bold text-white"><DollarSign size={20}/> Valor Total</span>
+                <span className="font-bold text-2xl text-[#daa520]">R$ {totalPrice.toFixed(2)}</span>
+            </div>
         </div>
       </div>
-      <div className="mt-8 flex justify-end">
+      
+       <div className="mt-8">
         <button
-          onClick={handleBookAppointment}
-          disabled={isBooking}
-          className="bg-[#daa520] hover:bg-[#c8961e] text-gray-900 font-bold py-3 px-6 rounded-lg transition-colors flex items-center gap-2 disabled:bg-gray-500"
+          onClick={handleConfirmBooking}
+          disabled={isLoading}
+          className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
-          {isBooking ? <Loader2 className="animate-spin h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
-          {isBooking ? "A Agendar..." : "Confirmar e Agendar"}
+          {isLoading ? <Loader2 className="animate-spin" size={24} /> : <><CheckCircle size={22}/>Confirmar Agendamento</>}
         </button>
       </div>
     </div>

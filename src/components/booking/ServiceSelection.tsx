@@ -9,19 +9,15 @@ const ServiceSelection = ({ onNext }: { onNext: () => void }) => {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(selectedService?.id || null);
   const [showError, setShowError] = useState(false);
 
-  // Efeito que lida com o caso em que os dados do prestador nunca chegam.
   useEffect(() => {
-    // Se após 3 segundos o prestador ainda não tiver sido carregado, exibe um erro.
     const timer = setTimeout(() => {
-      // Usamos getState() para verificar o valor mais recente no store sem causar re-renderização.
       if (!useBookingStore.getState().serviceProvider) {
         setShowError(true);
       }
     }, 3000);
 
-    // Limpa o temporizador se o componente for desmontado ou se o prestador for carregado.
     return () => clearTimeout(timer);
-  }, []); // Executa este efeito apenas uma vez na montagem do componente.
+  }, []);
 
   const services = useMemo(() => serviceProvider?.services || [], [serviceProvider]);
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Service, Professional } from '../types';
+import type { Service, Professional, UserProfile  } from '../types';
 
 // Tipos para o calendário
 type ValuePiece = Date | null;
@@ -14,8 +14,10 @@ interface BookingState {
   selectedTime: string;
   totalPrice: number;
   totalDuration: number;
+  serviceProvider: UserProfile | null;
 
   // Funções para manipular o estado
+  setServiceProvider: (provider: UserProfile) => void;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
   setStep: (step: number) => void;
@@ -28,6 +30,7 @@ interface BookingState {
 
 const initialState = {
   currentStep: 1,
+  serviceProvider: null,
   selectedServices: [],
   selectedProfessional: null,
   selectedDate: new Date(),
@@ -84,6 +87,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   }),
 
   setTime: (time) => set({ selectedTime: time }),
+
+  setServiceProvider: (provider) => set({ serviceProvider: provider }),
 
   resetBooking: () => set(initialState),
 }));

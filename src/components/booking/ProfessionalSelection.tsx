@@ -1,45 +1,52 @@
-// src/components/booking/ProfessionalSelection.tsx
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import type { Professional } from '../../types';
 import { Users, CheckCircle2, UserCheck } from 'lucide-react';
 import useBookingProcessStore from '../../store/bookingProcessStore';
 
 const ProfessionalSelection = () => {
-  // Pegamos as informações necessárias do store
   const { 
     serviceProvider, 
     selectedServices, 
     selectedProfessional, 
-    setProfessional 
+    setSelectedProfessional 
   } = useBookingProcessStore();
 
-  // A MÁGICA ACONTECE AQUI: Filtramos os profissionais
+  // LÓGICA CORRETA: Encontra profissionais que podem realizar TODOS os serviços selecionados.
   const availableProfessionals = useMemo(() => {
     if (!serviceProvider || !selectedServices || selectedServices.length === 0) {
       return [];
     }
 
-    // Cria um conjunto (Set) com os IDs de todos os profissionais que podem realizar os serviços selecionados.
-    // Usar um Set é eficiente para evitar duplicados.
-    const professionalIds = new Set<string>();
-    
-    // Itera sobre cada serviço selecionado
-    selectedServices.forEach(service => {
-      // Itera sobre os IDs dos profissionais associados a esse serviço
-      service.professionalIds?.forEach(profId => {
-        professionalIds.add(profId);
+    // Começa com a lista de profissionais do primeiro serviço
+    let professionalIdsWhoCanDoAll = new Set<string>(selectedServices[0].professionalIds || []);
+
+    // Itera sobre os outros serviços para encontrar a intersecção
+    for (let i = 1; i < selectedServices.length; i++) {
+      const currentServiceProfIds = new Set(selectedServices[i].professionalIds || []);
+      professionalIdsWhoCanDoAll.forEach(profId => {
+        // Se um profissional da nossa lista não pode fazer o serviço atual, ele é removido
+        if (!currentServiceProfIds.has(profId)) {
+          professionalIdsWhoCanDoAll.delete(profId);
+        }
       });
-    });
+    }
 
-    // Filtra a lista completa de profissionais do estabelecimento,
-    // mantendo apenas aqueles cujos IDs estão no nosso conjunto.
-    return serviceProvider.professionals.filter(prof => professionalIds.has(prof.id));
-
+    // Retorna os objetos completos dos profissionais que sobraram na lista
+    return serviceProvider.professionals.filter(prof => professionalIdsWhoCanDoAll.has(prof.id));
   }, [serviceProvider, selectedServices]);
+  
+  // LÓGICA EXTRA: Se o profissional selecionado não estiver mais disponível, reseta a seleção
+  useEffect(() => {
+    if (selectedProfessional) {
+      const isSelectedProfStillAvailable = availableProfessionals.some(p => p.id === selectedProfessional.id);
+      if (!isSelectedProfStillAvailable) {
+        setSelectedProfessional(null); // Reseta para "Qualquer profissional"
+      }
+    }
+  }, [availableProfessionals, selectedProfessional, setSelectedProfessional]);
 
   const handleSelectProfessional = (professional: Professional | null) => {
-    setProfessional(professional);
+    setSelectedProfessional(professional);
   };
 
   return (
@@ -99,19 +106,17 @@ const ProfessionalSelection = () => {
               />
               <div>
                 <h3 className="font-semibold text-white text-lg">{prof.name}</h3>
-                {/* Você pode adicionar uma especialidade aqui se tiver no seu tipo `Professional` */}
-                {/* <p className="text-gray-400 text-sm">Especialista em Cabelo</p> */}
               </div>
             </div>
           </div>
         ))}
         
-        {/* Mensagem se nenhum profissional puder realizar o serviço */}
-        {availableProfessionals.length === 0 && (
+        {/* Mensagem de feedback melhorada */}
+        {selectedServices && selectedServices.length > 0 && availableProfessionals.length === 0 && (
             <div className="text-center text-gray-400 py-10 bg-black/20 rounded-lg">
                 <UserCheck size={40} className="mx-auto text-gray-600 mb-4"/>
                 <p className="font-semibold text-white">Nenhum profissional específico encontrado</p>
-                <p className="text-sm">Nenhum profissional está associado a todos os serviços selecionados. A opção "Qualquer Profissional" foi selecionada.</p>
+                <p className="text-sm">Nenhum profissional pode realizar todos os serviços selecionados juntos. Tente uma combinação diferente.</p>
             </div>
         )}
       </div>

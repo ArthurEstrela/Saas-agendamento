@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { UserProfile, Service } from '../types';
+import type { UserProfile, Service, Professional  } from '../types';
 
 /**
  * Interface para o estado do processo de agendamento.
@@ -9,7 +9,7 @@ interface BookingProcessState {
   // Dados do agendamento
   serviceProvider: UserProfile | null;
   selectedServices: Service[];
-  selectedProfessional: UserProfile | null;
+  selectedProfessional: Professional | null;
   selectedDate: Date;
   selectedTime: string | null;
   
@@ -19,7 +19,7 @@ interface BookingProcessState {
   // Ações para modificar o estado
   setServiceProvider: (provider: UserProfile | null) => void;
   toggleService: (service: Service) => void;
-  setSelectedProfessional: (professional: UserProfile | null) => void;
+  setSelectedProfessional: (professional: Professional | null) => void;
   setSelectedDate: (date: Date) => void;
   setSelectedTime: (time: string | null) => void;
   goToNextStep: () => void;
@@ -27,10 +27,6 @@ interface BookingProcessState {
   resetBooking: () => void;
 }
 
-/**
- * O estado inicial para o formulário de agendamento.
- * Usado tanto na criação do store quanto na função de reset.
- */
 const initialState = {
   serviceProvider: null,
   selectedServices: [],

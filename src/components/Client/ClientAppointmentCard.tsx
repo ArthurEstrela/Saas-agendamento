@@ -1,130 +1,186 @@
-// src/components/Client/ClientAppointmentCard.tsx
+import React, { useState } from "react";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import type { Appointment } from "../../types";
+import {
+  Calendar,
+  Clock,
+  Store,
+  Tag,
+  User,
+  MoreVertical,
+  XCircle,
+  MessageSquare,
+  Star,
+} from "lucide-react";
+import ConfirmationModal from "../Common/ConfirmationModal";
+import ReviewModal from "../Common/ReviewModal";
 
-import React from 'react';
-import type { Booking } from '../../types';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Timestamp } from 'firebase/firestore';
-import { 
-    Calendar, 
-    Clock, 
-    Tag, 
-    DollarSign, 
-    CheckCircle, 
-    XCircle, 
-    AlertCircle,
-    Star
-} from 'lucide-react';
-
-// --- Helper para converter data (Timestamp, string, etc.) para Date ---
-const convertToDate = (date: any): Date => {
-  if (date instanceof Timestamp) {
-    return date.toDate();
-  }
-  return new Date(date);
-};
-
-// --- Helper para o Status ---
-const getStatusProps = (status: Booking['status']) => {
-  switch (status) {
-    case 'confirmed':
-      return { icon: <CheckCircle size={16} />, color: 'text-green-400', label: 'Confirmado' };
-    case 'cancelled':
-      return { icon: <XCircle size={16} />, color: 'text-red-400', label: 'Cancelado' };
-    case 'pending':
-    default:
-      return { icon: <AlertCircle size={16} />, color: 'text-yellow-400', label: 'Pendente' };
-  }
-};
-
-// --- Props do Componente ---
 interface ClientAppointmentCardProps {
-  booking: Booking;
-  // Funções recebidas do ClientDashboard
+  appointment: Appointment;
   onCancel: (bookingId: string) => void;
-  onReview: (booking: Booking) => void;
 }
 
-const ClientAppointmentCard = ({ booking, onCancel, onReview }: ClientAppointmentCardProps) => {
-  const { icon, color, label } = getStatusProps(booking.status);
-  const bookingDate = convertToDate(booking.date);
-  const isPast = new Date() > bookingDate;
+const ClientAppointmentCard = ({
+  appointment,
+  onCancel,
+}: ClientAppointmentCardProps) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
-  // Assume que o objeto booking foi enriquecido com os dados do prestador.
-  // Isso é uma ótima prática de performance para evitar buscas repetidas no banco.
-  const providerName = booking.professionalName || 'Prestador de Serviço';
-  const providerPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(providerName)}&background=1f2937&color=daa520`;
+  // --- CLÁUSULA DE GUARDA ---
+  // Se o agendamento for inválido por qualquer motivo, não renderiza o card.
+  // Isso previne o erro "Cannot read properties of undefined".
+  if (!appointment || !appointment.date || !appointment.startTime) {
+    console.warn(
+      "Tentativa de renderizar um Card de Agendamento inválido:",
+      appointment
+    );
+    return null;
+  }
+
+  const appointmentDate = parseISO(
+    `${appointment.date}T${appointment.startTime}`
+  );
+  const isPast = appointmentDate < new Date();
+
+  const getStatusChip = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return "bg-blue-500/20 text-blue-400";
+      case "completed":
+        return "bg-green-500/20 text-green-400";
+      case "cancelled":
+        return "bg-red-500/20 text-red-400";
+      default:
+        return "bg-gray-500/20 text-gray-400";
+    }
+  };
+
+  const handleCancelConfirm = () => {
+    onCancel(appointment.id);
+    setIsCancelModalOpen(false);
+  };
 
   return (
-    <div className="bg-gray-800/50 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300 transform hover:-translate-y-1 shadow-lg">
-      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-        {/* Informações do Prestador e Data */}
-        <div className="flex items-center gap-4 flex-grow">
-          <img 
-            src={providerPhoto} 
-            alt={providerName}
-            className="h-16 w-16 rounded-full object-cover border-2 border-gray-600 flex-shrink-0"
+    <div className="group relative bg-gray-800/80 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300">
+      {/* Menu Dropdown */}
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          className="p-2 rounded-full hover:bg-gray-700 transition-colors"
+        >
+          <MoreVertical size={20} className="text-gray-300" />
+        </button>
+        {isMenuOpen && (
+          <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-10">
+            {appointment.status === "confirmed" && !isPast && (
+              <button
+                onClick={() => {
+                  setIsCancelModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+              >
+                <XCircle size={16} /> Cancelar
+              </button>
+            )}
+            {appointment.status === "completed" &&
+              !appointment.hasBeenReviewed && (
+                <button
+                  onClick={() => {
+                    setIsReviewModalOpen(true);
+                    setIsMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2"
+                >
+                  <Star size={16} /> Avaliar
+                </button>
+              )}
+            {/* A propriedade serviceProviderPhone não existe no Appointment, vamos usar um placeholder */}
+            <a
+              href={`#`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-2"
+            >
+              <MessageSquare size={16} /> Contato
+            </a>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-shrink-0">
+          <img
+            src={
+              appointment.serviceProviderPhotoURL ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                appointment.serviceProviderName
+              )}&background=2d3748&color=ffffff`
+            }
+            alt={appointment.serviceProviderName}
+            className="h-20 w-20 rounded-lg object-cover"
           />
-          <div>
-            <h3 className="text-xl font-bold text-white">{providerName}</h3>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 text-gray-400 mt-1">
-              <span className="flex items-center gap-2 text-sm">
-                <Calendar size={14} /> {format(bookingDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
-              </span>
-              <span className="flex items-center gap-2 text-sm">
-                <Clock size={14} /> {format(bookingDate, "HH:mm")}h
-              </span>
-            </div>
+        </div>
+        <div className="flex-grow">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Store size={20} />
+              {appointment.serviceProviderName}
+            </h3>
+            <span
+              className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusChip(
+                appointment.status
+              )}`}
+            >
+              {appointment.status}
+            </span>
+          </div>
+
+          <div className="mb-4">
+            <p className="text-lg text-gray-200 font-medium flex items-center gap-2">
+              <Tag size={18} className="text-[#daa520]" />
+              {appointment.serviceName}
+            </p>
+          </div>
+
+          <div className="border-t border-gray-700 pt-3 space-y-2 text-sm text-gray-400">
+            <p className="flex items-center gap-2">
+              <Calendar size={16} />
+              {format(appointmentDate, "eeee, dd 'de' MMMM, yyyy", {
+                locale: ptBR,
+              })}
+            </p>
+            <p className="flex items-center gap-2">
+              <Clock size={16} />
+              {appointment.startTime} - {appointment.endTime}
+            </p>
+            <p className="flex items-center gap-2">
+              <User size={16} />
+              {appointment.professionalName}
+            </p>
           </div>
         </div>
-        
-        {/* Status */}
-        <div className={`flex items-center gap-2 font-semibold text-sm px-3 py-1 rounded-full ${color} bg-current/10 flex-shrink-0`}>
-          {icon}
-          <span>{label}</span>
-        </div>
       </div>
 
-      <div className="border-t border-gray-700 my-4"></div>
-      
-      {/* Detalhes dos Serviços e Preço */}
-      <div className="space-y-3">
-        <h4 className="font-semibold text-white flex items-center gap-2"><Tag size={16}/> Serviços</h4>
-        {booking.services.map(service => (
-          <div key={service.id} className="flex justify-between items-center text-gray-300 text-sm">
-            <span>{service.name}</span>
-            <span className="font-mono">R$ {service.price.toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
+      {/* Modais */}
+      <ConfirmationModal
+        isOpen={isCancelModalOpen}
+        onClose={() => setIsCancelModalOpen(false)}
+        onConfirm={handleCancelConfirm}
+        title="Confirmar Cancelamento"
+        message="Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita."
+      />
 
-      <div className="border-t border-gray-700 my-4"></div>
-
-      <div className="flex justify-between items-center">
-        <span className="font-semibold text-white flex items-center gap-2"><DollarSign size={18}/> Valor Total</span>
-        <span className="text-2xl font-bold text-[#daa520]">R$ {booking.totalPrice.toFixed(2)}</span>
-      </div>
-
-      {/* Ações Condicionais (Cancelar / Avaliar) */}
-      <div className="mt-4 flex justify-end gap-3">
-        {!isPast && booking.status === 'confirmed' && (
-          <button 
-            onClick={() => onCancel(booking.id)}
-            className="text-sm bg-red-600/20 text-red-400 hover:bg-red-600/40 px-4 py-2 rounded-lg transition-colors font-semibold"
-          >
-            Cancelar Agendamento
-          </button>
-        )}
-        
-        {isPast && booking.status === 'confirmed' && !booking.reviewId && (
-           <button 
-             onClick={() => onReview(booking)}
-             className="text-sm bg-[#daa520]/20 text-[#daa520] hover:bg-[#daa520]/40 px-4 py-2 rounded-lg transition-colors font-semibold flex items-center gap-2"
-           >
-             <Star size={14}/> Avaliar Serviço
-           </button>
-        )}
-      </div>
+      {isReviewModalOpen && (
+        <ReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          appointment={appointment}
+        />
+      )}
     </div>
   );
 };

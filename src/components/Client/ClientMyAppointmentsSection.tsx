@@ -1,133 +1,167 @@
-// src/components/Client/ClientMyAppointmentsSection.tsx
-
-import React, { useState, useMemo } from "react";
-import { useAuthStore } from "../../store/authStore";
-import ClientAppointmentCard from "./ClientAppointmentCard";
-import { CalendarX2 } from "lucide-react";
-import type { Booking, Appointment } from "../../types";
-import { Timestamp } from "firebase/firestore";
+import React, { useState, useMemo } from 'react';
+import { useAuthStore } from '../../store/authStore';
 import { useUserAppointments } from '../../store/userAppointmentsStore';
+import ClientAppointmentCard from './ClientAppointmentCard';
+import { Loader2, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { parseISO } from 'date-fns';
+import { useToast } from '../../context/ToastContext';
 
-// --- Helper para converter data (Timestamp, string, etc.) para Date ---
-const convertToDate = (date: any): Date => {
-  if (date instanceof Timestamp) {
-    return date.toDate();
+// --- Componente Auxiliar para Controles de Paginação ---
+const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
+  if (totalPages <= 1) {
+    return null;
   }
-  return new Date(date);
+
+  return (
+    <div className="flex items-center justify-end gap-2 mt-4">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronLeft size={20} />
+      </button>
+      <span className="text-sm text-gray-300 font-medium">
+        Página {currentPage} de {totalPages}
+      </span>
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronRight size={20} />
+      </button>
+    </div>
+  );
 };
 
-// --- Props do Componente ---
-interface ClientMyAppointmentsSectionProps {
-  setActiveView: (view: string) => void;
-  onCancel: (appointmentId: string) => void;
-  onReview: (appointment: Booking) => void;
-}
+// --- Função Auxiliar para Verificar Datas ---
+const isPast = (dateStr?: string, timeStr?: string): boolean => {
+  if (!dateStr || !timeStr) return true;
+  try {
+    return parseISO(`${dateStr}T${timeStr}`) < new Date();
+  } catch {
+    return true;
+  }
+};
 
-const ClientMyAppointmentsSection = ({
-  setActiveView,
-  onReview,
-}: ClientMyAppointmentsSectionProps) => {
-  const { user, userProfile } = useAuthStore();
-  const { bookings, loading, error, cancelBooking } = useUserAppointments(user?.uid);
-  const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+// --- Componente Principal ---
+const ClientMyAppointmentsSection = () => {
+  const { userProfile } = useAuthStore();
+  const { bookings, loading, error, cancelBooking } = useUserAppointments(userProfile?.uid);
+  const { showToast } = useToast();
+  
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [pastPage, setPastPage] = useState(1);
+  const ITEMS_PER_PAGE = 3; // Defina quantos agendamentos por página
 
-  // Memoiza a separação e ordenação dos agendamentos para melhor performance
+  // Memoiza os cálculos para evitar re-renderizações desnecessárias
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
-    if (!bookings) {
-      return { upcomingAppointments: [], pastAppointments: [] };
-    }
-
-    const now = new Date();
-    const allAppointments = bookings.map((app) => ({
-      ...app,
-      date: convertToDate(app.date), // Garante que a data é um objeto Date
-    }));
-
-    const upcoming = allAppointments
-      .filter((app) => app.date >= now)
-      .sort((a, b) => a.date.getTime() - b.date.getTime()); // Mais próximos primeiro
-
-    const past = allAppointments
-      .filter((app) => app.date < now)
-      .sort((a, b) => b.date.getTime() - a.date.getTime()); // Mais recentes primeiro
+    // Filtro robusto que remove qualquer item inválido (null, undefined, etc.)
+    const validBookings = bookings.filter(b => b && b.id && b.status && b.date && b.startTime);
+    
+    const upcoming = validBookings.filter(b => b.status === 'confirmed' && !isPast(b.date, b.startTime));
+    const past = validBookings.filter(b => b.status !== 'confirmed' || isPast(b.date, b.startTime));
+    
+    // Ordena o histórico dos mais recentes para os mais antigos
+    past.sort((a, b) => {
+        const dateA = parseISO(`${a.date}T${a.startTime}`);
+        const dateB = parseISO(`${b.date}T${b.startTime}`);
+        return dateB.getTime() - dateA.getTime();
+    });
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
   }, [bookings]);
 
-  const appointmentsToShow =
-    activeTab === "upcoming" ? upcomingAppointments : pastAppointments;
+  // Lógica de Paginação
+  const totalUpcomingPages = Math.ceil(upcomingAppointments.length / ITEMS_PER_PAGE);
+  const paginatedUpcoming = upcomingAppointments.slice((upcomingPage - 1) * ITEMS_PER_PAGE, upcomingPage * ITEMS_PER_PAGE);
 
-  if (error) {
+  const totalPastPages = Math.ceil(pastAppointments.length / ITEMS_PER_PAGE);
+  const paginatedPast = pastAppointments.slice((pastPage - 1) * ITEMS_PER_PAGE, pastPage * ITEMS_PER_PAGE);
+
+  const handleCancelBooking = async (bookingId: string) => {
+    try {
+      await cancelBooking(bookingId);
+      showToast('Agendamento cancelado.', 'success');
+    } catch {
+      showToast('Não foi possível cancelar o agendamento.', 'error');
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="text-center text-red-500 py-16">
-        <h3 className="text-lg font-semibold">Ocorreu um erro</h3>
-        <p>{error}</p>
+      <div className="flex justify-center items-center p-20">
+        <Loader2 className="animate-spin text-[#daa520]" size={40} />
       </div>
     );
   }
 
+  if (error) {
+    return <div className="text-center text-red-400 p-10">{error}</div>;
+  }
+
   return (
-    <div className="p-4 sm:p-6 animate-fade-in-down">
-      <h2 className="text-3xl font-bold text-white mb-2">Meus Agendamentos</h2>
-      <p className="text-gray-400 mb-8">
-        Acompanhe seus horários marcados e seu histórico.
-      </p>
-
-      {/* Abas de Navegação */}
-      <div className="flex border-b border-gray-700 mb-6">
-        <button
-          onClick={() => setActiveTab("upcoming")}
-          className={`px-6 py-3 font-semibold transition-colors relative ${
-            activeTab === "upcoming"
-              ? "text-[#daa520]"
-              : "text-gray-400 hover:text-white"
-          }`}
-        >
+    <div className="p-4 sm:p-6 space-y-10">
+      {/* Seção de Próximos Agendamentos */}
+      <section>
+        <h2 className="text-3xl font-bold text-white mb-4">
           Próximos ({upcomingAppointments.length})
-          {activeTab === "upcoming" && (
-            <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#daa520] rounded-full"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("past")}
-          className={`px-6 py-3 font-semibold transition-colors relative ${
-            activeTab === "past"
-              ? "text-[#daa520]"
-              : "text-gray-400 hover:text-white"
-          }`}
-        >
-          Anteriores ({pastAppointments.length})
-          {activeTab === "past" && (
-            <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#daa520] rounded-full"></div>
-          )}
-        </button>
-      </div>
-
-      {/* Lista de Agendamentos */}
-      <div className="space-y-6">
-        {appointmentsToShow.length > 0 ? (
-          appointmentsToShow.map((booking) => (
-            <ClientAppointmentCard
-              key={booking.id}
-              booking={booking}
-              onCancel={() => cancelBooking(booking.id)}
-              onReview={() => onReview(booking)}
+        </h2>
+        {upcomingAppointments.length > 0 ? (
+          <>
+            <div className="space-y-5">
+              {paginatedUpcoming.map((booking) => (
+                <ClientAppointmentCard
+                  key={booking.id}
+                  appointment={booking}
+                  onCancel={handleCancelBooking}
+                />
+              ))}
+            </div>
+            <PaginationControls 
+                currentPage={upcomingPage}
+                totalPages={totalUpcomingPages}
+                onPageChange={setUpcomingPage}
             />
-          ))
+          </>
         ) : (
-          <div className="text-center text-gray-400 py-16 bg-black/30 rounded-xl border border-dashed border-gray-700">
-            <CalendarX2 size={48} className="mx-auto text-gray-600 mb-4" />
-            <h3 className="text-lg font-semibold text-white">
-              Nenhum agendamento encontrado
-            </h3>
-            <p className="text-sm mt-2">
-              {activeTab === "upcoming"
-                ? "Você não tem nenhum horário futuro marcado."
-                : "Você ainda não tem um histórico de agendamentos."}
-            </p>
+          <div className="text-center text-gray-400 py-12 bg-black/20 rounded-lg border border-dashed border-gray-700">
+            <CalendarPlus size={40} className="mx-auto text-gray-600 mb-4" />
+            <p className="font-semibold text-white">Nenhum agendamento futuro</p>
+            <p className="text-sm mt-1">Que tal agendar um novo serviço?</p>
           </div>
         )}
-      </div>
+      </section>
+
+      {/* Seção de Histórico de Agendamentos */}
+      <section>
+        <h2 className="text-3xl font-bold text-white mb-4">
+          Histórico ({pastAppointments.length})
+        </h2>
+        {pastAppointments.length > 0 ? (
+          <>
+            <div className="space-y-5">
+              {paginatedPast.map((booking) => (
+                <ClientAppointmentCard
+                  key={booking.id}
+                  appointment={booking}
+                  onCancel={handleCancelBooking}
+                />
+              ))}
+            </div>
+             <PaginationControls 
+                currentPage={pastPage}
+                totalPages={totalPastPages}
+                onPageChange={setPastPage}
+            />
+          </>
+        ) : (
+          <div className="text-center text-gray-400 py-12 bg-black/20 rounded-lg border border-dashed border-gray-700">
+            <p>Seu histórico de agendamentos aparecerá aqui.</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

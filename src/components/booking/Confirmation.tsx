@@ -32,35 +32,35 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
     }
     setIsLoading(true);
     try {
-      // 1. Calcula a hora de término a partir da hora de início e da duração total
       const startTimeObject = parse(selectedTime, 'HH:mm', selectedDate);
       const endTimeObject = add(startTimeObject, { minutes: totalDuration });
 
-      // 2. Monta o objeto de dados com a estrutura correta da interface 'Appointment'
+      // --- CORREÇÃO AQUI ---
+      // Lógica robusta para garantir que o nome do estabelecimento seja salvo.
+      // Prioridade: 1º companyName, 2º displayName, 3º "Estabelecimento"
+      const providerName = serviceProvider.companyName || serviceProvider.displayName || "Estabelecimento";
+
       const appointmentData = {
-        // IDs e Nomes
         clientId: userProfile.uid,
         clientName: userProfile.name || userProfile.email || "Cliente",
         serviceProviderId: serviceProvider.uid,
-        serviceProviderName: serviceProvider.companyName || "Estabelecimento",
+        serviceProviderName: providerName, // <-- Usando a variável segura
+        serviceProviderPhotoURL: serviceProvider.photoURL || null,
+        
         professionalId: selectedProfessional?.id || 'any',
         professionalName: selectedProfessional?.name || 'Qualquer Profissional',
         
-        // Dados do Serviço
         serviceId: selectedServices[0]?.id || '',
         serviceName: selectedServices.map(s => s.name).join(', '),
 
-        // Data e Hora (formatados como string)
         date: format(selectedDate, 'yyyy-MM-dd'),
         startTime: selectedTime,
         endTime: format(endTimeObject, 'HH:mm'),
 
-        // Valores
         price: totalPrice,
         duration: totalDuration,
       };
 
-      // 3. Chama a função de criação do agendamento
       await createAppointment(appointmentData);
 
       showToast('Agendamento confirmado com sucesso!', 'success');

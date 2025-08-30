@@ -27,18 +27,18 @@ const ClientMyAppointmentsSection = ({
   setActiveView,
   onReview,
 }: ClientMyAppointmentsSectionProps) => {
-  const { userProfile } = useAuthStore();
+  const { user, userProfile } = useAuthStore();
   const { bookings, loading, error, cancelBooking } = useBookings(user?.uid);
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
   // Memoiza a separação e ordenação dos agendamentos para melhor performance
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
-    if (!userProfile?.myAppointments) {
+    if (!bookings) {
       return { upcomingAppointments: [], pastAppointments: [] };
     }
 
     const now = new Date();
-    const allAppointments = userProfile.myAppointments.map((app) => ({
+    const allAppointments = bookings.map((app) => ({
       ...app,
       date: convertToDate(app.date), // Garante que a data é um objeto Date
     }));
@@ -52,10 +52,19 @@ const ClientMyAppointmentsSection = ({
       .sort((a, b) => b.date.getTime() - a.date.getTime()); // Mais recentes primeiro
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
-  }, [userProfile?.myAppointments]);
+  }, [bookings]);
 
   const appointmentsToShow =
     activeTab === "upcoming" ? upcomingAppointments : pastAppointments;
+
+  if (error) {
+    return (
+      <div className="text-center text-red-500 py-16">
+        <h3 className="text-lg font-semibold">Ocorreu um erro</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 animate-fade-in-down">
@@ -101,8 +110,8 @@ const ClientMyAppointmentsSection = ({
             <ClientAppointmentCard
               key={booking.id}
               booking={booking}
-              onCancel={() => cancelBooking(appointment.id)}
-              onReview={() => onReview(appointment)}
+              onCancel={() => cancelBooking(booking.id)}
+              onReview={() => onReview(booking)}
             />
           ))
         ) : (

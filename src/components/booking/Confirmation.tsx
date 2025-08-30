@@ -1,11 +1,7 @@
-// src/components/booking/Confirmation.tsx
-
 import React, { useMemo, useState } from 'react';
-import { Timestamp } from "firebase/firestore";
-
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
-import { format } from 'date-fns';
+import { format, parse, add } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Clock, User, Tag, DollarSign, Loader2, CheckCircle } from 'lucide-react';
 import { createAppointment } from '../../firebase/bookingService';
@@ -23,7 +19,6 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  // Calcula o valor total e a duração total
   const { totalPrice, totalDuration } = useMemo(() => {
     const price = selectedServices.reduce((acc, service) => acc + service.price, 0);
     const duration = selectedServices.reduce((acc, service) => acc + service.duration, 0);
@@ -37,24 +32,39 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
     }
     setIsLoading(true);
     try {
-      const bookingData = {
-        userId: userProfile.uid,
-        userName: userProfile.displayName || "Cliente sem nome",
+      // 1. Calcula a hora de término a partir da hora de início e da duração total
+      const startTimeObject = parse(selectedTime, 'HH:mm', selectedDate);
+      const endTimeObject = add(startTimeObject, { minutes: totalDuration });
+
+      // 2. Monta o objeto de dados com a estrutura correta da interface 'Appointment'
+      const appointmentData = {
+        // IDs e Nomes
+        clientId: userProfile.uid,
+        clientName: userProfile.name || userProfile.email || "Cliente",
         serviceProviderId: serviceProvider.uid,
-        serviceProviderName: serviceProvider.displayName,
-        professionalId: selectedProfessional?.uid || null,
-        professionalName:
-          selectedProfessional?.displayName || "Qualquer Profissional",
-        services: selectedServices,
-        startTime: Timestamp.fromDate(startTime),
-        endTime: Timestamp.fromDate(endTime),
-        totalPrice,
-        status: "pending",
+        serviceProviderName: serviceProvider.companyName || "Estabelecimento",
+        professionalId: selectedProfessional?.id || 'any',
+        professionalName: selectedProfessional?.name || 'Qualquer Profissional',
+        
+        // Dados do Serviço
+        serviceId: selectedServices[0]?.id || '',
+        serviceName: selectedServices.map(s => s.name).join(', '),
+
+        // Data e Hora (formatados como string)
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        startTime: selectedTime,
+        endTime: format(endTimeObject, 'HH:mm'),
+
+        // Valores
+        price: totalPrice,
+        duration: totalDuration,
       };
 
-      await createAppointment(bookingData);
+      // 3. Chama a função de criação do agendamento
+      await createAppointment(appointmentData);
+
       showToast('Agendamento confirmado com sucesso!', 'success');
-      onBookingConfirmed(); // Chama a função para fechar o modal ou ir para outra tela
+      onBookingConfirmed();
     } catch (error) {
       console.error("Erro ao confirmar agendamento:", error);
       showToast('Não foi possível confirmar o agendamento.', 'error');
@@ -75,7 +85,6 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
       </div>
 
       <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 space-y-4">
-        {/* Detalhes do Agendamento */}
         <div className="flex justify-between items-center">
             <span className="flex items-center gap-3 text-gray-300"><Calendar size={18}/> Data</span>
             <span className="font-bold text-white">{format(selectedDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
@@ -89,7 +98,6 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
             <span className="font-bold text-white">{selectedProfessional?.name || 'Qualquer Profissional'}</span>
         </div>
 
-        {/* Detalhes dos Serviços e Preços */}
         <div className="border-t border-gray-700 pt-4 mt-4 space-y-3">
              <h3 className="text-lg font-semibold text-white flex items-center gap-3"><Tag size={18}/> Serviços Selecionados</h3>
              {selectedServices.map(service => (
@@ -100,7 +108,6 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
              ))}
         </div>
 
-        {/* Valor Total */}
         <div className="border-t border-gray-600 pt-4 mt-4">
             <div className="flex justify-between items-center text-xl">
                 <span className="flex items-center gap-3 font-bold text-white"><DollarSign size={20}/> Valor Total</span>

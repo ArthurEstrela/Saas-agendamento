@@ -27,7 +27,7 @@ const ProfessionalSelection = () => {
     // Itera sobre cada serviço selecionado
     selectedServices.forEach(service => {
       // Itera sobre os IDs dos profissionais associados a esse serviço
-      service.assignedProfessionals?.forEach(profId => {
+      service.professionalIds?.forEach(profId => {
         professionalIds.add(profId);
       });
     });

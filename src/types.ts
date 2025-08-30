@@ -39,11 +39,15 @@ export interface WorkSchedule {
 }
 
 // Disponibilidade por dia da semana, mais flexível para cada profissional
-export interface DayAvailability {
-  dayOfWeek: 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
-  isDayOff: boolean;
-  workIntervals: TimeInterval[];
-  breakIntervals: TimeInterval[];
+export interface Availability {
+  slotInterval: number;
+  weekdays: {
+    [day: string]: {
+      isOpen: boolean;
+      startTime: string;
+      endTime: string;
+    };
+  };
 }
 
 // Interface para Folgas e Imprevistos
@@ -62,6 +66,13 @@ export interface Professional {
   availability: DayAvailability[]; // Cada profissional tem sua agenda
   unavailability?: Unavailability[]; // Campo para folgas e imprevistos
   workSchedule?: WorkSchedule;
+}
+
+export interface DayAvailability {
+  dayOfWeek: 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
+  isDayOff: boolean;
+  workIntervals: TimeInterval[];
+  breakIntervals: TimeInterval[];
 }
 
 // Perfil do Usuário unificado e atualizado
@@ -90,6 +101,7 @@ export interface UserProfile {
   cnpj?: string;
   cancellationPolicyMinutes?: number;
   bookingAdvanceDays?: number;
+  availability?: Availability;
 
   averageRating?: number;
   reviewCount?: number;

@@ -20,7 +20,7 @@ const INITIAL_SERVICE_STATE: Omit<Service, 'id'> = {
   description: '',
   price: 0,
   duration: 0,
-  assignedProfessionals: [],
+  professionalIds: [],
 };
 
 // --- COMPONENTE DO MODAL (MAIS INTELIGENTE) ---
@@ -44,7 +44,7 @@ const ServiceModal = ({
     if (state.isOpen) {
       if ((state.mode === 'edit' || state.mode === 'delete') && state.service) {
         setServiceData(state.service);
-        setSelectedProfessionals(state.service.assignedProfessionals || []);
+        setSelectedProfessionals(state.service.professionalIds || []);
       } else {
         setServiceData(INITIAL_SERVICE_STATE);
         setSelectedProfessionals([]);
@@ -75,7 +75,7 @@ const ServiceModal = ({
       ...serviceData,
       price: Number(serviceData.price),
       duration: Number(serviceData.duration),
-      assignedProfessionals: selectedProfessionals,
+      professionalIds: selectedProfessionals,
     };
     onConfirm(finalService);
   };
@@ -243,7 +243,7 @@ const ServicesManagement = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {services.map(service => {
             const assignedProfObjects = professionals.filter(p => 
-                service.assignedProfessionals?.includes(p.id)
+                service.professionalIds?.includes(p.id)
             );
 
             return (

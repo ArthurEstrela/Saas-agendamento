@@ -37,7 +37,7 @@ const DateTimeSelection = () => {
       return [];
     }
 
-    const dayName = format(selectedDate, 'eeee', { locale: ptBR }).toLowerCase();
+    const dayName = format(selectedDate, 'eeee').toLowerCase();
     const daySchedule = serviceProvider.availability.weekdays[dayName];
     
     if (!daySchedule || !daySchedule.isOpen) {

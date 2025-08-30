@@ -1,14 +1,10 @@
-// src/components/ServiceProvider/AvailabilityManagement.tsx
-
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
-import { Loader2, Clock, Copy } from 'lucide-react';
 import type { Availability } from '../../types';
+import { Clock, SlidersHorizontal, Loader2, Save } from 'lucide-react';
 
-// Nomes dos dias em minúsculo e na ordem correta para facilitar a manipulação
-const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const dayTranslations: { [key: string]: string } = {
+const daysOfWeek = {
   monday: 'Segunda-feira',
   tuesday: 'Terça-feira',
   wednesday: 'Quarta-feira',
@@ -19,7 +15,7 @@ const dayTranslations: { [key: string]: string } = {
 };
 
 const INITIAL_AVAILABILITY: Availability = {
-  slotInterval: 15,
+  slotInterval: 30,
   weekdays: {
     monday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
     tuesday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
@@ -36,11 +32,11 @@ const AvailabilityManagement = () => {
   const { showToast } = useToast();
   const [availability, setAvailability] = useState<Availability>(INITIAL_AVAILABILITY);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
 
+  // Efeito para carregar a disponibilidade salva do perfil do usuário
   useEffect(() => {
     if (userProfile?.availability) {
-      // Garante que todos os dias da semana existam no estado
+      // Mescla a disponibilidade salva com a inicial para garantir que todos os dias existam
       const profileAvailability = {
         ...INITIAL_AVAILABILITY,
         ...userProfile.availability,
@@ -53,36 +49,28 @@ const AvailabilityManagement = () => {
     }
   }, [userProfile]);
 
-  const handleDayChange = (day: string, field: string, value: any) => {
+  const handleToggleDay = (day: string) => {
     setAvailability(prev => ({
       ...prev,
       weekdays: {
         ...prev.weekdays,
-        [day]: {
-          ...prev.weekdays[day as keyof typeof prev.weekdays],
-          [field]: value,
-        },
+        [day]: { ...prev.weekdays[day], isOpen: !prev.weekdays[day].isOpen },
       },
     }));
-    setHasChanges(true);
   };
 
-  const handleIntervalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setAvailability(prev => ({ ...prev, slotInterval: Number(e.target.value) }));
-    setHasChanges(true);
+  const handleTimeChange = (day: string, type: 'startTime' | 'endTime', value: string) => {
+    setAvailability(prev => ({
+      ...prev,
+      weekdays: {
+        ...prev.weekdays,
+        [day]: { ...prev.weekdays[day], [type]: value },
+      },
+    }));
   };
   
-  const copyMondayToAll = () => {
-    const mondaySchedule = availability.weekdays.monday;
-    const newWeekdays = { ...availability.weekdays };
-    dayNames.forEach(day => {
-        if(day !== 'monday') {
-            newWeekdays[day as keyof typeof newWeekdays] = { ...mondaySchedule };
-        }
-    });
-    setAvailability(prev => ({...prev, weekdays: newWeekdays}));
-    setHasChanges(true);
-    showToast('Horário de Segunda copiado para os outros dias!', 'info');
+  const handleIntervalChange = (value: number) => {
+    setAvailability(prev => ({ ...prev, slotInterval: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,101 +78,103 @@ const AvailabilityManagement = () => {
     setIsLoading(true);
     try {
       await manageAvailability(availability);
-      showToast('Disponibilidade atualizada com sucesso!', 'success');
-      setHasChanges(false);
+      showToast('Disponibilidade salva com sucesso!', 'success');
     } catch (error) {
       console.error(error);
-      showToast('Erro ao atualizar a disponibilidade.', 'error');
+      showToast('Erro ao salvar disponibilidade.', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-4 sm:p-6 animate-fade-in-down">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-            <h2 className="text-3xl font-bold text-white">Gerenciar Disponibilidade</h2>
-            <p className="text-gray-400 mt-1">Defina seus horários de trabalho e intervalos de atendimento.</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Coluna dos dias da semana */}
-            <div className="space-y-4">
-                <h3 className="text-xl font-bold text-white">Horários da Semana</h3>
-                {dayNames.map(day => (
-                <div key={day} className="bg-gray-900/70 p-4 rounded-lg border border-gray-700 flex items-center justify-between transition-all duration-300">
-                    <span className="font-semibold text-white w-28">{dayTranslations[day]}</span>
-                    <div className="flex items-center gap-3">
-                    <input
-                        type="time"
-                        value={availability.weekdays[day as keyof typeof availability.weekdays].startTime}
-                        onChange={e => handleDayChange(day, 'startTime', e.target.value)}
-                        disabled={!availability.weekdays[day as keyof typeof availability.weekdays].isOpen}
-                        className="bg-gray-800 border border-gray-600 rounded-md p-2 text-white disabled:opacity-50"
-                    />
-                    <span className="text-gray-400">-</span>
-                    <input
-                        type="time"
-                        value={availability.weekdays[day as keyof typeof availability.weekdays].endTime}
-                        onChange={e => handleDayChange(day, 'endTime', e.target.value)}
-                        disabled={!availability.weekdays[day as keyof typeof availability.weekdays].isOpen}
-                        className="bg-gray-800 border border-gray-600 rounded-md p-2 text-white disabled:opacity-50"
-                    />
-                    </div>
-                    <label className="flex items-center cursor-pointer">
-                        <div className="relative">
-                            <input type="checkbox" className="sr-only" 
-                                checked={availability.weekdays[day as keyof typeof availability.weekdays].isOpen}
-                                onChange={e => handleDayChange(day, 'isOpen', e.target.checked)}
-                            />
-                            <div className={`block w-12 h-7 rounded-full transition-colors ${availability.weekdays[day as keyof typeof availability.weekdays].isOpen ? 'bg-[#daa520]' : 'bg-gray-600'}`}></div>
-                            <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${availability.weekdays[day as keyof typeof availability.weekdays].isOpen ? 'transform translate-x-full' : ''}`}></div>
-                        </div>
-                    </label>
-                </div>
+    <div className="p-4 sm:p-6">
+      <h2 className="text-3xl font-bold text-white mb-2">Horários de Atendimento</h2>
+      <p className="text-gray-400 mb-8">Defina seus horários de trabalho e a duração de cada encaixe na agenda.</p>
+      
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Configuração do Intervalo de Encaixe */}
+        <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
+            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-3">
+                <SlidersHorizontal size={22}/> Intervalo dos Encaixes
+            </h3>
+            <p className="text-gray-400 mb-4 text-sm">
+                Define a duração de cada slot de horário que o cliente pode agendar. (Ex: 30 min, resultará em horários como 09:00, 09:30, 10:00).
+            </p>
+            <div className="flex gap-2">
+                {[15, 30, 45, 60].map(interval => (
+                    <button
+                        type="button"
+                        key={interval}
+                        onClick={() => handleIntervalChange(interval)}
+                        className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                            availability.slotInterval === interval
+                                ? 'bg-[#daa520] text-black'
+                                : 'bg-gray-700 hover:bg-gray-600 text-white'
+                        }`}
+                    >
+                        {interval} min
+                    </button>
                 ))}
             </div>
+        </div>
 
-            {/* Coluna de configurações e ações */}
-            <div className="space-y-6">
-                <div>
-                    <h3 className="text-xl font-bold text-white mb-2">Configurações Gerais</h3>
-                    <div className="bg-gray-900/70 p-4 rounded-lg border border-gray-700">
-                        <label htmlFor="slotInterval" className="block mb-2 font-semibold text-white">Intervalo entre horários</label>
-                        <select
-                            id="slotInterval"
-                            value={availability.slotInterval}
-                            onChange={handleIntervalChange}
-                            className="w-full bg-gray-800 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-[#daa520]"
-                        >
-                            <option value="15">15 minutos</option>
-                            <option value="30">30 minutos</option>
-                            <option value="45">45 minutos</option>
-                            <option value="60">60 minutos</option>
-                        </select>
-                        <p className="text-xs text-gray-400 mt-2">Define o intervalo em que os horários disponíveis serão mostrados para os clientes.</p>
+        {/* Configuração dos Dias da Semana */}
+        <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
+            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-3">
+                <Clock size={22}/> Horários por Dia
+            </h3>
+            <div className="space-y-4">
+            {Object.entries(daysOfWeek).map(([key, name]) => {
+                const dayData = availability.weekdays[key];
+                return (
+                <div key={key} className={`p-4 rounded-lg transition-all ${dayData.isOpen ? 'bg-gray-700/50' : 'bg-gray-800/40 opacity-60'}`}>
+                    <div className="flex items-center justify-between">
+                    <label htmlFor={`toggle-${key}`} className="flex items-center cursor-pointer">
+                        <div className="relative">
+                        <input
+                            type="checkbox"
+                            id={`toggle-${key}`}
+                            className="sr-only"
+                            checked={dayData.isOpen}
+                            onChange={() => handleToggleDay(key)}
+                        />
+                        <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                        <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                        </div>
+                        <div className="ml-3 text-white font-bold text-lg">{name}</div>
+                    </label>
+                    <div className={`flex items-center gap-2 transition-opacity ${dayData.isOpen ? 'opacity-100' : 'opacity-0'}`}>
+                        <input
+                        type="time"
+                        value={dayData.startTime}
+                        onChange={(e) => handleTimeChange(key, 'startTime', e.target.value)}
+                        disabled={!dayData.isOpen}
+                        className="bg-gray-800 p-2 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-600"
+                        />
+                        <span>até</span>
+                        <input
+                        type="time"
+                        value={dayData.endTime}
+                        onChange={(e) => handleTimeChange(key, 'endTime', e.target.value)}
+                        disabled={!dayData.isOpen}
+                        className="bg-gray-800 p-2 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-600"
+                        />
+                    </div>
                     </div>
                 </div>
-                 <div>
-                    <h3 className="text-xl font-bold text-white mb-2">Ações Rápidas</h3>
-                    <button type="button" onClick={copyMondayToAll} className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold p-3 rounded-lg transition-colors">
-                        <Copy size={18} />
-                        Copiar horário de Segunda para todos
-                    </button>
-                </div>
+                );
+            })}
             </div>
         </div>
 
-        <div className="mt-8 border-t border-gray-700 pt-6 flex justify-end">
+        <div className="flex justify-end pt-4">
             <button
-                type="submit"
-                disabled={!hasChanges || isLoading}
-                className="bg-[#daa520] hover:bg-[#c8961e] text-black font-bold py-3 px-8 rounded-lg transition-colors flex items-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed"
+            type="submit"
+            disabled={isLoading}
+            className="bg-[#daa520] hover:bg-[#c8961e] text-black font-bold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed text-lg"
             >
-                {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Salvar Alterações'}
+            {isLoading ? <Loader2 className="animate-spin" size={24} /> : <><Save size={20}/> Salvar Alterações</>}
             </button>
         </div>
       </form>

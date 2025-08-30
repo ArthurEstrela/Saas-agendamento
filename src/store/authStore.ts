@@ -80,7 +80,6 @@ interface AuthState {
   manageProfessionals: (professionals: Professional[]) => Promise<void>;
   manageServices: (services: Service[]) => Promise<void>;
   manageAvailability: (availability: Availability) => Promise<void>;
-  cancelAppointment: (bookingId: string) => Promise<void>;
   submitReview: (reviewData: Omit<Review, "id" | "createdAt">) => Promise<void>;
 }
 
@@ -417,24 +416,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error("Erro ao salvar disponibilidade:", error);
       throw error;
-    }
-  },
-
-  cancelAppointment: async (bookingId: string) => {
-    const { userProfile } = get();
-    if (!userProfile) {
-      console.error("Você precisa estar logado para cancelar.");
-      return;
-    }
-    try {
-      const bookingRef = doc(db, "bookings", bookingId);
-      await updateDoc(bookingRef, { status: "cancelled" });
-      // Não precisa fazer mais nada aqui!
-      // O onSnapshot vai pegar a mudança e atualizar a UI sozinho.
-      console.log("Status do agendamento atualizado para 'cancelled'");
-    } catch (error) {
-      console.error("Erro ao cancelar agendamento:", error);
-      // Aqui você pode usar um toast para notificar o usuário do erro
     }
   },
 

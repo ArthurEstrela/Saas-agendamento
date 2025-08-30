@@ -1,7 +1,7 @@
 // src/components/Booking.tsx
 
 import React, { useEffect } from 'react';
-import { useBookingStore } from '../store/bookingStore';
+import  useBookingStore  from '../store/bookingStore';
 import type { UserProfile } from '../types';
 import { 
   ArrowLeft, 

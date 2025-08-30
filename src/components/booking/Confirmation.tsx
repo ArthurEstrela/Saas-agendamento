@@ -1,7 +1,7 @@
 // src/components/booking/Confirmation.tsx
 
 import React, { useMemo, useState } from 'react';
-import { useBookingStore } from '../../store/bookingStore';
+import  useBookingStore  from '../../store/bookingStore';
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
 import { format } from 'date-fns';

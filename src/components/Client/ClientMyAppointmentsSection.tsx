@@ -6,6 +6,7 @@ import ClientAppointmentCard from "./ClientAppointmentCard";
 import { CalendarX2 } from "lucide-react";
 import type { Booking, Appointment } from "../../types";
 import { Timestamp } from "firebase/firestore";
+import { useBookings } from "../../store/bookingStore";
 
 // --- Helper para converter data (Timestamp, string, etc.) para Date ---
 const convertToDate = (date: any): Date => {
@@ -22,13 +23,12 @@ interface ClientMyAppointmentsSectionProps {
   onReview: (appointment: Booking) => void;
 }
 
-
-
 const ClientMyAppointmentsSection = ({
-  onCancel,
+  setActiveView,
   onReview,
 }: ClientMyAppointmentsSectionProps) => {
   const { userProfile } = useAuthStore();
+  const { bookings, loading, error, cancelBooking } = useBookings(user?.uid);
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
   // Memoiza a separação e ordenação dos agendamentos para melhor performance
@@ -101,8 +101,8 @@ const ClientMyAppointmentsSection = ({
             <ClientAppointmentCard
               key={booking.id}
               booking={booking}
-              onCancel={onCancel}
-              onReview={onReview}
+              onCancel={() => cancelBooking(appointment.id)}
+              onReview={() => onReview(appointment)}
             />
           ))
         ) : (

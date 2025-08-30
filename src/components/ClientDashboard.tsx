@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import type { Appointment, UserProfile } from "../types";
 import { Star, Menu as MenuIcon } from "lucide-react";
 import Booking from "./Booking";
+import { useBookings } from "../store/bookingStore";
 
 import ClientSideNav from "./Client/ClientSideNav";
 import ClientSearchSection from "./Client/ClientSearchSection";
@@ -142,16 +143,11 @@ const ReviewModal = ({
 };
 
 const ClientDashboard: React.FC = () => {
-  const {
-    user,
-    userProfile,
-    logout,
-    toggleFavorite,
-    cancelAppointment,
-    submitReview,
-  } = useAuthStore();
+  const { user, userProfile, logout, toggleFavorite, submitReview } =
+    useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const { cancelBooking } = useBookings(user?.uid);
   const [activeView, setActiveView] = useState<
     | "search"
     | "myAppointments"
@@ -190,7 +186,7 @@ const ClientDashboard: React.FC = () => {
       title: "Cancelar Agendamento",
       message: "Tem a certeza de que pretende cancelar este agendamento?",
       onConfirm: () => {
-        cancelAppointment(appointmentId);
+        cancelBooking(appointmentId);
         setModalState(null);
       },
     });

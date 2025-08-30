@@ -1,81 +1,129 @@
 import { create } from "zustand";
-import type { Service, Professional, UserProfile, Booking } from "../types";
+import { db } from "../firebase/config";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+} from "firebase/firestore";
+import { useEffect } from "react";
+import type { Appointment } from "../types";
 
-// Tipos para o calendário
-type ValuePiece = Date | null;
-type Value = ValuePiece | [ValuePiece, ValuePiece];
+// 1. Importe as FUNÇÕES do seu service!
+import { cancelBooking as cancelBookingInDb } from "../firebase/bookingService";
 
-// Define a estrutura do nosso estado de agendamento
 interface BookingState {
-  currentStep: number;
-  selectedServices: Service[];
-  selectedProfessional: Professional | null;
-  selectedDate: Value;
-  selectedTime: string;
-  totalPrice: number;
-  totalDuration: number;
-  serviceProvider: UserProfile | null;
-
-  // Funções para manipular o estado
-  setServiceProvider: (provider: UserProfile) => void;
-  goToNextStep: () => void;
-  goToPreviousStep: () => void;
-  setStep: (step: number) => void;
-  toggleService: (service: Service) => void;
-  selectProfessional: (professional: Professional | null) => void;
-  setDate: (date: Value) => void;
-  setTime: (time: string) => void;
-  resetBooking: () => void;
+  bookings: Appointment[];
+  loading: boolean;
+  error: string | null;
+  setBookings: (bookings: Appointment[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  cancelBooking: (bookingId: string) => Promise<void>;
 }
 
-const initialState = {
-  currentStep: 1,
-  serviceProvider: null,
-  selectedServices: [],
-  selectedProfessional: null,
-  selectedDate: new Date(),
-  selectedTime: "",
-  totalPrice: 0,
-  totalDuration: 0,
-};
+// Usando a técnica de "Atualização Otimista" para a melhor experiência do usuário
+const useBookingStore = create<BookingState>((set, get) => ({
+  bookings: [],
+  loading: true,
+  error: null,
+  setBookings: (bookings) => set({ bookings, loading: false }),
+  setLoading: (loading) => set({ loading }),
+  setError: (error) => set({ error, loading: false }),
 
-export const useBookingStore = create<BookingState>((set, get) => ({
-  ...initialState,
+  // 2. A função cancelBooking agora USA o service e atualiza a UI na hora
+  cancelBooking: async (bookingId: string) => {
+    const currentBookings = get().bookings;
+    const bookingToCancel = currentBookings.find((b) => b.id === bookingId);
 
-  setServiceProvider: (provider) => set({ serviceProvider: provider }),
+    // Se o agendamento nem existe na lista local, não faz nada.
+    if (!bookingToCancel) {
+      console.warn(
+        "Tentativa de cancelar um agendamento que não está no estado local."
+      );
+      return;
+    }
 
-  goToNextStep: () => set((state) => ({ currentStep: state.currentStep + 1 })),
+    // Atualização Otimista (a tela atualiza na hora)
+    const updatedBookings = currentBookings.map((b) =>
+      b.id === bookingId ? { ...b, status: "cancelled" as const } : b
+    );
+    set({ bookings: updatedBookings });
 
-  goToPreviousStep: () =>
-    set((state) => ({ currentStep: state.currentStep - 1 })),
+    try {
+      // Chama a função do service para fazer o trabalho no banco de dados
+      await cancelBookingInDb(bookingId);
+      // Se deu certo, ótimo. O onSnapshot vai confirmar o estado.
+    } catch (error: any) {
+      // Captura o erro
+      console.error("Falha ao cancelar no DB:", error);
 
-  setStep: (step) => set({ currentStep: step }),
-
-  toggleService: (service) => {
-    const currentServices = get().selectedServices;
-    const isAlreadySelected = currentServices.some((s) => s.id === service.id);
-
-    if (isAlreadySelected) {
-      set({
-        selectedServices: currentServices.filter((s) => s.id !== service.id),
-      });
-    } else {
-      set({ selectedServices: [...currentServices, service] });
+      // Verifica se o erro é porque o documento não foi encontrado
+      if (error.message.includes("No document to update")) {
+        console.warn("O agendamento já havia sido removido do Firestore.");
+        // O estado local já foi atualizado otimisticamente,
+        // e o listener onSnapshot vai remover o item fantasma de qualquer forma.
+        // A gente só precisa remover o erro da tela.
+        set({ error: null });
+      } else {
+        // Se foi outro erro (como falta de internet), desfazemos a mudança na tela
+        set({
+          bookings: currentBookings,
+          error: "Falha ao cancelar o agendamento.",
+        });
+      }
     }
   },
-
-  selectProfessional: (professional) =>
-    set({
-      selectedProfessional: professional,
-      // Reseta a seleção de tempo ao mudar o profissional
-      selectedTime: "",
-    }),
-
-  setProfessional: (professional) =>
-    set({ selectedProfessional: professional }),
-
-  setDate: (date) => set({ selectedDate: date, selectedTime: null }),
-  setTime: (time) => set({ selectedTime: time }),
-
-  resetBooking: () => set(initialState),
 }));
+
+// 3. REMOVA a função addBooking daqui. O lugar dela é só no bookingService.ts
+// Quem for usar o addBooking deve importar diretamente do service.
+
+// O hook useBookings continua perfeito, não precisa mudar nada nele!
+export const useBookings = (userId?: string) => {
+  const {
+    bookings,
+    loading,
+    error,
+    cancelBooking,
+    setBookings,
+    setLoading,
+    setError,
+  } = useBookingStore();
+
+  useEffect(() => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const q = query(
+      collection(db, "bookings"),
+      where("userId", "==", userId),
+      orderBy("startTime", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const userAppointments = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Appointment[];
+        setBookings(userAppointments);
+      },
+      (err) => {
+        console.error("Erro no listener de agendamentos: ", err);
+        setError("Não foi possível carregar os agendamentos.");
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userId, setBookings, setLoading, setError]);
+
+  return { bookings, loading, error, cancelBooking };
+};
+
+export default useBookingStore;

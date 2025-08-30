@@ -1,7 +1,7 @@
 // src/components/booking/DateTimeSelection.tsx
 
 import React, { useMemo } from 'react';
-import { useBookingStore } from '../../store/bookingStore';
+import  useBookingStore  from '../../store/bookingStore';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../../Calendar.css';

@@ -1,7 +1,7 @@
 // src/components/booking/ProfessionalSelection.tsx
 
 import React, { useMemo } from 'react';
-import { useBookingStore } from '../../store/bookingStore';
+import  useBookingStore  from '../../store/bookingStore';
 import type { Professional } from '../../types';
 import { Users, CheckCircle2, UserCheck } from 'lucide-react';
 

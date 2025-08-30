@@ -24,7 +24,7 @@ export const createAppointment = async (appointmentData: Omit<Appointment, 'id' 
   try {
     const docRef = await addDoc(collection(db, 'appointments'), {
       ...appointmentData,
-      status: 'confirmed', // ou 'pending' se você precisar de confirmação
+      status: 'pending', // ou 'pending' se você precisar de confirmação
       createdAt: Timestamp.now(),
     });
     console.log('Agendamento criado com ID: ', docRef.id);

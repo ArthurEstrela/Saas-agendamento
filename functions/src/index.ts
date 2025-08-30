@@ -76,7 +76,6 @@ export const onAppointmentCreate = onDocumentCreated(
 // --- FUNÇÃO ACIONADA QUANDO UM AGENDAMENTO É ATUALIZADO (EX: CANCELADO) ---
 export const onAppointmentUpdate = onDocumentUpdated(
   {
-    // 3. CORREÇÃO: Escutando a coleção correta
     document: "appointments/{appointmentId}",
     region: REGION,
   },
@@ -84,32 +83,36 @@ export const onAppointmentUpdate = onDocumentUpdated(
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
 
-    if (!beforeData || !afterData) {
-      logger.warn(`Dados ausentes no evento de atualização para ${event.params.appointmentId}.`);
-      return;
+    if (!beforeData || !afterData || beforeData.status === afterData.status) {
+      return; // Sai se não houver dados ou se o status não mudou
     }
 
-    // Só faz algo se o status do agendamento mudou
-    if (beforeData.status === afterData.status) {
-      return;
-    }
-
-    // 4. CORREÇÃO: Usando os nomes de campos da interface Appointment
     const {
-      serviceProviderId,
-      clientName,
+      clientId, // ID do cliente para enviar a notificação
       serviceName,
       date,
       startTime,
     } = afterData;
 
-    // Envia notificação de cancelamento para o prestador de serviço
-    if (afterData.status === "cancelled") {
-      const notificationTitle = "Agendamento Cancelado";
-      const notificationBody = `O agendamento de ${clientName} ("${serviceName}") em ${date} às ${startTime} foi cancelado.`;
-      
-      logger.info(`Enviando notificação de cancelamento para: ${serviceProviderId}`);
-      await sendNotification(serviceProviderId, notificationTitle, notificationBody);
+    let notificationTitle = "";
+    let notificationBody = "";
+
+    // Lógica para notificar o CLIENTE
+    if (afterData.status === "confirmed") {
+        notificationTitle = "Agendamento Confirmado!";
+        notificationBody = `Seu agendamento para "${serviceName}" em ${date} às ${startTime} foi confirmado.`;
+    } else if (afterData.status === "cancelled") {
+        // Verifica se foi o prestador que cancelou (antes era 'pending' ou 'confirmed')
+        if (beforeData.status === 'pending' || beforeData.status === 'confirmed') {
+             notificationTitle = "Agendamento Recusado";
+             notificationBody = `Infelizmente, seu agendamento para "${serviceName}" em ${date} não pôde ser confirmado.`;
+        }
+    }
+
+    // Se houver um título, envia a notificação para o cliente
+    if (notificationTitle && clientId) {
+        logger.info(`Enviando notificação de status para o cliente: ${clientId}`);
+        await sendNotification(clientId, notificationTitle, notificationBody);
     }
   }
 );

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useEffect } from "react";
 import { db } from "../firebase/config";
 import {
   collection,
@@ -7,13 +8,14 @@ import {
   onSnapshot,
   orderBy,
 } from "firebase/firestore";
-import { useEffect } from "react";
 import type { Appointment } from "../types";
-
-// 1. Importe as FUNÇÕES do seu service!
 import { cancelBooking as cancelBookingInDb } from "../firebase/bookingService";
 
-interface BookingState {
+/**
+ * Interface para o estado dos agendamentos de um usuário.
+ * Gerencia a lista de agendamentos, status de carregamento e erros.
+ */
+interface UserAppointmentsState {
   bookings: Appointment[];
   loading: boolean;
   error: string | null;
@@ -23,8 +25,10 @@ interface BookingState {
   cancelBooking: (bookingId: string) => Promise<void>;
 }
 
-// Usando a técnica de "Atualização Otimista" para a melhor experiência do usuário
-const useBookingStore = create<BookingState>((set, get) => ({
+/**
+ * Zustand store para gerenciar os agendamentos existentes de um usuário.
+ */
+const useUserAppointmentsStore = create<UserAppointmentsState>((set, get) => ({
   bookings: [],
   loading: true,
   error: null,
@@ -32,56 +36,46 @@ const useBookingStore = create<BookingState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
 
-  // 2. A função cancelBooking agora USA o service e atualiza a UI na hora
+  /**
+   * Cancela um agendamento com uma abordagem de atualização otimista.
+   * A UI é atualizada imediatamente para "cancelled", e a chamada ao banco de dados é feita em seguida.
+   * Em caso de falha, o estado da UI é revertido.
+   */
   cancelBooking: async (bookingId: string) => {
     const currentBookings = get().bookings;
     const bookingToCancel = currentBookings.find((b) => b.id === bookingId);
 
-    // Se o agendamento nem existe na lista local, não faz nada.
     if (!bookingToCancel) {
-      console.warn(
-        "Tentativa de cancelar um agendamento que não está no estado local."
-      );
+      console.warn("Tentativa de cancelar um agendamento que não está no estado local.");
       return;
     }
-
-    // Atualização Otimista (a tela atualiza na hora)
+    
+    // Atualização Otimista
     const updatedBookings = currentBookings.map((b) =>
       b.id === bookingId ? { ...b, status: "cancelled" as const } : b
     );
     set({ bookings: updatedBookings });
 
     try {
-      // Chama a função do service para fazer o trabalho no banco de dados
+      // Chama o serviço para atualizar o Firestore
       await cancelBookingInDb(bookingId);
-      // Se deu certo, ótimo. O onSnapshot vai confirmar o estado.
-    } catch (error: any) {
-      // Captura o erro
-      console.error("Falha ao cancelar no DB:", error);
-
-      // Verifica se o erro é porque o documento não foi encontrado
-      if (error.message.includes("No document to update")) {
-        console.warn("O agendamento já havia sido removido do Firestore.");
-        // O estado local já foi atualizado otimisticamente,
-        // e o listener onSnapshot vai remover o item fantasma de qualquer forma.
-        // A gente só precisa remover o erro da tela.
-        set({ error: null });
-      } else {
-        // Se foi outro erro (como falta de internet), desfazemos a mudança na tela
-        set({
-          bookings: currentBookings,
-          error: "Falha ao cancelar o agendamento.",
-        });
-      }
+    } catch (error) {
+      console.error("Falha ao cancelar o agendamento no Firestore:", error);
+      // Reverte a UI em caso de erro
+      set({
+        bookings: currentBookings,
+        error: "Falha ao cancelar o agendamento. Tente novamente.",
+      });
     }
   },
 }));
 
-// 3. REMOVA a função addBooking daqui. O lugar dela é só no bookingService.ts
-// Quem for usar o addBooking deve importar diretamente do service.
-
-// O hook useBookings continua perfeito, não precisa mudar nada nele!
-export const useBookings = (userId?: string) => {
+/**
+ * Hook customizado para ouvir os agendamentos de um usuário em tempo real do Firestore.
+ * @param userId - O ID do usuário para buscar os agendamentos.
+ * @returns O estado dos agendamentos, incluindo a lista, status de carregamento, erros e a função de cancelamento.
+ */
+export const useUserAppointments = (userId?: string) => {
   const {
     bookings,
     loading,
@@ -90,11 +84,12 @@ export const useBookings = (userId?: string) => {
     setBookings,
     setLoading,
     setError,
-  } = useBookingStore();
+  } = useUserAppointmentsStore();
 
   useEffect(() => {
     if (!userId) {
       setLoading(false);
+      setBookings([]);
       return;
     }
 
@@ -120,10 +115,11 @@ export const useBookings = (userId?: string) => {
       }
     );
 
+    // Limpa o listener quando o componente é desmontado ou o userId muda
     return () => unsubscribe();
   }, [userId, setBookings, setLoading, setError]);
 
   return { bookings, loading, error, cancelBooking };
 };
 
-export default useBookingStore;
+export default useUserAppointmentsStore;

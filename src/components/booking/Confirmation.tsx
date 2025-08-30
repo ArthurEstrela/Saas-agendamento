@@ -1,13 +1,14 @@
 // src/components/booking/Confirmation.tsx
 
 import React, { useMemo, useState } from 'react';
-import  useBookingStore  from '../../store/bookingStore';
+
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Clock, User, Tag, DollarSign, Loader2, CheckCircle } from 'lucide-react';
 import { addBooking } from '../../firebase/bookingService';
+import useBookingProcessStore from '../../store/bookingProcessStore';
 
 const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }) => {
   const {
@@ -16,7 +17,7 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
     selectedProfessional,
     selectedDate,
     selectedTime,
-  } = useBookingStore();
+  } = useBookingProcessStore();
   const { userProfile } = useAuthStore();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);

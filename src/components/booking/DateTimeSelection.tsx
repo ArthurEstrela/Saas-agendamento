@@ -1,7 +1,6 @@
 // src/components/booking/DateTimeSelection.tsx
 
 import React, { useMemo } from 'react';
-import  useBookingStore  from '../../store/bookingStore';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../../Calendar.css';
@@ -9,6 +8,7 @@ import { addMinutes, format, getDay, isEqual, parse, startOfDay, isToday } from 
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Clock, AlertTriangle } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
+import useBookingProcessStore from '../../store/bookingProcessStore';
 
 const convertToDate = (date: any): Date | null => {
   if (!date) return null;
@@ -28,7 +28,7 @@ const DateTimeSelection = () => {
     selectedTime,
     setDate,
     setTime,
-  } = useBookingStore();
+  } = useBookingProcessStore();
   
   const handleDateChange = (date: Date | null) => {
     if (date) {

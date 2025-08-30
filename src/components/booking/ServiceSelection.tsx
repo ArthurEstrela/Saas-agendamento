@@ -1,13 +1,12 @@
 // src/components/booking/ServiceSelection.tsx
-
 import React, { useMemo } from 'react';
-import  useBookingStore  from '../../store/bookingStore';
 import type { Service } from '../../types';
 import { Tag, Loader2, CheckCircle2, Clock, DollarSign, List } from 'lucide-react';
+import useBookingProcessStore from '../../store/bookingProcessStore';
 
 const ServiceSelection = () => {
   // CORREÇÃO: Pedimos `toggleService` do store
-  const { serviceProvider, selectedServices, toggleService } = useBookingStore();
+  const { serviceProvider, selectedServices, toggleService } = useBookingProcessStore();
 
   const isServiceSelected = (serviceId: string) => {
     return selectedServices.some(s => s.id === serviceId);

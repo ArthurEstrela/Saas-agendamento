@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import type { Appointment, UserProfile } from "../types";
 import { Star, Menu as MenuIcon } from "lucide-react";
 import Booking from "./Booking";
-import { useBookings } from "../store/bookingStore";
+
 
 import ClientSideNav from "./Client/ClientSideNav";
 import ClientSearchSection from "./Client/ClientSearchSection";
@@ -14,6 +14,7 @@ import ClientFavoritesSection from "./Client/ClientFavoritesSection";
 import ClientProfileManagement from "./Client/ClientProfileManagement";
 import LoginPrompt from "./Common/LoginPrompt";
 import Notifications from "./Common/Notifications";
+import { useUserAppointments } from "../store/userAppointmentsStore";
 
 const ConfirmationModal = ({
   title,
@@ -147,7 +148,7 @@ const ClientDashboard: React.FC = () => {
     useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const { cancelBooking } = useBookings(user?.uid);
+  const { cancelBooking } = useUserAppointments(user?.uid);
   const [activeView, setActiveView] = useState<
     | "search"
     | "myAppointments"

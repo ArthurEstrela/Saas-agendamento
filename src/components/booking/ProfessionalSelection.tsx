@@ -1,9 +1,9 @@
 // src/components/booking/ProfessionalSelection.tsx
 
 import React, { useMemo } from 'react';
-import  useBookingStore  from '../../store/bookingStore';
 import type { Professional } from '../../types';
 import { Users, CheckCircle2, UserCheck } from 'lucide-react';
+import useBookingProcessStore from '../../store/bookingProcessStore';
 
 const ProfessionalSelection = () => {
   // Pegamos as informações necessárias do store
@@ -12,7 +12,7 @@ const ProfessionalSelection = () => {
     selectedServices, 
     selectedProfessional, 
     setProfessional 
-  } = useBookingStore();
+  } = useBookingProcessStore();
 
   // A MÁGICA ACONTECE AQUI: Filtramos os profissionais
   const availableProfessionals = useMemo(() => {

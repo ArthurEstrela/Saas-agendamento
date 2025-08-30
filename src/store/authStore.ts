@@ -139,11 +139,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           id: doc.id,
           ...doc.data(),
         })) as Appointment[];
-        // Ordena os agendamentos, por exemplo, por data (opcional)
-        appointments.sort(
+        const validAppointments = appointments.filter((app) => app.startTime);
+        validAppointments.sort(
           (a, b) => b.startTime.toMillis() - a.startTime.toMillis()
         );
-        set({ userAppointments: appointments });
+        set({ userAppointments: validAppointments });
       },
       (error) => {
         console.error("Erro ao buscar agendamentos em tempo real:", error);

@@ -106,7 +106,7 @@ export interface Appointment {
   date: string; // 'YYYY-MM-DD'
   startTime: string; // 'HH:mm'
   endTime: string; // 'HH:mm'
-  status: "pendente" | "confirmado" | "concluido" | "cancelado" | "nao_compareceu";
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'; 
   createdAt: Timestamp;
   serviceName: string;
   professionalName: string;

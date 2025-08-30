@@ -1,6 +1,7 @@
 // src/components/booking/Confirmation.tsx
 
 import React, { useMemo, useState } from 'react';
+import { Timestamp } from "firebase/firestore";
 
 import { useAuthStore } from '../../store/authStore';
 import { useToast } from '../../context/ToastContext';
@@ -37,16 +38,18 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
     setIsLoading(true);
     try {
       const bookingData = {
-        clientId: userProfile.uid,
-        clientName: userProfile.displayName,
-        providerId: serviceProvider.uid,
+        userId: userProfile.uid,
+        userName: userProfile.displayName || "Cliente sem nome",
+        serviceProviderId: serviceProvider.uid,
+        serviceProviderName: serviceProvider.displayName,
+        professionalId: selectedProfessional?.uid || null,
+        professionalName:
+          selectedProfessional?.displayName || "Qualquer Profissional",
         services: selectedServices,
-        professionalId: selectedProfessional?.id || null,
-        professionalName: selectedProfessional?.name || 'Qualquer Profissional',
-        date: format(new Date(`${format(selectedDate, 'yyyy-MM-dd')}T${selectedTime}`), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"),
+        startTime: Timestamp.fromDate(startTime),
+        endTime: Timestamp.fromDate(endTime),
         totalPrice,
-        totalDuration,
-        status: 'confirmed' as const,
+        status: "pending",
       };
 
       await addBooking(bookingData);

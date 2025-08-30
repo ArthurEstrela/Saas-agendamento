@@ -1,161 +1,126 @@
-// src/components/booking/DateTimeSelection.tsx
-
 import React, { useMemo } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import '../../Calendar.css';
-import { addMinutes, format, getDay, isEqual, parse, startOfDay, isToday } from 'date-fns'; // Importa o isToday
-import { ptBR } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Clock, AlertTriangle } from 'lucide-react';
-import { Timestamp } from 'firebase/firestore';
+import '../../Calendar.css'; // Seu CSS customizado para o calendário
 import useBookingProcessStore from '../../store/bookingProcessStore';
+import { add, format, parse, areIntervalsOverlapping } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Loader2, CalendarX } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { getAppointmentsForDate } from '../../firebase/bookingService';
 
-const convertToDate = (date: any): Date | null => {
-  if (!date) return null;
-  if (date instanceof Timestamp) return date.toDate();
-  if (typeof date === 'string' || typeof date === 'number') {
-    const d = new Date(date);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return null;
-};
-
+// --- COMPONENTE PRINCIPAL ---
 const DateTimeSelection = () => {
   const {
+    selectedDate,
+    setSelectedDate,
+    selectedTime,
+    setSelectedTime,
     serviceProvider,
     selectedServices,
-    selectedDate,
-    selectedTime,
-    setDate,
-    setTime,
   } = useBookingProcessStore();
-  
-  const handleDateChange = (date: Date | null) => {
-    if (date) {
-      setDate(startOfDay(date));
-      setTime(null);
-    }
-  };
 
   const totalDuration = useMemo(() => {
-    return selectedServices.reduce((acc, service) => acc + service.duration, 0);
+    return selectedServices.reduce((total, service) => total + service.duration, 0);
   }, [selectedServices]);
 
-  const availableTimeSlots = useMemo(() => {
-    if (!selectedDate || !serviceProvider?.availability?.weekdays) {
+  // CORREÇÃO AQUI: A chamada do useQuery agora é um objeto só
+  const { data: existingAppointments, isLoading: isLoadingAppointments } = useQuery({
+    queryKey: ['appointments', serviceProvider?.uid, format(selectedDate, 'yyyy-MM-dd')],
+    queryFn: () => getAppointmentsForDate(serviceProvider!.uid, selectedDate),
+    enabled: !!serviceProvider,
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+
+  const availableTimes = useMemo(() => {
+    if (!serviceProvider?.availability?.weekdays) {
       return [];
     }
-    
-    // Pega a data e hora atuais para comparação
-    const now = new Date();
-    // Verifica se a data selecionada no calendário é o dia de hoje
-    const isSelectedDateToday = isToday(selectedDate);
 
-    const dayOfWeek = getDay(selectedDate);
-    const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayMapping[dayOfWeek] as keyof typeof serviceProvider.availability.weekdays;
+    const dayName = format(selectedDate, 'eeee', { locale: ptBR }).toLowerCase();
     const daySchedule = serviceProvider.availability.weekdays[dayName];
-
+    
     if (!daySchedule || !daySchedule.isOpen) {
       return [];
     }
+    
+    const times = [];
+    const slotInterval = serviceProvider.availability.slotInterval || 30;
 
-    try {
-        const startTime = parse(daySchedule.startTime, 'HH:mm', selectedDate);
-        const endTime = parse(daySchedule.endTime, 'HH:mm', selectedDate);
-        
-        const bookingsForDay = (serviceProvider.bookings || [])
-          .map(booking => {
-            const bookingDate = convertToDate(booking.date);
-            if (!bookingDate || !isEqual(startOfDay(bookingDate), selectedDate)) return null;
-            return {
-              ...booking,
-              startDate: bookingDate,
-            };
-          })
-          .filter((b): b is NonNullable<typeof b> => b !== null);
+    let currentTime = parse(daySchedule.startTime, 'HH:mm', selectedDate);
+    const lastPossibleTime = parse(daySchedule.endTime, 'HH:mm', selectedDate);
 
-        const slots = [];
-        let currentTime = startTime;
+    while (currentTime < lastPossibleTime) {
+      const slotStartTime = currentTime;
+      const slotEndTime = add(slotStartTime, { minutes: totalDuration });
 
-        while (addMinutes(currentTime, totalDuration) <= endTime) {
-            // ----> A NOVA LÓGICA ESTÁ AQUI <----
-            // Se o dia selecionado é hoje, verifica se o horário já passou.
-            // Se já passou, simplesmente pula para a próxima iteração do loop.
-            if (isSelectedDateToday && currentTime < now) {
-                currentTime = addMinutes(currentTime, serviceProvider.availability.slotInterval || 15);
-                continue; // Pula este horário
-            }
+      if (slotEndTime <= lastPossibleTime) {
+        const isOverlapping = existingAppointments?.some(appointment => {
+          const appointmentStart = parse(`${appointment.date} ${appointment.startTime}`, 'yyyy-MM-dd HH:mm', new Date());
+          const appointmentEnd = add(appointmentStart, { minutes: appointment.duration });
+          
+          return areIntervalsOverlapping(
+            { start: slotStartTime, end: slotEndTime },
+            { start: appointmentStart, end: appointmentEnd }
+          );
+        });
 
-            const slotEnd = addMinutes(currentTime, totalDuration);
-
-            const isOccupied = bookingsForDay.some(booking => {
-              const bookingStart = booking.startDate;
-              const bookingEnd = addMinutes(bookingStart, booking.totalDuration);
-              return (currentTime < bookingEnd) && (slotEnd > bookingStart);
-            });
-
-            if (!isOccupied) {
-                slots.push(format(currentTime, 'HH:mm'));
-            }
-            
-            currentTime = addMinutes(currentTime, serviceProvider.availability.slotInterval || 15);
+        if (!isOverlapping) {
+          times.push(format(slotStartTime, 'HH:mm'));
         }
-        
-        return slots;
-
-    } catch (error) {
-        console.error("Erro ao gerar horários:", error);
-        return [];
+      }
+      
+      currentTime = add(currentTime, { minutes: slotInterval });
     }
-  }, [selectedDate, serviceProvider, totalDuration]);
+    return times;
+  }, [selectedDate, serviceProvider, totalDuration, existingAppointments]);
 
   return (
-    <div className="animate-fade-in-down">
-      <div className="text-center mb-6">
-        <h2 className="text-3xl font-bold text-white">Escolha a Data e Hora</h2>
-        <p className="text-gray-400 mt-1">Selecione o melhor dia e horário para você.</p>
+    <div className="animate-fade-in-down grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+      <div className="flex flex-col items-center">
+        <h3 className="text-2xl font-bold text-white mb-4">Selecione uma Data</h3>
+        <Calendar
+          onChange={(date) => setSelectedDate(date as Date)}
+          value={selectedDate}
+          locale="pt-BR"
+          minDate={new Date()}
+          className="bg-transparent border-0"
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 items-start">
-        <div className="w-full max-w-sm mx-auto">
-          <Calendar
-            onChange={(value) => handleDateChange(value as Date)}
-            value={selectedDate}
-            minDate={new Date()}
-            locale="pt-BR"
-          />
-        </div>
-
-        <div className="max-h-[40vh] overflow-y-auto pr-2">
-          <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <Clock size={22}/>
-            Horários para {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : '...'}
-          </h3>
-          {selectedDate ? (
-            availableTimeSlots.length > 0 ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {availableTimeSlots.map(time => (
-                  <button key={time} onClick={() => setTime(time)} className={`p-3 rounded-lg font-semibold transition-all duration-200 ${selectedTime === time ? 'bg-[#daa520] text-black shadow-lg' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}>
-                    {time}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-gray-400 py-10 bg-black/20 rounded-lg">
-                <AlertTriangle size={32} className="mx-auto text-yellow-500 mb-3"/>
-                <p className="font-semibold text-white">Nenhum horário disponível</p>
-                <p className="text-sm">Tente selecionar outro dia.</p>
-              </div>
-            )
-          ) : (
-            <div className="text-center text-gray-400 py-10 bg-black/20 rounded-lg">
-              <CalendarIcon size={32} className="mx-auto text-gray-500 mb-3"/>
-              <p className="font-semibold text-white">Selecione uma data</p>
-              <p className="text-sm">Escolha um dia no calendário para ver os horários.</p>
-            </div>
-          )}
-        </div>
+      <div className="flex flex-col items-center w-full">
+        <h3 className="text-2xl font-bold text-white mb-4">
+          Horários para <span className='text-[#daa520]'>{format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</span>
+        </h3>
+        
+        {isLoadingAppointments ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <Loader2 className="animate-spin text-[#daa520]" size={48} />
+            <p className="mt-4 text-gray-400">Buscando horários...</p>
+          </div>
+        ) : availableTimes.length > 0 ? (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto pr-2 w-full">
+            {availableTimes.map((time) => (
+              <button
+                key={time}
+                onClick={() => setSelectedTime(time)}
+                className={`w-full p-3 font-semibold rounded-lg transition-all duration-200 border-2 ${
+                  selectedTime === time
+                    ? 'bg-[#daa520] text-black border-[#daa500]'
+                    : 'bg-gray-800 text-white border-gray-700 hover:border-[#daa520]/80 hover:bg-[#daa520]/10'
+                }`}
+              >
+                {time}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center text-center h-64 bg-black/20 p-6 rounded-lg w-full">
+             <CalendarX size={48} className="text-gray-600 mb-4"/>
+            <p className="font-semibold text-white">Nenhum horário disponível</p>
+            <p className="text-sm text-gray-400">Por favor, tente outra data.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Clock, User, Tag, DollarSign, Loader2, CheckCircle } from 'lucide-react';
-import { addBooking } from '../../firebase/bookingService';
+import { createAppointment } from '../../firebase/bookingService';
 import useBookingProcessStore from '../../store/bookingProcessStore';
 
 const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }) => {
@@ -52,7 +52,7 @@ const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void }
         status: "pending",
       };
 
-      await addBooking(bookingData);
+      await createAppointment(bookingData);
       showToast('Agendamento confirmado com sucesso!', 'success');
       onBookingConfirmed(); // Chama a função para fechar o modal ou ir para outra tela
     } catch (error) {

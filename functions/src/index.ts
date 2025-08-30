@@ -1,12 +1,3 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
@@ -21,18 +12,17 @@ import {
 // Inicialização do Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
-const messaging = admin.messaging(); // <--- INICIALIZAR O MESSAGING
+const messaging = admin.messaging();
 
 const REGION = "southamerica-east1";
 
-// Função auxiliar para enviar notificações
+// Função auxiliar para enviar notificações (sem alterações)
 const sendNotification = async (userId: string, title: string, body: string) => {
   try {
     const userRef = db.collection("users").doc(userId);
     const userSnap = await userRef.get();
     const userData = userSnap.data();
 
-    // Verifica se o usuário existe e tem um fcmToken
     if (userData && userData.fcmToken) {
       const message = {
         notification: { title, body },
@@ -48,18 +38,11 @@ const sendNotification = async (userId: string, title: string, body: string) => 
   }
 };
 
-
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
-
-export const helloWorld = onCall((request) => {
-  logger.info("Hello logs!", { structuredData: true });
-  return { message: "Hello from Firebase!", data: request.data };
-});
-
-export const onBookingCreate = onDocumentCreated(
+// --- FUNÇÃO ACIONADA QUANDO UM NOVO AGENDAMENTO É CRIADO ---
+export const onAppointmentCreate = onDocumentCreated(
   {
-    document: "bookings/{bookingId}",
+    // 1. CORREÇÃO: Escutando a coleção correta
+    document: "appointments/{appointmentId}",
     region: REGION,
   },
   async (event) => {
@@ -68,44 +51,33 @@ export const onBookingCreate = onDocumentCreated(
       logger.log("No data associated with the event");
       return;
     }
-    const bookingData = snapshot.data();
-    const bookingId = event.params.bookingId; // Obter o ID do documento
+    const appointmentData = snapshot.data();
 
-    const { providerId, clientId, clientName, serviceName, date, time } = bookingData;
+    // 2. CORREÇÃO: Usando os nomes de campos da interface Appointment
+    const {
+      serviceProviderId,
+      clientName,
+      serviceName,
+      date,
+      startTime,
+    } = appointmentData;
 
-    // Adicionar o ID do documento aos dados do agendamento
-    const bookingDataWithId = { ...bookingData, id: bookingId };
-
-    // Atualizar o perfil do prestador de serviço
-    if (providerId) {
-      const providerRef = db.collection("users").doc(providerId);
-      await providerRef.update({
-        bookings: admin.firestore.FieldValue.arrayUnion(bookingDataWithId),
-      });
-      logger.log(`Booking ${bookingId} added to provider ${providerId}`);
-      
-      // --- LÓGICA DE NOTIFICAÇÃO ---
+    // A principal responsabilidade é notificar o prestador de serviço
+    if (serviceProviderId) {
       const notificationTitle = "Novo Agendamento!";
-      const notificationBody = `${clientName} agendou ${serviceName} para ${date} às ${time}.`;
-      await sendNotification(providerId, notificationTitle, notificationBody);
-    }
-
-    // Atualizar o perfil do cliente
-    if (clientId) {
-      const clientRef = db.collection("users").doc(clientId);
-      await clientRef.update({
-        myAppointments:
-          admin.firestore.FieldValue.arrayUnion(bookingDataWithId),
-      });
-      logger.log(`Booking ${bookingId} added to client ${clientId}`);
+      const notificationBody = `${clientName} agendou "${serviceName}" para ${date} às ${startTime}.`;
+      
+      logger.info(`Enviando notificação para o prestador: ${serviceProviderId}`);
+      await sendNotification(serviceProviderId, notificationTitle, notificationBody);
     }
   }
 );
 
-// --- ATUALIZA PERFIS QUANDO UM AGENDAMENTO MUDA ---
-export const onBookingUpdate = onDocumentUpdated(
+// --- FUNÇÃO ACIONADA QUANDO UM AGENDAMENTO É ATUALIZADO (EX: CANCELADO) ---
+export const onAppointmentUpdate = onDocumentUpdated(
   {
-    document: "bookings/{bookingId}",
+    // 3. CORREÇÃO: Escutando a coleção correta
+    document: "appointments/{appointmentId}",
     region: REGION,
   },
   async (event: FirestoreEvent<Change<QueryDocumentSnapshot> | undefined>) => {
@@ -113,73 +85,31 @@ export const onBookingUpdate = onDocumentUpdated(
     const afterData = event.data?.after.data();
 
     if (!beforeData || !afterData) {
-      logger.warn(
-        `Dados de agendamento ausentes no evento de atualização para ${event.params.bookingId}.`
-      );
+      logger.warn(`Dados ausentes no evento de atualização para ${event.params.appointmentId}.`);
       return;
     }
 
-    // Se não houve mudança relevante, não faz nada.
+    // Só faz algo se o status do agendamento mudou
     if (beforeData.status === afterData.status) {
-      logger.info(
-        `Status do agendamento ${event.params.bookingId} não mudou. Nenhuma ação necessária.`
-      );
       return;
     }
 
-    const { providerId, clientId, clientName, serviceName, date, time } = afterData;
+    // 4. CORREÇÃO: Usando os nomes de campos da interface Appointment
+    const {
+      serviceProviderId,
+      clientName,
+      serviceName,
+      date,
+      startTime,
+    } = afterData;
 
-    // --- LÓGICA DE NOTIFICAÇÃO DE CANCELAMENTO ---
+    // Envia notificação de cancelamento para o prestador de serviço
     if (afterData.status === "cancelled") {
-        const notificationTitle = "Agendamento Cancelado";
-        const notificationBody = `O agendamento de ${clientName} para ${serviceName} em ${date} às ${time} foi cancelado.`;
-        await sendNotification(providerId, notificationTitle, notificationBody);
-    }
-
-    // --- Atualiza o perfil do prestador ---
-    if (providerId) {
-      const providerRef = db.collection("users").doc(providerId);
-      const providerSnap = await providerRef.get();
-      if (providerSnap.exists) {
-        const providerData = providerSnap.data();
-        const existingBookings = providerData?.bookings || [];
-
-        const updatedBookings = existingBookings.map((booking: any) => {
-          if (booking.id === event.params.bookingId) {
-            return { ...booking, ...afterData };
-          }
-          return booking;
-        });
-
-        await providerRef.update({ bookings: updatedBookings });
-        logger.info(
-          `Perfil do prestador ${providerId} atualizado para o agendamento ${event.params.bookingId}.`
-        );
-      }
-    }
-
-    // --- Atualiza o perfil do cliente ---
-    if (clientId) {
-      const clientRef = db.collection("users").doc(clientId);
-      const clientSnap = await clientRef.get();
-      if (clientSnap.exists) {
-        const clientData = clientSnap.data();
-        const existingAppointments = clientData?.myAppointments || [];
-
-        const updatedAppointments = existingAppointments.map(
-          (appointment: any) => {
-            if (appointment.id === event.params.bookingId) {
-              return { ...appointment, ...afterData };
-            }
-            return appointment;
-          }
-        );
-
-        await clientRef.update({ myAppointments: updatedAppointments });
-        logger.info(
-          `Perfil do cliente ${clientId} atualizado para o agendamento ${event.params.bookingId}.`
-        );
-      }
+      const notificationTitle = "Agendamento Cancelado";
+      const notificationBody = `O agendamento de ${clientName} ("${serviceName}") em ${date} às ${startTime} foi cancelado.`;
+      
+      logger.info(`Enviando notificação de cancelamento para: ${serviceProviderId}`);
+      await sendNotification(serviceProviderId, notificationTitle, notificationBody);
     }
   }
 );

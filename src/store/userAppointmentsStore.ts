@@ -9,11 +9,11 @@ import {
   orderBy,
 } from "firebase/firestore";
 import type { Appointment } from "../types";
-import { cancelBooking as cancelBookingInDb } from "../firebase/bookingService";
+// 1. CORREÇÃO: Importa a função com o nome correto.
+import { updateAppointmentStatus } from "../firebase/bookingService";
 
 /**
  * Interface para o estado dos agendamentos de um usuário.
- * Gerencia a lista de agendamentos, status de carregamento e erros.
  */
 interface UserAppointmentsState {
   bookings: Appointment[];
@@ -38,30 +38,28 @@ const useUserAppointmentsStore = create<UserAppointmentsState>((set, get) => ({
 
   /**
    * Cancela um agendamento com uma abordagem de atualização otimista.
-   * A UI é atualizada imediatamente para "cancelled", e a chamada ao banco de dados é feita em seguida.
-   * Em caso de falha, o estado da UI é revertido.
    */
   cancelBooking: async (bookingId: string) => {
     const currentBookings = get().bookings;
     const bookingToCancel = currentBookings.find((b) => b.id === bookingId);
 
     if (!bookingToCancel) {
-      console.warn("Tentativa de cancelar um agendamento que não está no estado local.");
+      console.warn("Agendamento não encontrado para cancelar.");
       return;
     }
     
-    // Atualização Otimista
-    const updatedBookings = currentBookings.map((b) =>
+    // Atualização Otimista: Muda o status na UI imediatamente.
+    const optimisticBookings = currentBookings.map((b) =>
       b.id === bookingId ? { ...b, status: "cancelled" as const } : b
     );
-    set({ bookings: updatedBookings });
+    set({ bookings: optimisticBookings });
 
     try {
-      // Chama o serviço para atualizar o Firestore
-      await cancelBookingInDb(bookingId);
+      // 2. CORREÇÃO: Chama a função correta do bookingService, passando o novo status.
+      await updateAppointmentStatus(bookingId, 'cancelled');
     } catch (error) {
       console.error("Falha ao cancelar o agendamento no Firestore:", error);
-      // Reverte a UI em caso de erro
+      // Reverte a UI em caso de erro.
       set({
         bookings: currentBookings,
         error: "Falha ao cancelar o agendamento. Tente novamente.",
@@ -71,33 +69,23 @@ const useUserAppointmentsStore = create<UserAppointmentsState>((set, get) => ({
 }));
 
 /**
- * Hook customizado para ouvir os agendamentos de um usuário em tempo real do Firestore.
- * @param userId - O ID do usuário para buscar os agendamentos.
- * @returns O estado dos agendamentos, incluindo a lista, status de carregamento, erros e a função de cancelamento.
+ * Hook customizado para ouvir os agendamentos de um usuário em tempo real.
  */
 export const useUserAppointments = (userId?: string) => {
-  const {
-    bookings,
-    loading,
-    error,
-    cancelBooking,
-    setBookings,
-    setLoading,
-    setError,
-  } = useUserAppointmentsStore();
+  const store = useUserAppointmentsStore();
 
   useEffect(() => {
     if (!userId) {
-      setLoading(false);
-      setBookings([]);
+      store.setLoading(false);
+      store.setBookings([]);
       return;
     }
 
-    setLoading(true);
+    store.setLoading(true);
     const q = query(
-      collection(db, "bookings"),
-      where("userId", "==", userId),
-      orderBy("startTime", "desc")
+      collection(db, "appointments"), // CORREÇÃO: A coleção correta é 'appointments'
+      where("clientId", "==", userId),
+      orderBy("date", "desc")
     );
 
     const unsubscribe = onSnapshot(
@@ -107,19 +95,16 @@ export const useUserAppointments = (userId?: string) => {
           id: doc.id,
           ...doc.data(),
         })) as Appointment[];
-        setBookings(userAppointments);
+        store.setBookings(userAppointments);
       },
       (err) => {
         console.error("Erro no listener de agendamentos: ", err);
-        setError("Não foi possível carregar os agendamentos.");
+        store.setError("Não foi possível carregar os agendamentos.");
       }
     );
 
-    // Limpa o listener quando o componente é desmontado ou o userId muda
     return () => unsubscribe();
-  }, [userId, setBookings, setLoading, setError]);
+  }, [userId, store.setBookings, store.setLoading, store.setError]);
 
-  return { bookings, loading, error, cancelBooking };
+  return store;
 };
-
-export default useUserAppointmentsStore;

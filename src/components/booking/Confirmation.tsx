@@ -52,20 +52,19 @@ const Confirmation = ({
     }
     setIsLoading(true);
     try {
-      // ✨ CORREÇÃO AQUI: Adicione a definição da variável providerName ✨
       const providerName =
         serviceProvider.companyName ||
         serviceProvider.displayName ||
         "Estabelecimento";
 
-      // Seu objeto appointmentData agora encontrará a variável providerName
+      // ✅ CORREÇÃO AQUI: Renomeie 'userId' para 'clientId'
       const appointmentData = {
-        userId: userProfile.uid,
+        clientId: userProfile.uid, // Alterado de userId para clientId
         clientName: userProfile.name || userProfile.email || "Cliente",
         clientPhotoURL: userProfile.photoURL || null,
 
         serviceProviderId: serviceProvider.uid,
-        serviceProviderName: providerName, // Agora esta linha funciona!
+        serviceProviderName: providerName,
         serviceProviderPhotoURL: serviceProvider.photoURL || null,
 
         professionalId: selectedProfessional?.id || "any",
@@ -74,7 +73,6 @@ const Confirmation = ({
         serviceId: selectedServices[0]?.id || "",
         serviceName: selectedServices.map((s) => s.name).join(", "),
 
-        // Passa o objeto Date, como ajustamos anteriormente
         date: selectedDate,
         startTime: selectedTime,
         duration: totalDuration,
@@ -85,12 +83,9 @@ const Confirmation = ({
 
       showToast("Agendamento confirmado com sucesso!", "success");
 
-      // ✨ 3. Invalide as queries para forçar a atualização automática ✨
-      // Invalida a busca de agendamentos do cliente
       queryClient.invalidateQueries({
         queryKey: ["appointments", userProfile.uid],
       });
-      // Invalida a busca de agendamentos do prestador (para a outra tela)
       queryClient.invalidateQueries({
         queryKey: ["appointments", serviceProvider.uid],
       });
@@ -98,7 +93,11 @@ const Confirmation = ({
       onBookingConfirmed();
     } catch (error) {
       console.error("Erro ao confirmar agendamento:", error);
-      showToast("Não foi possível confirmar o agendamento.", "error");
+      // O erro exibido aqui vem da exceção lançada em bookingService.ts
+      showToast(
+        "Não foi possível confirmar o agendamento. Verifique o console para detalhes.",
+        "error"
+      );
     } finally {
       setIsLoading(false);
     }

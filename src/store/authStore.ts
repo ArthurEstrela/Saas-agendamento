@@ -94,28 +94,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   checkAuth: () => {
     set({ isLoading: true });
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        if (user) {
+      if (user) {
+        try {
           const userDocRef = doc(db, "users", user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
-            const profile = userDoc.data() as UserProfile;
-            set({ user, userProfile: profile, isLoading: false, error: null });
-            get().fetchUserAppointments(user.uid); // <-- CHAME A FUNÇÃO AQUI
+            set({
+              user,
+              userProfile: userDoc.data() as UserProfile,
+              isLoading: false,
+              error: null,
+            });
           } else {
-            set({ user, userProfile: null, isLoading: false, error: null });
+            // Caso raro: usuário autenticado no Firebase Auth mas sem perfil no Firestore.
+            set({
+              user,
+              userProfile: null,
+              isLoading: false,
+              error: "Perfil de usuário não encontrado.",
+            });
           }
-        } else {
-          // Se não há usuário, limpe tudo
-          get().logout();
+        } catch (err) {
+          console.error("Erro ao buscar perfil do usuário:", err);
+          set({
+            isLoading: false,
+            error: "Falha ao carregar dados do perfil.",
+          });
         }
-      } catch (err: any) {
-        set({
-          user: null,
-          userProfile: null,
-          isLoading: false,
-          error: err.message,
-        });
+      } else {
+        // Usuário deslogado, limpa o estado.
+        set({ user: null, userProfile: null, isLoading: false, error: null });
       }
     });
     return unsubscribe;

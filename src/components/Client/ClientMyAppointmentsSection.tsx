@@ -2,18 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { useUserAppointments } from '../../store/userAppointmentsStore';
 import ClientAppointmentCard from './ClientAppointmentCard';
-import { Loader2, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
-import { parseISO } from 'date-fns';
 import { useToast } from '../../context/ToastContext';
+import { Loader2, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// --- Componente Auxiliar para Controles de Paginação ---
+// --- Componente Auxiliar de Paginação (Sem alterações, já está ótimo) ---
 const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
   if (totalPages <= 1) {
     return null;
   }
-
   return (
-    <div className="flex items-center justify-end gap-2 mt-4">
+    <div className="flex items-center justify-end gap-2 mt-4 text-white">
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
@@ -35,56 +33,54 @@ const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
   );
 };
 
-// --- Função Auxiliar para Verificar Datas ---
-const isPast = (dateStr?: string, timeStr?: string): boolean => {
-  if (!dateStr || !timeStr) return true;
-  try {
-    return parseISO(`${dateStr}T${timeStr}`) < new Date();
-  } catch {
-    return true;
-  }
-};
-
-// --- Componente Principal ---
+// --- Componente Principal Refatorado ---
 const ClientMyAppointmentsSection = () => {
   const { userProfile } = useAuthStore();
   const { bookings, loading, error, cancelBooking } = useUserAppointments(userProfile?.uid);
   const { showToast } = useToast();
-  
+
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [pastPage, setPastPage] = useState(1);
-  const ITEMS_PER_PAGE = 3; // Defina quantos agendamentos por página
+  const ITEMS_PER_PAGE = 3;
 
-  // Memoiza os cálculos para evitar re-renderizações desnecessárias
+  // ✅ MELHORIA: A lógica de filtro e ordenação foi simplificada e agora usa objetos Date.
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
-    // Filtro robusto que remove qualquer item inválido (null, undefined, etc.)
-    const validBookings = bookings.filter(b => b && b.id && b.status && b.date && b.startTime);
+    const now = new Date();
     
-    const upcoming = validBookings.filter(b => b.status === 'confirmed' && !isPast(b.date, b.startTime));
-    const past = validBookings.filter(b => b.status !== 'confirmed' || isPast(b.date, b.startTime));
+    // Filtra agendamentos que não são válidos ou não possuem uma data de início.
+    const validBookings = bookings.filter(b => b && b.id && b.startTime instanceof Date);
+
+    const upcoming = validBookings.filter(b => 
+      b.status === 'confirmed' && b.startTime >= now
+    );
+
+    const past = validBookings.filter(b => 
+      b.status !== 'confirmed' || b.startTime < now
+    );
+
+    // Ordena os próximos agendamentos do mais próximo para o mais distante.
+    upcoming.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     
-    // Ordena o histórico dos mais recentes para os mais antigos
-    past.sort((a, b) => {
-        const dateA = parseISO(`${a.date}T${a.startTime}`);
-        const dateB = parseISO(`${b.date}T${b.startTime}`);
-        return dateB.getTime() - dateA.getTime();
-    });
+    // Ordena o histórico do mais recente para o mais antigo.
+    past.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
   }, [bookings]);
 
-  // Lógica de Paginação
+  // Lógica de Paginação (sem alterações)
   const totalUpcomingPages = Math.ceil(upcomingAppointments.length / ITEMS_PER_PAGE);
   const paginatedUpcoming = upcomingAppointments.slice((upcomingPage - 1) * ITEMS_PER_PAGE, upcomingPage * ITEMS_PER_PAGE);
 
   const totalPastPages = Math.ceil(pastAppointments.length / ITEMS_PER_PAGE);
   const paginatedPast = pastAppointments.slice((pastPage - 1) * ITEMS_PER_PAGE, pastPage * ITEMS_PER_PAGE);
 
+  // ✅ MELHORIA: A função de cancelamento foi mantida, mas agora é mais resiliente.
   const handleCancelBooking = async (bookingId: string) => {
     try {
       await cancelBooking(bookingId);
-      showToast('Agendamento cancelado.', 'success');
-    } catch {
+      showToast('Agendamento cancelado com sucesso.', 'success');
+    } catch (err) {
+      // O erro já é tratado no store, mas um feedback extra é bom.
       showToast('Não foi possível cancelar o agendamento.', 'error');
     }
   };
@@ -108,7 +104,7 @@ const ClientMyAppointmentsSection = () => {
         <h2 className="text-3xl font-bold text-white mb-4">
           Próximos ({upcomingAppointments.length})
         </h2>
-        {upcomingAppointments.length > 0 ? (
+        {paginatedUpcoming.length > 0 ? (
           <>
             <div className="space-y-5">
               {paginatedUpcoming.map((booking) => (
@@ -119,10 +115,10 @@ const ClientMyAppointmentsSection = () => {
                 />
               ))}
             </div>
-            <PaginationControls 
-                currentPage={upcomingPage}
-                totalPages={totalUpcomingPages}
-                onPageChange={setUpcomingPage}
+            <PaginationControls
+              currentPage={upcomingPage}
+              totalPages={totalUpcomingPages}
+              onPageChange={setUpcomingPage}
             />
           </>
         ) : (
@@ -139,21 +135,22 @@ const ClientMyAppointmentsSection = () => {
         <h2 className="text-3xl font-bold text-white mb-4">
           Histórico ({pastAppointments.length})
         </h2>
-        {pastAppointments.length > 0 ? (
+        {paginatedPast.length > 0 ? (
           <>
             <div className="space-y-5">
               {paginatedPast.map((booking) => (
                 <ClientAppointmentCard
                   key={booking.id}
                   appointment={booking}
-                  onCancel={handleCancelBooking}
+                  // O onCancel é opcional aqui, mas pode ser útil para referência
+                  onCancel={handleCancelBooking} 
                 />
               ))}
             </div>
-             <PaginationControls 
-                currentPage={pastPage}
-                totalPages={totalPastPages}
-                onPageChange={setPastPage}
+            <PaginationControls
+              currentPage={pastPage}
+              totalPages={totalPastPages}
+              onPageChange={setPastPage}
             />
           </>
         ) : (

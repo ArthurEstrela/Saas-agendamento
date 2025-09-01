@@ -1,17 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { useUserAppointments } from '../../store/userAppointmentsStore';
 import ClientAppointmentCard from './ClientAppointmentCard';
-import { useToast } from '../../context/ToastContext';
-import { Loader2, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, CalendarPlus, ChevronLeft, ChevronRight, CalendarClock, History } from 'lucide-react';
 
-// --- Componente Auxiliar de Paginação (Sem alterações, já está ótimo) ---
+// --- Componentes Auxiliares ---
 const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
-  if (totalPages <= 1) {
-    return null;
-  }
+  if (totalPages <= 1) return null;
   return (
-    <div className="flex items-center justify-end gap-2 mt-4 text-white">
+    <div className="flex items-center justify-center sm:justify-end gap-2 mt-6 text-white">
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
@@ -33,134 +30,88 @@ const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
   );
 };
 
-// --- Componente Principal Refatorado ---
+const EmptyState = ({ icon: Icon, title, message }) => (
+  <div className="text-center text-gray-400 py-16 px-6 bg-gray-800/30 rounded-lg border-2 border-dashed border-gray-700">
+    <Icon size={48} className="mx-auto text-gray-600 mb-4" />
+    <p className="font-bold text-lg text-white">{title}</p>
+    <p className="text-sm mt-1">{message}</p>
+  </div>
+);
+
+const TabButton = ({ icon: Icon, label, count, isActive, onClick }) => (
+    <button 
+      onClick={onClick} 
+      className={`flex items-center gap-2 px-4 py-3 font-semibold transition-colors duration-200 -mb-px border-b-2 ${
+        isActive 
+          ? 'text-[#daa520] border-[#daa520]' 
+          : 'text-gray-400 border-transparent hover:text-white'
+      }`}
+    >
+        <Icon size={18} />
+        <span>{label}</span>
+        <span className={`px-2 py-0.5 text-xs rounded-full ${
+          isActive ? 'bg-[#daa520]/20 text-[#daa520]' : 'bg-gray-700 text-gray-300'
+        }`}>{count}</span>
+    </button>
+);
+
+// --- Componente Principal ---
 const ClientMyAppointmentsSection = () => {
   const { userProfile } = useAuthStore();
-  const { bookings, loading, error, cancelBooking } = useUserAppointments(userProfile?.uid);
-  const { showToast } = useToast();
-
-  const [upcomingPage, setUpcomingPage] = useState(1);
-  const [pastPage, setPastPage] = useState(1);
+  const { upcomingBookings, pastBookings, loading, error, cancelBooking } = useUserAppointments(userProfile?.uid);
+  
+  const [activeTab, setActiveTab] = useState('upcoming');
+  const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 3;
 
-  // ✅ MELHORIA: A lógica de filtro e ordenação foi simplificada e agora usa objetos Date.
-  const { upcomingAppointments, pastAppointments } = useMemo(() => {
-    const now = new Date();
-    
-    // Filtra agendamentos que não são válidos ou não possuem uma data de início.
-    const validBookings = bookings.filter(b => b && b.id && b.startTime instanceof Date);
-
-    const upcoming = validBookings.filter(b => 
-      b.status === 'confirmed' && b.startTime >= now
-    );
-
-    const past = validBookings.filter(b => 
-      b.status !== 'confirmed' || b.startTime < now
-    );
-
-    // Ordena os próximos agendamentos do mais próximo para o mais distante.
-    upcoming.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-    
-    // Ordena o histórico do mais recente para o mais antigo.
-    past.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-
-    return { upcomingAppointments: upcoming, pastAppointments: past };
-  }, [bookings]);
-
-  // Lógica de Paginação (sem alterações)
-  const totalUpcomingPages = Math.ceil(upcomingAppointments.length / ITEMS_PER_PAGE);
-  const paginatedUpcoming = upcomingAppointments.slice((upcomingPage - 1) * ITEMS_PER_PAGE, upcomingPage * ITEMS_PER_PAGE);
-
-  const totalPastPages = Math.ceil(pastAppointments.length / ITEMS_PER_PAGE);
-  const paginatedPast = pastAppointments.slice((pastPage - 1) * ITEMS_PER_PAGE, pastPage * ITEMS_PER_PAGE);
-
-  // ✅ MELHORIA: A função de cancelamento foi mantida, mas agora é mais resiliente.
-  const handleCancelBooking = async (bookingId: string) => {
-    try {
-      await cancelBooking(bookingId);
-      showToast('Agendamento cancelado com sucesso.', 'success');
-    } catch (err) {
-      // O erro já é tratado no store, mas um feedback extra é bom.
-      showToast('Não foi possível cancelar o agendamento.', 'error');
-    }
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setCurrentPage(1); // Reseta a página ao trocar de aba
   };
 
+  // Renderiza os estados de carregamento e erro primeiro para evitar crashes
   if (loading) {
-    return (
-      <div className="flex justify-center items-center p-20">
-        <Loader2 className="animate-spin text-[#daa520]" size={40} />
-      </div>
-    );
+    return <div className="flex justify-center items-center p-20"><Loader2 className="animate-spin text-[#daa520]" size={40} /></div>;
   }
-
   if (error) {
     return <div className="text-center text-red-400 p-10">{error}</div>;
   }
 
-  return (
-    <div className="p-4 sm:p-6 space-y-10">
-      {/* Seção de Próximos Agendamentos */}
-      <section>
-        <h2 className="text-3xl font-bold text-white mb-4">
-          Próximos ({upcomingAppointments.length})
-        </h2>
-        {paginatedUpcoming.length > 0 ? (
-          <>
-            <div className="space-y-5">
-              {paginatedUpcoming.map((booking) => (
-                <ClientAppointmentCard
-                  key={booking.id}
-                  appointment={booking}
-                  onCancel={handleCancelBooking}
-                />
-              ))}
-            </div>
-            <PaginationControls
-              currentPage={upcomingPage}
-              totalPages={totalUpcomingPages}
-              onPageChange={setUpcomingPage}
-            />
-          </>
-        ) : (
-          <div className="text-center text-gray-400 py-12 bg-black/20 rounded-lg border border-dashed border-gray-700">
-            <CalendarPlus size={40} className="mx-auto text-gray-600 mb-4" />
-            <p className="font-semibold text-white">Nenhum agendamento futuro</p>
-            <p className="text-sm mt-1">Que tal agendar um novo serviço?</p>
-          </div>
-        )}
-      </section>
+  // A partir daqui, podemos assumir que os dados estão prontos ou são arrays vazios.
+  const currentBookings = activeTab === 'upcoming' ? (upcomingBookings || []) : (pastBookings || []);
+  const totalPages = Math.ceil(currentBookings.length / ITEMS_PER_PAGE);
+  const paginatedBookings = currentBookings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-      {/* Seção de Histórico de Agendamentos */}
-      <section>
-        <h2 className="text-3xl font-bold text-white mb-4">
-          Histórico ({pastAppointments.length})
-        </h2>
-        {paginatedPast.length > 0 ? (
+  return (
+    <div className="p-4 sm:p-6 space-y-6">
+      {/* Navegação por Abas */}
+      <div className="flex border-b border-gray-700">
+        <TabButton icon={CalendarClock} label="Próximos" count={upcomingBookings?.length || 0} isActive={activeTab === 'upcoming'} onClick={() => handleTabChange('upcoming')} />
+        <TabButton icon={History} label="Histórico" count={pastBookings?.length || 0} isActive={activeTab === 'past'} onClick={() => handleTabChange('past')} />
+      </div>
+
+      {/* Conteúdo das Abas */}
+      <div className="transition-opacity duration-300">
+        {paginatedBookings.length > 0 ? (
           <>
             <div className="space-y-5">
-              {paginatedPast.map((booking) => (
-                <ClientAppointmentCard
-                  key={booking.id}
-                  appointment={booking}
-                  // O onCancel é opcional aqui, mas pode ser útil para referência
-                  onCancel={handleCancelBooking} 
-                />
+              {paginatedBookings.map((booking) => (
+                <ClientAppointmentCard key={booking.id} appointment={booking} onCancel={cancelBooking} />
               ))}
             </div>
-            <PaginationControls
-              currentPage={pastPage}
-              totalPages={totalPastPages}
-              onPageChange={setPastPage}
-            />
+            <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
           </>
         ) : (
-          <div className="text-center text-gray-400 py-12 bg-black/20 rounded-lg border border-dashed border-gray-700">
-            <p>Seu histórico de agendamentos aparecerá aqui.</p>
-          </div>
+          activeTab === 'upcoming' ? (
+            <EmptyState icon={CalendarPlus} title="Nenhum agendamento futuro" message="Quando você agendar um serviço, ele aparecerá aqui." />
+          ) : (
+            <EmptyState icon={History} title="Nenhum histórico encontrado" message="Seus agendamentos anteriores serão listados aqui." />
+          )
         )}
-      </section>
+      </div>
     </div>
   );
 };
 
 export default ClientMyAppointmentsSection;
+

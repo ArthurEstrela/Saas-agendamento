@@ -1,4 +1,4 @@
-import { db } from './config';
+import { db } from "./config";
 import {
   collection,
   addDoc,
@@ -11,38 +11,51 @@ import {
   writeBatch,
   orderBy,
   limit,
-} from 'firebase/firestore';
-import type { Appointment, Review } from '../types';
-import { format, parse, add } from 'date-fns';
-
+} from "firebase/firestore";
+import type { Appointment, Review } from "../types";
+import { format, parse, add } from "date-fns";
 
 /**
  * Cria um novo agendamento no Firestore.
  * @param appointmentData Os dados do agendamento, sem o 'id'.
  * @returns O ID do documento recém-criado.
  */
-export const createAppointment = async (appointmentData: AppointmentData): Promise<string> => {
+export const createAppointment = async (
+  appointmentData: AppointmentData
+): Promise<string> => {
   try {
-    const { date, startTime: timeStr, duration, ...restOfData } = appointmentData;
+    const {
+      date,
+      startTime: timeStr,
+      duration,
+      ...restOfData
+    } = appointmentData;
 
     // Converte a string de data e hora para um objeto Date do JavaScript
-    const startTime = parse(`${format(date, 'yyyy-MM-dd')} ${timeStr}`, 'yyyy-MM-dd HH:mm', new Date());
+    const startTime = parse(
+      `${format(date, "yyyy-MM-dd")} ${timeStr}`,
+      "yyyy-MM-dd HH:mm",
+      new Date()
+    );
     const endTime = add(startTime, { minutes: duration });
 
     const newAppointment = {
       ...restOfData,
-      date: format(date, 'yyyy-MM-dd'),
       startTime: Timestamp.fromDate(startTime),
       endTime: Timestamp.fromDate(endTime),
-      status: 'scheduled', // Define o status inicial
-      createdAt: Timestamp.now(), // Adiciona um campo de data de criação
+      // ✅ CORREÇÃO: O status inicial agora é 'pending' para aguardar a confirmação do prestador.
+      status: "pending",
+      createdAt: Timestamp.now(),
+      hasBeenReviewed: false, // Garante que o campo exista na criação
     };
 
-    const docRef = await addDoc(collection(db, 'appointments'), newAppointment);
+    // Remove o campo 'date' que era uma string, já que startTime é a fonte da verdade.
+    delete (newAppointment as any).date;
+
+    const docRef = await addDoc(collection(db, "appointments"), newAppointment);
     return docRef.id;
   } catch (error) {
     console.error("Erro ao criar agendamento: ", error);
-    // Lança um erro mais específico para a interface do usuário capturar
     throw new Error("Não foi possível realizar o agendamento.");
   }
 };
@@ -52,46 +65,53 @@ export const createAppointment = async (appointmentData: AppointmentData): Promi
  * @param clientId O UID do cliente.
  * @returns Uma promessa que resolve para um array de agendamentos.
  */
-export const getClientAppointments = async (clientId: string): Promise<Appointment[]> => {
+export const getClientAppointments = async (
+  clientId: string
+): Promise<Appointment[]> => {
   try {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const appointmentsCol = collection(db, 'appointments');
+    const now = Timestamp.now();
+    const appointmentsCol = collection(db, "appointments");
     const q = query(
       appointmentsCol,
-      where('clientId', '==', clientId),
-      where('date', '>=', today),
-      orderBy('date', 'asc'),
-      orderBy('startTime', 'asc')
+      where("clientId", "==", clientId),
+      where("startTime", ">=", now),
+      orderBy("startTime", "asc")
     );
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Appointment[];
   } catch (error) {
-    console.error('Erro ao buscar agendamentos do cliente: ', error);
-    throw new Error('Não foi possível buscar os agendamentos.');
+    console.error("Erro ao buscar agendamentos do cliente: ", error);
+    throw new Error("Não foi possível buscar os agendamentos.");
   }
 };
-
 /**
  * Busca todos os agendamentos de um prestador de serviço.
  * @param serviceProviderId O UID do prestador de serviço.
  * @returns Uma promessa que resolve para um array de agendamentos.
  */
-export const getServiceProviderAppointments = async (serviceProviderId: string): Promise<Appointment[]> => {
-    try {
-        const appointmentsCol = collection(db, 'appointments');
-        const q = query(
-            appointmentsCol,
-            where('serviceProviderId', '==', serviceProviderId),
-            orderBy('date', 'desc'), // Ordena dos mais recentes para os mais antigos
-            orderBy('startTime', 'asc')
-        );
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
-    } catch (error) {
-        console.error('Erro ao buscar agendamentos do prestador: ', error);
-        throw new Error('Não foi possível carregar a agenda.');
-    }
+export const getServiceProviderAppointments = async (
+  serviceProviderId: string
+): Promise<Appointment[]> => {
+  try {
+    const appointmentsCol = collection(db, "appointments");
+    const q = query(
+      appointmentsCol,
+      where("serviceProviderId", "==", serviceProviderId),
+      orderBy("startTime", "desc") // Ordena dos mais recentes para os mais antigos
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Appointment[];
+  } catch (error) {
+    console.error("Erro ao buscar agendamentos do prestador: ", error);
+    throw new Error("Não foi possível carregar a agenda.");
+  }
 };
 
 /**
@@ -101,22 +121,36 @@ export const getServiceProviderAppointments = async (serviceProviderId: string):
  * @param date A data para a qual os agendamentos serão buscados.
  * @returns Uma promessa que resolve para um array de agendamentos.
  */
-export const getAppointmentsForDate = async (serviceProviderId: string, date: Date): Promise<Appointment[]> => {
+export const getAppointmentsForDate = async (
+  serviceProviderId: string,
+  date: Date
+): Promise<Appointment[]> => {
   try {
-    const dateString = format(date, 'yyyy-MM-dd');
-    const appointmentsCol = collection(db, 'appointments');
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const appointmentsCol = collection(db, "appointments");
     const q = query(
       appointmentsCol,
-      where('serviceProviderId', '==', serviceProviderId),
-      where('date', '==', dateString),
-      where('status', 'in', ['confirmed', 'pending'])
+      where("serviceProviderId", "==", serviceProviderId),
+      where("startTime", ">=", Timestamp.fromDate(startOfDay)),
+      where("startTime", "<=", Timestamp.fromDate(endOfDay)),
+      where("status", "in", ["confirmed", "pending"])
     );
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Appointment[];
   } catch (error) {
-    console.error(`Erro ao buscar agendamentos para a data ${format(date, 'yyyy-MM-dd')}:`, error);
-    return []; // Retorna um array vazio em caso de erro para não quebrar a UI
+    console.error(
+      `Erro ao buscar agendamentos para a data ${format(date, "yyyy-MM-dd")}:`,
+      error
+    );
+    return [];
   }
 };
 
@@ -126,18 +160,17 @@ export const getAppointmentsForDate = async (serviceProviderId: string, date: Da
  * @param status O novo status para o agendamento.
  * @param cancellationReason (Opcional) A razão do cancelamento.
  */
-export const updateAppointmentStatus = async (appointmentId: string, status: 'confirmed' | 'cancelled' | 'completed', cancellationReason?: string): Promise<void> => {
-    try {
-        const appointmentRef = doc(db, 'appointments', appointmentId);
-        const updateData: any = { status };
-        if (status === 'cancelled' && cancellationReason) {
-            updateData.cancellationReason = cancellationReason;
-        }
-        await updateDoc(appointmentRef, updateData);
-    } catch (error) {
-        console.error('Erro ao atualizar status do agendamento: ', error);
-        throw new Error('Não foi possível atualizar o agendamento.');
-    }
+export const updateAppointmentStatus = async (
+  appointmentId: string,
+  status: "confirmed" | "cancelled" | "completed" | "pending"
+): Promise<void> => {
+  try {
+    const appointmentRef = doc(db, "appointments", appointmentId);
+    await updateDoc(appointmentRef, { status });
+  } catch (error) {
+    console.error("Erro ao atualizar status do agendamento: ", error);
+    throw new Error("Não foi possível atualizar o agendamento.");
+  }
 };
 
 /**
@@ -145,28 +178,31 @@ export const updateAppointmentStatus = async (appointmentId: string, status: 'co
  * @param reviewData Os dados da avaliação.
  * @param appointmentId O ID do agendamento que está sendo avaliado.
  */
-export const createReviewForAppointment = async (reviewData: Omit<Review, 'id' | 'date'>, appointmentId: string): Promise<void> => {
-    const batch = writeBatch(db);
-    
-    // 1. Cria a referência para o novo documento de avaliação
-    const reviewRef = doc(collection(db, 'reviews'));
-    batch.set(reviewRef, {
-        ...reviewData,
-        id: reviewRef.id, // Salva o próprio ID no documento
-        date: format(new Date(), 'yyyy-MM-dd'),
-    });
+export const createReviewForAppointment = async (
+  reviewData: Omit<Review, "id" | "date">,
+  appointmentId: string
+): Promise<void> => {
+  const batch = writeBatch(db);
 
-    // 2. Cria a referência para o agendamento e o atualiza
-    const appointmentRef = doc(db, 'appointments', appointmentId);
-    batch.update(appointmentRef, { hasBeenReviewed: true });
+  // 1. Cria a referência para o novo documento de avaliação
+  const reviewRef = doc(collection(db, "reviews"));
+  batch.set(reviewRef, {
+    ...reviewData,
+    id: reviewRef.id, // Salva o próprio ID no documento
+    date: format(new Date(), "yyyy-MM-dd"),
+  });
 
-    try {
-        await batch.commit();
-        console.log('Avaliação criada e agendamento atualizado com sucesso!');
-    } catch (error) {
-        console.error('Erro ao criar avaliação: ', error);
-        throw new Error('Não foi possível enviar sua avaliação.');
-    }
+  // 2. Cria a referência para o agendamento e o atualiza
+  const appointmentRef = doc(db, "appointments", appointmentId);
+  batch.update(appointmentRef, { hasBeenReviewed: true });
+
+  try {
+    await batch.commit();
+    console.log("Avaliação criada e agendamento atualizado com sucesso!");
+  } catch (error) {
+    console.error("Erro ao criar avaliação: ", error);
+    throw new Error("Não foi possível enviar sua avaliação.");
+  }
 };
 
 /**
@@ -175,23 +211,26 @@ export const createReviewForAppointment = async (reviewData: Omit<Review, 'id' |
  * @param count O número de avaliações a serem buscadas (opcional).
  * @returns Uma promessa que resolve para um array de avaliações.
  */
-export const getReviewsForServiceProvider = async (serviceProviderId: string, count?: number): Promise<Review[]> => {
-    try {
-        const reviewsCol = collection(db, 'reviews');
-        const constraints = [
-            where('serviceProviderId', '==', serviceProviderId),
-            orderBy('date', 'desc')
-        ];
+export const getReviewsForServiceProvider = async (
+  serviceProviderId: string,
+  count?: number
+): Promise<Review[]> => {
+  try {
+    const reviewsCol = collection(db, "reviews");
+    const constraints = [
+      where("serviceProviderId", "==", serviceProviderId),
+      orderBy("date", "desc"),
+    ];
 
-        if (count) {
-            constraints.push(limit(count));
-        }
-
-        const q = query(reviewsCol, ...constraints);
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data()) as Review[];
-    } catch (error) {
-        console.error('Erro ao buscar avaliações: ', error);
-        throw new Error('Não foi possível carregar as avaliações.');
+    if (count) {
+      constraints.push(limit(count));
     }
+
+    const q = query(reviewsCol, ...constraints);
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => doc.data()) as Review[];
+  } catch (error) {
+    console.error("Erro ao buscar avaliações: ", error);
+    throw new Error("Não foi possível carregar as avaliações.");
+  }
 };

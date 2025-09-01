@@ -132,10 +132,14 @@ const ClientAppointmentCard = ({
             </h3>
             <span
               className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusChip(
-                appointment.status
+                typeof appointment.status === "object"
+                  ? String(appointment.status)
+                  : appointment.status
               )}`}
             >
-              {appointment.status}
+              {typeof appointment.status === "object"
+                ? String(appointment.status)
+                : appointment.status}
             </span>
           </div>
 

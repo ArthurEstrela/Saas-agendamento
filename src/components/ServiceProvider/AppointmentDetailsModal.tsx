@@ -1,132 +1,124 @@
-// src/components/ServiceProvider/AppointmentDetailsModal.tsx
 import React, { useState } from 'react';
-import { X, Clock, User, Scissors, DollarSign, Calendar, Edit, Trash2, Info, Check, Loader } from 'lucide-react';
-import type { Appointment, Professional } from '../../types';
-import { format, parseISO } from 'date-fns';
+import type { AppAppointment } from '../../store/providerAppointmentsStore';
+import { format, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { db } from '../../firebase/config';
-import { doc, updateDoc } from 'firebase/firestore';
+import { X, Calendar, Clock, User, Tag, Phone, DollarSign, Check, XCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { updateAppointmentStatus } from '../../firebase/bookingService';
+import { useToast } from '../../context/ToastContext';
 
-// --- Tipos e Constantes ---
-const statusConfig = {
-  pendente: { label: 'Pendente', color: 'bg-yellow-500/20 text-yellow-400' },
-  confirmado: { label: 'Confirmado', color: 'bg-green-500/20 text-green-400' },
-  concluido: { label: 'Concluído', color: 'bg-blue-500/20 text-blue-400' },
-  cancelado: { label: 'Cancelado', color: 'bg-red-500/20 text-red-400' },
-  nao_compareceu: { label: 'Não Compareceu', color: 'bg-gray-500/20 text-gray-400' },
-};
-
-interface ModalProps {
-  appointment: Appointment | null;
+interface AppointmentDetailsModalProps {
+  appointment: AppAppointment;
+  isOpen: boolean;
   onClose: () => void;
-  professionals: Professional[];
 }
 
-const AppointmentDetailsModal = ({ appointment, onClose, professionals }: ModalProps) => {
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
+const DetailItem = ({ icon: Icon, label, value }) => (
+  <div className="flex items-start gap-3">
+    <Icon className="text-[#daa520] mt-1 flex-shrink-0" size={18} />
+    <div>
+      <p className="text-sm text-gray-400">{label}</p>
+      <p className="font-semibold text-white">{value}</p>
+    </div>
+  </div>
+);
 
-  if (!appointment) return null;
+const ActionButton = ({ icon: Icon, label, onClick, className, isLoading = false }) => (
+  <button
+    onClick={onClick}
+    disabled={isLoading}
+    className={`w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-wait ${className}`}
+  >
+    {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Icon size={20} />}
+    <span>{label}</span>
+  </button>
+);
 
-  const professionalName = professionals.find(p => p.id === appointment.professionalId)?.name || 'Profissional não encontrado';
-  const status = statusConfig[appointment.status] || statusConfig.pendente;
+const AppointmentDetailsModal = ({ appointment, isOpen, onClose }: AppointmentDetailsModalProps) => {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { showToast } = useToast();
 
-  const handleStatusUpdate = async (newStatus: Appointment['status']) => {
-    if(newStatus === 'confirmado') setIsConfirming(true);
-    if(newStatus === 'cancelado') setIsCanceling(true);
+  if (!isOpen || !appointment) return null;
 
+  const handleStatusUpdate = async (newStatus: 'confirmed' | 'completed' | 'cancelled') => {
+    setIsUpdating(true);
     try {
-      const appointmentRef = doc(db, 'appointments', appointment.id);
-      await updateDoc(appointmentRef, { status: newStatus });
+      await updateAppointmentStatus(appointment.id, newStatus);
+      showToast(`Agendamento ${newStatus === 'confirmed' ? 'confirmado' : 'atualizado'}!`, 'success');
       onClose();
     } catch (error) {
-      console.error(`Erro ao atualizar status para ${newStatus}:`, error);
+      showToast('Erro ao atualizar o agendamento.', 'error');
+      console.error(error);
     } finally {
-      setIsConfirming(false);
-      setIsCanceling(false);
+      setIsUpdating(false);
     }
   };
-
-  const handleModalContentClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
   
+  const canBeCompleted = appointment.status === 'confirmed' && isPast(appointment.startTime!);
+
   return (
-    <div 
-      className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-700"
-        onClick={handleModalContentClick}
-      >
-        <div className="flex justify-between items-center p-5 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Detalhes do Agendamento</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={24} />
-          </button>
-        </div>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fade-in">
+      <div className="bg-gray-800 rounded-2xl w-full max-w-md m-4 border border-gray-700 shadow-2xl relative animate-slide-in-up">
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors">
+          <X size={24} />
+        </button>
 
-        <div className="p-6 space-y-5">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-amber-400">{appointment.clientName}</h3>
-            <span className={`px-3 py-1 text-sm font-semibold rounded-full ${status.color}`}>{status.label}</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <InfoItem icon={Calendar} label="Data" value={format(parseISO(appointment.date), "dd 'de' MMMM, yyyy", { locale: ptBR })} />
-            <InfoItem icon={Clock} label="Horário" value={appointment.startTime} />
-            <InfoItem icon={Scissors} label="Serviço" value={appointment.serviceName} />
-            <InfoItem icon={DollarSign} label="Valor" value={`R$ ${appointment.price.toFixed(2).replace('.', ',')}`} />
-            <InfoItem icon={User} label="Profissional" value={professionalName} />
+        <div className="p-8">
+          <div className="flex items-center gap-4 mb-6">
+            <img
+              src={appointment.clientPhotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(appointment.clientName)}&background=2d3748&color=ffffff`}
+              alt={appointment.clientName}
+              className="h-16 w-16 rounded-full object-cover border-2 border-[#daa520]"
+            />
+            <div>
+              <h2 className="text-2xl font-bold text-white">{appointment.clientName}</h2>
+              <p className="text-gray-300 capitalize">{appointment.status}</p>
+            </div>
           </div>
           
-          {appointment.notes && (
-            <div>
-              <h4 className="font-semibold text-gray-300 mb-2 flex items-center gap-2"><Info size={16}/> Observações</h4>
-              <p className="text-gray-400 bg-gray-900/50 p-3 rounded-lg text-sm">{appointment.notes}</p>
+          <div className="space-y-4 border-t border-gray-700 pt-6">
+            <DetailItem icon={Tag} label="Serviço" value={appointment.serviceName} />
+            <DetailItem icon={Calendar} label="Data" value={format(appointment.startTime!, "eeee, dd 'de' MMMM", { locale: ptBR })} />
+            <DetailItem icon={Clock} label="Horário" value={`${format(appointment.startTime!, 'HH:mm')} - ${format(appointment.endTime!, 'HH:mm')}`} />
+            <DetailItem icon={User} label="Profissional" value={appointment.professionalName} />
+            <DetailItem icon={DollarSign} label="Valor" value={`R$ ${appointment.price.toFixed(2)}`} />
+            <DetailItem icon={Phone} label="Contato" value={appointment.clientPhone || 'Não informado'} />
+          </div>
+        </div>
+
+        {/* Botões de Ação Condicionais */}
+        <div className="bg-gray-900/50 p-4 rounded-b-2xl">
+          {appointment.status === 'pending' && (
+            <div className="flex gap-3">
+              <ActionButton 
+                icon={XCircle} 
+                label="Recusar" 
+                onClick={() => handleStatusUpdate('cancelled')}
+                isLoading={isUpdating}
+                className="bg-red-600/20 text-red-400 hover:bg-red-600/40"
+              />
+              <ActionButton 
+                icon={Check} 
+                label="Confirmar" 
+                onClick={() => handleStatusUpdate('confirmed')}
+                isLoading={isUpdating}
+                className="bg-green-600 text-white hover:bg-green-500"
+              />
             </div>
           )}
-        </div>
-        
-        <div className="flex justify-end items-center p-5 border-t border-gray-700 gap-3">
-          <button 
-            onClick={() => handleStatusUpdate('cancelado')}
-            disabled={isCanceling || appointment.status === 'cancelado' || appointment.status === 'concluido'}
-            className="px-4 py-2 text-sm font-semibold bg-red-500/80 text-white rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isCanceling ? <Loader size={16} className="animate-spin" /> : <Trash2 size={16} />}
-            Cancelar
-          </button>
-          
-          {appointment.status === 'pendente' && (
-            <button 
-              onClick={() => handleStatusUpdate('confirmado')}
-              disabled={isConfirming}
-              className="px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isConfirming ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
-              Confirmar
-            </button>
-          )}
 
-          <button className="px-4 py-2 text-sm font-semibold bg-amber-500 text-black rounded-lg hover:bg-amber-400 transition-colors flex items-center gap-2">
-            <Edit size={16} /> Editar
-          </button>
+          {canBeCompleted && (
+            <ActionButton 
+              icon={CheckCircle} 
+              label="Marcar como Concluído" 
+              onClick={() => handleStatusUpdate('completed')}
+              isLoading={isUpdating}
+              className="bg-blue-600 text-white hover:bg-blue-500"
+            />
+          )}
         </div>
       </div>
     </div>
   );
 };
-
-const InfoItem = ({ icon: Icon, label, value }) => (
-  <div className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
-    <Icon className="text-amber-400 mt-1 flex-shrink-0" size={18} />
-    <div>
-      <p className="text-gray-400 text-xs">{label}</p>
-      <p className="font-semibold text-white">{value}</p>
-    </div>
-  </div>
-);
 
 export default AppointmentDetailsModal;

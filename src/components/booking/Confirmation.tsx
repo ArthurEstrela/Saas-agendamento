@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../context/ToastContext";
 import { format, parse, add } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -30,6 +31,7 @@ const Confirmation = ({
   const { userProfile } = useAuthStore();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const { totalPrice, totalDuration } = useMemo(() => {
     const price = selectedServices.reduce(
@@ -50,22 +52,20 @@ const Confirmation = ({
     }
     setIsLoading(true);
     try {
-      const startTimeObject = parse(selectedTime, "HH:mm", selectedDate);
-      const endTimeObject = add(startTimeObject, { minutes: totalDuration });
+      // ✨ CORREÇÃO AQUI: Adicione a definição da variável providerName ✨
       const providerName =
         serviceProvider.companyName ||
         serviceProvider.displayName ||
         "Estabelecimento";
 
+      // Seu objeto appointmentData agora encontrará a variável providerName
       const appointmentData = {
-        // --- CORREÇÃO AQUI ---
-        // Garante que o nome e a foto do cliente sejam salvos corretamente
-        clientId: userProfile.uid,
-        clientName: userProfile.name || userProfile.email || "Cliente", // Prioriza o nome salvo no perfil
-        clientPhotoURL: userProfile.photoURL || null, // Salva a foto do cliente
+        userId: userProfile.uid,
+        clientName: userProfile.name || userProfile.email || "Cliente",
+        clientPhotoURL: userProfile.photoURL || null,
 
         serviceProviderId: serviceProvider.uid,
-        serviceProviderName: providerName,
+        serviceProviderName: providerName, // Agora esta linha funciona!
         serviceProviderPhotoURL: serviceProvider.photoURL || null,
 
         professionalId: selectedProfessional?.id || "any",
@@ -74,17 +74,27 @@ const Confirmation = ({
         serviceId: selectedServices[0]?.id || "",
         serviceName: selectedServices.map((s) => s.name).join(", "),
 
-        date: format(selectedDate, "yyyy-MM-dd"),
+        // Passa o objeto Date, como ajustamos anteriormente
+        date: selectedDate,
         startTime: selectedTime,
-        endTime: format(endTimeObject, "HH:mm"),
-
-        price: totalPrice,
         duration: totalDuration,
+        price: totalPrice,
       };
 
-      await createAppointment(appointmentData);
+      await createAppointment(appointmentData as any);
 
       showToast("Agendamento confirmado com sucesso!", "success");
+
+      // ✨ 3. Invalide as queries para forçar a atualização automática ✨
+      // Invalida a busca de agendamentos do cliente
+      queryClient.invalidateQueries({
+        queryKey: ["appointments", userProfile.uid],
+      });
+      // Invalida a busca de agendamentos do prestador (para a outra tela)
+      queryClient.invalidateQueries({
+        queryKey: ["appointments", serviceProvider.uid],
+      });
+
       onBookingConfirmed();
     } catch (error) {
       console.error("Erro ao confirmar agendamento:", error);

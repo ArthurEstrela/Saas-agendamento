@@ -13,25 +13,37 @@ import {
   limit,
 } from 'firebase/firestore';
 import type { Appointment, Review } from '../types';
-import { format } from 'date-fns';
+import { format, parse, add } from 'date-fns';
+
 
 /**
  * Cria um novo agendamento no Firestore.
  * @param appointmentData Os dados do agendamento, sem o 'id'.
  * @returns O ID do documento recém-criado.
  */
-export const createAppointment = async (appointmentData: Omit<Appointment, 'id' | 'createdAt' | 'status'>): Promise<string> => {
+export const createAppointment = async (appointmentData: AppointmentData): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, 'appointments'), {
-      ...appointmentData,
-      status: 'pending',
-      createdAt: Timestamp.now(),
-    });
-    console.log('Agendamento criado com ID: ', docRef.id);
+    const { date, startTime: timeStr, duration, ...restOfData } = appointmentData;
+
+    // Converte a string de data e hora para um objeto Date do JavaScript
+    const startTime = parse(`${format(date, 'yyyy-MM-dd')} ${timeStr}`, 'yyyy-MM-dd HH:mm', new Date());
+    const endTime = add(startTime, { minutes: duration });
+
+    const newAppointment = {
+      ...restOfData,
+      date: format(date, 'yyyy-MM-dd'),
+      startTime: Timestamp.fromDate(startTime),
+      endTime: Timestamp.fromDate(endTime),
+      status: 'scheduled', // Define o status inicial
+      createdAt: Timestamp.now(), // Adiciona um campo de data de criação
+    };
+
+    const docRef = await addDoc(collection(db, 'appointments'), newAppointment);
     return docRef.id;
   } catch (error) {
-    console.error('Erro ao criar agendamento: ', error);
-    throw new Error('Não foi possível realizar o agendamento.');
+    console.error("Erro ao criar agendamento: ", error);
+    // Lança um erro mais específico para a interface do usuário capturar
+    throw new Error("Não foi possível realizar o agendamento.");
   }
 };
 

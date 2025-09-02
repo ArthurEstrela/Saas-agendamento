@@ -14,30 +14,26 @@ import {
   Star,
 } from "lucide-react";
 import ConfirmationModal from "../Common/ConfirmationModal";
-import ReviewModal from "../Common/ReviewModal";
+// Remova a importação do ReviewModal daqui
+// import ReviewModal from "../Common/ReviewModal";
 
 interface ClientAppointmentCardProps {
   appointment: Appointment;
   onCancel: (bookingId: string) => void;
+  onReview: (appointment: Appointment) => void; // Adicionada a prop onReview
 }
 
-/**
- * Componente de Card para exibir um único agendamento do cliente.
- * É um componente de apresentação que recebe dados já processados.
- */
-const ClientAppointmentCard = ({ appointment, onCancel }: ClientAppointmentCardProps) => {
+const ClientAppointmentCard = ({ appointment, onCancel, onReview }: ClientAppointmentCardProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  // Remova o estado do modal de review
+  // const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
-  // --- CLÁUSULA DE GUARDA ROBUSTA ---
-  // Previne a renderização e crashes se o dado essencial (startTime como Date) não estiver presente.
   if (!appointment || !(appointment.startTime instanceof Date)) {
     console.warn("Tentativa de renderizar um Card de Agendamento com dados inválidos:", appointment);
     return null;
   }
 
-  // startTime já é um objeto Date, graças ao processamento no userAppointmentsStore.
   const appointmentDate = appointment.startTime;
   const isPast = appointmentDate < new Date();
 
@@ -57,7 +53,6 @@ const ClientAppointmentCard = ({ appointment, onCancel }: ClientAppointmentCardP
 
   return (
     <div className="group relative bg-gray-800/80 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300">
-      {/* Menu Dropdown de Ações */}
       <div className="absolute top-4 right-4">
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -77,14 +72,14 @@ const ClientAppointmentCard = ({ appointment, onCancel }: ClientAppointmentCardP
             )}
             {appointment.status === "completed" && !appointment.hasBeenReviewed && (
                 <button
-                  onClick={() => { setIsReviewModalOpen(true); setIsMenuOpen(false); }}
+                  onClick={() => { onReview(appointment); setIsMenuOpen(false); }} // Modificado para usar onReview
                   className="w-full text-left px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2"
                 >
                   <Star size={16} /> Avaliar
                 </button>
               )}
             <a
-              href={`https://wa.me/PHONE_NUMBER_PLACEHOLDER`} // Substituir com o telefone real
+              href={`https://wa.me/PHONE_NUMBER_PLACEHOLDER`}
               target="_blank" rel="noopener noreferrer"
               className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-2"
             >
@@ -125,7 +120,6 @@ const ClientAppointmentCard = ({ appointment, onCancel }: ClientAppointmentCardP
             </p>
             <p className="flex items-center gap-2">
               <Clock size={16} />
-              {/* Formatação segura, pois já garantimos que são objetos Date */}
               {format(appointmentDate, 'HH:mm')} - {appointment.endTime instanceof Date ? format(appointment.endTime, 'HH:mm') : 'N/A'}
             </p>
             <p className="flex items-center gap-2">
@@ -136,7 +130,6 @@ const ClientAppointmentCard = ({ appointment, onCancel }: ClientAppointmentCardP
         </div>
       </div>
 
-      {/* Modais de Confirmação e Avaliação */}
       <ConfirmationModal
         isOpen={isCancelModalOpen}
         onClose={() => setIsCancelModalOpen(false)}
@@ -145,13 +138,7 @@ const ClientAppointmentCard = ({ appointment, onCancel }: ClientAppointmentCardP
         message="Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita."
       />
 
-      {isReviewModalOpen && (
-        <ReviewModal
-          isOpen={isReviewModalOpen}
-          onClose={() => setIsReviewModalOpen(false)}
-          appointment={appointment}
-        />
-      )}
+      {/* Remova o ReviewModal daqui */}
     </div>
   );
 };

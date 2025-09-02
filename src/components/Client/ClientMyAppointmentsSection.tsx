@@ -56,7 +56,7 @@ const TabButton = ({ icon: Icon, label, count, isActive, onClick }) => (
 );
 
 // --- Componente Principal ---
-const ClientMyAppointmentsSection = () => {
+const ClientMyAppointmentsSection = ({ onCancel, onReview }) => { // Adicionado onReview
   const { userProfile } = useAuthStore();
   const { upcomingBookings, pastBookings, loading, error, cancelBooking } = useUserAppointments(userProfile?.uid);
   
@@ -96,7 +96,7 @@ const ClientMyAppointmentsSection = () => {
           <>
             <div className="space-y-5">
               {paginatedBookings.map((booking) => (
-                <ClientAppointmentCard key={booking.id} appointment={booking} onCancel={cancelBooking} />
+                <ClientAppointmentCard key={booking.id} appointment={booking} onCancel={cancelBooking} onReview={onReview} />
               ))}
             </div>
             <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
@@ -114,4 +114,3 @@ const ClientMyAppointmentsSection = () => {
 };
 
 export default ClientMyAppointmentsSection;
-

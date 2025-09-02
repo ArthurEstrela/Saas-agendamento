@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -17,7 +18,11 @@ const messaging = admin.messaging();
 const REGION = "southamerica-east1";
 
 // Função auxiliar para enviar notificações (sem alterações)
-const sendNotification = async (userId: string, title: string, body: string) => {
+const sendNotification = async (
+  userId: string,
+  title: string,
+  body: string
+) => {
   try {
     const userRef = db.collection("users").doc(userId);
     const userSnap = await userRef.get();
@@ -54,21 +59,22 @@ export const onAppointmentCreate = onDocumentCreated(
     const appointmentData = snapshot.data();
 
     // 2. CORREÇÃO: Usando os nomes de campos da interface Appointment
-    const {
-      serviceProviderId,
-      clientName,
-      serviceName,
-      date,
-      startTime,
-    } = appointmentData;
+    const { serviceProviderId, clientName, serviceName, date, startTime } =
+      appointmentData;
 
     // A principal responsabilidade é notificar o prestador de serviço
     if (serviceProviderId) {
       const notificationTitle = "Novo Agendamento!";
       const notificationBody = `${clientName} agendou "${serviceName}" para ${date} às ${startTime}.`;
-      
-      logger.info(`Enviando notificação para o prestador: ${serviceProviderId}`);
-      await sendNotification(serviceProviderId, notificationTitle, notificationBody);
+
+      logger.info(
+        `Enviando notificação para o prestador: ${serviceProviderId}`
+      );
+      await sendNotification(
+        serviceProviderId,
+        notificationTitle,
+        notificationBody
+      );
     }
   }
 );
@@ -99,20 +105,23 @@ export const onAppointmentUpdate = onDocumentUpdated(
 
     // Lógica para notificar o CLIENTE
     if (afterData.status === "confirmed") {
-        notificationTitle = "Agendamento Confirmado!";
-        notificationBody = `Seu agendamento para "${serviceName}" em ${date} às ${startTime} foi confirmado.`;
+      notificationTitle = "Agendamento Confirmado!";
+      notificationBody = `Seu agendamento para "${serviceName}" em ${date} às ${startTime} foi confirmado.`;
     } else if (afterData.status === "cancelled") {
-        // Verifica se foi o prestador que cancelou (antes era 'pending' ou 'confirmed')
-        if (beforeData.status === 'pending' || beforeData.status === 'confirmed') {
-             notificationTitle = "Agendamento Recusado";
-             notificationBody = `Infelizmente, seu agendamento para "${serviceName}" em ${date} não pôde ser confirmado.`;
-        }
+      // Verifica se foi o prestador que cancelou (antes era 'pending' ou 'confirmed')
+      if (
+        beforeData.status === "pending" ||
+        beforeData.status === "confirmed"
+      ) {
+        notificationTitle = "Agendamento Recusado";
+        notificationBody = `Infelizmente, seu agendamento para "${serviceName}" em ${date} não pôde ser confirmado.`;
+      }
     }
 
     // Se houver um título, envia a notificação para o cliente
     if (notificationTitle && clientId) {
-        logger.info(`Enviando notificação de status para o cliente: ${clientId}`);
-        await sendNotification(clientId, notificationTitle, notificationBody);
+      logger.info(`Enviando notificação de status para o cliente: ${clientId}`);
+      await sendNotification(clientId, notificationTitle, notificationBody);
     }
   }
 );
@@ -189,6 +198,83 @@ export const createStripeCheckout = onCall(
       throw new HttpsError(
         "internal",
         "Não foi possível criar a sessão de checkout."
+      );
+    }
+  }
+);
+
+export const onappointmentcompleted = onDocumentUpdated(
+  {
+    document: "appointments/{appointmentId}",
+    region: REGION,
+  },
+  async (event) => {
+    // O evento contém todos os dados
+    if (!event.data) {
+      logger.info("Nenhum dado associado ao evento. Saindo.");
+      return;
+    }
+
+    // Acessando os dados de antes e depois
+    const newData = event.data.after.data();
+    const oldData = event.data.before.data();
+    // Acessando os parâmetros da URL
+    const appointmentId = event.params.appointmentId;
+
+    // Condição: Executar apenas se o status mudou para 'completed'
+    if (newData.status !== "completed" || oldData.status === "completed") {
+      logger.log(
+        `Agendamento ${appointmentId} não foi concluído nesta atualização. Saindo.`
+      );
+      return;
+    }
+
+    // Prevenir a criação de transações duplicadas
+    const transactionRef = db
+      .collection("transactions")
+      .where("appointmentId", "==", appointmentId);
+    const snapshot = await transactionRef.get();
+    if (!snapshot.empty) {
+      logger.log(
+        `Transação para o agendamento ${appointmentId} já existe. Saindo.`
+      );
+      return;
+    }
+
+    const {
+      serviceProviderId,
+      clientId,
+      clientName,
+      serviceName,
+      servicePrice,
+      professionalName,
+    } = newData;
+
+    if (!serviceProviderId || !servicePrice) {
+      logger.error(`Dados ausentes no agendamento ${appointmentId}.`, newData);
+      return;
+    }
+
+    const transactionData = {
+      serviceProviderId,
+      appointmentId,
+      clientId: clientId || "N/A",
+      clientName: clientName || "N/A",
+      serviceName: serviceName || "Serviço não informado",
+      amount: servicePrice,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      professionalName: professionalName || "N/A",
+    };
+
+    try {
+      await db.collection("transactions").add(transactionData);
+      logger.log(
+        `Transação criada com sucesso para o agendamento ${appointmentId}`
+      );
+    } catch (error) {
+      logger.error(
+        `Erro ao criar transação para o agendamento ${appointmentId}:`,
+        error
       );
     }
   }

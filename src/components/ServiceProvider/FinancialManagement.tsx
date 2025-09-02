@@ -1,327 +1,275 @@
-import React, { useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "../../store/authStore";
-import { getServiceProviderAppointments } from "../../firebase/bookingService";
-import {
-  getExpenses,
-  addExpense,
-  deleteExpense,
-} from "../../firebase/financeService";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
-import { format, endOfMonth, eachMonthOfInterval, subMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import {
-  Loader2,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  PlusCircle,
-  Trash2,
-  X as IconX,
-} from "lucide-react";
-import { useToast } from "../../context/ToastContext";
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAuthStore } from '../../store/authStore';
+import { getTransactions } from '../../firebase/financeService';
+import { getExpenses, addExpense, deleteExpense } from '../../firebase/expenseService';
+import type { Transaction, Expense } from '../../types';
+import { Loader2, DollarSign, Calendar, BarChart2, AlertCircle, ArrowDownCircle, TrendingUp, PlusCircle, Trash2 } from 'lucide-react';
+import { Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import ConfirmationModal from '../Common/ConfirmationModal';
 
-// --- MODAL PARA ADICIONAR DESPESA (sem alterações) ---
-const AddExpenseModal = ({ isOpen, onClose, onAdd }) => {
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!description || !amount || parseFloat(amount) <= 0) return;
-    setIsLoading(true);
-    await onAdd({ description, amount: parseFloat(amount) });
-    setIsLoading(false);
-    setDescription("");
-    setAmount("");
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 p-6 rounded-2xl w-full max-w-md border border-[#daa520]/30">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-2xl font-bold text-white">Nova Despesa</h3>
-          <button onClick={onClose}>
-            <IconX className="text-gray-500 hover:text-white" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Descrição (ex: Aluguel, Produtos)"
-            required
-            className="w-full bg-gray-800 p-3 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700"
-          />
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Valor (R$)"
-            min="0.01"
-            step="0.01"
-            required
-            className="w-full bg-gray-800 p-3 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-700"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="px-4 py-2 bg-[#daa520] text-black rounded-lg font-semibold hover:bg-[#c8961e] flex items-center gap-2 disabled:opacity-50"
-            >
-              {isLoading ? <Loader2 className="animate-spin" /> : "Adicionar"}
-            </button>
-          </div>
-        </form>
-      </div>
+// Componentes de estado (sem alterações)
+const ErrorState = ({ message }: { message: string }) => (
+    <div className="flex flex-col items-center justify-center text-center text-red-400 bg-red-900/20 p-8 rounded-lg">
+        <AlertCircle size={48} className="mb-4" />
+        <h3 className="text-xl font-semibold text-white">Ocorreu um Erro</h3>
+        <p>{message}</p>
     </div>
-  );
+);
+const LoadingState = () => (
+    <div className="flex items-center justify-center p-20">
+        <Loader2 className="animate-spin text-[#daa520]" size={40} />
+    </div>
+);
+
+// Novo Componente para Gerenciar Despesas (Adicionado aqui para simplicidade)
+const ExpensesSection = ({ userId }) => {
+    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
+    const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+
+    const fetchExpenses = async () => {
+        setLoading(true);
+        const fetchedExpenses = await getExpenses(userId);
+        setExpenses(fetchedExpenses);
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchExpenses();
+    }, [userId]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!description || !amount || !date) {
+            alert('Por favor, preencha todos os campos.');
+            return;
+        }
+        setIsSubmitting(true);
+        await addExpense(userId, { description, amount: parseFloat(amount), date: new Date(date) });
+        // Reset form
+        setDescription('');
+        setAmount('');
+        await fetchExpenses(); // Recarrega a lista
+        setIsSubmitting(false);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (expenseToDelete) {
+            await deleteExpense(userId, expenseToDelete.id);
+            setExpenseToDelete(null);
+            await fetchExpenses();
+        }
+    };
+
+    return (
+        <div className="bg-gray-800/80 rounded-xl border border-gray-700 p-6 space-y-6">
+            <h3 className="text-lg font-semibold text-white">Controle de Despesas</h3>
+            {/* Formulário para Adicionar Despesa */}
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="md:col-span-2">
+                    <label className="text-xs text-gray-400">Descrição</label>
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Aluguel do espaço" className="w-full bg-gray-900/50 rounded-md p-2 mt-1 border border-gray-600 focus:border-[#daa520] focus:ring-[#daa520]" required />
+                </div>
+                <div>
+                    <label className="text-xs text-gray-400">Valor (R$)</label>
+                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1500.00" className="w-full bg-gray-900/50 rounded-md p-2 mt-1 border border-gray-600 focus:border-[#daa520] focus:ring-[#daa520]" required />
+                </div>
+                <button type="submit" disabled={isSubmitting} className="flex justify-center items-center gap-2 bg-[#daa520] text-black font-bold p-2 rounded-md hover:bg-amber-400 transition-colors disabled:bg-gray-500">
+                    {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <PlusCircle size={20} />}
+                    Adicionar
+                </button>
+            </form>
+
+            {/* Lista de Despesas */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-300">
+                    <thead className="text-xs text-gray-400 uppercase bg-gray-900/50">
+                        <tr>
+                            <th className="px-6 py-3">Data</th>
+                            <th className="px-6 py-3">Descrição</th>
+                            <th className="px-6 py-3 text-right">Valor</th>
+                            <th className="px-6 py-3 text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? <tr><td colSpan={4} className="text-center py-10"><Loader2 className="animate-spin mx-auto" /></td></tr> :
+                            expenses.length > 0 ? (
+                                expenses.map((exp) => (
+                                    <tr key={exp.id} className="border-t border-gray-700 hover:bg-gray-700/40">
+                                        <td className="px-6 py-4">{format(exp.date, 'dd/MM/yyyy')}</td>
+                                        <td className="px-6 py-4 font-medium text-white">{exp.description}</td>
+                                        <td className="px-6 py-4 text-right font-bold text-red-400">
+                                            - R$ {exp.amount.toFixed(2).replace('.', ',')}
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <button onClick={() => setExpenseToDelete(exp)} className="text-gray-400 hover:text-red-400">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={4} className="text-center py-10 text-gray-400">Nenhuma despesa registrada.</td>
+                                </tr>
+                            )}
+                    </tbody>
+                </table>
+            </div>
+            <ConfirmationModal
+                isOpen={!!expenseToDelete}
+                onClose={() => setExpenseToDelete(null)}
+                onConfirm={handleDeleteConfirm}
+                title="Confirmar Exclusão"
+                message={`Tem certeza que deseja remover a despesa "${expenseToDelete?.description}"?`}
+            />
+        </div>
+    );
 };
 
-// --- COMPONENTE PRINCIPAL ---
+
+// Componente Principal
 const FinancialManagement = () => {
-  const { userProfile } = useAuthStore();
-  const queryClient = useQueryClient();
-  const { showToast } = useToast();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+    const { userProfile } = useAuthStore();
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-  const { data: appointments, isLoading: isLoadingAppointments } = useQuery({
-    queryKey: ["providerAppointments", userProfile?.uid],
-    queryFn: () => getServiceProviderAppointments(userProfile!.uid),
-    enabled: !!userProfile,
-  });
-  const { data: expenses, isLoading: isLoadingExpenses } = useQuery({
-    queryKey: ["providerExpenses", userProfile?.uid],
-    queryFn: () => getExpenses(userProfile!.uid),
-    enabled: !!userProfile,
-  });
+    useEffect(() => {
+        const fetchFinancials = async () => {
+            if (!userProfile?.uid) {
+                setLoading(false);
+                setError("Usuário não autenticado.");
+                return;
+            }
+            try {
+                setLoading(true);
+                const [fetchedTransactions, fetchedExpenses] = await Promise.all([
+                    getTransactions(userProfile.uid),
+                    getExpenses(userProfile.uid)
+                ]);
+                setTransactions(fetchedTransactions);
+                setExpenses(fetchedExpenses);
+                setError(null);
+            } catch (err: any) {
+                setError(err.message || 'Falha ao carregar dados financeiros.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFinancials();
+    }, [userProfile?.uid]);
 
-  const addExpenseMutation = useMutation({
-    // --- CORREÇÃO AQUI ---
-    mutationFn: (newExpense: any) =>
-      addExpense(userProfile!.uid, {
-        ...newExpense,
-        date: format(new Date(), "yyyy-MM-dd"),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["providerExpenses"] });
-      showToast("Despesa adicionada!", "success");
-    },
-    onError: () => showToast("Erro ao adicionar despesa.", "error"),
-  });
+    const financialSummary = useMemo(() => {
+        const totalRevenue = transactions.reduce((sum, tr) => sum + tr.amount, 0);
+        const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+        const netProfit = totalRevenue - totalExpenses;
 
-  const deleteExpenseMutation = useMutation({
-    // --- CORREÇÃO AQUI ---
-    mutationFn: (expenseId: string) =>
-      deleteExpense(userProfile!.uid, expenseId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["providerExpenses"] });
-      showToast("Despesa removida.", "success");
-    },
-    onError: () => showToast("Erro ao remover despesa.", "error"),
-  });
+        const monthlyRevenue = transactions.reduce((acc, tr) => {
+            const month = format(tr.completedAt, 'yyyy-MM');
+            acc[month] = (acc[month] || 0) + tr.amount;
+            return acc;
+        }, {} as Record<string, number>);
 
-  // --- CORREÇÃO AQUI ---
-  const financialData = useMemo(() => {
-    // Garante que sempre teremos um array, mesmo que vazio, para evitar o erro.
-    const validAppointments = appointments || [];
-    const validExpenses = expenses || [];
+        return { totalRevenue, totalExpenses, netProfit, monthlyRevenue };
+    }, [transactions, expenses]);
 
-    const completedAppointments = validAppointments.filter(
-      (a) => a.status === "completed"
-    );
+    const chartData = useMemo(() => {
+        // ... (lógica do gráfico permanece a mesma)
+        const sortedMonths = Object.keys(financialSummary.monthlyRevenue).sort();
+        const labels = sortedMonths.map(month => format(new Date(`${month}-02`), 'MMM/yy', { locale: ptBR }));
+        const data = sortedMonths.map(month => financialSummary.monthlyRevenue[month]);
 
-    const totalRevenue = completedAppointments.reduce(
-      (sum, app) => sum + app.price,
-      0
-    );
-    const totalExpenses = validExpenses.reduce(
-      (sum, exp) => sum + exp.amount,
-      0
-    );
-    const netProfit = totalRevenue - totalExpenses;
+        return {
+            labels,
+            datasets: [{
+                label: 'Faturamento Mensal',
+                data,
+                backgroundColor: 'rgba(218, 165, 32, 0.6)',
+                borderColor: 'rgba(218, 165, 32, 1)',
+                borderWidth: 1,
+            }],
+        };
+    }, [financialSummary.monthlyRevenue]);
 
-    const monthlyData = eachMonthOfInterval({
-      start: subMonths(new Date(), 5),
-      end: new Date(),
-    }).map((monthStart) => {
-      const monthEnd = endOfMonth(monthStart);
-      const monthKey = format(monthStart, "MMM/yy", { locale: ptBR });
+    if (loading) return <LoadingState />;
+    if (error) return <ErrorState message={error} />;
 
-      const revenue = completedAppointments
-        .filter(
-          (a) => new Date(a.date) >= monthStart && new Date(a.date) <= monthEnd
-        )
-        .reduce((sum, app) => sum + app.price, 0);
-
-      // Agora, esta linha usa `validExpenses`, que é um array seguro.
-      const expense = validExpenses
-        .filter(
-          (e) => new Date(e.date) >= monthStart && new Date(e.date) <= monthEnd
-        )
-        .reduce((sum, exp) => sum + exp.amount, 0);
-
-      return { name: monthKey, Faturamento: revenue, Despesas: expense };
-    });
-
-    return { totalRevenue, totalExpenses, netProfit, monthlyData };
-  }, [appointments, expenses]);
-
-  if (isLoadingAppointments || isLoadingExpenses) {
     return (
-      <div className="p-20 flex justify-center">
-        <Loader2 className="animate-spin text-[#daa520]" size={48} />
-      </div>
-    );
-  }
+        <div className="p-4 sm:p-6 space-y-6">
+            <h2 className="text-2xl font-bold text-white">Gestão Financeira</h2>
 
-  return (
-    <div className="p-4 sm:p-6 space-y-8">
-      <AddExpenseModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onAdd={addExpenseMutation.mutateAsync}
-      />
-
-      <h1 className="text-4xl font-bold text-white">Painel Financeiro</h1>
-
-      {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-          <h3 className="text-sm font-semibold text-green-400 flex items-center gap-2">
-            <TrendingUp size={18} /> Faturamento Total
-          </h3>
-          <p className="text-4xl font-bold text-white mt-2">
-            R$ {financialData.totalRevenue.toFixed(2)}
-          </p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-          <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2">
-            <TrendingDown size={18} /> Despesas Totais
-          </h3>
-          <p className="text-4xl font-bold text-white mt-2">
-            R$ {financialData.totalExpenses.toFixed(2)}
-          </p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-          <h3 className="text-sm font-semibold text-[#daa520] flex items-center gap-2">
-            <DollarSign size={18} /> Lucro Líquido
-          </h3>
-          <p className="text-4xl font-bold text-white mt-2">
-            R$ {financialData.netProfit.toFixed(2)}
-          </p>
-        </div>
-      </div>
-
-      {/* Gráfico */}
-      <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-        <h3 className="text-xl font-bold text-white mb-4">
-          Receita vs Despesas (Últimos 6 meses)
-        </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={financialData.monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.1} />
-            <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-            <YAxis
-              stroke="#9ca3af"
-              fontSize={12}
-              tickFormatter={(value) => `R$${value}`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "#1f2937",
-                border: "1px solid #4b5563",
-              }}
-              cursor={{ fill: "rgba(218, 165, 32, 0.1)" }}
-            />
-            <Legend wrapperStyle={{ fontSize: "14px" }} />
-            <Bar dataKey="Faturamento" radius={[4, 4, 0, 0]}>
-              {financialData.monthlyData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={"#22c55e"} />
-              ))}
-            </Bar>
-            <Bar dataKey="Despesas" radius={[4, 4, 0, 0]}>
-              {financialData.monthlyData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={"#ef4444"} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Gerenciamento de Despesas */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-white">Registro de Despesas</h3>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors"
-          >
-            <PlusCircle size={18} /> Adicionar Despesa
-          </button>
-        </div>
-        <div className="bg-gray-800 rounded-2xl border border-gray-700">
-          <div className="max-h-96 overflow-y-auto">
-            {expenses && expenses.length > 0 ? (
-              expenses.map((expense) => (
-                <div
-                  key={expense.id}
-                  className="flex justify-between items-center p-4 border-b border-gray-700 last:border-b-0"
-                >
-                  <div>
-                    <p className="font-semibold text-white">
-                      {expense.description}
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      {format(new Date(expense.date), "dd/MM/yyyy")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <p className="font-bold text-red-400">
-                      R$ {expense.amount.toFixed(2)}
-                    </p>
-                    <button
-                      onClick={() => deleteExpenseMutation.mutate(expense.id)}
-                      disabled={deleteExpenseMutation.isPending}
-                      className="p-2 text-gray-500 hover:text-red-500 transition-colors disabled:opacity-50"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+            {/* Cards de Resumo Atualizados */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-gray-800/80 p-6 rounded-xl border border-gray-700">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-green-500/20 rounded-full"><DollarSign className="text-green-400" size={24} /></div>
+                        <div>
+                            <p className="text-sm text-gray-400">Faturamento Bruto</p>
+                            <p className="text-2xl font-bold text-white">R$ {financialSummary.totalRevenue.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                    </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-center text-gray-500 p-8">
-                Nenhuma despesa registrada.
-              </p>
-            )}
-          </div>
+                <div className="bg-gray-800/80 p-6 rounded-xl border border-gray-700">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-red-500/20 rounded-full"><ArrowDownCircle className="text-red-400" size={24} /></div>
+                        <div>
+                            <p className="text-sm text-gray-400">Total de Despesas</p>
+                            <p className="text-2xl font-bold text-white">R$ {financialSummary.totalExpenses.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-gray-800/80 p-6 rounded-xl border border-gray-700">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-blue-500/20 rounded-full"><TrendingUp className="text-blue-400" size={24} /></div>
+                        <div>
+                            <p className="text-sm text-gray-400">Lucro Líquido</p>
+                            <p className="text-2xl font-bold text-white">R$ {financialSummary.netProfit.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Seção de Despesas */}
+            <ExpensesSection userId={userProfile!.uid} />
+
+            {/* Gráfico (sem alterações) */}
+            <div className="bg-gray-800/80 p-6 rounded-xl border border-gray-700">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 size={20} /> Desempenho Mensal (Bruto)</h3>
+                {transactions.length > 0 ? (<Bar data={chartData} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: '#9ca3af' } }, x: { ticks: { color: '#9ca3af' } } } }} />) : (<p className="text-center text-gray-400 py-8">Ainda não há dados para exibir o gráfico.</p>)}
+            </div>
+
+            {/* Tabela de Transações Recentes (sem alterações) */}
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden">
+                <h3 className="text-lg font-semibold text-white p-6">Histórico de Faturamento</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-300">
+                        <thead className="text-xs text-gray-400 uppercase bg-gray-900/50">
+                            <tr>
+                                <th scope="col" className="px-6 py-3">Data</th>
+                                <th scope="col" className="px-6 py-3">Cliente</th>
+                                <th scope="col" className="px-6 py-3">Serviço</th>
+                                <th scope="col" className="px-6 py-3 text-right">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactions.length > 0 ? (transactions.slice(0, 10).map((tr) => (<tr key={tr.id} className="border-t border-gray-700 hover:bg-gray-700/40"><td className="px-6 py-4">{format(tr.completedAt, 'dd/MM/yyyy HH:mm')}</td><td className="px-6 py-4 font-medium text-white">{tr.clientName}</td><td className="px-6 py-4">{tr.serviceName}</td><td className="px-6 py-4 text-right font-bold text-green-400">R$ {tr.amount.toFixed(2).replace('.', ',')}</td></tr>))) : (<tr><td colSpan={4} className="text-center py-10 text-gray-400">Nenhuma transação encontrada.</td></tr>)}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default FinancialManagement;

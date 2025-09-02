@@ -137,11 +137,10 @@ export interface Appointment {
 // Interface para Despesas
 export interface Expense {
   id: string;
-  serviceProviderId: string;
+  userId: string; // ID do prestador de serviço
   description: string;
-  category: string;
   amount: number;
-  date: string; // Formato 'YYYY-MM-DD'
+  date: Date;
 }
 
 // Interface para Avaliações
@@ -183,4 +182,16 @@ export interface Booking {
   status: 'confirmed' | 'pending' | 'cancelled';
   createdAt: Timestamp;
   reviewId?: string | null; // ID da avaliação, se houver
+}
+
+export interface Transaction {
+  id: string;
+  serviceProviderId: string;
+  appointmentId: string;
+  clientId: string;
+  clientName: string;
+  serviceName: string;
+  amount: number;
+  completedAt: Date; // Data em que o serviço foi concluído
+  professionalName: string;
 }

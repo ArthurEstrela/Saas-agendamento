@@ -1,11 +1,13 @@
 // src/components/ClientDashboard.tsx
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
+import { useReviewStore } from "../store/reviewStore";
 import { useNavigate, useLocation } from "react-router-dom";
 import type { Appointment, UserProfile } from "../types";
 import { Star, Menu as MenuIcon } from "lucide-react";
+import ReviewModal from "./Common/ReviewModal";
 import Booking from "./Booking";
-
+import ConfirmationModal from "./Common/ConfirmationModal";
 
 import ClientSideNav from "./Client/ClientSideNav";
 import ClientSearchSection from "./Client/ClientSearchSection";
@@ -16,136 +18,9 @@ import LoginPrompt from "./Common/LoginPrompt";
 import Notifications from "./Common/Notifications";
 import { useUserAppointments } from "../store/userAppointmentsStore";
 
-const ConfirmationModal = ({
-  title,
-  message,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) => (
-  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-    <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center animate-scale-in">
-      <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-      <p className="text-gray-300 mb-6">{message}</p>
-      <div className="flex justify-center space-x-4">
-        <button
-          onClick={onCancel}
-          className="px-5 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onConfirm}
-          className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-        >
-          Confirmar
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-const ReviewModal = ({
-  isOpen,
-  onClose,
-  appointment,
-  onSubmit,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  appointment: Appointment;
-  onSubmit: (rating: number, comment: string) => void;
-}) => {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
-
-  useEffect(() => {
-    if (!isOpen) {
-      setRating(0);
-      setComment("");
-    }
-  }, [isOpen]);
-
-  const handleSubmit = () => {
-    if (rating === 0) {
-      alert("Por favor, dê uma classificação."); // Substituir por Toast
-      return;
-    }
-    onSubmit(rating, comment);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700 max-w-md w-full animate-scale-in">
-        <h3 className="text-2xl font-bold text-white mb-4 text-center">
-          Avaliar Agendamento
-        </h3>
-        <p className="text-gray-300 mb-6 text-center">
-          Compartilhe sua experiência com {appointment?.establishmentName}.
-        </p>
-
-        <div className="mb-6 text-center">
-          <p className="text-gray-400 mb-2">Sua classificação:</p>
-          <div className="flex justify-center space-x-1">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Star
-                key={star}
-                className={`w-10 h-10 cursor-pointer transition-transform duration-200 ${
-                  rating >= star
-                    ? "text-yellow-400 fill-current transform scale-110"
-                    : "text-gray-500 hover:text-yellow-300"
-                }`}
-                onClick={() => setRating(star)}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <label
-            htmlFor="comment"
-            className="block text-gray-300 text-sm font-medium mb-2"
-          >
-            Comentário (opcional):
-          </label>
-          <textarea
-            id="comment"
-            className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-[#daa520] focus:border-[#daa520] resize-y"
-            rows={4}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Deixe seu comentário sobre o serviço..."
-          ></textarea>
-        </div>
-
-        <div className="flex justify-end space-x-4">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-6 py-2 bg-[#daa520] text-gray-900 font-semibold rounded-lg hover:bg-[#c8961e] transition-colors"
-          >
-            Enviar Avaliação
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const ClientDashboard: React.FC = () => {
-  const { user, userProfile, logout, toggleFavorite, submitReview } =
-    useAuthStore();
+  const { user, userProfile, logout, toggleFavorite } = useAuthStore();
+  const { submitReview, isSubmitting, error: reviewError } = useReviewStore();
   const navigate = useNavigate();
   const location = useLocation();
   const { cancelBooking } = useUserAppointments(user?.uid);
@@ -193,21 +68,35 @@ const ClientDashboard: React.FC = () => {
     });
   };
 
-  const handleOpenReviewModal = (appointment: Appointment) =>
+  const handleOpenReviewModal = (appointment: Appointment) => {
     setReviewModal({ isOpen: true, appointment });
+  };
 
-  const handleSubmitReview = (rating: number, comment: string) => {
-    if (reviewModal.appointment && user) {
-      submitReview({
-        serviceProviderId: reviewModal.appointment.serviceProviderId,
-        appointmentId: reviewModal.appointment.id,
-        rating,
-        comment,
-        clientId: user.uid,
-        serviceIds: reviewModal.appointment.serviceIds,
-      });
-    }
+  const handleCloseReviewModal = () => {
     setReviewModal({ isOpen: false });
+  };
+
+  const handleSubmitReview = async (rating: number, comment: string) => {
+    if (!reviewModal.appointment || !user) return;
+
+    const reviewPayload = {
+      serviceProviderId: reviewModal.appointment.serviceProviderId,
+      appointmentId: reviewModal.appointment.id,
+      clientId: user.uid,
+      professionalId: reviewModal.appointment.professionalId,
+      serviceName: reviewModal.appointment.serviceName,
+      rating,
+      comment,
+    };
+
+    try {
+      await submitReview(reviewPayload);
+      // Aqui você pode adicionar um toast de sucesso
+      handleCloseReviewModal();
+    } catch (e) {
+      // Aqui você pode adicionar um toast de erro
+      console.error("Falha ao enviar avaliação:", e);
+    }
   };
 
   const handleSelectProfessionalForBooking = (prof: UserProfile) => {
@@ -322,9 +211,10 @@ const ClientDashboard: React.FC = () => {
       {reviewModal.isOpen && (
         <ReviewModal
           isOpen={reviewModal.isOpen}
-          onClose={() => setReviewModal({ isOpen: false })}
-          appointment={reviewModal.appointment!}
-          onSubmit={handleSubmitReview}
+          onClose={handleCloseReviewModal}
+          onSubmit={handleSubmitReview} // A prop onSubmit está correta aqui
+          appointment={reviewModal.appointment}
+          isSubmitting={isSubmitting} // 4. (Opcional) Passe o estado de loading para o modal
         />
       )}
 

@@ -80,7 +80,6 @@ interface AuthState {
   manageProfessionals: (professionals: Professional[]) => Promise<void>;
   manageServices: (services: Service[]) => Promise<void>;
   manageAvailability: (availability: Availability) => Promise<void>;
-  submitReview: (reviewData: Omit<Review, "id" | "createdAt">) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -425,11 +424,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error("Erro ao salvar disponibilidade:", error);
       throw error;
     }
-  },
-
-  submitReview: async (reviewData) => {
-    // Implemente a lógica para enviar a avaliação aqui
-    console.log("Enviando avaliação:", reviewData);
-    // ...código para salvar a avaliação no Firestore...
   },
 }));

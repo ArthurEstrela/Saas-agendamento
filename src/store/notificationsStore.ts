@@ -1,7 +1,15 @@
-// src/store/notificationsStore.ts
 import { create } from 'zustand';
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 interface Notification {
   id: string;
@@ -9,14 +17,13 @@ interface Notification {
   title: string;
   message: string;
   isRead: boolean;
-  createdAt: any;
+  createdAt: any; // Mantido como 'any' para flexibilidade com Timestamps do Firebase
 }
 
 interface NotificationState {
   notifications: Notification[];
   loading: boolean;
-  unsubscribe: () => void | null;
-  unreadCount: number;
+  unsubscribe: () => void;
   fetchNotifications: (userId: string) => void;
   markAsRead: (notificationId: string) => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
@@ -25,57 +32,74 @@ interface NotificationState {
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   loading: true,
-  unsubscribe: null,
-  unreadCount: 0,
+  unsubscribe: () => {}, // Inicializa com uma função vazia
 
   fetchNotifications: (userId) => {
-    get().unsubscribe?.(); 
+    // Cancela a inscrição anterior para evitar múltiplos listeners
+    get().unsubscribe();
 
-    // CORREÇÃO: Aponte para a subcoleção dentro do documento do usuário
-    const q = query(
-      collection(db, 'users', userId, 'notifications'),
-      orderBy('createdAt', 'desc')
+    set({ loading: true });
+    const notificationsRef = collection(db, 'users', userId, 'notifications');
+    const q = query(notificationsRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const notificationsData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Notification[];
+        set({ notifications: notificationsData, loading: false });
+      },
+      (error) => {
+        console.error('Erro ao buscar notificações:', error);
+        set({ loading: false });
+      }
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-      const unread = notificationsData.filter(n => !n.isRead).length;
-      set({ notifications: notificationsData, loading: false, unreadCount: unread });
-    }, (error) => {
-      console.error("Erro ao buscar notificações:", error);
-      set({ loading: false });
-    });
-
+    // Armazena a função de unsubscribe para poder chamá-la depois
     set({ unsubscribe });
   },
 
   markAsRead: async (notificationId) => {
-    const { user } = useAuthStore.getState();
-    if (!user) {
-      console.error("Usuário não autenticado.");
-      return;
-    }
-    // CORREÇÃO: Use o caminho completo para a subcoleção
-    const notifRef = doc(db, 'users', user.uid, 'notifications', notificationId);
-    try {
-      await updateDoc(notifRef, { isRead: true });
-    } catch (error) {
-      console.error("Erro ao marcar notificação como lida:", error);
+    const { notifications } = get();
+    const notification = notifications.find((n) => n.id === notificationId);
+
+    if (notification && notification.userId) {
+      const notificationRef = doc(
+        db,
+        'users',
+        notification.userId,
+        'notifications',
+        notificationId
+      );
+      try {
+        await updateDoc(notificationRef, { isRead: true });
+        // O listener onSnapshot atualizará o estado automaticamente
+      } catch (error) {
+        console.error('Erro ao marcar notificação como lida:', error);
+      }
     }
   },
 
   deleteNotification: async (notificationId) => {
-    const { user } = useAuthStore.getState();
-    if (!user) {
-      console.error("Usuário não autenticado.");
-      return;
-    }
-    // CORREÇÃO: Use o caminho completo para a subcoleção
-    const notifRef = doc(db, 'users', user.uid, 'notifications', notificationId);
-    try {
-      await deleteDoc(notifRef);
-    } catch (error) {
-      console.error("Erro ao apagar notificação:", error);
+    const { notifications } = get();
+    const notification = notifications.find((n) => n.id === notificationId);
+
+    if (notification && notification.userId) {
+      const notificationRef = doc(
+        db,
+        'users',
+        notification.userId,
+        'notifications',
+        notificationId
+      );
+      try {
+        await deleteDoc(notificationRef);
+        // O listener onSnapshot cuidará da remoção do estado
+      } catch (error) {
+        console.error('Erro ao excluir notificação:', error);
+      }
     }
   },
 }));

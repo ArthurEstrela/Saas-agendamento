@@ -17,6 +17,31 @@ const messaging = admin.messaging();
 
 const REGION = "southamerica-east1";
 
+const createNotificationDocument = async (
+  userId: string,
+  title: string,
+  message: string
+) => {
+  if (!userId) {
+    logger.warn("Tentativa de criar notificação para um ID de usuário vazio.");
+    return;
+  }
+  try {
+    // Acessa a subcoleção 'notifications' dentro do documento do usuário
+    const notificationsCol = db.collection("users").doc(userId).collection("notifications");
+    await notificationsCol.add({
+      userId,
+      title,
+      message,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    logger.info(`Documento de notificação criado para o usuário: ${userId}`);
+  } catch (error) {
+    logger.error(`Erro ao criar documento de notificação para ${userId}:`, error);
+  }
+};
+
 // Função auxiliar para enviar notificações (sem alterações)
 const sendNotification = async (
   userId: string,
@@ -24,6 +49,9 @@ const sendNotification = async (
   body: string
 ) => {
   try {
+    // Primeiro, salva a notificação no Firestore para que ela apareça na aba de notificações
+    await createNotificationDocument(userId, title, body);
+
     const userRef = db.collection("users").doc(userId);
     const userSnap = await userRef.get();
     const userData = userSnap.data();
@@ -34,7 +62,7 @@ const sendNotification = async (
         token: userData.fcmToken,
       };
       await messaging.send(message);
-      logger.info(`Notificação enviada com sucesso para ${userId}`);
+      logger.info(`Notificação push enviada com sucesso para ${userId}`);
     } else {
       logger.warn(`Usuário ${userId} não encontrado ou não possui fcmToken.`);
     }
@@ -46,7 +74,6 @@ const sendNotification = async (
 // --- FUNÇÃO ACIONADA QUANDO UM NOVO AGENDAMENTO É CRIADO ---
 export const onAppointmentCreate = onDocumentCreated(
   {
-    // 1. CORREÇÃO: Escutando a coleção correta
     document: "appointments/{appointmentId}",
     region: REGION,
   },
@@ -58,11 +85,9 @@ export const onAppointmentCreate = onDocumentCreated(
     }
     const appointmentData = snapshot.data();
 
-    // 2. CORREÇÃO: Usando os nomes de campos da interface Appointment
     const { serviceProviderId, clientName, serviceName, date, startTime } =
       appointmentData;
 
-    // A principal responsabilidade é notificar o prestador de serviço
     if (serviceProviderId) {
       const notificationTitle = "Novo Agendamento!";
       const notificationBody = `${clientName} agendou "${serviceName}" para ${date} às ${startTime}.`;
@@ -90,11 +115,11 @@ export const onAppointmentUpdate = onDocumentUpdated(
     const afterData = event.data?.after.data();
 
     if (!beforeData || !afterData || beforeData.status === afterData.status) {
-      return; // Sai se não houver dados ou se o status não mudou
+      return;
     }
 
     const {
-      clientId, // ID do cliente para enviar a notificação
+      clientId,
       serviceName,
       date,
       startTime,
@@ -103,12 +128,10 @@ export const onAppointmentUpdate = onDocumentUpdated(
     let notificationTitle = "";
     let notificationBody = "";
 
-    // Lógica para notificar o CLIENTE
     if (afterData.status === "confirmed") {
       notificationTitle = "Agendamento Confirmado!";
       notificationBody = `Seu agendamento para "${serviceName}" em ${date} às ${startTime} foi confirmado.`;
     } else if (afterData.status === "cancelled") {
-      // Verifica se foi o prestador que cancelou (antes era 'pending' ou 'confirmed')
       if (
         beforeData.status === "pending" ||
         beforeData.status === "confirmed"
@@ -118,7 +141,6 @@ export const onAppointmentUpdate = onDocumentUpdated(
       }
     }
 
-    // Se houver um título, envia a notificação para o cliente
     if (notificationTitle && clientId) {
       logger.info(`Enviando notificação de status para o cliente: ${clientId}`);
       await sendNotification(clientId, notificationTitle, notificationBody);
@@ -140,7 +162,6 @@ export const onUserCreate = onDocumentCreated(
     }
     const userId = event.params.userId;
 
-    // Exemplo: Definir campos padrão no perfil do usuário
     const defaultFields = {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -170,10 +191,8 @@ export const createStripeCheckout = onCall(
       );
     }
 
-    // Lazy load do Stripe para não carregar em todas as functions
     const { default: Stripe } = await import("stripe");
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-      // CORREÇÃO: Atualizado para a versão que a biblioteca espera.
       apiVersion: "2025-08-27.basil",
     });
 
@@ -209,19 +228,15 @@ export const onappointmentcompleted = onDocumentUpdated(
     region: REGION,
   },
   async (event) => {
-    // O evento contém todos os dados
     if (!event.data) {
       logger.info("Nenhum dado associado ao evento. Saindo.");
       return;
     }
 
-    // Acessando os dados de antes e depois
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
-    // Acessando os parâmetros da URL
     const appointmentId = event.params.appointmentId;
 
-    // Condição: Executar apenas se o status mudou para 'completed'
     if (newData.status !== "completed" || oldData.status === "completed") {
       logger.log(
         `Agendamento ${appointmentId} não foi concluído nesta atualização. Saindo.`
@@ -229,7 +244,6 @@ export const onappointmentcompleted = onDocumentUpdated(
       return;
     }
 
-    // Prevenir a criação de transações duplicadas
     const transactionRef = db
       .collection("transactions")
       .where("appointmentId", "==", appointmentId);

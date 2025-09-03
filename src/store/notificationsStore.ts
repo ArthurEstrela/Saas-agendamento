@@ -22,6 +22,7 @@ interface Notification {
 
 interface NotificationState {
   notifications: Notification[];
+  unreadCount: number;
   loading: boolean;
   unsubscribe: () => void;
   fetchNotifications: (userId: string) => void;
@@ -31,6 +32,7 @@ interface NotificationState {
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
+  unreadCount: 0,
   loading: true,
   unsubscribe: () => {}, // Inicializa com uma função vazia
 
@@ -49,7 +51,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           id: doc.id,
           ...doc.data(),
         })) as Notification[];
-        set({ notifications: notificationsData, loading: false });
+
+        const unreadCount = notificationsData.filter(n => !n.isRead).length;
+
+        set({ notifications: notificationsData, unreadCount: unreadCount, loading: false });
       },
       (error) => {
         console.error('Erro ao buscar notificações:', error);

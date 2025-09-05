@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Bell, Clock, Trash2, Loader2, Inbox } from 'lucide-react';
+import { Bell, Clock, Trash2, Loader2, Inbox, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationsStore';
 import { formatDistanceToNow } from 'date-fns';
@@ -43,17 +43,18 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }) => (
     </div>
     <div className="flex flex-col gap-2 items-center">
       {!notification.isRead && (
-        <button
+         <button
           onClick={() => onMarkAsRead(notification.id)}
-          className="text-xs text-blue-400 hover:underline"
+          className="p-1 text-blue-400 hover:text-blue-200 transition-colors"
+          title="Marcar como lida"
         >
-          Marcar como lida
+          <CheckCircle className="h-4 w-4" />
         </button>
       )}
       <button
         onClick={() => onDelete(notification.id)}
         className="p-1 text-gray-500 hover:text-red-500 transition-colors"
-        title="Excluir notificação"
+        title="Excluir"
       >
         <Trash2 className="h-4 w-4" />
       </button>

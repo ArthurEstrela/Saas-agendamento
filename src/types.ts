@@ -141,6 +141,25 @@ export interface Expense {
   description: string;
   amount: number;
   date: Date;
+  category: string;
+}
+
+export interface ProfessionalRevenue {
+  professionalId: string;
+  professionalName: string;
+  totalRevenue: number;
+}
+
+export interface ServiceRevenue {
+  serviceId: string;
+  serviceName: string;
+  totalRevenue: number;
+}
+
+export interface FinancialSummary {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
 }
 
 // Interface para Avaliações

@@ -9,6 +9,7 @@ import {
   Change,
   QueryDocumentSnapshot,
 } from "firebase-functions/v2/firestore";
+import { format } from "date-fns";
 
 // Inicialização do Firebase Admin
 admin.initializeApp();
@@ -16,6 +17,14 @@ const db = admin.firestore();
 const messaging = admin.messaging();
 
 const REGION = "southamerica-east1";
+
+const formatDate = (timestamp: { toDate: () => any; }) => {
+  if (!timestamp) return "data não informada";
+  const date = timestamp.toDate();
+  const formattedDate = format(date, "dd/MM/yyyy");
+  const formattedTime = format(date, "HH:mm");
+  return { formattedDate, formattedTime };
+};
 
 const createNotificationDocument = async (
   userId: string,
@@ -44,53 +53,52 @@ const createNotificationDocument = async (
 
 // Função auxiliar para enviar notificações (sem alterações)
 const sendNotification = async (
-  userId: string,
+  recipientId: string,
   title: string,
   body: string
 ) => {
-  try {
-    // Primeiro, salva a notificação no Firestore para que ela apareça na aba de notificações
-    await createNotificationDocument(userId, title, body);
+  const userRef = admin.firestore().collection("users").doc(recipientId);
+  const userDoc = await userRef.get();
+  const fcmToken = userDoc.data()?.fcmToken;
 
-    const userRef = db.collection("users").doc(userId);
-    const userSnap = await userRef.get();
-    const userData = userSnap.data();
-
-    if (userData && userData.fcmToken) {
-      const message = {
-        notification: { title, body },
-        token: userData.fcmToken,
-      };
-      await messaging.send(message);
-      logger.info(`Notificação push enviada com sucesso para ${userId}`);
-    } else {
-      logger.warn(`Usuário ${userId} não encontrado ou não possui fcmToken.`);
+  if (fcmToken) {
+    const message = {
+      notification: {
+        title: title,
+        body: body,
+      },
+      token: fcmToken,
+    };
+    try {
+      await admin.messaging().send(message);
+      logger.info("Notificação enviada com sucesso", { recipientId });
+    } catch (error) {
+      logger.error("Erro ao enviar notificação", { error });
     }
-  } catch (error) {
-    logger.error(`Erro ao enviar notificação para ${userId}:`, error);
+  } else {
+    logger.warn("Token FCM não encontrado para o usuário", { recipientId });
   }
 };
-
 // --- FUNÇÃO ACIONADA QUANDO UM NOVO AGENDAMENTO É CRIADO ---
 export const onAppointmentCreate = onDocumentCreated(
   {
     document: "appointments/{appointmentId}",
     region: REGION,
   },
-  async (event) => {
-    const snapshot = event.data;
-    if (!snapshot) {
-      logger.log("No data associated with the event");
-      return;
-    }
-    const appointmentData = snapshot.data();
+  async (event: FirestoreEvent<QueryDocumentSnapshot | undefined>) => {
+    const appointmentData = event.data?.data();
 
-    const { serviceProviderId, clientName, serviceName, date, startTime } =
-      appointmentData;
+    if (!appointmentData) return;
+
+    const { serviceProviderId, clientName, serviceName, startTime } = appointmentData;
+    const { formattedDate, formattedTime } = formatDate(startTime);
+
+    const safeClientName = clientName || "Cliente";
+    const safeServiceName = serviceName || "Serviço";
 
     if (serviceProviderId) {
       const notificationTitle = "Novo Agendamento!";
-      const notificationBody = `${clientName} agendou "${serviceName}" para ${date} às ${startTime}.`;
+      const notificationBody = `${safeClientName} agendou "${safeServiceName}" para ${formattedDate} às ${formattedTime}.`;
 
       logger.info(
         `Enviando notificação para o prestador: ${serviceProviderId}`
@@ -121,23 +129,39 @@ export const onAppointmentUpdate = onDocumentUpdated(
     const {
       clientId,
       serviceName,
-      date,
       startTime,
     } = afterData;
+
+    // Função para formatar a data de forma segura
+    const getFormattedDateTime = (timestamp: any) => {
+      try {
+        if (timestamp && typeof timestamp.toDate === 'function') {
+          const dateObj = timestamp.toDate();
+          const formattedDate = format(dateObj, "dd/MM/yyyy");
+          const formattedTime = format(dateObj, "HH:mm");
+          return { formattedDate, formattedTime };
+        }
+      } catch (e) {
+        logger.error("Erro ao converter Timestamp para Date", e);
+      }
+      return { formattedDate: "data", formattedTime: "hora" };
+    };
+
+    const { formattedDate, formattedTime } = getFormattedDateTime(startTime);
 
     let notificationTitle = "";
     let notificationBody = "";
 
     if (afterData.status === "confirmed") {
       notificationTitle = "Agendamento Confirmado!";
-      notificationBody = `Seu agendamento para "${serviceName}" em ${date} às ${startTime} foi confirmado.`;
+      notificationBody = `Seu agendamento para "${serviceName}" em ${formattedDate} às ${formattedTime} foi confirmado.`;
     } else if (afterData.status === "cancelled") {
       if (
         beforeData.status === "pending" ||
         beforeData.status === "confirmed"
       ) {
         notificationTitle = "Agendamento Recusado";
-        notificationBody = `Infelizmente, seu agendamento para "${serviceName}" em ${date} não pôde ser confirmado.`;
+        notificationBody = `Infelizmente, seu agendamento para "${serviceName}" em ${formattedDate} não pôde ser confirmado.`;
       }
     }
 
@@ -147,6 +171,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
     }
   }
 );
+
 
 // Adicione aqui suas outras funções, como a de criação de usuário, se tiver.
 export const onUserCreate = onDocumentCreated(

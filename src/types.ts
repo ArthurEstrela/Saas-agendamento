@@ -214,3 +214,18 @@ export interface Transaction {
   completedAt: Date; // Data em que o serviço foi concluído
   professionalName: string;
 }
+
+export interface RevenueBreakdown {
+  professional: {
+    id: string;
+    name: string;
+    revenue: number;
+    appointments: number;
+  }[];
+  service: {
+    id: string;
+    name: string;
+    revenue: number;
+    appointments: number;
+  }[];
+}

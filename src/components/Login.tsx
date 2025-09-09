@@ -15,6 +15,7 @@ import {
   MapPin,
 } from "lucide-react";
 
+
 // --- Componente de Card para Seleção de Tipo de Usuário ---
 const UserTypeCard = ({
   icon: Icon,
@@ -59,6 +60,9 @@ const Login = () => {
   const [isLoginView, setIsLoginView] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Pega a rota de onde o usuário veio, se existir
+  const from = location.state?.from?.pathname || "/dashboard";
 
   const [formData, setFormData] = useState({
     email: "",
@@ -199,7 +203,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   if (isLoginView) {
     try {
       await signIn(formData.email, formData.password);
-      navigate("/dashboard");
+        navigate(from, { replace: true }); // Redireciona para a rota original
     } catch (err) {
       setError("Email ou senha inválidos.");
     }
@@ -217,8 +221,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       const profileData = {
         displayName: formData.displayName,
         userType: formData.userType,
-        // O spread (...) operator adiciona os campos do prestador
-        // apenas se o userType for 'serviceProvider'
         ...(formData.userType === "serviceProvider" && {
           establishmentName: formData.establishmentName,
           phoneNumber: formData.phoneNumber,
@@ -238,9 +240,9 @@ const handleSubmit = async (e: React.FormEvent) => {
 
       // --- CHAMADA CORRETA DA FUNÇÃO ---
       // Passe todos os dados necessários para a função signUp
-      await signUp(formData.email, formData.password, formData.userType, profileData);
+     await signUp(formData.email, formData.password, formData.userType, profileData);
 
-      navigate("/dashboard");
+      navigate(from, { replace: true });
     } catch (err) {
       console.error("Erro no cadastro:", err); // Adicione um console.error para ver detalhes do erro no console do navegador
       setError("Falha ao criar a conta. Verifique os seus dados.");
@@ -251,7 +253,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   const handleGoogleLogin = async () => {
     try {
       await signInWithGoogle(); // <-- MUDANÇA AQUI: 'loginWithGoogle' virou 'signInWithGoogle'
-      navigate("/dashboard");
+       navigate(from, { replace: true }); // Redireciona para a rota original
     } catch (err) {
       setError("Falha ao fazer login com o Google.");
     }

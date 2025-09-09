@@ -14,7 +14,8 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { createAppointment } from "../../firebase/bookingService";
-import useBookingProcessStore from "../../store/bookingProcessStore";
+import { useNavigate } from 'react-router-dom'; // Importe o useNavigate
+import useBookingProcessStore from "../../store/bookingProcessStore"; // Adicione esta linha
 
 const Confirmation = ({
   onBookingConfirmed,
@@ -29,6 +30,7 @@ const Confirmation = ({
     selectedTime,
   } = useBookingProcessStore();
   const { userProfile } = useAuthStore();
+  const navigate = useNavigate(); // Hook para navegação
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
@@ -45,8 +47,14 @@ const Confirmation = ({
     return { totalPrice: price, totalDuration: duration };
   }, [selectedServices]);
 
-  const handleConfirmBooking = async () => {
-    if (!userProfile || !serviceProvider || !selectedDate || !selectedTime) {
+   const handleConfirmBooking = async () => {
+    // Se não tiver usuário, redireciona para o login
+    if (!userProfile) {
+      // Passa a rota atual para que o usuário retorne após o login
+      navigate('/login', { state: { from: location.pathname } });
+      return;
+    }
+     if (!serviceProvider || !selectedDate || !selectedTime) {
       showToast("Faltam informações para completar o agendamento.", "error");
       return;
     }

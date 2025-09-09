@@ -14,14 +14,11 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { createAppointment } from "../../firebase/bookingService";
-import { useNavigate } from 'react-router-dom'; // Importe o useNavigate
+import { useNavigate, useLocation } from 'react-router-dom'; // Importe o useNavigate
 import useBookingProcessStore from "../../store/bookingProcessStore"; // Adicione esta linha
 
-const Confirmation = ({
-  onBookingConfirmed,
-}: {
-  onBookingConfirmed: () => void;
-}) => {
+
+const Confirmation = ({ onBookingConfirmed }: { onBookingConfirmed: () => void; }) => {
   const {
     serviceProvider,
     selectedServices,
@@ -31,11 +28,13 @@ const Confirmation = ({
   } = useBookingProcessStore();
   const { userProfile } = useAuthStore();
   const navigate = useNavigate(); // Hook para navegação
+  const location = useLocation();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
 
   const { totalPrice, totalDuration } = useMemo(() => {
+      if (!selectedServices) return { totalPrice: 0, totalDuration: 0 };
     const price = selectedServices.reduce(
       (acc, service) => acc + service.price,
       0
@@ -50,9 +49,38 @@ const Confirmation = ({
    const handleConfirmBooking = async () => {
     // Se não tiver usuário, redireciona para o login
     if (!userProfile) {
-      // Passa a rota atual para que o usuário retorne após o login
-      navigate('/login', { state: { from: location.pathname } });
-      return;
+      // 1. Verifica se temos todas as informações necessárias
+      if (serviceProvider && selectedServices && selectedServices.length > 0 && selectedProfessional && selectedDate && selectedTime) {
+        
+        // 2. Cria o objeto de agendamento pendente com os dados da tela
+        const pendingBooking = {
+          serviceProviderId: serviceProvider.uid,
+          serviceProviderName: serviceProvider.companyName || serviceProvider.displayName,
+          serviceProviderPhotoURL: serviceProvider.photoURL || null,
+          
+          professionalId: selectedProfessional.id,
+          professionalName: selectedProfessional.name,
+
+          // Salva a lista completa de serviços
+          services: selectedServices.map(s => ({ id: s.id, name: s.name, price: s.price, duration: s.duration })),
+
+          date: selectedDate,
+          startTime: selectedTime,
+          duration: totalDuration,
+          price: totalPrice,
+        };
+
+        // 3. Salva o objeto no localStorage para recuperar depois do login
+        localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
+        
+        // 4. Redireciona o usuário para a tela de login
+        showToast("Faça login para continuar", "info");
+        navigate('/login', { state: { from: location.pathname } });
+
+      } else {
+        showToast("Faltam informações para completar o agendamento.", "error");
+      }
+      return; // Impede a continuação da função
     }
      if (!serviceProvider || !selectedDate || !selectedTime) {
       showToast("Faltam informações para completar o agendamento.", "error");

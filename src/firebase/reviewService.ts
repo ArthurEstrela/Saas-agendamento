@@ -1,58 +1,66 @@
-import { db } from './config';
 import {
   collection,
-  getDocs,
-  query,
-  orderBy,
-  writeBatch,
+  addDoc,
+  serverTimestamp,
   doc,
-} from 'firebase/firestore';
-import type { Review } from '../types';
-import { format } from 'date-fns';
+  updateDoc,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "./config";
+import type { Review } from "../types";
 
 /**
- * Busca todas as avaliações de um prestador de serviço.
- * @param serviceProviderId O UID do prestador de serviço.
- * @returns Uma promessa que resolve para um array de avaliações.
+ * Adiciona uma nova avaliação a um agendamento.
+ * @param appointmentId O ID do agendamento que está sendo avaliado.
+ * @param reviewData Os dados da avaliação.
  */
-export const getReviews = async (serviceProviderId: string): Promise<Review[]> => {
-    try {
-        const reviewsColPath = `users/${serviceProviderId}/reviews`;
-        const reviewsCol = collection(db, reviewsColPath);
-        const q = query(reviewsCol, orderBy('date', 'desc'));
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data()) as Review[];
-    } catch (error) {
-        console.error('Erro ao buscar avaliações: ', error);
-        throw new Error('Não foi possível carregar as avaliações.');
-    }
+export const addReviewToAppointment = async (
+  appointmentId: string,
+  reviewData: Omit<Review, "id" | "createdAt">
+): Promise<void> => {
+  // Cria a avaliação na coleção 'reviews'
+  const reviewsCollection = collection(db, "reviews");
+  const reviewDocRef = await addDoc(reviewsCollection, {
+    ...reviewData,
+    appointmentId,
+    createdAt: serverTimestamp(),
+  });
+
+  // Atualiza o documento do agendamento para incluir a referência da avaliação
+  const appointmentRef = doc(db, "appointments", appointmentId);
+  await updateDoc(appointmentRef, {
+    review: {
+      id: reviewDocRef.id,
+      ...reviewData,
+      createdAt: new Date(), // Usamos a data atual para a UI
+    },
+  });
 };
 
-/**
- * Cria uma nova avaliação para um prestador e atualiza o agendamento correspondente.
- * @param serviceProviderId O UID do prestador de serviço.
- * @param reviewData Os dados da nova avaliação.
- * @param appointmentId O ID do agendamento que está sendo avaliado.
- */
-export const addReview = async (serviceProviderId: string, reviewData: Omit<Review, 'id' | 'date'>, appointmentId: string): Promise<void> => {
-    const batch = writeBatch(db);
-    
-    // 1. Cria a referência para o novo documento na subcoleção de reviews
-    const reviewRef = doc(collection(db, `users/${serviceProviderId}/reviews`));
-    batch.set(reviewRef, {
-        ...reviewData,
-        id: reviewRef.id,
-        date: format(new Date(), 'yyyy-MM-dd'),
-    });
+export const getReviewsByProviderId = async (
+  providerId: string
+): Promise<Review[]> => {
+  // Como as reviews estão em uma coleção própria, buscamos por um campo que identifique o prestador.
+  // Vamos assumir que cada review tem um 'serviceProviderId'.
+  const reviewsCollection = collection(db, "reviews");
+  const q = query(
+    reviewsCollection,
+    where("serviceProviderId", "==", providerId),
+    orderBy("createdAt", "desc")
+  );
 
-    // 2. Cria a referência para o agendamento e o atualiza
-    const appointmentRef = doc(db, 'appointments', appointmentId);
-    batch.update(appointmentRef, { hasBeenReviewed: true });
+  const querySnapshot = await getDocs(q);
 
-    try {
-        await batch.commit();
-    } catch (error) {
-        console.error('Erro ao criar avaliação: ', error);
-        throw new Error('Não foi possível enviar sua avaliação.');
+  return querySnapshot.docs.map((doc) => {
+    const data = doc.data();
+    // Converte o timestamp, se houver
+    if (data["createdAt"] instanceof Timestamp) {
+      data["createdAt"] = data["createdAt"].toDate();
     }
+    return { id: doc.id, ...data } as Review;
+  });
 };

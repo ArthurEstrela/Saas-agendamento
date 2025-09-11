@@ -1,231 +1,136 @@
-import { Timestamp } from 'firebase/firestore';
+// Tipos Base e Enumerações
 
-// Interface para o endereço estruturado com geolocalização
-export interface Address {
-  street: string;
-  number: string;
-  neighborhood: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  latitude?: number;
-  longitude?: number;
-}
+export const UserRole = {
+  Client: 'client',
+  ServiceProvider: 'serviceProvider',
+  Professional: 'professional',
+} as const;
 
-// Interface para Serviços, mantida detalhada para associar aos profissionais
-export interface Service {
+export type UserRole = typeof UserRole[keyof typeof UserRole];
+
+export interface BaseUser {
   id: string;
-  serviceProviderId: string;
+  email: string;
   name: string;
-  price: number;
-  duration: number; // Duração em minutos
-  description: string;
-  professionalIds: string[]; // MUDANÇA: de professionalId para um array de IDs
+  role: UserRole;
+  createdAt: Date;
+  lastLogin?: Date;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
 }
 
-// Estrutura para os intervalos de tempo (trabalho e pausa)
-export interface TimeInterval {
+// Disponibilidade
+
+export interface TimeSlot {
   start: string; // "HH:mm"
   end: string;   // "HH:mm"
 }
 
-export interface WorkSchedule {
-  [dayOfWeek: string]: {
-    active: boolean;
-    intervals: TimeInterval[];
-  };
-  // Ex: "monday": { active: true, intervals: [{ start: "09:00", end: "18:00" }] }
+export interface DailyAvailability {
+  dayOfWeek: 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
+  isAvailable: boolean;
+  slots: TimeSlot[];
 }
 
-// Disponibilidade por dia da semana, mais flexível para cada profissional
-export interface Availability {
-  slotInterval: number;
-  weekdays: {
-    [day: string]: {
-      isOpen: boolean;
-      startTime: string;
-      endTime: string;
-    };
-  };
-}
+// Entidades Principais
 
-// Interface para Folgas e Imprevistos
-export interface Unavailability {
-  id: string;
-  date: string; // 'YYYY-MM-DD'
-  period: 'morning' | 'afternoon' | 'all_day';
-  description: string;
-}
-
-// Interface para o Profissional, com sua própria disponibilidade
-export interface Professional {
+export interface Service {
   id: string;
   name: string;
-  photoURL?: string;
-  availability: DayAvailability[]; // Cada profissional tem sua agenda
-  unavailability?: Unavailability[]; // Campo para folgas e imprevistos
-  workSchedule?: WorkSchedule;
-}
-
-export interface DayAvailability {
-  dayOfWeek: 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
-  isDayOff: boolean;
-  workIntervals: TimeInterval[];
-  breakIntervals: TimeInterval[];
-}
-
-// Perfil do Usuário unificado e atualizado
-export interface UserProfile {
-  uid: string;
-  email: string;
-  createdAt: Timestamp;
-  userType: "client" | "serviceProvider";
-
-  phoneNumber?: string;
-  photoURL?: string;
-  
-  // Para Clientes
-  name?: string; // Nome de exibição do cliente
-  favorites?: string[]; // UIDs dos prestadores favoritos
-
-  // Para Prestadores de Serviço
-  companyName?: string; // Nome do estabelecimento
-  address?: Address; // Endereço estruturado
-  instagram?: string;
-  whatsapp?: string;
-  segment?: string;
-  publicProfileSlug?: string;
-  professionals?: Professional[];
-  services?: Service[];
-  cnpj?: string;
-  cancellationPolicyMinutes?: number;
-  bookingAdvanceDays?: number;
-  availability?: Availability;
-
-  averageRating?: number;
-  reviewCount?: number;
-  totalRevenue?: number;
-}
-
-// Interface de Agendamento detalhada
-export interface Appointment {
-  id: string;
-  serviceProviderId: string;
-  professionalId: string;
-  clientId: string;
-  serviceId: string; // ID do serviço principal agendado
-  date: string; // 'YYYY-MM-DD'
-  startTime: string; // 'HH:mm'
-  endTime: string; // 'HH:mm'
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'; 
-  createdAt: Timestamp;
-  serviceName: string;
-  professionalName: string;
-  clientName: string;
-  clientEmail?: string;
-  duration: number;
-  price: number;
-  totalPrice?: number;
-  cancellationReason?: string;
-  notes?: string;
-  hasBeenReviewed?: boolean;
-  serviceProviderName: string;      // NOVO CAMPO (ou garantir que exista)
-  serviceProviderPhotoURL?: string; // NOVO CAMPO OPCIONAL
-}
-
-// Interface para Despesas
-export interface Expense {
-  id: string;
-  userId: string; // ID do prestador de serviço
   description: string;
-  amount: number;
-  date: Date;
-  category: string;
+  duration: number; // in minutes
+  price: number;
 }
 
-export interface ProfessionalRevenue {
-  professionalId: string;
-  professionalName: string;
-  totalRevenue: number;
+export interface Professional {
+  id:string;
+  name: string;
+  services: Service[]; // Array of Service objects
+  availability: DailyAvailability[];
 }
 
-export interface ServiceRevenue {
-  serviceId: string;
-  serviceName: string;
-  totalRevenue: number;
-}
-
-export interface FinancialSummary {
-  totalRevenue: number;
-  totalExpenses: number;
-  netProfit: number;
-}
-
-// Interface para Avaliações
 export interface Review {
   id: string;
-  serviceProviderId: string;
-  clientId: string;
-  clientName: string;
-  clientPhotoURL?: string;
-  professionalId: string;
-  serviceName: string;
-  rating: number;
-  comment: string;
-  date: string;
-}
-
-export interface RecurringAppointment {
-  id: string;
-  professionalId: string;
-  clientId: string;
-  serviceId: string;
-  startDate: string; // 'YYYY-MM-DD'
-  endDate: string; // 'YYYY-MM-DD'
-  startTime: string; // 'HH:mm'
-  recurrence: 'semanal' | 'quinzenal' | 'mensal';
-}
-
-export interface Booking {
-  id: string;
-  clientId: string;
-  clientName: string;
-  providerId: string;
-  services: Service[];
-  professionalId: string | null;
-  professionalName: string;
-  date: Date | Timestamp | string; // O Firestore pode retornar diferentes tipos
-  totalPrice: number;
-  totalDuration: number; // em minutos
-  status: 'confirmed' | 'pending' | 'cancelled';
-  createdAt: Timestamp;
-  reviewId?: string | null; // ID da avaliação, se houver
-}
-
-export interface Transaction {
-  id: string;
-  serviceProviderId: string;
   appointmentId: string;
   clientId: string;
   clientName: string;
-  serviceName: string;
-  amount: number;
-  completedAt: Date; // Data em que o serviço foi concluído
-  professionalName: string;
+  rating: number;
+  comment: string;
+  createdAt: Date;
 }
 
-export interface RevenueBreakdown {
-  professional: {
+export interface Appointment {
+  id: string;
+  clientId: string;
+  clientName: string;
+  professionalId: string;
+  professionalName: string;
+  serviceId: string;
+  serviceName: string;
+  startTime: Date;
+  endTime: Date;
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled';
+  notes?: string;
+  review?: Review;
+  // Opcional: útil para quando o prestador recusa o agendamento
+  rejectionReason?: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  message: string;
+  isRead: boolean;
+  createdAt: Date;
+  link?: string; // Opcional, para redirecionar o usuário
+}
+
+// Perfis de Usuário
+
+export interface ClientProfile extends BaseUser {
+  // Mude de 'UserRole.Client' para a string literal 'client'
+  role: 'client';
+  favoriteProfessionals?: string[]; // Array of professional IDs
+}
+
+export interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  // Opcional: para integração com mapas
+  lat?: number;
+  lng?: number;
+}
+
+export interface ServiceProviderProfile extends BaseUser {
+  // Mude de 'UserRole.ServiceProvider' para a string literal 'serviceProvider'
+  role: 'serviceProvider';
+  businessName: string;
+  businessAddress: Address;
+  businessPhone?: string;
+  services: Service[];
+  professionals: Professional[];
+  reviews: Review[];
+}
+
+// Union Type para o perfil do usuário logado
+export type UserProfile = ClientProfile | ServiceProviderProfile;
+
+// Tipos para a área Financeira
+
+export interface Expense {
     id: string;
-    name: string;
-    revenue: number;
-    appointments: number;
-  }[];
-  service: {
-    id: string;
-    name: string;
-    revenue: number;
-    appointments: number;
-  }[];
+    description: string;
+    amount: number;
+    date: Date;
+    category: string;
+}
+
+export interface FinancialData {
+    totalRevenue: number;
+    totalExpenses: number;
+    netIncome: number;
+    monthlyRevenue: Record<string, number>; // Ex: { "2023-01": 5000, "2023-02": 6000 }
+    expenses: Expense[];
 }

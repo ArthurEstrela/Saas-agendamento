@@ -1,146 +1,63 @@
-import React, { useState } from "react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import type { Appointment } from "../../types";
-import {
-  Calendar,
-  Clock,
-  Store,
-  Tag,
-  User,
-  MoreVertical,
-  XCircle,
-  MessageSquare,
-  Star,
-} from "lucide-react";
-import ConfirmationModal from "../Common/ConfirmationModal";
-// Remova a importação do ReviewModal daqui
-// import ReviewModal from "../Common/ReviewModal";
+import type { Appointment } from '../../types';
+import { useUserAppointmentsStore } from '../../store/userAppointmentsStore';
+import { FaCalendar, FaClock, FaUserTie, FaCheckCircle, FaTimesCircle, FaHourglassHalf, FaStar } from 'react-icons/fa';
 
 interface ClientAppointmentCardProps {
   appointment: Appointment;
-  onCancel: (bookingId: string) => void;
-  onReview: (appointment: Appointment) => void; // Adicionada a prop onReview
 }
 
-const ClientAppointmentCard = ({ appointment, onCancel, onReview }: ClientAppointmentCardProps) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  // Remova o estado do modal de review
-  // const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+const getStatusChip = (status: Appointment['status']) => {
+    const baseClasses = "text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full";
+    const statusMap = {
+        pending: <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}><FaHourglassHalf className="inline mr-1"/>Pendente</span>,
+        scheduled: <span className={`${baseClasses} bg-green-100 text-green-800`}><FaCheckCircle className="inline mr-1"/>Confirmado</span>,
+        completed: <span className={`${baseClasses} bg-blue-100 text-blue-800`}><FaCheckCircle className="inline mr-1"/>Concluído</span>,
+        cancelled: <span className={`${baseClasses} bg-red-100 text-red-800`}><FaTimesCircle className="inline mr-1"/>Cancelado</span>,
+    };
+    return statusMap[status] || null;
+}
 
-  if (!appointment || !(appointment.startTime instanceof Date)) {
-    console.warn("Tentativa de renderizar um Card de Agendamento com dados inválidos:", appointment);
-    return null;
-  }
+export const ClientAppointmentCard = ({ appointment }: ClientAppointmentCardProps) => {
+  const { cancelAppointment } = useUserAppointmentsStore();
+//   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
 
-  const appointmentDate = appointment.startTime;
-  const isPast = appointmentDate < new Date();
-
-  const getStatusChip = (status?: string) => {
-    switch (status) {
-      case "confirmed": return "bg-blue-500/20 text-blue-400";
-      case "completed": return "bg-green-500/20 text-green-400";
-      case "cancelled": return "bg-red-500/20 text-red-400";
-      default: return "bg-gray-500/20 text-gray-400";
-    }
-  };
-
-  const handleCancelConfirm = () => {
-    onCancel(appointment.id);
-    setIsCancelModalOpen(false);
-  };
+  const canCancel = appointment.status === 'pending' || appointment.status === 'scheduled';
+  const canReview = appointment.status === 'completed' && !appointment.review;
 
   return (
-    <div className="group relative bg-gray-800/80 p-5 rounded-xl border border-gray-700 hover:border-[#daa520]/50 transition-all duration-300">
-      <div className="absolute top-4 right-4">
-        <button
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="p-2 rounded-full hover:bg-gray-700 transition-colors"
-        >
-          <MoreVertical size={20} className="text-gray-300" />
-        </button>
-        {isMenuOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-10 animate-fade-in-down">
-            {appointment.status === "confirmed" && !isPast && (
-              <button
-                onClick={() => { setIsCancelModalOpen(true); setIsMenuOpen(false); }}
-                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
-              >
-                <XCircle size={16} /> Cancelar
-              </button>
-            )}
-            {appointment.status === "completed" && !appointment.hasBeenReviewed && (
-                <button
-                  onClick={() => { onReview(appointment); setIsMenuOpen(false); }} // Modificado para usar onReview
-                  className="w-full text-left px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2"
-                >
-                  <Star size={16} /> Avaliar
-                </button>
-              )}
-            <a
-              href={`https://wa.me/PHONE_NUMBER_PLACEHOLDER`}
-              target="_blank" rel="noopener noreferrer"
-              className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-2"
+    <>
+    <div className="bg-white rounded-lg shadow-md p-5 flex flex-col justify-between">
+      <div>
+        <div className="flex justify-between items-start mb-2">
+            <h3 className="text-lg font-bold text-gray-800">{appointment.serviceName}</h3>
+            {getStatusChip(appointment.status)}
+        </div>
+        <div className="text-sm text-gray-500 space-y-2">
+            <p><FaCalendar className="inline mr-2" />{new Date(appointment.startTime).toLocaleDateString('pt-BR')}</p>
+            <p><FaClock className="inline mr-2" />{`${new Date(appointment.startTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - ${new Date(appointment.endTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`}</p>
+            <p><FaUserTie className="inline mr-2" />{appointment.professionalName}</p>
+        </div>
+      </div>
+      <div className="mt-4 flex space-x-2">
+        {canCancel && (
+            <button 
+                onClick={() => window.confirm('Tem certeza que deseja cancelar?') && cancelAppointment(appointment.id)}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-2 px-4 rounded transition-colors"
             >
-              <MessageSquare size={16} /> Contato
-            </a>
-          </div>
+                Cancelar
+            </button>
+        )}
+        {canReview && (
+            <button
+                // onClick={() => setReviewModalOpen(true)}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-bold py-2 px-4 rounded transition-colors"
+            >
+                <FaStar className="inline mr-1" /> Avaliar
+            </button>
         )}
       </div>
-
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-shrink-0">
-          <img
-            src={appointment.serviceProviderPhotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(appointment.serviceProviderName)}&background=2d3748&color=ffffff`}
-            alt={appointment.serviceProviderName}
-            className="h-20 w-20 rounded-lg object-cover"
-          />
-        </div>
-        <div className="flex-grow">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <Store size={20} />
-              {appointment.serviceProviderName}
-            </h3>
-            <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${getStatusChip(appointment.status)}`}>
-              {appointment.status}
-            </span>
-          </div>
-
-          <p className="text-lg text-gray-200 font-medium flex items-center gap-2 mb-4">
-            <Tag size={18} className="text-[#daa520]" />
-            {appointment.serviceName}
-          </p>
-
-          <div className="border-t border-gray-700 pt-3 space-y-2 text-sm text-gray-400">
-            <p className="flex items-center gap-2 capitalize">
-              <Calendar size={16} />
-              {format(appointmentDate, "eeee, dd 'de' MMMM, yyyy", { locale: ptBR })}
-            </p>
-            <p className="flex items-center gap-2">
-              <Clock size={16} />
-              {format(appointmentDate, 'HH:mm')} - {appointment.endTime instanceof Date ? format(appointment.endTime, 'HH:mm') : 'N/A'}
-            </p>
-            <p className="flex items-center gap-2">
-              <User size={16} />
-              {appointment.professionalName}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <ConfirmationModal
-        isOpen={isCancelModalOpen}
-        onClose={() => setIsCancelModalOpen(false)}
-        onConfirm={handleCancelConfirm}
-        title="Confirmar Cancelamento"
-        message="Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita."
-      />
-
-      {/* Remova o ReviewModal daqui */}
     </div>
+    {/* {isReviewModalOpen && <ReviewModal appointmentId={appointment.id} onClose={() => setReviewModalOpen(false)} />} */}
+    </>
   );
 };
-
-export default ClientAppointmentCard;

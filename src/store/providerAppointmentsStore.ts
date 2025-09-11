@@ -1,75 +1,82 @@
-import { create } from "zustand";
-import { useEffect } from "react";
-import { db } from "../firebase/config";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
-import type { Appointment as FirestoreAppointment } from "../types";
-
-// ✅ CORREÇÃO: A palavra 'export' é essencial aqui.
-// Ela torna o tipo 'AppAppointment' visível e importável por outros arquivos no projeto.
-// Sem ela, o tipo existe apenas dentro deste arquivo, causando o erro de "does not provide an export".
-export type AppAppointment = Omit<FirestoreAppointment, 'startTime' | 'endTime' | 'createdAt'> & {
-  startTime: Date | null;
-  endTime: Date | null;
-  createdAt: Date | null;
-};
+import { create } from 'zustand';
+import type { Appointment } from '../types';
+import { getAppointmentsByProviderId, updateAppointmentStatus } from '../firebase/bookingService';
 
 interface ProviderAppointmentsState {
-  allAppointments: AppAppointment[];
-  loading: boolean;
+  appointments: Appointment[];
+  isLoading: boolean;
   error: string | null;
-  _setState: (partial: Partial<Omit<ProviderAppointmentsState, '_setState'>>) => void;
+  fetchAppointments: (providerId: string) => Promise<void>;
+  approveAppointment: (appointmentId: string) => Promise<void>;
+  completeAppointment: (appointmentId: string) => Promise<void>;
+  rejectAppointment: (appointmentId: string, reason: string) => Promise<void>;
 }
 
-const useProviderAppointmentsStore = create<ProviderAppointmentsState>((set) => ({
-  allAppointments: [],
-  loading: true,
+export const useProviderAppointmentsStore = create<ProviderAppointmentsState>((set) => ({
+  appointments: [],
+  isLoading: false,
   error: null,
-  _setState: (partial) => set(partial),
-}));
 
-export const useProviderAppointments = (providerId?: string) => {
-  const state = useProviderAppointmentsStore();
-  const { _setState } = useProviderAppointmentsStore.getState();
-
-  useEffect(() => {
-    if (!providerId) {
-      _setState({ allAppointments: [], loading: false, error: null });
-      return;
+  fetchAppointments: async (providerId: string) => {
+    if (!providerId) return;
+    set({ isLoading: true, error: null });
+    try {
+      const appointments = await getAppointmentsByProviderId(providerId);
+      set({ appointments, isLoading: false });
+    } catch (err: unknown) {
+      let errorMessage = "Erro ao buscar agendamentos do prestador.";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      set({ error: errorMessage, isLoading: false });
     }
-    _setState({ loading: true });
+  },
 
-    const q = query(
-      collection(db, "appointments"),
-      where("serviceProviderId", "==", providerId)
-    );
+  // Ação para aprovar um agendamento de 'pending' para 'scheduled'
+  approveAppointment: async (appointmentId: string) => {
+    try {
+      await updateAppointmentStatus(appointmentId, 'scheduled');
+      
+      set((state) => ({
+        appointments: state.appointments.map((app) =>
+          app.id === appointmentId ? ({ ...app, status: 'scheduled' } as Appointment) : app
+        ),
+      }));
+    } catch (err: unknown) {
+      console.error("Erro ao aprovar agendamento:", err);
+      // Adicionar lógica para notificar o usuário do erro, se necessário
+    }
+  },
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const processedAppointments = snapshot.docs.map((doc) => {
-        const data = doc.data() as FirestoreAppointment;
-        return {
-          ...data,
-          id: doc.id,
-          startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : null,
-          endTime: data.endTime instanceof Timestamp ? data.endTime.toDate() : null,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : null,
-        }
-      });
-      _setState({ allAppointments: processedAppointments, loading: false, error: null });
-    }, (err) => {
-      console.error("Erro no listener de agendamentos do prestador:", err);
-      _setState({ error: "Não foi possível carregar a agenda.", loading: false });
-    });
+  // Ação para finalizar um agendamento de 'scheduled' para 'completed'
+  completeAppointment: async (appointmentId: string) => {
+    try {
+      await updateAppointmentStatus(appointmentId, 'completed');
 
-    return () => unsubscribe();
-  }, [providerId, _setState]);
+      set((state) => ({
+        appointments: state.appointments.map((app) =>
+          app.id === appointmentId ? ({ ...app, status: 'completed' } as Appointment) : app
+        ),
+      }));
+    } catch (err: unknown) {
+      console.error("Erro ao completar agendamento:", err);
+    }
+  },
+  
+  // Ação para rejeitar um agendamento de 'pending' para 'cancelled'
+  rejectAppointment: async (appointmentId: string, reason: string) => {
+    try {
+      await updateAppointmentStatus(appointmentId, 'cancelled', reason);
 
-  return state;
-};
-
+      set((state) => ({
+        appointments: state.appointments.map((app) =>
+          app.id === appointmentId 
+            ? ({ ...app, status: 'cancelled', rejectionReason: reason } as Appointment) 
+            : app
+        ),
+      }));
+    } catch (err: unknown) {
+      console.error("Erro ao rejeitar agendamento:", err);
+    }
+  },
+}));

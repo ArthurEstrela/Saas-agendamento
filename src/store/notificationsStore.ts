@@ -1,109 +1,58 @@
 import { create } from 'zustand';
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-} from 'firebase/firestore';
-import { db } from '../firebase/config';
+import type { Notification } from '../types';
+import { getNotificationsByUserId, markNotificationAsRead } from '../firebase/notificationService';
 
-interface Notification {
-  id: string;
-  userId: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: any; // Mantido como 'any' para flexibilidade com Timestamps do Firebase
-}
-
-interface NotificationState {
+interface NotificationsState {
   notifications: Notification[];
   unreadCount: number;
-  loading: boolean;
-  unsubscribe: () => void;
-  fetchNotifications: (userId: string) => void;
+  isLoading: boolean;
+  error: string | null;
+  fetchNotifications: (userId: string) => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
-  deleteNotification: (notificationId: string) => Promise<void>;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
+export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
-  loading: true,
-  unsubscribe: () => {}, // Inicializa com uma função vazia
+  isLoading: false,
+  error: null,
 
-  fetchNotifications: (userId) => {
-    // Cancela a inscrição anterior para evitar múltiplos listeners
-    get().unsubscribe();
-
-    set({ loading: true });
-    const notificationsRef = collection(db, 'users', userId, 'notifications');
-    const q = query(notificationsRef, orderBy('createdAt', 'desc'));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const notificationsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Notification[];
-
-        const unreadCount = notificationsData.filter(n => !n.isRead).length;
-
-        set({ notifications: notificationsData, unreadCount: unreadCount, loading: false });
-      },
-      (error) => {
-        console.error('Erro ao buscar notificações:', error);
-        set({ loading: false });
+  fetchNotifications: async (userId: string) => {
+    if (!userId) return;
+    set({ isLoading: true, error: null });
+    try {
+      const notifications = await getNotificationsByUserId(userId);
+      const unreadCount = notifications.filter(n => !n.isRead).length;
+      set({ notifications, unreadCount, isLoading: false });
+    } catch (err: unknown) {
+      let errorMessage = "Erro ao buscar notificações.";
+      if (err instanceof Error) {
+        errorMessage = err.message;
       }
-    );
-
-    // Armazena a função de unsubscribe para poder chamá-la depois
-    set({ unsubscribe });
-  },
-
-  markAsRead: async (notificationId) => {
-    const { notifications } = get();
-    const notification = notifications.find((n) => n.id === notificationId);
-
-    if (notification && notification.userId) {
-      const notificationRef = doc(
-        db,
-        'users',
-        notification.userId,
-        'notifications',
-        notificationId
-      );
-      try {
-        await updateDoc(notificationRef, { isRead: true });
-        // O listener onSnapshot atualizará o estado automaticamente
-      } catch (error) {
-        console.error('Erro ao marcar notificação como lida:', error);
-      }
+      set({ error: errorMessage, isLoading: false });
     }
   },
 
-  deleteNotification: async (notificationId) => {
-    const { notifications } = get();
-    const notification = notifications.find((n) => n.id === notificationId);
-
-    if (notification && notification.userId) {
-      const notificationRef = doc(
-        db,
-        'users',
-        notification.userId,
-        'notifications',
-        notificationId
-      );
+  markAsRead: async (notificationId: string) => {
+    const notification = get().notifications.find(n => n.id === notificationId);
+    // Só faz a chamada se a notificação existir e não estiver lida (evita chamadas duplicadas)
+    if (notification && !notification.isRead) {
       try {
-        await deleteDoc(notificationRef);
-        // O listener onSnapshot cuidará da remoção do estado
-      } catch (error) {
-        console.error('Erro ao excluir notificação:', error);
+        await markNotificationAsRead(notificationId);
+
+        set(state => {
+          const updatedNotifications = state.notifications.map(n =>
+            n.id === notificationId ? { ...n, isRead: true } : n
+          );
+          const newUnreadCount = state.unreadCount - 1;
+          return {
+            notifications: updatedNotifications,
+            unreadCount: newUnreadCount > 0 ? newUnreadCount : 0,
+          };
+        });
+
+      } catch (err: unknown) {
+        console.error("Erro ao marcar notificação como lida:", err);
       }
     }
   },

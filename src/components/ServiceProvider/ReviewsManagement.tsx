@@ -1,130 +1,80 @@
-import React, { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useAuthStore } from '../../store/authStore';
-import { getReviews } from '../../firebase/reviewService'; // Importa do novo serviço
-import { Loader2, Star, MessageSquare, User, Calendar, Inbox } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useEffect, useMemo } from 'react';
+import { useProfileStore } from '../../store/profileStore';
+import { useProviderReviewsStore } from '../../store/providerReviewsStore'; // Importa o novo store
+import { Star, Loader2 } from 'lucide-react';
 
-// --- Componente para a Barra de Progresso das Estrelas ---
-const RatingBar = ({ count, total, percentage }) => (
-    <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-400 w-12">{count} {count > 1 ? 'votos' : 'voto'}</span>
-        <div className="w-full bg-gray-700 rounded-full h-2">
-            <div className="bg-amber-400 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
-        </div>
-        <span className="text-sm font-semibold text-white w-10 text-right">{percentage.toFixed(0)}%</span>
-    </div>
-);
-
-// --- Componente para o Card de Avaliação Individual ---
-const ReviewCard = ({ review }) => (
-    <div className="bg-gray-800 p-5 rounded-xl border border-gray-700">
-        <div className="flex items-start gap-4">
-            <img 
-                src={review.clientPhotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(review.clientName)}&background=1f2937&color=daa520`} 
-                alt={review.clientName}
-                className="h-12 w-12 rounded-full object-cover"
+// Componente para renderizar as estrelas da avaliação
+const StarRating = ({ rating }: { rating: number }) => (
+    <div className="flex items-center">
+        {[...Array(5)].map((_, i) => (
+            <Star
+                key={i}
+                className={`h-5 w-5 ${i < rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`}
             />
-            <div className="flex-grow">
-                <div className="flex justify-between items-center">
-                    <p className="font-bold text-white">{review.clientName}</p>
-                    <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                            <Star key={i} size={16} className={i < review.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-600'} />
-                        ))}
-                    </div>
-                </div>
-                <p className="text-xs text-gray-500">{format(parseISO(review.date), "dd 'de' MMMM, yyyy", { locale: ptBR })}</p>
-                {review.comment && (
-                    <p className="mt-3 text-gray-300 bg-black/20 p-3 rounded-md">{review.comment}</p>
-                )}
-            </div>
-        </div>
+        ))}
     </div>
 );
 
 
-// --- Componente Principal ---
-const ReviewsManagement = () => {
-    const { userProfile } = useAuthStore();
+// -- Componente Principal de Avaliações --
+export const ReviewsManagement = () => {
+  const { userProfile } = useProfileStore();
+  const { reviews, isLoading, error, fetchReviews } = useProviderReviewsStore();
 
-    const { data: reviews, isLoading, error } = useQuery({
-        queryKey: ['providerReviews', userProfile?.uid],
-        queryFn: () => getReviews(userProfile!.uid),
-        enabled: !!userProfile,
-    });
-
-    const stats = useMemo(() => {
-        if (!reviews || reviews.length === 0) {
-            return { average: 0, total: 0, counts: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } };
-        }
-        const total = reviews.length;
-        const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
-        const average = sum / total;
-        const counts = reviews.reduce((acc, r) => {
-            acc[r.rating] = (acc[r.rating] || 0) + 1;
-            return acc;
-        }, { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 });
-
-        return { average, total, counts };
-    }, [reviews]);
-
-
-    if (isLoading) {
-        return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-[#daa520]" size={48}/></div>;
+  useEffect(() => {
+    if (userProfile?.id) {
+      fetchReviews(userProfile.id);
     }
+  }, [userProfile, fetchReviews]);
+  
+  const averageRating = useMemo(() => {
+      if (reviews.length === 0) return 0;
+      const total = reviews.reduce((acc, review) => acc + review.rating, 0);
+      return (total / reviews.length).toFixed(1);
+  }, [reviews]);
 
-    if (error) {
-        return <div className="p-10 text-center text-red-400">Ocorreu um erro ao carregar as avaliações.</div>;
-    }
+  if (isLoading) {
+    return <div className="flex justify-center items-center p-20"><Loader2 className="animate-spin text-[#daa520]" size={40} /></div>;
+  }
 
-    return (
-        <div className="p-4 sm:p-6 space-y-8">
-            <h1 className="text-4xl font-bold text-white">Avaliações dos Clientes</h1>
+  if (error) {
+    return <div className="text-center text-red-400 p-10 bg-red-500/10 rounded-lg">{error}</div>;
+  }
 
-            {/* Seção de Resumo e Estatísticas */}
-            <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                <div className="flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-700 pb-6 md:pb-0 md:pr-6">
-                    <p className="text-6xl font-bold text-[#daa520]">{stats.average.toFixed(1)}</p>
-                    <div className="flex items-center mt-1">
-                        {[...Array(5)].map((_, i) => (
-                            <Star key={i} size={24} className={i < Math.round(stats.average) ? 'text-amber-400 fill-amber-400' : 'text-gray-600'} />
-                        ))}
-                    </div>
-                    <p className="text-gray-400 mt-2">Baseado em {stats.total} {stats.total === 1 ? 'avaliação' : 'avaliações'}</p>
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                    {[5, 4, 3, 2, 1].map(star => (
-                        <RatingBar 
-                            key={star}
-                            count={stats.counts[star]}
-                            total={stats.total}
-                            percentage={stats.total > 0 ? (stats.counts[star] / stats.total) * 100 : 0}
-                        />
-                    ))}
-                </div>
-            </div>
+  return (
+    <div className="animate-fade-in-down">
+      <h1 className="text-3xl font-bold text-white mb-8 flex items-center gap-3"><Star /> Avaliações de Clientes</h1>
 
-            {/* Lista de Avaliações */}
-            <div>
-                <h2 className="text-2xl font-bold text-white mb-4">O que os clientes dizem</h2>
-                {reviews && reviews.length > 0 ? (
-                    <div className="space-y-5">
-                        {reviews.map(review => (
-                            <ReviewCard key={review.id} review={review} />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center text-gray-500 py-20 bg-black/20 rounded-lg border border-dashed border-gray-700">
-                        <Inbox size={48} className="mx-auto mb-4"/>
-                        <p className="font-semibold">Nenhuma avaliação recebida ainda</p>
-                        <p className="text-sm">As avaliações dos seus clientes aparecerão aqui.</p>
-                    </div>
-                )}
-            </div>
+      {/* Seção de Resumo */}
+      <div className="bg-gray-800/70 p-6 rounded-xl border border-gray-700 mb-10 flex items-center justify-center gap-4 text-center">
+        <div>
+            <p className="text-sm text-gray-400">Nota Média</p>
+            <p className="text-4xl font-bold text-yellow-400">{averageRating}</p>
         </div>
-    );
-};
+        <div className="border-l border-gray-700 h-16 mx-4"></div>
+        <div>
+            <p className="text-sm text-gray-400">Total de Avaliações</p>
+            <p className="text-4xl font-bold text-white">{reviews.length}</p>
+        </div>
+      </div>
 
-export default ReviewsManagement;
+      {/* Lista de Avaliações */}
+      <div className="space-y-6">
+        {reviews.length > 0 ? reviews.map(review => (
+            <div key={review.id} className="bg-gray-800/70 p-5 rounded-xl border border-gray-700">
+                <div className="flex justify-between items-center mb-2">
+                    <p className="font-semibold text-white">{review.clientName}</p>
+                    <StarRating rating={review.rating} />
+                </div>
+                <p className="text-gray-400 italic">"{review.comment}"</p>
+                <p className="text-xs text-gray-500 mt-3 text-right">
+                    {new Date(review.createdAt).toLocaleDateString('pt-BR')}
+                </p>
+            </div>
+        )) : (
+            <p className="text-center text-gray-500 py-10">Você ainda não recebeu nenhuma avaliação.</p>
+        )}
+      </div>
+    </div>
+  );
+};

@@ -1,185 +1,117 @@
-import React, { useState, useEffect } from 'react';
-import { useAuthStore } from '../../store/authStore';
-import { useToast } from '../../context/ToastContext';
-import type { Availability } from '../../types';
-import { Clock, SlidersHorizontal, Loader2, Save } from 'lucide-react';
+import { useState } from 'react';
+import { useProfileStore } from '../../store/profileStore';
+import type { Professional, ServiceProviderProfile, DailyAvailability } from '../../types';
+import { Clock, Plus, Trash2, Save, Loader2 } from 'lucide-react';
 
-const daysOfWeek = {
-  monday: 'Segunda-feira',
-  tuesday: 'Terça-feira',
-  wednesday: 'Quarta-feira',
-  thursday: 'Quinta-feira',
-  friday: 'Sexta-feira',
-  saturday: 'Sábado',
-  sunday: 'Domingo',
+const weekDays: DailyAvailability['dayOfWeek'][] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const weekDaysPt: { [key in DailyAvailability['dayOfWeek']]: string } = {
+    Sunday: 'Domingo', Monday: 'Segunda-feira', Tuesday: 'Terça-feira', Wednesday: 'Quarta-feira',
+    Thursday: 'Quinta-feira', Friday: 'Sexta-feira', Saturday: 'Sábado'
 };
 
-const INITIAL_AVAILABILITY: Availability = {
-  slotInterval: 30,
-  weekdays: {
-    monday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
-    tuesday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
-    wednesday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
-    thursday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
-    friday: { isOpen: true, startTime: '09:00', endTime: '18:00' },
-    saturday: { isOpen: false, startTime: '09:00', endTime: '12:00' },
-    sunday: { isOpen: false, startTime: '09:00', endTime: '12:00' },
-  },
-};
+export const AvailabilityManagement = () => {
+    const { userProfile, updateUserProfile } = useProfileStore();
+    const [selectedProf, setSelectedProf] = useState<Professional | null>((userProfile as ServiceProviderProfile)?.professionals[0] || null);
+    const [availability, setAvailability] = useState<DailyAvailability[]>(selectedProf?.availability || []);
+    const [isSaving, setIsSaving] = useState(false);
 
-const AvailabilityManagement = () => {
-  const { userProfile, manageAvailability } = useAuthStore();
-  const { showToast } = useToast();
-  const [availability, setAvailability] = useState<Availability>(INITIAL_AVAILABILITY);
-  const [isLoading, setIsLoading] = useState(false);
+    const handleProfessionalChange = (profId: string) => {
+        const prof = (userProfile as ServiceProviderProfile)?.professionals.find(p => p.id === profId);
+        if (prof) {
+            setSelectedProf(prof);
+            // Garante que todos os dias da semana existam no estado
+            const profAvailability = weekDays.map(day => {
+                return prof.availability.find(a => a.dayOfWeek === day) || { dayOfWeek: day, isAvailable: false, slots: [] };
+            });
+            setAvailability(profAvailability);
+        }
+    };
 
-  // Efeito para carregar a disponibilidade salva do perfil do usuário
-  useEffect(() => {
-    if (userProfile?.availability) {
-      // Mescla a disponibilidade salva com a inicial para garantir que todos os dias existam
-      const profileAvailability = {
-        ...INITIAL_AVAILABILITY,
-        ...userProfile.availability,
-        weekdays: {
-          ...INITIAL_AVAILABILITY.weekdays,
-          ...userProfile.availability.weekdays,
-        },
-      };
-      setAvailability(profileAvailability);
-    }
-  }, [userProfile]);
+    const handleIsAvailableChange = (day: DailyAvailability['dayOfWeek'], isAvailable: boolean) => {
+        setAvailability(prev => prev.map(d => d.dayOfWeek === day ? { ...d, isAvailable, slots: isAvailable && d.slots.length === 0 ? [{ start: '09:00', end: '18:00' }] : d.slots } : d));
+    };
 
-  const handleToggleDay = (day: string) => {
-    setAvailability(prev => ({
-      ...prev,
-      weekdays: {
-        ...prev.weekdays,
-        [day]: { ...prev.weekdays[day], isOpen: !prev.weekdays[day].isOpen },
-      },
-    }));
-  };
+    const handleSlotChange = (day: DailyAvailability['dayOfWeek'], slotIndex: number, field: 'start' | 'end', value: string) => {
+        setAvailability(prev => prev.map(d => {
+            if (d.dayOfWeek === day) {
+                const newSlots = [...d.slots];
+                newSlots[slotIndex] = { ...newSlots[slotIndex], [field]: value };
+                return { ...d, slots: newSlots };
+            }
+            return d;
+        }));
+    };
 
-  const handleTimeChange = (day: string, type: 'startTime' | 'endTime', value: string) => {
-    setAvailability(prev => ({
-      ...prev,
-      weekdays: {
-        ...prev.weekdays,
-        [day]: { ...prev.weekdays[day], [type]: value },
-      },
-    }));
-  };
-  
-  const handleIntervalChange = (value: number) => {
-    setAvailability(prev => ({ ...prev, slotInterval: value }));
-  };
+    const handleAddSlot = (day: DailyAvailability['dayOfWeek']) => {
+        setAvailability(prev => prev.map(d => d.dayOfWeek === day ? { ...d, slots: [...d.slots, { start: '19:00', end: '21:00' }] } : d));
+    };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      await manageAvailability(availability);
-      showToast('Disponibilidade salva com sucesso!', 'success');
-    } catch (error) {
-      console.error(error);
-      showToast('Erro ao salvar disponibilidade.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const handleRemoveSlot = (day: DailyAvailability['dayOfWeek'], slotIndex: number) => {
+        setAvailability(prev => prev.map(d => d.dayOfWeek === day ? { ...d, slots: d.slots.filter((_, i) => i !== slotIndex) } : d));
+    };
 
-  return (
-    <div className="p-4 sm:p-6">
-      <h2 className="text-3xl font-bold text-white mb-2">Horários de Atendimento</h2>
-      <p className="text-gray-400 mb-8">Defina seus horários de trabalho e a duração de cada encaixe na agenda.</p>
-      
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Configuração do Intervalo de Encaixe */}
-        <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
-            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-3">
-                <SlidersHorizontal size={22}/> Intervalo dos Encaixes
-            </h3>
-            <p className="text-gray-400 mb-4 text-sm">
-                Define a duração de cada slot de horário que o cliente pode agendar. (Ex: 30 min, resultará em horários como 09:00, 09:30, 10:00).
-            </p>
-            <div className="flex gap-2">
-                {[15, 30, 45, 60].map(interval => (
-                    <button
-                        type="button"
-                        key={interval}
-                        onClick={() => handleIntervalChange(interval)}
-                        className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                            availability.slotInterval === interval
-                                ? 'bg-[#daa520] text-black'
-                                : 'bg-gray-700 hover:bg-gray-600 text-white'
-                        }`}
-                    >
-                        {interval} min
-                    </button>
-                ))}
+    const handleSave = async () => {
+        if (!userProfile || !selectedProf) return;
+        setIsSaving(true);
+        const updatedProfessionals = (userProfile as ServiceProviderProfile).professionals.map(p => 
+            p.id === selectedProf.id ? { ...p, availability } : p
+        );
+        await updateUserProfile(userProfile.id, { professionals: updatedProfessionals });
+        setIsSaving(false);
+        // showToast("Disponibilidade salva com sucesso!", "success");
+    };
+
+    return (
+        <div className="animate-fade-in-down">
+            <h1 className="text-3xl font-bold text-white mb-8 flex items-center gap-3"><Clock /> Gerenciar Disponibilidade</h1>
+            <div className="mb-6">
+                <label htmlFor="professional-select" className="block text-sm font-medium text-gray-300 mb-1">Selecione o Profissional</label>
+                <select 
+                    id="professional-select"
+                    onChange={(e) => handleProfessionalChange(e.target.value)}
+                    value={selectedProf?.id || ''}
+                    className="w-full max-w-xs bg-gray-900 p-3 rounded-md border border-gray-700"
+                >
+                    {(userProfile as ServiceProviderProfile)?.professionals.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
             </div>
-        </div>
 
-        {/* Configuração dos Dias da Semana */}
-        <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
-            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-3">
-                <Clock size={22}/> Horários por Dia
-            </h3>
-            <div className="space-y-4">
-            {Object.entries(daysOfWeek).map(([key, name]) => {
-                const dayData = availability.weekdays[key];
-                return (
-                <div key={key} className={`p-4 rounded-lg transition-all ${dayData.isOpen ? 'bg-gray-700/50' : 'bg-gray-800/40 opacity-60'}`}>
-                    <div className="flex items-center justify-between">
-                    <label htmlFor={`toggle-${key}`} className="flex items-center cursor-pointer">
-                        <div className="relative">
-                        <input
-                            type="checkbox"
-                            id={`toggle-${key}`}
-                            className="sr-only"
-                            checked={dayData.isOpen}
-                            onChange={() => handleToggleDay(key)}
-                        />
-                        <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
-                        <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+            {selectedProf && (
+                <div className="space-y-6">
+                    {availability.map(day => (
+                        <div key={day.dayOfWeek} className="bg-gray-800/70 p-4 rounded-xl border border-gray-700">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-semibold text-white">{weekDaysPt[day.dayOfWeek]}</h3>
+                                <label className="flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={day.isAvailable} onChange={(e) => handleIsAvailableChange(day.dayOfWeek, e.target.checked)} className="sr-only peer" />
+                                    <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#daa520]"></div>
+                                </label>
+                            </div>
+                            {day.isAvailable && (
+                                <div className="mt-4 space-y-2 pl-4 border-l-2 border-gray-700">
+                                    {day.slots.map((slot, i) => (
+                                        <div key={i} className="flex items-center gap-2">
+                                            <input type="time" value={slot.start} onChange={(e) => handleSlotChange(day.dayOfWeek, i, 'start', e.target.value)} className="bg-gray-900 p-2 rounded-md border border-gray-600" />
+                                            <span>até</span>
+                                            <input type="time" value={slot.end} onChange={(e) => handleSlotChange(day.dayOfWeek, i, 'end', e.target.value)} className="bg-gray-900 p-2 rounded-md border border-gray-600" />
+                                            <button onClick={() => handleRemoveSlot(day.dayOfWeek, i)} className="text-gray-500 hover:text-red-400"><Trash2 size={18} /></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => handleAddSlot(day.dayOfWeek)} className="flex items-center gap-2 text-sm text-[#daa520] hover:text-yellow-300 mt-2"><Plus size={16} /> Adicionar intervalo</button>
+                                </div>
+                            )}
                         </div>
-                        <div className="ml-3 text-white font-bold text-lg">{name}</div>
-                    </label>
-                    <div className={`flex items-center gap-2 transition-opacity ${dayData.isOpen ? 'opacity-100' : 'opacity-0'}`}>
-                        <input
-                        type="time"
-                        value={dayData.startTime}
-                        onChange={(e) => handleTimeChange(key, 'startTime', e.target.value)}
-                        disabled={!dayData.isOpen}
-                        className="bg-gray-800 p-2 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-600"
-                        />
-                        <span>até</span>
-                        <input
-                        type="time"
-                        value={dayData.endTime}
-                        onChange={(e) => handleTimeChange(key, 'endTime', e.target.value)}
-                        disabled={!dayData.isOpen}
-                        className="bg-gray-800 p-2 rounded-md focus:ring-2 focus:ring-[#daa520] border border-gray-600"
-                        />
-                    </div>
+                    ))}
+                    <div className="flex justify-end">
+                        <button onClick={handleSave} disabled={isSaving} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] flex items-center gap-2">
+                            {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                            Salvar Disponibilidade
+                        </button>
                     </div>
                 </div>
-                );
-            })}
-            </div>
+            )}
         </div>
-
-        <div className="flex justify-end pt-4">
-            <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-[#daa520] hover:bg-[#c8961e] text-black font-bold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed text-lg"
-            >
-            {isLoading ? <Loader2 className="animate-spin" size={24} /> : <><Save size={20}/> Salvar Alterações</>}
-            </button>
-        </div>
-      </form>
-    </div>
-  );
+    );
 };
-
-export default AvailabilityManagement;

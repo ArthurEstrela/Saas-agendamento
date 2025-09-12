@@ -34,6 +34,25 @@ const convertTimestamps = (
   return data;
 };
 
+const createSlug = (text: string) => {
+  const a =
+    "àáâäæãåāăąçćčđďèéêëēėęěğǵḧîïíīįìłḿñńǹňôöòóœøōõőṕŕřßśšşșťțûüùúūǘůűųẃẍÿýžźż·/_,:;";
+  const b =
+    "aaaaaaaaaacccddeeeeeeeegghiiiiiilmnnnnoooooooooprrsssssttuuuuuuuuuwxyyzzz------";
+  const p = new RegExp(a.split("").join("|"), "g");
+
+  return text
+    .toString()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(p, (c) => b.charAt(a.indexOf(c)))
+    .replace(/&/g, "-e-")
+    .replace(/[^\w-]+/g, "") // Remove todos os caracteres não-palavra (sem a barra antes do hífen)
+    .replace(/--+/g, "-") // Substitui múltiplos - por um único - (sem a barra)
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+};
+
 export const createUserProfile = async (
   uid: string,
   email: string,
@@ -47,7 +66,7 @@ export const createUserProfile = async (
     email,
     name,
     role,
-    createdAt: serverTimestamp(), // Isso é do tipo FieldValue
+    createdAt: serverTimestamp(),
   };
 
   let specificProfile;
@@ -57,18 +76,20 @@ export const createUserProfile = async (
       ...baseProfile,
       role: "client",
       favoriteProfessionals: [],
-      // Correção aqui: usando o cast 'as unknown' para compatibilizar FieldValue e Date
     } as unknown as ClientProfile;
   } else {
+    // --- LÓGICA DE CRIAÇÃO DO SLUG ACONTECE AQUI ---
+    // O nome do negócio inicial virá do nome completo do usuário no cadastro
+    const businessName = `${name}'s Business`;
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
-      businessName: "Meu Negócio",
-      businessAddress: "",
+      businessName: businessName, // Valor inicial
+      publicProfileSlug: createSlug(businessName), // Gera o slug automaticamente
+      businessAddress: { street: "", city: "", state: "", zipCode: "" }, // Endereço inicial vazio
       services: [],
       professionals: [],
       reviews: [],
-      // Correção aqui: usando o cast 'as unknown'
     } as unknown as ServiceProviderProfile;
   }
 
@@ -120,32 +141,37 @@ export const toggleFavoriteProfessional = async (
   });
 };
 
-export const getProfessionalsByIds = async (professionalIds: string[]): Promise<ServiceProviderProfile[]> => {
+export const getProfessionalsByIds = async (
+  professionalIds: string[]
+): Promise<ServiceProviderProfile[]> => {
   if (professionalIds.length === 0) {
     return [];
   }
 
   try {
-    const usersCollection = collection(db, 'users');
-    
+    const usersCollection = collection(db, "users");
+
     // --- CORREÇÃO AQUI ---
     // Adicionamos 'where('role', '==', 'serviceProvider')' para alinhar com as regras de segurança.
     // Isso garante que a query só peça por documentos que o usuário tem permissão para ler.
     const q = query(
-      usersCollection, 
-      where('id', 'in', professionalIds),
-      where('role', '==', 'serviceProvider') // Garante que só buscamos prestadores
+      usersCollection,
+      where("id", "in", professionalIds),
+      where("role", "==", "serviceProvider") // Garante que só buscamos prestadores
     );
 
     const querySnapshot = await getDocs(q);
 
-    return querySnapshot.docs.map(doc => {
+    return querySnapshot.docs.map((doc) => {
       const data = doc.data();
       // Lembre-se de converter Timestamps se necessário
       return data as ServiceProviderProfile;
     });
   } catch (error) {
-    console.error("Erro ao buscar perfis de favoritos. Verifique as regras e os índices do Firestore.", error);
+    console.error(
+      "Erro ao buscar perfis de favoritos. Verifique as regras e os índices do Firestore.",
+      error
+    );
     return [];
   }
 };
@@ -218,6 +244,5 @@ export const getProviderProfileBySlug = async (
   }
 
   const providerData = querySnapshot.docs[0].data();
-  // Lembre-se de converter Timestamps se necessário
   return providerData as ServiceProviderProfile;
 };

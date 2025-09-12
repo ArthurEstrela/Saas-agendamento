@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { ServiceProviderProfile } from '../types';
-import { getProviderProfileBySlug } from '../firebase/userService'; // Usamos nossa nova função
-import { Loader2, AlertCircle, MapPin, Phone, Star, Calendar } from 'lucide-react';
+import { getProviderProfileBySlug } from '../firebase/userService';
+import { Loader2, AlertCircle, MapPin, Phone, Calendar } from 'lucide-react';
 import Footer from '../components/Footer';
 
 const PublicBookingPage = () => {
-  // O 'slug' vem da URL, ex: /agendar/:slug
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
@@ -38,41 +37,36 @@ const PublicBookingPage = () => {
   }, [slug]);
 
   const handleGoToBooking = () => {
-    // A mágica acontece aqui: navegamos para a nossa página de agendamento,
-    // passando o ID do prestador na URL.
-    navigate(`/book/${provider?.id}`);
+    // Garantimos que o provider e o id existem antes de navegar
+    if (provider?.id) {
+      navigate(`/book/${provider.id}`);
+    } else {
+      setError("Não foi possível iniciar o agendamento. ID do prestador não encontrado.");
+    }
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white">
         <Loader2 className="animate-spin text-[#daa520]" size={48} />
-        <p className="mt-4 text-lg">Carregando perfil...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !provider) {
     return (
       <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white p-4 text-center">
         <AlertCircle className="text-red-500" size={48} />
         <h1 className="mt-4 text-2xl font-bold">Oops! Algo deu errado.</h1>
-        <p className="mt-2 text-gray-400">{error}</p>
-        <Link to="/" className="mt-6 bg-[#daa520] text-black font-bold px-6 py-2 rounded-lg hover:bg-[#c8961e]">
-          Voltar para a Página Inicial
-        </Link>
+        <p className="mt-2 text-gray-400">{error || "Perfil não encontrado."}</p>
       </div>
     );
   }
 
-  if (!provider) return null;
-
   return (
     <div className="bg-gray-900 text-white min-h-screen">
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
-        {/* Header do Perfil */}
         <header className="relative h-48 sm:h-64 rounded-2xl overflow-hidden mb-[-80px]">
-          {/* Adicionar uma foto de capa aqui se tiver no seu 'types.ts' */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
         </header>
 
@@ -85,18 +79,18 @@ const PublicBookingPage = () => {
             />
             <div className="flex-grow text-center sm:text-left">
               <h1 className="text-3xl sm:text-4xl font-bold text-white">{provider.businessName}</h1>
-              <div className="flex items-center justify-center sm:justify-start gap-4 mt-2 text-gray-300">
-                {provider.businessAddress && (
+              {provider.businessAddress && (
+                <div className="flex items-center justify-center sm:justify-start gap-4 mt-2 text-gray-300">
                   <span className="flex items-center gap-2">
                     <MapPin size={16} /> {provider.businessAddress.city}, {provider.businessAddress.state}
                   </span>
-                )}
-                {provider.businessPhone && (
-                  <span className="flex items-center gap-2">
-                    <Phone size={16} /> {provider.businessPhone}
-                  </span>
-                )}
-              </div>
+                  {provider.businessPhone && (
+                    <span className="flex items-center gap-2">
+                      <Phone size={16} /> {provider.businessPhone}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <button
               onClick={handleGoToBooking}

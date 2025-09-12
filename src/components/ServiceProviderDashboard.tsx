@@ -8,6 +8,8 @@ import { FinancialManagement } from "./ServiceProvider/FinancialManagement";
 import { ProfessionalsManagement } from "./ServiceProvider/ProfessionalsManagement";
 import { AvailabilityManagement } from "./ServiceProvider/AvailabilityManagement";
 import { ProfileManagement } from "./ServiceProvider/ProfileManagement";
+import { ServicesManagement } from "./ServiceProvider/ServicesManagement";
+import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 // ... importe as outras seções quando estiverem prontas
 
 // Tipagem para garantir que apenas seções válidas sejam chamadas
@@ -25,8 +27,7 @@ const ServiceProviderDashboard = () => {
   const [activeView, setActiveView] = useState<ProviderDashboardView>("agenda");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const renderContent = () => {
-    // A lógica de qual componente renderizar fica centralizada aqui
+   const renderContent = () => {
     switch (activeView) {
       case "agenda":
         return <AgendaView />;
@@ -38,6 +39,16 @@ const ServiceProviderDashboard = () => {
         return <ProfessionalsManagement />;
       case "availability":
         return <AvailabilityManagement />;
+      
+      // --- 2. ADICIONAR OS CASES FALTANTES ---
+      case "services":
+        return <ServicesManagement />;
+      case "reviews":
+        return <ReviewsManagement />;
+      case "notifications":
+        // Placeholder enquanto não refatoramos a seção de notificações
+        return <div>Em breve: Notificações</div>;
+
       default:
         return <AgendaView />;
     }

@@ -45,6 +45,7 @@ export interface Service {
 export interface Professional {
   id:string;
   name: string;
+  photoURL?: string;
   services: Service[]; // Array of Service objects
   availability: DailyAvailability[];
 }

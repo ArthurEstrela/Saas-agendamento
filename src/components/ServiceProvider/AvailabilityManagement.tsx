@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProfileStore } from '../../store/profileStore';
-import type { Professional, ServiceProviderProfile, DailyAvailability } from '../../types';
+import type { Professional, ServiceProviderProfile, DailyAvailability, TimeSlot } from '../../types';
 import { Clock, Plus, Trash2, Save, Loader2 } from 'lucide-react';
 
 const weekDays: DailyAvailability['dayOfWeek'][] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -11,21 +11,25 @@ const weekDaysPt: { [key in DailyAvailability['dayOfWeek']]: string } = {
 
 export const AvailabilityManagement = () => {
     const { userProfile, updateUserProfile } = useProfileStore();
-    const [selectedProf, setSelectedProf] = useState<Professional | null>((userProfile as ServiceProviderProfile)?.professionals[0] || null);
-    const [availability, setAvailability] = useState<DailyAvailability[]>(selectedProf?.availability || []);
+    const professionals = (userProfile as ServiceProviderProfile)?.professionals || [];
+
+    const [selectedProfId, setSelectedProfId] = useState<string>(professionals[0]?.id || '');
+    const [availability, setAvailability] = useState<DailyAvailability[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
-    const handleProfessionalChange = (profId: string) => {
-        const prof = (userProfile as ServiceProviderProfile)?.professionals.find(p => p.id === profId);
-        if (prof) {
-            setSelectedProf(prof);
-            // Garante que todos os dias da semana existam no estado
-            const profAvailability = weekDays.map(day => {
-                return prof.availability.find(a => a.dayOfWeek === day) || { dayOfWeek: day, isAvailable: false, slots: [] };
+    // --- CORREÇÃO PRINCIPAL AQUI ---
+    // Este useEffect sincroniza o 'availability' com o profissional selecionado.
+    useEffect(() => {
+        const selectedProfessional = professionals.find(p => p.id === selectedProfId);
+        if (selectedProfessional) {
+            // Garante que a lista de disponibilidade tenha sempre todos os dias da semana
+            const fullWeekAvailability = weekDays.map(dayName => {
+                return selectedProfessional.availability?.find(a => a.dayOfWeek === dayName) || { dayOfWeek: dayName, isAvailable: false, slots: [] };
             });
-            setAvailability(profAvailability);
+            setAvailability(fullWeekAvailability);
         }
-    };
+    }, [selectedProfId, professionals]); // Roda sempre que o profissional selecionado ou a lista de profissionais mudar.
+
 
     const handleIsAvailableChange = (day: DailyAvailability['dayOfWeek'], isAvailable: boolean) => {
         setAvailability(prev => prev.map(d => d.dayOfWeek === day ? { ...d, isAvailable, slots: isAvailable && d.slots.length === 0 ? [{ start: '09:00', end: '18:00' }] : d.slots } : d));
@@ -51,10 +55,10 @@ export const AvailabilityManagement = () => {
     };
 
     const handleSave = async () => {
-        if (!userProfile || !selectedProf) return;
+        if (!userProfile || !selectedProfId) return;
         setIsSaving(true);
         const updatedProfessionals = (userProfile as ServiceProviderProfile).professionals.map(p => 
-            p.id === selectedProf.id ? { ...p, availability } : p
+            p.id === selectedProfId ? { ...p, availability } : p
         );
         await updateUserProfile(userProfile.id, { professionals: updatedProfessionals });
         setIsSaving(false);
@@ -68,17 +72,17 @@ export const AvailabilityManagement = () => {
                 <label htmlFor="professional-select" className="block text-sm font-medium text-gray-300 mb-1">Selecione o Profissional</label>
                 <select 
                     id="professional-select"
-                    onChange={(e) => handleProfessionalChange(e.target.value)}
-                    value={selectedProf?.id || ''}
+                    onChange={(e) => setSelectedProfId(e.target.value)}
+                    value={selectedProfId}
                     className="w-full max-w-xs bg-gray-900 p-3 rounded-md border border-gray-700"
                 >
-                    {(userProfile as ServiceProviderProfile)?.professionals.map(p => (
+                    {professionals.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                 </select>
             </div>
 
-            {selectedProf && (
+            {selectedProfId && (
                 <div className="space-y-6">
                     {availability.map(day => (
                         <div key={day.dayOfWeek} className="bg-gray-800/70 p-4 rounded-xl border border-gray-700">
@@ -105,7 +109,7 @@ export const AvailabilityManagement = () => {
                         </div>
                     ))}
                     <div className="flex justify-end">
-                        <button onClick={handleSave} disabled={isSaving} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] flex items-center gap-2">
+                        <button onClick={handleSave} disabled={isSaving || !selectedProfId} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed">
                             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
                             Salvar Disponibilidade
                         </button>

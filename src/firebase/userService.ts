@@ -144,29 +144,33 @@ export const searchServiceProviders = async (
   searchTerm: string = ""
 ): Promise<ServiceProviderProfile[]> => {
   const usersCollection = collection(db, "users");
-  const q = query(
-    usersCollection,
-    where("role", "==", "serviceProvider")
-    // Adicionar mais filtros aqui no futuro, ex:
-    // where('businessName', '>=', searchTerm),
-    // where('businessName', '<=', searchTerm + '\uf8ff')
-  );
+  const q = query(usersCollection, where("role", "==", "serviceProvider")); // Vamos manter a query, mas a regra de segurança é a chave
 
-  const querySnapshot = await getDocs(q);
-  const providers = querySnapshot.docs.map(
-    (doc) => doc.data() as ServiceProviderProfile
-  );
+  try {
+    const querySnapshot = await getDocs(q);
 
-  // Filtro simples no lado do cliente por enquanto
-  if (searchTerm) {
-    return providers.filter(
-      (p) =>
-        p.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const providers = querySnapshot.docs.map(
+      (doc) => doc.data() as ServiceProviderProfile
     );
-  }
 
-  return providers;
+    // Filtro por termo de busca (se houver)
+    if (searchTerm.trim() !== "") {
+      return providers.filter(
+        (p) =>
+          p.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    return providers; // Retorna todos se não houver termo de busca
+  } catch (error) {
+    console.error(
+      "Erro ao buscar prestadores de serviço. Verifique suas regras de segurança do Firestore.",
+      error
+    );
+    // Retorna um array vazio em caso de erro para não quebrar a UI
+    return [];
+  }
 };
 
 export const uploadProfilePicture = async (
@@ -186,12 +190,14 @@ export const uploadProfilePicture = async (
   return downloadURL;
 };
 
-export const getProviderProfileBySlug = async (slug: string): Promise<ServiceProviderProfile | null> => {
-  const usersCollection = collection(db, 'users');
+export const getProviderProfileBySlug = async (
+  slug: string
+): Promise<ServiceProviderProfile | null> => {
+  const usersCollection = collection(db, "users");
   const q = query(
     usersCollection,
-    where('publicProfileSlug', '==', slug),
-    where('role', '==', 'serviceProvider'),
+    where("publicProfileSlug", "==", slug),
+    where("role", "==", "serviceProvider"),
     limit(1)
   );
 

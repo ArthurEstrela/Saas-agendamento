@@ -47,8 +47,13 @@ export const ProfessionalsManagement = () => {
         <div className="bg-gray-800/70 rounded-xl border border-gray-700">
           <ul className="divide-y divide-gray-700">
             {professionals.length > 0 ? professionals.map(prof => (
-              <li key={prof.id} className="p-4 flex justify-between items-center">
-                <div>
+              <li key={prof.id} className="p-4 flex items-center gap-4">
+                <img 
+                  src={prof.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=1f2937&color=daa520`}
+                  alt={prof.name}
+                  className="h-14 w-14 rounded-full object-cover border-2 border-gray-700"
+                />
+                <div className="flex-grow">
                   <p className="font-semibold text-white">{prof.name}</p>
                   <p className="text-sm text-gray-400">
                     {prof.services.map(s => s.name).join(', ')}

@@ -1,4 +1,5 @@
 import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from './config';
 import type { Professional, ServiceProviderProfile } from '../types';
 
@@ -41,4 +42,16 @@ export const updateProfessionalInProvider = async (providerId: string, updatedPr
             professionals: updatedProfessionals
         });
     }
+};
+
+export const uploadProfessionalPhoto = async (providerId: string, professionalId: string, file: File): Promise<string> => {
+    const storage = getStorage();
+    // Cria um caminho único para a imagem para evitar conflitos
+    const filePath = `providers/${providerId}/professionals/${professionalId}/${file.name}`;
+    const storageRef = ref(storage, filePath);
+
+    await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(storageRef);
+    
+    return downloadURL;
 };

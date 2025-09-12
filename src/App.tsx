@@ -12,6 +12,7 @@ import { ProtectedRoute } from './components/Common/ProtectedRoute';
 import RegisterTypeSelection from './pages/RegisterTypeSelection';
 import RegisterPage from './pages/RegisterPage';
 import { BookingPage } from './pages/BookingPage';
+import PublicBookingPage from './pages/PublicBookingPage';
 
 
 function App() {

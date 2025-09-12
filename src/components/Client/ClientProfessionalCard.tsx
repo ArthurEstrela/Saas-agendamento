@@ -37,7 +37,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
         />
       </button>
       
-      <Link to={`/provider/${provider.publicProfileSlug}`} className="block">
+      <Link to={`/agendar/${provider.publicProfileSlug}`} className="block">
         {/* Imagem/Logo */}
         <div className="h-40 bg-gray-800 flex items-center justify-center">
           {provider.logoUrl ? (

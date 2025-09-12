@@ -1,73 +1,80 @@
-import { useState, useEffect } from "react";
-import { useSearchStore } from "../../store/searchStore";
-import { ClientProfessionalCard } from "./ClientProfessionalCard";
-import { FaSearch } from "react-icons/fa";
-// Importe um skeleton para o card de profissional
-// import { ProfessionalCardSkeleton } from './ProfessionalCardSkeleton';
+import { useState, useEffect } from 'react';
+import { useSearchStore } from '../../store/searchStore';
+import { ClientProfessionalCard } from './ClientProfessionalCard';
+import { Loader2, Search, Frown } from 'lucide-react';
+import { useProfileStore } from '../../store/profileStore';
 
 export const ClientSearchSection = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const { results, isLoading, error, search, clearSearch } = useSearchStore();
+  const { userProfile } = useProfileStore();
+  
+  // AQUI ESTÁ A CORREÇÃO:
+  // Trocamos 'providers' por 'results' e 'searchProviders' por 'search'
+  const { results, isLoading, search } = useSearchStore(); 
+  
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Limpa a busca quando o componente é desmontado
+  // Busca inicial quando o componente monta
   useEffect(() => {
-    search(""); // Busca todos os prestadores ao carregar a página
-    return () => {
-      clearSearch();
-    };
-  }, [search, clearSearch]);
+    search(''); // Usando a função 'search'
+  }, [search]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    search(searchTerm);
+    search(searchTerm); // Usando a função 'search'
   };
 
-  const renderResults = () => {
-    if (isLoading) {
-      // return <ProfessionalCardSkeleton count={3} />;
-      return <div>Buscando...</div>;
-    }
-    if (error) {
-      return <div className="text-red-500 text-center">{error}</div>;
-    }
-    if (results.length === 0) {
-      return (
-        <div className="text-center text-gray-500">
-          Nenhum prestador encontrado.
-        </div>
-      );
-    }
+  const WelcomeMessage = () => {
+    const firstName = userProfile?.name.split(' ')[0];
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-        {results.map((prof) => (
-          <ClientProfessionalCard key={prof.id} professional={prof} />
-        ))}
-      </div>
+      <h1 className="text-4xl font-bold text-white mb-2">
+        Bem-vindo, <span className="text-amber-400">{firstName}</span>!
+      </h1>
     );
-  };
+  }
 
   return (
-    <section>
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">
-        Buscar Prestadores
-      </h1>
-      <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Nome do salão ou profissional..."
-          className="flex-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        >
-          <FaSearch />
-        </button>
-      </form>
+    <div>
+      {/* Cabeçalho e Barra de Busca */}
+      <div className="mb-10">
+        <WelcomeMessage />
+        <p className="text-lg text-gray-400">Encontre os melhores profissionais para o seu estilo.</p>
+        
+        <form onSubmit={handleSearch} className="mt-8 max-w-2xl">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por barbearias, salões, manicures..."
+              className="w-full bg-black/30 text-white placeholder-gray-500 rounded-full py-4 pl-6 pr-16 border-2 border-transparent focus:border-amber-500 focus:ring-0 transition-all duration-300 text-base"
+            />
+            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-amber-500 rounded-full hover:bg-amber-600 transition-colors">
+              <Search className="text-gray-900" size={20} />
+            </button>
+          </div>
+        </form>
+      </div>
 
-      {renderResults()}
-    </section>
+      {/* Grid de Resultados */}
+      <div>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="animate-spin text-amber-500" size={48} />
+          </div>
+        ) : results.length > 0 ? ( // AQUI TAMBÉM: Usando 'results.length'
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {results.map((provider) => ( // E aqui, fazendo o map em 'results'
+              <ClientProfessionalCard key={provider.id} provider={provider} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
+            <Frown size={48} className="mb-4" />
+            <h3 className="text-xl font-semibold text-gray-300">Nenhum resultado encontrado</h3>
+            <p>Tente ajustar os termos da sua busca.</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };

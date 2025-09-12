@@ -1,113 +1,121 @@
-import { useState } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Professional, Service, ServiceProviderProfile } from '../../types';
-import { X, Save, Loader2, Camera } from 'lucide-react';
-import { useProfessionalsManagementStore } from '../../store/professionalsManagementStore';
-import { useProfileStore } from '../../store/profileStore';
+import type { Professional, Service } from '../../types';
+import { Loader2, User, Image as ImageIcon, X } from 'lucide-react';
 
+// Schema de validação
 const professionalSchema = z.object({
-  name: z.string().min(3, { message: "Nome do profissional é obrigatório." }),
-  serviceIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um serviço." }),
+  name: z.string().min(3, 'O nome é obrigatório'),
+  serviceIds: z.array(z.string()).min(1, 'Selecione pelo menos um serviço'),
 });
 
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
 
 interface ProfessionalModalProps {
-  professional?: Professional | null;
+  isOpen: boolean;
   onClose: () => void;
+  onSave: (data: ProfessionalFormData, photoFile: File | null) => void;
+  professional?: Professional | null; // Profissional existente para edição
+  availableServices: Service[];
+  isLoading: boolean;
 }
 
-export const ProfessionalModal = ({ professional, onClose }: ProfessionalModalProps) => {
-  const { addProfessional, updateProfessional } = useProfessionalsManagementStore();
-  const { userProfile } = useProfileStore();
-  const providerServices = (userProfile as ServiceProviderProfile)?.services || [];
-
+export const ProfessionalModal = ({ isOpen, onClose, onSave, professional, availableServices, isLoading }: ProfessionalModalProps) => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(professional?.photoURL || null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(professional?.photoURL || null);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ProfessionalFormData>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
-    defaultValues: {
-      name: professional?.name || '',
-      serviceIds: professional?.services.map(s => s.id) || [],
-    },
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Popula o formulário quando o modo de edição é ativado
+  useEffect(() => {
+    if (professional) {
+      reset({
+        name: professional.name,
+        serviceIds: professional.services.map(s => s.id),
+      });
+      setPreviewUrl(professional.photoURL || null);
+    } else {
+      reset({ name: '', serviceIds: [] });
+      setPreviewUrl(null);
+    }
+    setPhotoFile(null);
+  }, [professional, reset]);
+  
+  if (!isOpen) return null;
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (file) {
       setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+      setPreviewUrl(URL.createObjectURL(file));
     }
   };
-
-  const onSubmit: SubmitHandler<ProfessionalFormData> = async (data) => {
-    if (!userProfile?.id) return;
-
-    const selectedServices: Service[] = data.serviceIds
-      .map(id => providerServices.find(s => s.id === id))
-      .filter((s): s is Service => s !== undefined);
-
-    const payload = {
-      name: data.name,
-      services: selectedServices,
-      availability: professional?.availability || [],
-      photoURL: professional?.photoURL || '',
-      photoFile: photoFile,
-    };
-
-    if (professional) {
-      await updateProfessional(userProfile.id, professional.id, payload);
-    } else {
-      await addProfessional(userProfile.id, payload);
-    }
-    onClose();
+  
+  const onSubmit = (data: ProfessionalFormData) => {
+    onSave(data, photoFile);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex justify-center items-center p-4">
-      <div className="bg-gray-800 rounded-xl p-8 w-full max-w-lg animate-fade-in-down border border-gray-700">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center backdrop-blur-sm">
+      <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg border border-gray-700 m-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">{professional ? 'Editar Profissional' : 'Novo Profissional'}</h2>
-            <button type="button" onClick={onClose} className="text-gray-400 hover:text-white"><X /></button>
+            <h2 className="text-2xl font-bold text-white">{professional ? 'Editar Profissional' : 'Adicionar Profissional'}</h2>
+            <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white"><X size={24} /></button>
           </div>
 
-          {/* Campo de Upload de Foto */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-600 group">
-                <img src={photoPreview || `https://ui-avatars.com/api/?name=${encodeURIComponent(professional?.name || '?')}&background=4B5563&color=fff`} alt="Preview" className="w-full h-full object-cover" />
-                <label htmlFor="photo-upload" className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                    <Camera className="w-6 h-6 text-white" />
-                    <input id="photo-upload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+          <div className="space-y-6">
+            {/* Foto e Nome */}
+            <div className='flex items-center gap-6'>
+                <label htmlFor="photo-upload" className="cursor-pointer">
+                    <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center border-2 border-dashed border-gray-600 hover:border-amber-500">
+                    {previewUrl ? <img src={previewUrl} alt="Preview" className="w-full h-full rounded-full object-cover" /> : <ImageIcon size={32} className="text-gray-500" />}
+                    </div>
+                    <input id="photo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                 </label>
+                <div className="flex-1">
+                    <label className="label-text">Nome do Profissional</label>
+                    <div className="input-container">
+                        <User className="input-icon" />
+                        <input {...register('name')} className="input-field pl-10" />
+                    </div>
+                    {errors.name && <p className="error-message">{errors.name.message}</p>}
+                </div>
+            </div>
+
+            {/* Serviços Associados */}
+            <div>
+              <label className="label-text">Serviços Realizados</label>
+              {availableServices.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 bg-black/30 p-4 rounded-lg max-h-48 overflow-y-auto">
+                  {availableServices.map(service => (
+                    <label key={service.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-800/50 cursor-pointer">
+                      <input type="checkbox" {...register('serviceIds')} value={service.id} className="form-checkbox bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500" />
+                      <span className="text-gray-200">{service.name}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">Você precisa cadastrar serviços primeiro na aba "Meus Serviços".</p>
+              )}
+              {errors.serviceIds && <p className="error-message">{errors.serviceIds.message}</p>}
             </div>
           </div>
 
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">Nome do Profissional</label>
-            <input {...register('name')} id="name" className="w-full bg-gray-900 p-3 rounded-md border border-gray-700" />
-            {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name.message}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Serviços Realizados</label>
-            <div className="bg-gray-900 p-3 rounded-md border border-gray-700 max-h-40 overflow-y-auto space-y-2">
-                {providerServices.map(service => (
-                    <label key={service.id} className="flex items-center gap-3 text-white">
-                        <input type="checkbox" {...register('serviceIds')} value={service.id} className="form-checkbox h-5 w-5 bg-gray-700 border-gray-600 text-[#daa520] focus:ring-[#daa520]" />
-                        <span>{service.name}</span>
-                    </label>
-                ))}
-            </div>
-            {errors.serviceIds && <p className="text-red-400 text-sm mt-1">{errors.serviceIds.message}</p>}
-          </div>
-          <div className="flex justify-end gap-4 pt-4">
-            <button type="button" onClick={onClose} className="bg-gray-700 hover:bg-gray-600 text-white font-semibold px-6 py-2 rounded-lg">Cancelar</button>
-            <button type="submit" disabled={isSubmitting} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] flex items-center gap-2">
-              {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
-              {isSubmitting ? 'Salvando...' : 'Salvar'}
+          <div className="flex justify-end gap-4 mt-8">
+            <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+            <button type="submit" disabled={isLoading} className="primary-button w-36 flex justify-center">
+              {isLoading ? <Loader2 className="animate-spin" /> : 'Salvar'}
             </button>
           </div>
         </form>

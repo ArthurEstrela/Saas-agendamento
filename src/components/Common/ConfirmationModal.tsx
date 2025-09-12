@@ -1,66 +1,56 @@
-// src/components/Common/ConfirmationModal.tsx
-
-import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
   title: string;
   message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
   isLoading?: boolean;
 }
 
-const ConfirmationModal = ({
+export const ConfirmationModal = ({
   isOpen,
+  onClose,
+  onConfirm,
   title,
   message,
-  onConfirm,
-  onCancel,
-  confirmText = "Confirmar",
-  cancelText = "Cancelar",
-  isLoading = false,
+  confirmText = 'Confirmar',
+  cancelText = 'Cancelar',
 }: ConfirmationModalProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-down">
-      <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-700 max-w-sm w-full text-center relative">
-        <button 
-            onClick={onCancel} 
-            className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
-            aria-label="Fechar modal"
-        >
-            <X size={24} />
-        </button>
-
-        <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
-        
-        <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-        <p className="text-gray-300 mb-8">{message}</p>
-        
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-          >
-            {cancelText}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-          >
-            {isLoading ? 'Aguarde...' : confirmText}
-          </button>
+    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center backdrop-blur-sm">
+      <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-md border border-gray-700 m-4">
+        <div className="p-8">
+          <div className="flex items-start">
+            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-500/10 sm:mx-0">
+                <AlertTriangle className="h-6 w-6 text-red-400" aria-hidden="true" />
+            </div>
+            <div className="ml-4 text-left">
+                <h3 className="text-xl font-bold text-white" id="modal-title">
+                {title}
+                </h3>
+                <div className="mt-2">
+                <p className="text-sm text-gray-400">
+                    {message}
+                </p>
+                </div>
+            </div>
+          </div>
+          <div className="mt-8 flex justify-end gap-4">
+            <button type="button" onClick={onClose} className="secondary-button">
+              {cancelText}
+            </button>
+            <button type="button" onClick={onConfirm} className="danger-button">
+              {confirmText}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-export default ConfirmationModal;

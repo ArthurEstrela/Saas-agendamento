@@ -1,20 +1,25 @@
 import { useState } from 'react';
 import { useProfileStore } from '../../store/profileStore';
 import { useProfessionalsManagementStore } from '../../store/professionalsManagementStore';
-import type { Professional, ServiceProviderProfile } from '../../types';
-import { PlusCircle, Edit, Trash2, Users, Loader2 } from 'lucide-react';
 import { ProfessionalModal } from './ProfessionalModal';
+import { ProfessionalCard } from './ProfessionalCard'; // Importa o novo card
+import { ConfirmationModal } from '../Common/ConfirmationModal'; // Importa o modal de confirmação
+import { Loader2, Users, UserPlus } from 'lucide-react';
 
 export const ProfessionalsManagement = () => {
   const { userProfile } = useProfileStore();
-  const { removeProfessional, isSubmitting } = useProfessionalsManagementStore();
+  const { isSubmitting: isLoading, addProfessional, updateProfessional, removeProfessional: deleteProfessional } = useProfessionalsManagementStore();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
+  const [editingProfessional, setEditingProfessional] = useState(null);
 
-  const professionals = (userProfile as ServiceProviderProfile)?.professionals || [];
+  // Estado para o modal de confirmação
+  const [confirmationState, setConfirmationState] = useState({ isOpen: false, professionalToDelete: null });
 
-  const handleOpenModal = (professional: Professional | null = null) => {
+  const professionals = (userProfile?.role === 'serviceProvider' && userProfile.professionals) ? userProfile.professionals : [];
+  const services = (userProfile?.role === 'serviceProvider' && userProfile.services) ? userProfile.services : [];
+
+  const handleOpenModal = (professional = null) => {
     setEditingProfessional(professional);
     setIsModalOpen(true);
   };
@@ -23,55 +28,84 @@ export const ProfessionalsManagement = () => {
     setIsModalOpen(false);
     setEditingProfessional(null);
   };
-  
-  const handleDelete = (professional: Professional) => {
-      if (window.confirm(`Tem certeza que deseja remover ${professional.name}?`)) {
-          if (userProfile?.id) {
-              removeProfessional(userProfile.id, professional);
-          }
-      }
-  }
+
+  const handleSaveProfessional = async (formData, photoFile) => {
+    if (!userProfile) return;
+    const selectedServices = services.filter(s => formData.serviceIds.includes(s.id));
+    const payload = { name: formData.name, services: selectedServices, availability: [], photoFile };
+    if (editingProfessional) {
+      const updatedPayload = { ...payload, photoURL: editingProfessional.photoURL };
+      await updateProfessional(userProfile.id, editingProfessional.id, updatedPayload);
+    } else {
+      await addProfessional(userProfile.id, payload);
+    }
+    handleCloseModal();
+  };
+
+  const handleDeleteRequest = (professional) => {
+    setConfirmationState({ isOpen: true, professionalToDelete: professional });
+  };
+
+  const confirmDelete = () => {
+    if (userProfile && confirmationState.professionalToDelete) {
+      deleteProfessional(userProfile.id, confirmationState.professionalToDelete);
+    }
+    setConfirmationState({ isOpen: false, professionalToDelete: null });
+  };
 
   return (
-    <>
-      <div className="animate-fade-in-down">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3"><Users /> Meus Profissionais</h1>
-          <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e]">
-            <PlusCircle size={20} /> Adicionar Profissional
-          </button>
+    <div>
+      {/* Cabeçalho */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-10">
+        <div>
+          <h1 className="text-4xl font-bold text-white">Meus Profissionais</h1>
+          <p className="text-lg text-gray-400 mt-2">Gerencie a equipe que atende em seu estabelecimento.</p>
         </div>
-        
-        {isSubmitting && <div className="flex justify-center my-4"><Loader2 className="animate-spin text-[#daa520]" /></div>}
-
-        <div className="bg-gray-800/70 rounded-xl border border-gray-700">
-          <ul className="divide-y divide-gray-700">
-            {professionals.length > 0 ? professionals.map(prof => (
-              <li key={prof.id} className="p-4 flex items-center gap-4">
-                <img 
-                  src={prof.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=1f2937&color=daa520`}
-                  alt={prof.name}
-                  className="h-14 w-14 rounded-full object-cover border-2 border-gray-700"
-                />
-                <div className="flex-grow">
-                  <p className="font-semibold text-white">{prof.name}</p>
-                  <p className="text-sm text-gray-400">
-                    {prof.services.map(s => s.name).join(', ')}
-                  </p>
-                </div>
-                <div className="flex gap-4">
-                  <button onClick={() => handleOpenModal(prof)} className="text-gray-400 hover:text-[#daa520]"><Edit size={18} /></button>
-                  <button onClick={() => handleDelete(prof)} className="text-gray-400 hover:text-red-500"><Trash2 size={18} /></button>
-                </div>
-              </li>
-            )) : (
-              <p className="p-8 text-center text-gray-500">Nenhum profissional cadastrado.</p>
-            )}
-          </ul>
-        </div>
+        <button onClick={() => handleOpenModal()} className="primary-button flex items-center gap-2">
+          <UserPlus size={20} />
+          Adicionar Profissional
+        </button>
       </div>
 
-      {isModalOpen && <ProfessionalModal professional={editingProfessional} onClose={handleCloseModal} />}
-    </>
+      {/* Lista de Profissionais */}
+      {!userProfile ? (
+        <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin text-amber-500" size={48} /></div>
+      ) : professionals.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {professionals.map(prof => (
+            <ProfessionalCard 
+              key={prof.id} 
+              professional={prof}
+              onEdit={() => handleOpenModal(prof)}
+              onDelete={() => handleDeleteRequest(prof)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
+          <Users size={48} className="mb-4" />
+          <h3 className="text-xl font-semibold text-gray-300">Nenhum profissional cadastrado</h3>
+          <p>Clique em "Adicionar Profissional" para começar.</p>
+        </div>
+      )}
+
+      {/* Modais */}
+      <ProfessionalModal 
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveProfessional}
+        professional={editingProfessional}
+        availableServices={services}
+        isLoading={isLoading}
+      />
+      <ConfirmationModal
+        isOpen={confirmationState.isOpen}
+        onClose={() => setConfirmationState({ isOpen: false, professionalToDelete: null })}
+        onConfirm={confirmDelete}
+        title="Confirmar Exclusão"
+        message={`Tem certeza que deseja excluir permanentemente o profissional "${confirmationState.professionalToDelete?.name}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+      />
+    </div>
   );
 };

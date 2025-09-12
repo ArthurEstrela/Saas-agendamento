@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { UserProfile } from "../types";
-import { getUserProfile, updateUserProfile, uploadProfilePicture as uploadService } from "../firebase/userService"; 
+import type { UserProfile, ClientProfile, ServiceProviderProfile, Service, Professional  } from "../types";
+import { getUserProfile, toggleFavoriteProfessional, updateUserProfile, uploadProfilePicture as uploadService } from "../firebase/userService"; 
 
 interface ProfileState {
   userProfile: UserProfile | null;
@@ -11,6 +11,9 @@ interface ProfileState {
   uploadProfilePicture: (uid: string, file: File) => Promise<string | undefined>;
   setUserProfile: (profile: UserProfile) => void;
   clearProfile: () => void;
+  toggleFavorite: (professionalId: string) => Promise<void>;
+  updateServicesInProfile: (services: Service[]) => void;
+  updateProfessionalsInProfile: (professionals: Professional[]) => void;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -89,5 +92,53 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   clearProfile: () => {
     set({ userProfile: null, isLoadingProfile: false, error: null });
+  },
+
+   toggleFavorite: async (professionalId: string) => {
+    const { userProfile } = get();
+    if (userProfile && userProfile.role === 'client') {
+      const clientProfile = userProfile as ClientProfile;
+      const oldFavorites = clientProfile.favoriteProfessionals || [];
+      
+      // Atualização Otimista: atualiza a UI primeiro para uma resposta instantânea
+      const isFavorite = oldFavorites.includes(professionalId);
+      const newFavorites = isFavorite
+        ? oldFavorites.filter((id) => id !== professionalId)
+        : [...oldFavorites, professionalId];
+
+      set({
+        userProfile: { ...clientProfile, favoriteProfessionals: newFavorites },
+      });
+
+      try {
+        // Em seguida, atualiza o banco de dados em segundo plano
+        await toggleFavoriteProfessional(clientProfile.id, professionalId);
+      } catch (error) {
+        console.error("Failed to update favorite status:", error);
+        // Em caso de erro, reverte a UI para o estado anterior
+        set({
+          userProfile: { ...clientProfile, favoriteProfessionals: oldFavorites },
+        });
+      }
+    }
+  },
+   updateServicesInProfile: (services) => {
+    const { userProfile } = get();
+    if (userProfile && userProfile.role === 'serviceProvider') {
+      // Cria um novo objeto de perfil com a lista de serviços atualizada
+      const updatedProfile = { ...userProfile, services } as ServiceProviderProfile;
+      // Atualiza o estado sem disparar o loading geral
+      set({ userProfile: updatedProfile });
+    }
+  },
+
+  updateProfessionalsInProfile: (professionals) => {
+    const { userProfile } = get();
+    if (userProfile && userProfile.role === 'serviceProvider') {
+      // Cria um novo objeto de perfil com a lista de profissionais atualizada
+      const updatedProfile = { ...userProfile, professionals } as ServiceProviderProfile;
+      // Atualiza o estado sem disparar o loading geral
+      set({ userProfile: updatedProfile });
+    }
   },
 }));

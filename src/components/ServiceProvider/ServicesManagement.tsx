@@ -1,20 +1,23 @@
 import { useState } from 'react';
 import { useProfileStore } from '../../store/profileStore';
 import { useServiceManagementStore } from '../../store/serviceManagementStore';
-import type { Service, ServiceProviderProfile } from '../../types';
-import { PlusCircle, Edit, Trash2, Scissors, Loader2 } from 'lucide-react';
-import { ServiceModal } from './ServiceModal'; // Importa o nosso novo modal
+import { ServiceModal } from './ServiceModal';
+import { ServiceCard } from './ServiceCard';
+import { ConfirmationModal } from '../Common/ConfirmationModal';
+import { Loader2, ListPlus, Wrench } from 'lucide-react';
 
 export const ServicesManagement = () => {
   const { userProfile } = useProfileStore();
-  const { removeService, isSubmitting } = useServiceManagementStore();
-  
+  const { isSubmitting: isLoading, addService, updateService, removeService: deleteService } = useServiceManagementStore();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingService, setEditingService] = useState(null);
+  
+  const [confirmationState, setConfirmationState] = useState({ isOpen: false, serviceToDelete: null });
 
-  const services = (userProfile as ServiceProviderProfile)?.services || [];
+  const services = (userProfile?.role === 'serviceProvider' && userProfile.services) ? userProfile.services : [];
 
-  const handleOpenModal = (service: Service | null = null) => {
+  const handleOpenModal = (service = null) => {
     setEditingService(service);
     setIsModalOpen(true);
   };
@@ -23,53 +26,80 @@ export const ServicesManagement = () => {
     setIsModalOpen(false);
     setEditingService(null);
   };
-  
-  const handleDelete = (service: Service) => {
-      if (window.confirm(`Tem certeza que deseja remover o serviço "${service.name}"?`)) {
-          if (userProfile?.id) {
-              removeService(userProfile.id, service);
-          }
-      }
-  }
+
+  const handleSaveService = async (data) => {
+    if (!userProfile) return;
+    if (editingService) {
+      await updateService(userProfile.id, { ...editingService, ...data });
+    } else {
+      await addService(userProfile.id, data);
+    }
+    handleCloseModal();
+  };
+
+  const handleDeleteRequest = (service) => {
+    setConfirmationState({ isOpen: true, serviceToDelete: service });
+  };
+
+  const confirmDelete = () => {
+    if (userProfile && confirmationState.serviceToDelete) {
+      deleteService(userProfile.id, confirmationState.serviceToDelete);
+    }
+    setConfirmationState({ isOpen: false, serviceToDelete: null });
+  };
 
   return (
-    <>
-      <div className="animate-fade-in-down">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3"><Scissors /> Meus Serviços</h1>
-          <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors">
-            <PlusCircle size={20} /> Adicionar Serviço
-          </button>
+    <div>
+      {/* Cabeçalho */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-10">
+        <div>
+          <h1 className="text-4xl font-bold text-white">Meus Serviços</h1>
+          <p className="text-lg text-gray-400 mt-2">Adicione e gerencie os serviços que você oferece.</p>
         </div>
-        
-        {isSubmitting && <div className="flex justify-center my-4"><Loader2 className="animate-spin text-[#daa520]" /></div>}
-
-        <div className="bg-gray-800/70 rounded-xl border border-gray-700">
-          <ul className="divide-y divide-gray-700">
-            {services.length > 0 ? services.map(service => (
-              <li key={service.id} className="p-4 flex justify-between items-center">
-                <div>
-                  <p className="font-semibold text-white">{service.name}</p>
-                  <p className="text-sm text-gray-400">{service.description}</p>
-                  <div className="text-xs text-gray-300 mt-1">
-                    <span>{service.duration} min</span>
-                    <span className="mx-2">·</span>
-                    <span>R$ {service.price.toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <button onClick={() => handleOpenModal(service)} className="text-gray-400 hover:text-[#daa520]"><Edit size={18} /></button>
-                  <button onClick={() => handleDelete(service)} className="text-gray-400 hover:text-red-500"><Trash2 size={18} /></button>
-                </div>
-              </li>
-            )) : (
-              <p className="p-8 text-center text-gray-500">Você ainda não cadastrou nenhum serviço.</p>
-            )}
-          </ul>
-        </div>
+        <button onClick={() => handleOpenModal()} className="primary-button flex items-center gap-2">
+          <ListPlus size={20} />
+          Adicionar Serviço
+        </button>
       </div>
 
-      {isModalOpen && <ServiceModal service={editingService} onClose={handleCloseModal} />}
-    </>
+      {/* Lista de Serviços */}
+      {!userProfile ? (
+        <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin text-amber-500" size={48} /></div>
+      ) : services.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {services.map(service => (
+            <ServiceCard 
+              key={service.id} 
+              service={service}
+              onEdit={() => handleOpenModal(service)}
+              onDelete={() => handleDeleteRequest(service)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
+          <Wrench size={48} className="mb-4" />
+          <h3 className="text-xl font-semibold text-gray-300">Nenhum serviço cadastrado</h3>
+          <p>Clique em "Adicionar Serviço" para começar a montar seu catálogo.</p>
+        </div>
+      )}
+
+      {/* Modais */}
+      <ServiceModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveService}
+        service={editingService}
+        isLoading={isLoading}
+      />
+      <ConfirmationModal
+        isOpen={confirmationState.isOpen}
+        onClose={() => setConfirmationState({ isOpen: false, serviceToDelete: null })}
+        onConfirm={confirmDelete}
+        title="Confirmar Exclusão"
+        message={`Tem certeza que deseja excluir permanentemente o serviço "${confirmationState.serviceToDelete?.name}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+      />
+    </div>
   );
 };

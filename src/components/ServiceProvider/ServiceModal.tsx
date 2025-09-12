@@ -1,82 +1,104 @@
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Service } from '../../types';
-import { X, Save, Loader2 } from 'lucide-react';
-import { useServiceManagementStore } from '../../store/serviceManagementStore';
-import { useProfileStore } from '../../store/profileStore';
+import { Loader2, X, Scissors, AlignLeft, Clock, DollarSign } from 'lucide-react';
 
-// Esquema de validação com os tipos corretos
+// Schema de validação
 const serviceSchema = z.object({
-  name: z.string().min(3, { message: "Nome do serviço é obrigatório." }),
-  description: z.string().min(10, { message: "A descrição deve ter pelo menos 10 caracteres." }),
-  duration: z.coerce.number().int().min(5, { message: "A duração mínima é de 5 minutos." }),
-  price: z.coerce.number().min(0.01, { message: "O preço deve ser maior que zero." }),
+  name: z.string().min(3, 'O nome do serviço é obrigatório'),
+  description: z.string().min(10, 'A descrição deve ter pelo menos 10 caracteres'),
+  duration: z.number().min(5, 'A duração mínima é de 5 minutos'),
+  price: z.number().min(0, 'O preço não pode ser negativo'),
 });
 
-// O tipo para os dados do formulário
 type ServiceFormData = z.infer<typeof serviceSchema>;
 
 interface ServiceModalProps {
-  service?: Service | null;
+  isOpen: boolean;
   onClose: () => void;
+  onSave: (data: ServiceFormData) => void;
+  service?: Service | null;
+  isLoading: boolean;
 }
 
-export const ServiceModal = ({ service, onClose }: ServiceModalProps) => {
-  const { addService, updateService } = useServiceManagementStore();
-  const { userProfile } = useProfileStore();
-
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ServiceFormData>({
+export const ServiceModal = ({ isOpen, onClose, onSave, service, isLoading }: ServiceModalProps) => {
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
-    defaultValues: service || { name: '', description: '', duration: 30, price: 50 },
   });
 
-  const onSubmit: SubmitHandler<ServiceFormData> = async (data) => {
-    if (!userProfile?.id) return;
-
-    if (service?.id) { // Editando um serviço existente
-      await updateService(userProfile.id, service.id, data);
-    } else { // Criando um novo serviço
-      await addService(userProfile.id, data);
+  useEffect(() => {
+    if (service) {
+      reset(service);
+    } else {
+      reset({ name: '', description: '', duration: 30, price: 0 });
     }
-    onClose();
-  };
+  }, [service, reset]);
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex justify-center items-center p-4">
-      <div className="bg-gray-800 rounded-xl shadow-2xl p-8 w-full max-w-lg animate-fade-in-down border border-gray-700">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">{service ? 'Editar Serviço' : 'Adicionar Novo Serviço'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X /></button>
-        </div>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">Nome do Serviço</label>
-            <input {...register('name')} id="name" className="w-full bg-gray-900 p-3 rounded-md border border-gray-700" />
-            {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name.message}</p>}
+    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center backdrop-blur-sm">
+      <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg border border-gray-700 m-4">
+        <form onSubmit={handleSubmit(onSave)} className="p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-white">{service ? 'Editar Serviço' : 'Adicionar Serviço'}</h2>
+            <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white"><X size={24} /></button>
           </div>
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
-            <textarea {...register('description')} id="description" rows={3} className="w-full bg-gray-900 p-3 rounded-md border border-gray-700"></textarea>
-            {errors.description && <p className="text-red-400 text-sm mt-1">{errors.description.message}</p>}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="space-y-4">
+            {/* Nome do Serviço */}
             <div>
-                <label htmlFor="duration" className="block text-sm font-medium text-gray-300 mb-1">Duração (minutos)</label>
-                <input {...register('duration')} id="duration" type="number" className="w-full bg-gray-900 p-3 rounded-md border border-gray-700" />
-                {errors.duration && <p className="text-red-400 text-sm mt-1">{errors.duration.message}</p>}
+                <label className="label-text">Nome do Serviço</label>
+                <div className="input-container">
+                    <Scissors className="input-icon" />
+                    <input {...register('name')} placeholder="Ex: Corte Masculino" className="input-field pl-10" />
+                </div>
+                {errors.name && <p className="error-message">{errors.name.message}</p>}
             </div>
+
+            {/* Descrição */}
             <div>
-                <label htmlFor="price" className="block text-sm font-medium text-gray-300 mb-1">Preço (R$)</label>
-                <input {...register('price')} id="price" type="number" step="0.01" className="w-full bg-gray-900 p-3 rounded-md border border-gray-700" />
-                {errors.price && <p className="text-red-400 text-sm mt-1">{errors.price.message}</p>}
+                <label className="label-text">Descrição</label>
+                <div className="input-container">
+                    <AlignLeft className="input-icon" />
+                    <textarea {...register('description')} placeholder="Descreva o que está incluso no serviço..." className="input-field pl-10 h-24 resize-none" />
+                </div>
+                {errors.description && <p className="error-message">{errors.description.message}</p>}
+            </div>
+
+            {/* Duração e Preço */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="label-text">Duração (minutos)</label>
+                    <div className="input-container">
+                        <Clock className="input-icon" />
+                        <input {...register('duration', { valueAsNumber: true })} type="number" className="input-field pl-10" />
+                    </div>
+                    {errors.duration && <p className="error-message">{errors.duration.message}</p>}
+                </div>
+                <div>
+                    <label className="label-text">Preço (R$)</label>
+                    <div className="input-container">
+                        <DollarSign className="input-icon" />
+                        <input {...register('price', { valueAsNumber: true })} type="number" step="0.01" className="input-field pl-10" />
+                    </div>
+                    {errors.price && <p className="error-message">{errors.price.message}</p>}
+                </div>
             </div>
           </div>
-          <div className="flex justify-end gap-4 pt-4">
-            <button type="button" onClick={onClose} className="bg-gray-700 hover:bg-gray-600 text-white font-semibold px-6 py-2 rounded-lg">Cancelar</button>
-            <button type="submit" disabled={isSubmitting} className="bg-[#daa520] text-black font-semibold px-6 py-2 rounded-lg hover:bg-[#c8961e] flex items-center gap-2">
-              {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
-              {isSubmitting ? 'Salvando...' : 'Salvar'}
+
+          <div className="flex justify-end gap-4 mt-8">
+            <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+            <button type="submit" disabled={isLoading} className="primary-button w-36 flex justify-center">
+              {isLoading ? <Loader2 className="animate-spin" /> : 'Salvar'}
             </button>
           </div>
         </form>

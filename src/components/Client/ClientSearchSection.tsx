@@ -1,20 +1,21 @@
-import { useState, useEffect } from 'react';
-import { useSearchStore } from '../../store/searchStore';
-import { ClientProfessionalCard } from './ClientProfessionalCard';
-import { FaSearch } from 'react-icons/fa';
+import { useState, useEffect } from "react";
+import { useSearchStore } from "../../store/searchStore";
+import { ClientProfessionalCard } from "./ClientProfessionalCard";
+import { FaSearch } from "react-icons/fa";
 // Importe um skeleton para o card de profissional
 // import { ProfessionalCardSkeleton } from './ProfessionalCardSkeleton';
 
 export const ClientSearchSection = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const { results, isLoading, error, search, clearSearch } = useSearchStore();
 
   // Limpa a busca quando o componente é desmontado
   useEffect(() => {
+    search(""); // Busca todos os prestadores ao carregar a página
     return () => {
       clearSearch();
     };
-  }, [clearSearch]);
+  }, [search, clearSearch]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +31,11 @@ export const ClientSearchSection = () => {
       return <div className="text-red-500 text-center">{error}</div>;
     }
     if (results.length === 0) {
-      return <div className="text-center text-gray-500">Nenhum prestador encontrado.</div>;
+      return (
+        <div className="text-center text-gray-500">
+          Nenhum prestador encontrado.
+        </div>
+      );
     }
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -43,7 +48,9 @@ export const ClientSearchSection = () => {
 
   return (
     <section>
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Buscar Prestadores</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">
+        Buscar Prestadores
+      </h1>
       <form onSubmit={handleSearch} className="flex gap-2 mb-4">
         <input
           type="text"
@@ -52,11 +59,14 @@ export const ClientSearchSection = () => {
           placeholder="Nome do salão ou profissional..."
           className="flex-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
         />
-        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
           <FaSearch />
         </button>
       </form>
-      
+
       {renderResults()}
     </section>
   );

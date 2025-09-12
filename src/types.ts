@@ -1,12 +1,12 @@
 // Tipos Base e Enumerações
 
 export const UserRole = {
-  Client: 'client',
-  ServiceProvider: 'serviceProvider',
-  Professional: 'professional',
+  Client: "client",
+  ServiceProvider: "serviceProvider",
+  Professional: "professional",
 } as const;
 
-export type UserRole = typeof UserRole[keyof typeof UserRole];
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export interface BaseUser {
   id: string;
@@ -23,11 +23,18 @@ export interface BaseUser {
 
 export interface TimeSlot {
   start: string; // "HH:mm"
-  end: string;   // "HH:mm"
+  end: string; // "HH:mm"
 }
 
 export interface DailyAvailability {
-  dayOfWeek: 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
+  dayOfWeek:
+    | "Sunday"
+    | "Monday"
+    | "Tuesday"
+    | "Wednesday"
+    | "Thursday"
+    | "Friday"
+    | "Saturday";
   isAvailable: boolean;
   slots: TimeSlot[];
 }
@@ -43,7 +50,7 @@ export interface Service {
 }
 
 export interface Professional {
-  id:string;
+  id: string;
   name: string;
   photoURL?: string;
   services: Service[]; // Array of Service objects
@@ -70,7 +77,7 @@ export interface Appointment {
   serviceName: string;
   startTime: Date;
   endTime: Date;
-  status: 'pending' | 'scheduled' | 'completed' | 'cancelled';
+  status: "pending" | "scheduled" | "completed" | "cancelled";
   notes?: string;
   review?: Review;
   // Opcional: útil para quando o prestador recusa o agendamento
@@ -90,7 +97,7 @@ export interface Notification {
 
 export interface ClientProfile extends BaseUser {
   // Mude de 'UserRole.Client' para a string literal 'client'
-  role: 'client';
+  role: "client";
   favoriteProfessionals?: string[]; // Array of professional IDs
 }
 
@@ -106,9 +113,10 @@ export interface Address {
 
 export interface ServiceProviderProfile extends BaseUser {
   // Mude de 'UserRole.ServiceProvider' para a string literal 'serviceProvider'
-  role: 'serviceProvider';
+  role: "serviceProvider";
   businessName: string;
   businessAddress: Address;
+  publicProfileSlug?: string;
   businessPhone?: string;
   services: Service[];
   professionals: Professional[];
@@ -121,17 +129,17 @@ export type UserProfile = ClientProfile | ServiceProviderProfile;
 // Tipos para a área Financeira
 
 export interface Expense {
-    id: string;
-    description: string;
-    amount: number;
-    date: Date;
-    category: string;
+  id: string;
+  description: string;
+  amount: number;
+  date: Date;
+  category: string;
 }
 
 export interface FinancialData {
-    totalRevenue: number;
-    totalExpenses: number;
-    netIncome: number;
-    monthlyRevenue: Record<string, number>; // Ex: { "2023-01": 5000, "2023-02": 6000 }
-    expenses: Expense[];
+  totalRevenue: number;
+  totalExpenses: number;
+  netIncome: number;
+  monthlyRevenue: Record<string, number>; // Ex: { "2023-01": 5000, "2023-02": 6000 }
+  expenses: Expense[];
 }

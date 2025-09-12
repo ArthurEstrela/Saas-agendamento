@@ -120,24 +120,34 @@ export const toggleFavoriteProfessional = async (
   });
 };
 
-export const getProfessionalsByIds = async (
-  professionalIds: string[]
-): Promise<ServiceProviderProfile[]> => {
+export const getProfessionalsByIds = async (professionalIds: string[]): Promise<ServiceProviderProfile[]> => {
   if (professionalIds.length === 0) {
     return [];
   }
 
-  const usersCollection = collection(db, "users");
-  // O Firestore permite buscar até 30 itens com o operador 'in'
-  const q = query(usersCollection, where("id", "in", professionalIds));
-  const querySnapshot = await getDocs(q);
+  try {
+    const usersCollection = collection(db, 'users');
+    
+    // --- CORREÇÃO AQUI ---
+    // Adicionamos 'where('role', '==', 'serviceProvider')' para alinhar com as regras de segurança.
+    // Isso garante que a query só peça por documentos que o usuário tem permissão para ler.
+    const q = query(
+      usersCollection, 
+      where('id', 'in', professionalIds),
+      where('role', '==', 'serviceProvider') // Garante que só buscamos prestadores
+    );
 
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data();
-    // Supondo que você tenha uma função para converter timestamps, se necessário
-    // const convertedData = convertTimestamps(data);
-    return data as ServiceProviderProfile;
-  });
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      // Lembre-se de converter Timestamps se necessário
+      return data as ServiceProviderProfile;
+    });
+  } catch (error) {
+    console.error("Erro ao buscar perfis de favoritos. Verifique as regras e os índices do Firestore.", error);
+    return [];
+  }
 };
 
 export const searchServiceProviders = async (

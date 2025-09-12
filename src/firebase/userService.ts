@@ -21,8 +21,9 @@ import type {
   ClientProfile,
   ServiceProviderProfile,
   UserRole,
-    ServiceProviderAdditionalData,
 } from "../types";
+
+
 
 const convertTimestamps = (
   data: Record<string, unknown>
@@ -57,45 +58,50 @@ const createSlug = (text: string) => {
 export const createUserProfile = async (
   uid: string,
   email: string,
-  name: string, // Nome completo do proprietário
+  name: string,
   role: UserRole,
-    additionalData?: ServiceProviderAdditionalData 
+  additionalData?: Partial<ServiceProviderProfile>
 ): Promise<void> => {
   const userRef = doc(db, "users", uid);
 
   const baseProfile = {
     id: uid,
     email,
-    name, // Continua sendo o nome do proprietário
+    name,
     role,
-    createdAt: serverTimestamp(),
+    createdAt: serverTimestamp(), // Isso agora é válido!
   };
 
-  let specificProfile;
+  let specificProfile: UserProfile;
 
   if (role === "client") {
     specificProfile = {
       ...baseProfile,
       role: "client",
       favoriteProfessionals: [],
-    } as unknown as ClientProfile;
+    } as ClientProfile;
   } else {
-    // --- 2. LÓGICA ATUALIZADA PARA PRESTADOR DE SERVIÇO ---
-    
-    // Pegamos o nome do negócio diretamente dos dados do formulário
     const businessName = additionalData?.businessName || `${name}'s Business`;
     
+    // O erro de conversão desaparece aqui
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
+      
       businessName: businessName,
-      publicProfileSlug: createSlug(businessName), // O slug agora é criado com o nome real do negócio
-      businessAddress: additionalData?.address || { street: "", city: "", state: "", zipCode: "" }, // Endereço completo vindo do formulário
-      cnpj: additionalData?.cnpj || "", // CNPJ vindo do formulário
+      cnpj: additionalData?.cnpj || "", 
+      businessAddress: additionalData?.businessAddress || { street: "", number: "", neighborhood: "", city: "", state: "", zipCode: "" },
+      businessPhone: additionalData?.businessPhone || "",
+      areaOfWork: additionalData?.areaOfWork || "",
+      socialLinks: additionalData?.socialLinks || {},
+      paymentMethods: additionalData?.paymentMethods || [],
+      
+      publicProfileSlug: createSlug(businessName),
+      logoUrl: "", 
       services: [],
       professionals: [],
       reviews: [],
-    } as unknown as ServiceProviderProfile;
+    } as ServiceProviderProfile; // A conversão direta agora funciona
   }
 
   await setDoc(userRef, specificProfile);

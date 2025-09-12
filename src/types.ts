@@ -1,4 +1,4 @@
-// Tipos Base e Enumerações
+import type { FieldValue } from "firebase/firestore";
 
 export const UserRole = {
   Client: "client",
@@ -13,7 +13,7 @@ export interface BaseUser {
   email: string;
   name: string;
   role: UserRole;
-  createdAt: Date;
+  createdAt: Date | FieldValue; 
   lastLogin?: Date;
   phoneNumber?: string;
   profilePictureUrl?: string;
@@ -119,33 +119,30 @@ export interface Address {
   city: string;
   state: string;
   zipCode: string;
-  // Opcional: para integração com mapas
   lat?: number;
   lng?: number;
 }
-export interface ServiceProviderAdditionalData {
-  businessName: string;
-  cnpj: string;
-  address: {
-    street: string;
-    number: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    zipCode: string;
-  };
-}
+
+export type PaymentMethod = "pix" | "credit_card" | "cash";
 
 export interface ServiceProviderProfile extends BaseUser {
-  // Mude de 'UserRole.ServiceProvider' para a string literal 'serviceProvider'
   role: "serviceProvider";
   businessName: string;
   businessAddress: Address;
+  cnpj: string;
   publicProfileSlug?: string;
   businessPhone?: string;
   services: Service[];
   professionals: Professional[];
   reviews: Review[];
+  areaOfWork?: string; // Área de atuação
+  logoUrl?: string; // URL da foto ou logo
+  socialLinks?: {
+    instagram?: string;
+    facebook?: string;
+    website?: string;
+  };
+  paymentMethods?: PaymentMethod[];
 }
 
 // Union Type para o perfil do usuário logado

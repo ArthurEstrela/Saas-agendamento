@@ -109,9 +109,11 @@ export interface Notification {
 // Perfis de Usuário
 
 export interface ClientProfile extends BaseUser {
-  // Mude de 'UserRole.Client' para a string literal 'client'
   role: "client";
-  favoriteProfessionals?: string[]; // Array of professional IDs
+  favoriteProfessionals?: string[];
+  cpf?: string;
+  dateOfBirth?: string;
+  gender?: 'Masculino' | 'Feminino' | 'Outro' | 'Prefiro não dizer';
 }
 
 export interface Address {

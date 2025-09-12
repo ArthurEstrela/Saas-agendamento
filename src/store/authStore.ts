@@ -11,7 +11,7 @@ import {
 import { auth } from "../firebase/config";
 import { useProfileStore } from "./profileStore";
 import { createUserProfile, getUserProfile } from "../firebase/userService"; // Verifique o nome do seu arquivo de serviço
-import type { ServiceProviderProfile } from "../types";
+import type { ServiceProviderProfile, ClientProfile } from "../types";
 
 interface AuthState {
   user: User | null;
@@ -26,7 +26,7 @@ interface AuthState {
     password: string,
     fullName: string,
     userType: "client" | "serviceProvider",
-    additionalData?: Partial<ServiceProviderProfile>
+    additionalData?: Partial<ServiceProviderProfile | ClientProfile>
   ) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -56,11 +56,34 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isSubmitting: true, error: null });
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
-      set({ error: "E-mail ou senha inválidos." });
-    } finally {
+      // O onAuthStateChanged vai cuidar de atualizar o estado do usuário.
+      // A gente só limpa o isSubmitting aqui.
       set({ isSubmitting: false });
+    } catch (err) {
+      const error = err as AuthError;
+      let errorMessage = "Ocorreu um erro ao tentar fazer login.";
+
+      // Mapeia os códigos de erro do Firebase para mensagens amigáveis
+      switch (error.code) {
+        case "auth/user-not-found":
+        case "auth/wrong-password":
+        case "auth/invalid-credential":
+          errorMessage = "E-mail ou senha inválidos.";
+          break;
+        case "auth/invalid-email":
+          errorMessage = "O formato do e-mail fornecido é inválido.";
+          break;
+        case "auth/too-many-requests":
+          errorMessage =
+            "Muitas tentativas de login. Por favor, tente novamente mais tarde.";
+          break;
+        default:
+          errorMessage = "Falha no login. Verifique suas credenciais.";
+      }
+
+      set({ error: errorMessage, isSubmitting: false });
+      // Lança o erro para que o formulário saiba que a operação falhou
+      throw error;
     }
   },
 
@@ -98,7 +121,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     } catch (error: any) {
       let errorMessage = "Ocorreu um erro desconhecido.";
-      // O Firebase retorna um código de erro que podemos usar para dar mensagens melhores
       if (error.code) {
         switch (error.code) {
           case "auth/email-already-in-use":

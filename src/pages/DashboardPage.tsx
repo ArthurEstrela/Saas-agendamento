@@ -1,7 +1,7 @@
 import { useProfileStore } from '../store/profileStore';
-import ClientDashboard from '../components/ClientDashboard';
 import ServiceProviderDashboard from '../components/ServiceProviderDashboard';
 import { DashboardSkeleton } from '../components/Common/LoadingSpinner';
+import { ClientDashboard } from '../components/ClientDashboard';
 
 
 // O tipo é exportado pelo ClientDashboard, mas a página precisa dele

@@ -23,8 +23,6 @@ import type {
   UserRole,
 } from "../types";
 
-
-
 const convertTimestamps = (
   data: Record<string, unknown>
 ): Record<string, unknown> => {
@@ -60,7 +58,7 @@ export const createUserProfile = async (
   email: string,
   name: string,
   role: UserRole,
-  additionalData?: Partial<ServiceProviderProfile>
+  additionalData?: Partial<ServiceProviderProfile | ClientProfile>
 ): Promise<void> => {
   const userRef = doc(db, "users", uid);
 
@@ -69,39 +67,55 @@ export const createUserProfile = async (
     email,
     name,
     role,
-    createdAt: serverTimestamp(), // Isso agora é válido!
+    createdAt: serverTimestamp(),
+    phoneNumber: additionalData?.phoneNumber || "",
   };
 
   let specificProfile: UserProfile;
 
   if (role === "client") {
+    // AQUI ESTÁ A CORREÇÃO:
+    // Nós convertemos 'additionalData' para o tipo específico do cliente.
+    const clientData = additionalData as Partial<ClientProfile>;
+
     specificProfile = {
       ...baseProfile,
       role: "client",
       favoriteProfessionals: [],
+      cpf: clientData?.cpf || "",
+      dateOfBirth: clientData?.dateOfBirth || "",
+      gender: clientData?.gender || "Prefiro não dizer",
+      profilePictureUrl: "",
     } as ClientProfile;
+
   } else {
-    const businessName = additionalData?.businessName || `${name}'s Business`;
-    
-    // O erro de conversão desaparece aqui
+    // E AQUI FAZEMOS O MESMO PARA O PRESTADOR DE SERVIÇO:
+    const providerData = additionalData as Partial<ServiceProviderProfile>;
+    const businessName = providerData?.businessName || `${name}'s Business`;
+
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
-      
       businessName: businessName,
-      cnpj: additionalData?.cnpj || "", 
-      businessAddress: additionalData?.businessAddress || { street: "", number: "", neighborhood: "", city: "", state: "", zipCode: "" },
-      businessPhone: additionalData?.businessPhone || "",
-      areaOfWork: additionalData?.areaOfWork || "",
-      socialLinks: additionalData?.socialLinks || {},
-      paymentMethods: additionalData?.paymentMethods || [],
-      
+      cnpj: providerData?.cnpj || "",
+      businessAddress: providerData?.businessAddress || {
+        street: "",
+        number: "",
+        neighborhood: "",
+        city: "",
+        state: "",
+        zipCode: "",
+      },
+      businessPhone: providerData?.businessPhone || "",
+      areaOfWork: providerData?.areaOfWork || "",
+      socialLinks: providerData?.socialLinks || {},
+      paymentMethods: providerData?.paymentMethods || [],
       publicProfileSlug: createSlug(businessName),
-      logoUrl: "", 
+      logoUrl: "",
       services: [],
       professionals: [],
       reviews: [],
-    } as ServiceProviderProfile; // A conversão direta agora funciona
+    } as ServiceProviderProfile;
   }
 
   await setDoc(userRef, specificProfile);

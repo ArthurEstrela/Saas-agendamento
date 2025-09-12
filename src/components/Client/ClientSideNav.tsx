@@ -1,61 +1,96 @@
-import { FaCalendarAlt, FaUser, FaHeart, FaSearch, FaSignOutAlt } from 'react-icons/fa';
+import { Search, Calendar, Heart, User, LogOut, Image as ImageIcon } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import type { ClientDashboardView } from '../../pages/DashboardPage'; // Atualize o caminho
+import { useProfileStore } from '../../store/profileStore';
+import logo from '../../assets/stylo-logo.png';
+import { Link } from 'react-router-dom';
 
 interface ClientSideNavProps {
-  activeView: ClientDashboardView;
-  setActiveView: (view: ClientDashboardView) => void;
+  activeSection: string;
+  setActiveSection: (section: 'search' | 'appointments' | 'favorites' | 'profile') => void;
 }
 
-interface NavItemProps {
-  icon: React.ReactNode;
-  label: string;
-  view: ClientDashboardView;
-  activeView: ClientDashboardView;
-  setActiveView: (view: ClientDashboardView) => void;
-}
+// 1. AJUSTES NOS ITENS DE NAVEGAÇÃO
+const navItems = [
+  { id: 'search', label: 'Buscar', icon: Search },
+  { id: 'appointments', label: 'Agendamentos', icon: Calendar }, // Texto encurtado
+  { id: 'favorites', label: 'Favoritos', icon: Heart },
+  // O item "Meu Perfil" foi removido daqui
+];
 
-const NavItem = ({ icon, label, view, activeView, setActiveView }: NavItemProps) => {
-    const isActive = activeView === view;
-    return (
-        <button
-            onClick={() => setActiveView(view)}
-            className={`flex items-center w-full px-4 py-3 text-left text-sm font-medium rounded-md transition-colors ${
-                isActive
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            }`}
-        >
-            {icon}
-            <span className="ml-3">{label}</span>
-        </button>
-    );
-};
-
-
-export const ClientSideNav = ({ activeView, setActiveView }: ClientSideNavProps) => {
+export const ClientSideNav = ({ activeSection, setActiveSection }: ClientSideNavProps) => {
   const { logout } = useAuthStore();
+  const { userProfile } = useProfileStore();
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-4 border-b">
-        <h2 className="text-xl font-bold text-gray-800">Meu Painel</h2>
+    <div className="flex flex-col justify-between h-full text-white">
+      <div>
+        {/* Logo */}
+        <div className="mb-12 px-2">
+          <Link to="/dashboard">
+            <img src={logo} alt="Stylo" className="h-10" />
+          </Link>
+        </div>
+
+        {/* Itens de Navegação */}
+        <nav className="space-y-2">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id as any)}
+              className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 text-base font-medium
+                ${
+                  activeSection === item.id
+                    ? 'bg-amber-500/10 text-amber-400'
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                }`}
+            >
+              <item.icon className="mr-3 flex-shrink-0" size={22} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
-      <nav className="flex-1 p-4 space-y-2">
-        <NavItem icon={<FaCalendarAlt />} label="Meus Agendamentos" view="appointments" activeView={activeView} setActiveView={setActiveView} />
-        <NavItem icon={<FaSearch />} label="Buscar" view="search" activeView={activeView} setActiveView={setActiveView} />
-        <NavItem icon={<FaUser />} label="Meu Perfil" view="profile" activeView={activeView} setActiveView={setActiveView} />
-        <NavItem icon={<FaHeart />} label="Favoritos" view="favorites" activeView={activeView} setActiveView={setActiveView} />
-      </nav>
-      <div className="p-4 border-t mt-auto">
+
+      {/* Seção do Usuário e Logout */}
+      <div className="border-t border-gray-700/50 pt-4">
+        {/* 2. ÁREA DO PERFIL AGORA É UM BOTÃO */}
+        <button
+          onClick={() => setActiveSection('profile')}
+          className={`w-full flex items-center p-2 rounded-lg transition-all duration-200 text-base font-medium
+            ${
+              activeSection === 'profile'
+                ? 'bg-amber-500/10' // Estilo quando a seção de perfil está ativa
+                : 'hover:bg-gray-800/50'
+            }`}
+        >
+          <div className="relative mr-3">
+            {/* 3. FOTO COM BORDA DOURADA */}
+            {userProfile?.profilePictureUrl ? (
+              <img
+                src={userProfile.profilePictureUrl}
+                alt="Foto do perfil"
+                className="w-10 h-10 rounded-full object-cover border-2 border-amber-500"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center border-2 border-gray-600">
+                <ImageIcon size={20} className="text-gray-400" />
+              </div>
+            )}
+          </div>
+          <span className={`truncate ${activeSection === 'profile' ? 'text-amber-400' : 'text-white'}`}>
+            {userProfile?.name || userProfile?.email}
+          </span>
+        </button>
+
+        {/* Botão de Logout */}
         <button
           onClick={logout}
-          className="flex items-center justify-center w-full bg-gray-100 hover:bg-red-100 text-gray-600 hover:text-red-600 font-bold py-2 px-4 rounded transition-colors"
+          className="w-full flex items-center p-3 mt-2 rounded-lg transition-all duration-200 text-gray-400 hover:bg-red-500/10 hover:text-red-400 text-base font-medium"
         >
-          <FaSignOutAlt className="mr-2"/>
+          <LogOut className="mr-3" size={22} />
           Sair
         </button>
       </div>
-    </aside>
+    </div>
   );
 };

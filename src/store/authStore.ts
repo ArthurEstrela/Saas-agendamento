@@ -1,10 +1,17 @@
 // src/store/authStore.ts
-import { create } from 'zustand';
-import { type User, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, type AuthError } from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { useProfileStore } from './profileStore';
-import { createUserProfile, getUserProfile } from '../firebase/userService'; // Verifique o nome do seu arquivo de serviço
-import type { ProviderAdditionalData } from '../types';
+import { create } from "zustand";
+import {
+  type User,
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  type AuthError,
+} from "firebase/auth";
+import { auth } from "../firebase/config";
+import { useProfileStore } from "./profileStore";
+import { createUserProfile, getUserProfile } from "../firebase/userService"; // Verifique o nome do seu arquivo de serviço
+import type { ServiceProviderProfile } from "../types";
 
 interface AuthState {
   user: User | null;
@@ -18,8 +25,8 @@ interface AuthState {
     email: string,
     password: string,
     fullName: string,
-    userType: 'client' | 'serviceProvider',
-    additionalData?: ProviderAdditionalData
+    userType: "client" | "serviceProvider",
+    additionalData?: Partial<ServiceProviderProfile>
   ) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -49,7 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isSubmitting: true, error: null });
     try {
       await signInWithEmailAndPassword(auth, email, password);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       set({ error: "E-mail ou senha inválidos." });
     } finally {
@@ -60,13 +67,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   signup: async (email, password, fullName, userType, additionalData) => {
     set({ isSubmitting: true, error: null });
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       const user = userCredential.user;
-      
-      await createUserProfile(user.uid, email, fullName, userType, additionalData);
+
+      await createUserProfile(
+        user.uid,
+        email,
+        fullName,
+        userType,
+        additionalData
+      );
 
       const userProfile = await getUserProfile(user.uid);
-      
+
       if (userProfile) {
         // Atualiza o estado de autenticação NESTA store
         set({
@@ -77,15 +94,31 @@ export const useAuthStore = create<AuthState>((set) => ({
         // Seta o perfil do usuário na store DELE
         useProfileStore.getState().setUserProfile(userProfile);
       } else {
-        throw new Error('Falha ao buscar perfil do usuário após o cadastro.');
+        throw new Error("Falha ao buscar perfil do usuário após o cadastro.");
       }
-    } catch (err) {
-      const error = err as AuthError; // Tipagem segura para o erro do Firebase
-      let errorMessage = 'Ocorreu um erro ao criar a conta.';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Este e-mail já está em uso. Tente outro.';
+    } catch (error: any) {
+      let errorMessage = "Ocorreu um erro desconhecido.";
+      // O Firebase retorna um código de erro que podemos usar para dar mensagens melhores
+      if (error.code) {
+        switch (error.code) {
+          case "auth/email-already-in-use":
+            errorMessage =
+              "Este endereço de e-mail já está em uso por outra conta.";
+            break;
+          case "auth/invalid-email":
+            errorMessage = "O formato do e-mail fornecido é inválido.";
+            break;
+          case "auth/weak-password":
+            errorMessage = "A senha é muito fraca. Tente uma senha mais forte.";
+            break;
+          default:
+            errorMessage = `Erro no cadastro: ${error.message}`;
+        }
       }
+      console.error("Firebase signup error:", error); // Mantém o erro detalhado no console para debug
       set({ error: errorMessage, isSubmitting: false });
+
+      throw error;
     }
   },
 

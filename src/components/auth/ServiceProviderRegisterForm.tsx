@@ -1,5 +1,6 @@
 import { useState, useEffect, forwardRef } from "react";
 import { useForm, type SubmitHandler, Controller } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { IMaskInput } from "react-imask";
@@ -83,13 +84,16 @@ const paymentOptions: {
 
 const InputField = forwardRef(({ icon: Icon, error, ...props }: any, ref) => (
   <div className="relative">
-    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-      <Icon className="text-gray-400" size={20} />
-    </div>
+    {/* Só mostra o ícone se ele for fornecido */}
+    {Icon && (
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Icon className="text-gray-400" size={20} />
+      </div>
+    )}
     <input
       {...props}
       ref={ref}
-      className={`input-field pl-10 ${
+      className={`input-field ${Icon ? "pl-10" : "pl-4"} ${
         error ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""
       }`}
     />
@@ -101,6 +105,7 @@ InputField.displayName = "InputField";
 export const ServiceProviderRegisterForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const { signup, isSubmitting, error: authError } = useAuthStore();
+  const navigate = useNavigate();
   const {
     address,
     loading: cepLoading,
@@ -158,7 +163,7 @@ export const ServiceProviderRegisterForm = () => {
 
   const prevStep = () => setCurrentStep((prev) => prev - 1);
 
-  const onSubmit: SubmitHandler<ProviderFormData> = (data) => {
+  const onSubmit: SubmitHandler<ProviderFormData> = async (data) => {
     const additionalData: Partial<ServiceProviderProfile> = {
       businessName: data.businessName,
       cnpj: data.cnpj,
@@ -179,13 +184,19 @@ export const ServiceProviderRegisterForm = () => {
         state: data.state,
       },
     };
-    signup(
-      data.email,
-      data.password,
-      data.name,
-      "serviceProvider",
-      additionalData
-    );
+    try {
+      await signup(
+        data.email,
+        data.password,
+        data.name,
+        "serviceProvider",
+        additionalData
+      );
+
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Falha no cadastro:", error);
+    }
   };
 
   return (
@@ -383,6 +394,7 @@ export const ServiceProviderRegisterForm = () => {
               </div>
               <div className="col-span-3 sm:col-span-2">
                 <InputField
+                  icon={MapPin}
                   error={errors.street}
                   {...register("street")}
                   placeholder="Endereço"

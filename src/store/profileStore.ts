@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { UserProfile } from "../types";
-import { getUserProfile, updateUserProfile } from "../firebase/userService"; // Importamos as funções reais
+import { getUserProfile, updateUserProfile, uploadProfilePicture as uploadService } from "../firebase/userService"; 
 
 interface ProfileState {
   userProfile: UserProfile | null;
@@ -8,6 +8,8 @@ interface ProfileState {
   error: string | null;
   fetchUserProfile: (uid: string) => Promise<void>;
   updateUserProfile: (uid: string, data: Partial<UserProfile>) => Promise<void>;
+  uploadProfilePicture: (uid: string, file: File) => Promise<string | undefined>;
+  setUserProfile: (profile: UserProfile) => void;
   clearProfile: () => void;
 }
 
@@ -39,6 +41,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     const currentProfile = get().userProfile;
     if (!currentProfile) return;
 
+    // Atualização otimista
     set({
       userProfile: { ...currentProfile, ...data } as UserProfile,
     });
@@ -46,13 +49,41 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     try {
       await updateUserProfile(uid, data);
     } catch (err: unknown) {
-      // Correção aqui
       let errorMessage = "Falha ao salvar as alterações.";
       if (err instanceof Error) {
         errorMessage = err.message;
       }
       console.error("Erro ao atualizar o perfil:", err);
+      // Reverte em caso de erro
       set({ userProfile: currentProfile, error: errorMessage });
+    }
+  },
+
+  // --- FUNÇÃO ADICIONADA ---
+  // Esta é a função que a authStore chamará após o signup para evitar
+  // uma nova chamada desnecessária ao banco de dados.
+  setUserProfile: (profile: UserProfile) => {
+    set({ userProfile: profile, isLoadingProfile: false });
+  },
+
+  // --- FUNÇÃO ADICIONADA (Esqueleto) ---
+  // Para completar a interface que você definiu.
+  uploadProfilePicture: async (uid, file) => {
+    const currentProfile = get().userProfile;
+    if (!currentProfile) return;
+
+    set({ isLoadingProfile: true });
+    try {
+      const downloadURL = await uploadService(uid, file);
+      set(state => ({
+        userProfile: state.userProfile ? { ...state.userProfile, profilePictureUrl: downloadURL } : null,
+        isLoadingProfile: false
+      }));
+      return downloadURL;
+    } catch (err) {
+      console.error("Erro no upload da foto:", err);
+      set({ error: "Falha ao enviar a foto.", isLoadingProfile: false });
+      return undefined;
     }
   },
 

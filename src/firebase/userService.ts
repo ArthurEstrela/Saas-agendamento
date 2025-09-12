@@ -21,6 +21,7 @@ import type {
   ClientProfile,
   ServiceProviderProfile,
   UserRole,
+    ServiceProviderAdditionalData,
 } from "../types";
 
 const convertTimestamps = (
@@ -56,15 +57,16 @@ const createSlug = (text: string) => {
 export const createUserProfile = async (
   uid: string,
   email: string,
-  name: string,
-  role: UserRole
+  name: string, // Nome completo do proprietário
+  role: UserRole,
+    additionalData?: ServiceProviderAdditionalData 
 ): Promise<void> => {
   const userRef = doc(db, "users", uid);
 
   const baseProfile = {
     id: uid,
     email,
-    name,
+    name, // Continua sendo o nome do proprietário
     role,
     createdAt: serverTimestamp(),
   };
@@ -78,15 +80,18 @@ export const createUserProfile = async (
       favoriteProfessionals: [],
     } as unknown as ClientProfile;
   } else {
-    // --- LÓGICA DE CRIAÇÃO DO SLUG ACONTECE AQUI ---
-    // O nome do negócio inicial virá do nome completo do usuário no cadastro
-    const businessName = `${name}'s Business`;
+    // --- 2. LÓGICA ATUALIZADA PARA PRESTADOR DE SERVIÇO ---
+    
+    // Pegamos o nome do negócio diretamente dos dados do formulário
+    const businessName = additionalData?.businessName || `${name}'s Business`;
+    
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
-      businessName: businessName, // Valor inicial
-      publicProfileSlug: createSlug(businessName), // Gera o slug automaticamente
-      businessAddress: { street: "", city: "", state: "", zipCode: "" }, // Endereço inicial vazio
+      businessName: businessName,
+      publicProfileSlug: createSlug(businessName), // O slug agora é criado com o nome real do negócio
+      businessAddress: additionalData?.address || { street: "", city: "", state: "", zipCode: "" }, // Endereço completo vindo do formulário
+      cnpj: additionalData?.cnpj || "", // CNPJ vindo do formulário
       services: [],
       professionals: [],
       reviews: [],

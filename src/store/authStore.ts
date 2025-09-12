@@ -1,19 +1,26 @@
+// src/store/authStore.ts
 import { create } from 'zustand';
-import { type User, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { type User, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, type AuthError } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useProfileStore } from './profileStore';
-import { createUserProfile } from '../firebase/userService';
-import type { UserRole } from '../types';
+import { createUserProfile, getUserProfile } from '../firebase/userService'; // Verifique o nome do seu arquivo de serviço
+import type { ProviderAdditionalData } from '../types';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  isLoading: boolean; // Estado de carregamento GERAL (inicial)
-  isSubmitting: boolean; // Estado para ações de formulário (login/signup)
+  isLoading: boolean;
+  isSubmitting: boolean;
   error: string | null;
   initializeAuth: () => () => void;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
+  signup: (
+    email: string,
+    password: string,
+    fullName: string,
+    userType: 'client' | 'serviceProvider',
+    additionalData?: ProviderAdditionalData
+  ) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -25,10 +32,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   initializeAuth: () => {
-    // ... (a função initializeAuth continua a mesma)
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         set({ user, isAuthenticated: true, isLoading: false });
+        // Dispara a busca do perfil na store correta
         useProfileStore.getState().fetchUserProfile(user.uid);
       } else {
         set({ user: null, isAuthenticated: false, isLoading: false });
@@ -42,35 +49,50 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isSubmitting: true, error: null });
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // O 'onAuthStateChanged' vai cuidar de atualizar o resto do estado.
-    } catch (error: any) {
-      set({ error: "Email ou senha inválidos." });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      set({ error: "E-mail ou senha inválidos." });
     } finally {
       set({ isSubmitting: false });
     }
   },
 
-  signup: async (email, password, name, role) => {
+  signup: async (email, password, fullName, userType, additionalData) => {
     set({ isSubmitting: true, error: null });
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await createUserProfile(userCredential.user.uid, email, name, role);
-      // O 'onAuthStateChanged' vai cuidar do login automático.
-    } catch (error: any) {
-      if (error.code === 'auth/email-already-in-use') {
-        set({ error: "Este email já está em uso." });
+      const user = userCredential.user;
+      
+      await createUserProfile(user.uid, email, fullName, userType, additionalData);
+
+      const userProfile = await getUserProfile(user.uid);
+      
+      if (userProfile) {
+        // Atualiza o estado de autenticação NESTA store
+        set({
+          isAuthenticated: true,
+          user,
+          isSubmitting: false,
+        });
+        // Seta o perfil do usuário na store DELE
+        useProfileStore.getState().setUserProfile(userProfile);
       } else {
-        set({ error: "Ocorreu um erro ao criar a conta." });
+        throw new Error('Falha ao buscar perfil do usuário após o cadastro.');
       }
-    } finally {
-      set({ isSubmitting: false });
+    } catch (err) {
+      const error = err as AuthError; // Tipagem segura para o erro do Firebase
+      let errorMessage = 'Ocorreu um erro ao criar a conta.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Este e-mail já está em uso. Tente outro.';
+      }
+      set({ error: errorMessage, isSubmitting: false });
     }
   },
 
   logout: async () => {
-    // ... (a função logout continua a mesma)
     try {
       await signOut(auth);
+      // O onAuthStateChanged vai limpar o resto
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
     }

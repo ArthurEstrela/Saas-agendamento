@@ -27,6 +27,7 @@ const PublicBookingPage = () => {
         } else {
           setProvider(profile);
         }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (err) {
         setError("Ocorreu um erro ao carregar o perfil.");
       } finally {

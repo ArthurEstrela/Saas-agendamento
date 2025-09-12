@@ -26,6 +26,19 @@ export interface TimeSlot {
   end: string; // "HH:mm"
 }
 
+export interface ProviderAdditionalData {
+  businessName: string;
+  cnpj: string;
+  address: {
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+}
+
 export interface DailyAvailability {
   dayOfWeek:
     | "Sunday"
@@ -109,6 +122,18 @@ export interface Address {
   // Opcional: para integração com mapas
   lat?: number;
   lng?: number;
+}
+export interface ServiceProviderAdditionalData {
+  businessName: string;
+  cnpj: string;
+  address: {
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
 }
 
 export interface ServiceProviderProfile extends BaseUser {

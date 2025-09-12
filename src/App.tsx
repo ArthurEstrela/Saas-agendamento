@@ -11,6 +11,8 @@ import DashboardPage from './pages/DashboardPage';
 import PublicBookingPage from './pages/PublicBookingPage';
 import BookingPage from './pages/BookingPage';
 import { ProtectedRoute } from './components/Common/ProtectedRoute';
+import RegisterTypeSelection from './pages/RegisterTypeSelection';
+import RegisterPage from './pages/RegisterPage';
 
 
 function App() {
@@ -32,7 +34,9 @@ function App() {
         </Route>
 
         {/* Rotas Públicas sem o Layout Principal */}
-        <Route path="/login" element={<LoginPage />} />
+         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register-type" element={<RegisterTypeSelection />} />
+        <Route path="/register/:userType" element={<RegisterPage />} />
         <Route path="/agendar/:slug" element={<PublicBookingPage />} />
         <Route path="/book/:providerId" element={<BookingPage />} />
 

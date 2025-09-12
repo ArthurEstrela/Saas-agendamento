@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useForm, type SubmitHandler, Controller } from 'react-hook-form'; // 1. Importa o Controller
+import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuthStore } from '../../store/authStore';
 import { useViaCep } from '../../hooks/useViaCep';
 import { StepProgressBar } from './StepProgressBar';
-import InputMask from 'react-input-mask';
+import { IMaskInput } from 'react-imask';
 import { Loader2 } from 'lucide-react';
 
 const fullSchema = z.object({
@@ -32,7 +32,6 @@ export const ServiceProviderRegisterForm = () => {
   const { signup, isSubmitting, error: authError } = useAuthStore();
   const { address, loading: cepLoading, error: cepError, fetchAddress } = useViaCep();
 
-  // 2. Extrai o 'control' do useForm
   const { register, handleSubmit, formState: { errors }, trigger, watch, setValue, control } = useForm<ProviderFormData>({
     resolver: zodResolver(fullSchema),
     mode: 'onChange'
@@ -46,7 +45,6 @@ export const ServiceProviderRegisterForm = () => {
     }
   };
 
-  // Efeito para preencher o formulário quando o endereço do ViaCEP for encontrado
   useEffect(() => {
     if (address) {
       setValue('street', address.logradouro, { shouldValidate: true });
@@ -86,7 +84,7 @@ export const ServiceProviderRegisterForm = () => {
     <>
       <StepProgressBar currentStep={currentStep} totalSteps={3} stepLabels={["Dados Pessoais", "Negócio", "Endereço"]} />
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Etapa 1: Dados Pessoais e de Acesso (sem alteração) */}
+        {/* Etapa 1: Dados Pessoais e de Acesso */}
         {currentStep === 1 && (
           <>
             <input {...register('fullName')} placeholder="Seu Nome Completo" className="input-field" />
@@ -106,16 +104,16 @@ export const ServiceProviderRegisterForm = () => {
         {/* Etapa 2: Documentos */}
         {currentStep === 2 && (
           <>
-            {/* 3. Usa o Controller para o CNPJ */}
             <Controller
               name="cnpj"
               control={control}
               render={({ field }) => (
-                <InputMask
+                <IMaskInput
                   {...field}
-                  mask="99.999.999/9999-99"
+                  mask="00.000.000/0000-00"
                   placeholder="CNPJ"
                   className="input-field"
+                  onAccept={(value) => field.onChange(value)}
                 />
               )}
             />
@@ -127,20 +125,20 @@ export const ServiceProviderRegisterForm = () => {
         {currentStep === 3 && (
          <>
             <div className="relative">
-              {/* 4. Usa o Controller para o CEP */}
               <Controller
                 name="zipCode"
                 control={control}
                 render={({ field }) => (
-                  <InputMask
+                  <IMaskInput
                     {...field}
-                    mask="99999-999"
+                    mask="00000-000"
                     placeholder="CEP"
                     className="input-field"
                     onBlur={(e) => {
-                      field.onBlur(); // Informa ao RHF que o campo perdeu o foco
-                      handleCepBlur(e.target.value); // Chama nossa função do ViaCEP
+                      field.onBlur();
+                      handleCepBlur(e.target.value);
                     }}
+                    onAccept={(value) => field.onChange(value)}
                   />
                 )}
               />

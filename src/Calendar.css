@@ -124,3 +124,51 @@
 .react-calendar__tile--hasActive:enabled:focus {
     background-color: #5a5a5a;
 }
+
+.rdp {
+    --rdp-cell-size: 40px;
+    --rdp-accent-color: #FBBF24; /* amber-400 */
+    --rdp-background-color: #374151; /* gray-700 */
+    --rdp-accent-color-dark: #F59E0B; /* amber-500 */
+    --rdp-background-color-dark: #1F2937; /* gray-800 */
+    --rdp-outline: 2px solid var(--rdp-accent-color);
+    --rdp-outline-selected: 3px solid var(--rdp-accent-color);
+    --rdp-border-radius: 8px;
+    margin: 1em auto;
+}
+
+.rdp-caption_label {
+    font-weight: bold;
+    color: #F3F4F6; /* gray-100 */
+}
+
+.rdp-head_cell {
+    color: #9CA3AF; /* gray-400 */
+    font-weight: 600;
+}
+
+.rdp-day {
+    color: #D1D5DB; /* gray-300 */
+    transition: all 0.2s ease;
+}
+
+.rdp-day_today {
+    color: var(--rdp-accent-color);
+    font-weight: bold;
+}
+
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+    background-color: var(--rdp-accent-color);
+    color: #111827; /* gray-900 */
+    font-weight: bold;
+}
+
+.rdp-day:hover:not(.rdp-day_disabled) {
+    background-color: #374151; /* gray-700 */
+}
+
+.rdp-button:focus-visible:not([disabled]) {
+    border: none;
+    outline: var(--rdp-outline);
+    outline-offset: 2px;
+}

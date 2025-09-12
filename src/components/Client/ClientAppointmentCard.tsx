@@ -1,63 +1,53 @@
 import type { Appointment } from '../../types';
-import { useUserAppointmentsStore } from '../../store/userAppointmentsStore';
-import { FaCalendar, FaClock, FaUserTie, FaCheckCircle, FaTimesCircle, FaHourglassHalf, FaStar } from 'react-icons/fa';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Building, Scissors, Calendar, Clock, Star } from 'lucide-react';
 
 interface ClientAppointmentCardProps {
   appointment: Appointment;
+  onReview: (appointment: Appointment) => void; // Função para abrir o modal de avaliação
 }
 
-const getStatusChip = (status: Appointment['status']) => {
-    const baseClasses = "text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full";
-    const statusMap = {
-        pending: <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}><FaHourglassHalf className="inline mr-1"/>Pendente</span>,
-        scheduled: <span className={`${baseClasses} bg-green-100 text-green-800`}><FaCheckCircle className="inline mr-1"/>Confirmado</span>,
-        completed: <span className={`${baseClasses} bg-blue-100 text-blue-800`}><FaCheckCircle className="inline mr-1"/>Concluído</span>,
-        cancelled: <span className={`${baseClasses} bg-red-100 text-red-800`}><FaTimesCircle className="inline mr-1"/>Cancelado</span>,
-    };
-    return statusMap[status] || null;
-}
+// Mapeia o status para estilos visuais
+const statusStyles = {
+  pending: { borderColor: 'border-yellow-500', textColor: 'text-yellow-400', text: 'Pendente' },
+  scheduled: { borderColor: 'border-green-500', textColor: 'text-green-400', text: 'Confirmado' },
+  completed: { borderColor: 'border-blue-500', textColor: 'text-blue-400', text: 'Concluído' },
+  cancelled: { borderColor: 'border-red-500', textColor: 'text-red-400', text: 'Cancelado' },
+};
 
-export const ClientAppointmentCard = ({ appointment }: ClientAppointmentCardProps) => {
-  const { cancelAppointment } = useUserAppointmentsStore();
-//   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
-
-  const canCancel = appointment.status === 'pending' || appointment.status === 'scheduled';
-  const canReview = appointment.status === 'completed' && !appointment.review;
+export const ClientAppointmentCard = ({ appointment, onReview }: ClientAppointmentCardProps) => {
+  const style = statusStyles[appointment.status] || statusStyles.pending;
+  const appointmentDate = new Date(appointment.startTime);
 
   return (
-    <>
-    <div className="bg-white rounded-lg shadow-md p-5 flex flex-col justify-between">
+    <div className={`bg-black/30 rounded-2xl p-5 border-l-4 ${style.borderColor} flex flex-col justify-between`}>
       <div>
-        <div className="flex justify-between items-start mb-2">
-            <h3 className="text-lg font-bold text-gray-800">{appointment.serviceName}</h3>
-            {getStatusChip(appointment.status)}
+        <div className="flex justify-between items-start">
+          <h3 className="text-xl font-bold text-white mb-2">{appointment.serviceName}</h3>
+          <span className={`text-sm font-semibold px-3 py-1 rounded-full ${style.textColor} bg-gray-800`}>
+            {style.text}
+          </span>
         </div>
-        <div className="text-sm text-gray-500 space-y-2">
-            <p><FaCalendar className="inline mr-2" />{new Date(appointment.startTime).toLocaleDateString('pt-BR')}</p>
-            <p><FaClock className="inline mr-2" />{`${new Date(appointment.startTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} - ${new Date(appointment.endTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`}</p>
-            <p><FaUserTie className="inline mr-2" />{appointment.professionalName}</p>
+
+        <div className="space-y-2 text-gray-400">
+          <p className="flex items-center gap-2 text-sm"><Building size={16} /> {appointment.professionalName}</p>
+          <p className="flex items-center gap-2 text-sm"><Calendar size={16} /> {format(appointmentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+          <p className="flex items-center gap-2 text-sm"><Clock size={16} /> {format(appointmentDate, "HH:mm")}</p>
         </div>
       </div>
-      <div className="mt-4 flex space-x-2">
-        {canCancel && (
-            <button 
-                onClick={() => window.confirm('Tem certeza que deseja cancelar?') && cancelAppointment(appointment.id)}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-2 px-4 rounded transition-colors"
-            >
-                Cancelar
-            </button>
-        )}
-        {canReview && (
-            <button
-                // onClick={() => setReviewModalOpen(true)}
-                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-bold py-2 px-4 rounded transition-colors"
-            >
-                <FaStar className="inline mr-1" /> Avaliar
-            </button>
-        )}
-      </div>
+
+      {/* Botão de Avaliação */}
+      {appointment.status === 'completed' && !appointment.review && (
+        <div className="mt-4 pt-4 border-t border-gray-700/50">
+          <button 
+            onClick={() => onReview(appointment)}
+            className="w-full secondary-button flex items-center justify-center gap-2"
+          >
+            <Star size={16}/> Avaliar Serviço
+          </button>
+        </div>
+      )}
     </div>
-    {/* {isReviewModalOpen && <ReviewModal appointmentId={appointment.id} onClose={() => setReviewModalOpen(false)} />} */}
-    </>
   );
 };

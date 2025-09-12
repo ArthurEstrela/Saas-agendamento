@@ -1,44 +1,53 @@
 import { useBookingProcessStore } from '../../store/bookingProcessStore';
-import type { Professional } from '../../types';
-import { ArrowLeft } from 'lucide-react';
+import { CheckCircle, User } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-interface ProfessionalSelectionProps {
-  professionals: Professional[];
-}
+export const ProfessionalSelection = () => {
+  const { provider, service, professional: selectedProfessional, selectProfessional, goToPreviousStep } = useBookingProcessStore();
 
-export const ProfessionalSelection = ({ professionals }: ProfessionalSelectionProps) => {
-  const { selectProfessional, professional: selectedProfessional, service, goToPreviousStep } = useBookingProcessStore();
-
-  const availableProfessionals = professionals.filter(p => 
+  const availableProfessionals = provider?.professionals.filter(p =>
     p.services.some(s => s.id === service?.id)
-  );
+  ) || [];
+  
+  if (availableProfessionals.length === 0) {
+    return (
+        <div className="text-center">
+            <p className="text-gray-400 mb-4">Nenhum profissional disponível para o serviço selecionado.</p>
+            <button onClick={goToPreviousStep} className="secondary-button">Voltar aos Serviços</button>
+        </div>
+    );
+  }
 
   return (
-    <div className="animate-fade-in">
-      <h2 className="text-xl font-semibold mb-4 text-gray-700">2. Escolha um Profissional</h2>
-      <div className="space-y-3">
-        {availableProfessionals.map((prof) => (
-          <button
-            key={prof.id}
-            onClick={() => selectProfessional(prof)}
-            className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 flex items-center gap-4 ${
-              selectedProfessional?.id === prof.id
-                ? 'border-[#daa520] bg-yellow-50 shadow-md'
-                : 'border-gray-200 hover:border-[#daa520]'
-            }`}
-          >
-            {/* Adicione a foto do profissional aqui */}
-            <div className="w-12 h-12 rounded-full bg-gray-200"></div>
-            <div>
-              <p className="font-bold text-gray-800">{prof.name}</p>
-            </div>
-          </button>
-        ))}
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <h2 className="text-3xl font-bold text-center text-white mb-8">Escolha o Profissional</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
+        {availableProfessionals.map((professional) => {
+          const isSelected = selectedProfessional?.id === professional.id;
+          return (
+            <button
+              key={professional.id}
+              onClick={() => selectProfessional(professional)} // A store já avança
+              className={`relative p-4 flex flex-col items-center gap-4 bg-black/30 rounded-2xl border-2 transition-all duration-300
+                ${isSelected ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 hover:border-gray-600'}
+              `}
+            >
+              {isSelected && <CheckCircle size={24} className="absolute top-2 right-2 text-amber-500" />}
+              <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center">
+                {professional.photoURL ? (
+                  <img src={professional.photoURL} alt={professional.name} className="w-full h-full rounded-full object-cover"/>
+                ) : (
+                  <User size={48} className="text-gray-500"/>
+                )}
+              </div>
+              <h3 className={`text-lg font-semibold text-center ${isSelected ? 'text-amber-400' : 'text-white'}`}>{professional.name}</h3>
+            </button>
+          );
+        })}
       </div>
-      <button onClick={goToPreviousStep} className="mt-6 text-sm text-gray-600 hover:text-black flex items-center gap-2">
-        <ArrowLeft size={16} />
-        Voltar para Serviços
-      </button>
-    </div>
+      <div className="text-center mt-8">
+        <button onClick={goToPreviousStep} className="secondary-button">Voltar</button>
+      </div>
+    </motion.div>
   );
 };

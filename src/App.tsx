@@ -8,11 +8,10 @@ import AppLayout from './components/AppLayout';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import PublicBookingPage from './pages/PublicBookingPage';
-import BookingPage from './pages/BookingPage';
 import { ProtectedRoute } from './components/Common/ProtectedRoute';
 import RegisterTypeSelection from './pages/RegisterTypeSelection';
 import RegisterPage from './pages/RegisterPage';
+import { BookingPage } from './pages/BookingPage';
 
 
 function App() {

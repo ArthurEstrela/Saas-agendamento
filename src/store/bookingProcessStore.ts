@@ -1,112 +1,93 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Service, Professional, ServiceProviderProfile, Appointment } from '../types'; // Importe Appointment
+import type { Service, Professional, ServiceProviderProfile, Appointment } from '../types'; 
 import { createAppointment } from '../firebase/bookingService';
-import { getProviderProfileBySlug, getUserProfile  } from '../firebase/userService';
+import { getUserProfile } from '../firebase/userService';
 
+// ... (Interface BookingState e initialState permanecem as mesmas da versão anterior)
 interface BookingState {
   provider: ServiceProviderProfile | null;
   isLoading: boolean;
-  service: Service | null;
+  selectedServices: Service[];
   professional: Professional | null;
   date: Date | null;
   timeSlot: string | null;
   currentStep: number;
-  // --- ESTADOS ADICIONADOS ---
-  isBooking: boolean; // Para o spinner do botão de confirmar
+  isBooking: boolean;
   bookingSuccess: boolean;
   bookingError: string | null;
 }
 
 interface BookingActions {
-  fetchProviderDetails: (slug: string) => Promise<void>;
   fetchProviderDetailsById: (providerId: string) => Promise<void>;
-  selectService: (service: Service) => void;
+  toggleService: (service: Service) => void;
   selectProfessional: (professional: Professional) => void;
-  // Renomeado para consistência com o que o componente espera
-  selectDateTime: (date: Date, timeSlot: string) => void; 
+  selectDateTime: (date: Date, timeSlot: string) => void;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
   resetBooking: () => void;
-  // A assinatura agora recebe os dados do agendamento
+  // Agora espera o objeto Appointment pronto
   confirmBooking: (appointmentData: Omit<Appointment, 'id'>) => Promise<void>;
 }
 
 const initialState: BookingState = {
   provider: null,
   isLoading: true,
-  service: null,
+  selectedServices: [],
   professional: null,
   date: null,
   timeSlot: null,
   currentStep: 1,
-  // --- VALORES INICIAIS ADICIONADOS ---
   isBooking: false,
   bookingSuccess: false,
   bookingError: null,
 };
+
 
 export const useBookingProcessStore = create(
   persist<BookingState & BookingActions>(
     (set, get) => ({
       ...initialState,
 
-      fetchProviderDetails: async (slug) => {
-        const persistedState = get();
-        set({ ...persistedState, isLoading: true });
-        try {
-          const providerProfile = await getProviderProfileBySlug(slug);
-          if (providerProfile) {
-            set({ provider: providerProfile, isLoading: false });
-          } else {
-            throw new Error('Prestador de serviço não encontrado.');
-          }
-        } catch (error) {
-          console.error("Erro ao buscar detalhes do prestador:", error);
-          set({ isLoading: false, provider: null });
-        }
-      },
-      
-       fetchProviderDetailsById: async (providerId) => {
+      // ... (fetchProviderDetailsById, toggleService, etc. continuam iguais)
+      fetchProviderDetailsById: async (providerId) => {
         set({ isLoading: true });
         try {
-          // Reutilizamos a função que busca qualquer perfil de usuário por ID
           const providerProfile = await getUserProfile(providerId);
           if (providerProfile && providerProfile.role === 'serviceProvider') {
             set({ provider: providerProfile as ServiceProviderProfile, isLoading: false });
-          } else {
-            throw new Error('Prestador de serviço não encontrado ou usuário não é um prestador.');
-          }
+          } else { throw new Error('Prestador não encontrado.'); }
         } catch (error) {
           console.error("Erro ao buscar detalhes do prestador por ID:", error);
           set({ isLoading: false, provider: null });
         }
       },
-      
-      selectService: (service) => set({ service, professional: null, date: null, timeSlot: null }),
-      selectProfessional: (professional) => set({ professional, date: null, timeSlot: null }),
+      toggleService: (service) => {
+        const { selectedServices } = get();
+        const isSelected = selectedServices.some((s) => s.id === service.id);
+        const newSelectedServices = isSelected
+          ? selectedServices.filter((s) => s.id !== service.id)
+          : [...selectedServices, service];
+        set({ selectedServices: newSelectedServices });
+      },
+      selectProfessional: (professional) => set({ professional, date: null, timeSlot: null, currentStep: 3 }),
       selectDateTime: (date, timeSlot) => set({ date, timeSlot }),
-
       goToNextStep: () => set((state) => ({ currentStep: state.currentStep + 1 })),
       goToPreviousStep: () => set((state) => ({ currentStep: state.currentStep - 1 })),
-
       resetBooking: () => {
         const provider = get().provider;
         set({ ...initialState, provider, isLoading: false });
       },
-
-      // --- FUNÇÃO CONFIRMBOOKING CORRIGIDA ---
+      
+      // Lógica de confirmação simplificada
       confirmBooking: async (appointmentData) => {
-        // 1. LIGA O LOADING
         set({ isBooking: true, bookingError: null });
         try {
+          // Apenas passa o objeto pronto para o serviço do Firebase
           await createAppointment(appointmentData);
-          // 2. EM CASO DE SUCESSO, ATUALIZA O ESTADO
           set({ isBooking: false, bookingSuccess: true });
-          // Não precisa chamar resetBooking aqui, a tela de sucesso fará isso se necessário
         } catch (error) {
           console.error("Erro ao confirmar agendamento:", error);
-          // 3. EM CASO DE ERRO, ATUALIZA O ESTADO E DESLIGA O LOADING
           set({ isBooking: false, bookingError: 'Falha ao criar o agendamento. Tente novamente.' });
         }
       },
@@ -115,7 +96,7 @@ export const useBookingProcessStore = create(
       name: 'booking-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        service: state.service,
+        selectedServices: state.selectedServices,
         professional: state.professional,
         date: state.date,
         timeSlot: state.timeSlot,

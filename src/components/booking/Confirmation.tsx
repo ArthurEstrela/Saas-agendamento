@@ -1,88 +1,123 @@
 import { useBookingProcessStore } from '../../store/bookingProcessStore';
-import { useProfileStore } from '../../store/profileStore';
-import { Loader2, Calendar, Clock, User, Scissors, DollarSign, CheckCircle } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
+import { Loader2, Calendar, User, Scissors, DollarSign, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import type { Appointment } from '../../types';
 
 export const Confirmation = () => {
-    const {
-        provider,
-        service: selectedService,
-        professional: selectedProfessional,
-        date: selectedDate,
-        timeSlot: selectedTime,
-        isBooking,
-        bookingSuccess,
-        bookingError,
-        confirmBooking,
-        goToPreviousStep
-    } = useBookingProcessStore();
+  const {
+    selectedServices,
+    professional,
+    date,
+    timeSlot,
+    isBooking,
+    bookingSuccess,
+    bookingError,
+    confirmBooking,
+    goToPreviousStep,
+    resetBooking
+  } = useBookingProcessStore();
+  
+  const { user } = useAuthStore(); 
 
-    const { userProfile } = useProfileStore();
-
-    if (!provider || !selectedService || !selectedProfessional || !selectedDate || !selectedTime || !userProfile) {
-        return <p className="text-center text-red-400">Dados do agendamento incompletos. Por favor, volte e tente novamente.</p>;
-    }
-    
-    const handleConfirm = () => {
-        const startTime = new Date(selectedDate);
-        const [hours, minutes] = selectedTime.split(':').map(Number);
-        startTime.setHours(hours, minutes, 0, 0);
-
-        const appointmentData = {
-            providerId: provider.id,
-            clientId: userProfile.id,
-            clientName: userProfile.name,
-            professionalId: selectedProfessional.id,
-            professionalName: selectedProfessional.name,
-            serviceId: selectedService.id,
-            serviceName: selectedService.name,
-            startTime,
-            endTime: new Date(startTime.getTime() + selectedService.duration * 60000),
-            status: 'pending' as const
-        };
-        confirmBooking(appointmentData);
-    };
-
-    if (bookingSuccess) {
-        return (
-            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-lg mx-auto bg-black/30 p-8 rounded-2xl">
-                <CheckCircle size={64} className="mx-auto text-green-400 mb-6"/>
-                <h2 className="text-3xl font-bold text-white">Agendamento Solicitado!</h2>
-                <p className="text-gray-300 mt-4">
-                    Seu horário foi enviado para o estabelecimento. Você será notificado sobre a confirmação.
-                </p>
-                <Link to="/dashboard" className="primary-button mt-8">
-                    Ver Meus Agendamentos
-                </Link>
-            </motion.div>
-        );
-    }
-
-    return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <h2 className="text-3xl font-bold text-center text-white mb-8">Confirme seu Agendamento</h2>
-            <div className="max-w-lg mx-auto bg-black/30 p-8 rounded-2xl space-y-6">
-                <div>
-                    <h3 className="text-xl font-semibold text-amber-400 border-b border-gray-700 pb-3 mb-3">Resumo do Agendamento</h3>
-                    <div className="space-y-4 text-lg">
-                        <p className="flex items-center gap-3"><Scissors className="text-gray-400" size={20}/> <span className="font-semibold">{selectedService.name}</span></p>
-                        <p className="flex items-center gap-3"><User className="text-gray-400" size={20}/> Com <span className="font-semibold">{selectedProfessional.name}</span></p>
-                        <p className="flex items-center gap-3"><Calendar className="text-gray-400" size={20}/> Dia <span className="font-semibold">{format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
-                        <p className="flex items-center gap-3"><Clock className="text-gray-400" size={20}/> Às <span className="font-semibold">{selectedTime}</span></p>
-                        <p className="flex items-center gap-3"><DollarSign className="text-gray-400" size={20}/> Valor <span className="font-semibold">R$ {selectedService.price.toFixed(2).replace('.', ',')}</span></p>
-                    </div>
-                </div>
-            </div>
-             {bookingError && <p className="error-message text-center mt-4">{bookingError}</p>}
-            <div className="flex justify-center items-center gap-4 mt-8">
-                <button onClick={goToPreviousStep} className="secondary-button" disabled={isBooking}>Voltar</button>
-                <button onClick={handleConfirm} disabled={isBooking} className="primary-button w-56 flex justify-center">
-                    {isBooking ? <Loader2 className="animate-spin" /> : 'Confirmar Agendamento'}
-                </button>
-            </div>
-        </motion.div>
+  const { totalDuration, totalPrice } = useMemo(() => {
+    return selectedServices.reduce(
+      (acc, service) => {
+        acc.totalDuration += service.duration;
+        acc.totalPrice += service.price;
+        return acc;
+      },
+      { totalDuration: 0, totalPrice: 0 }
     );
+  }, [selectedServices]);
+
+  const handleConfirm = async () => {
+    // 1. Verificamos se 'user' existe antes de continuar
+    if (!user || !professional || !date || !timeSlot || selectedServices.length === 0) {
+      // Idealmente, você teria uma mensagem de erro mais específica aqui
+      console.error("Dados do agendamento incompletos ou usuário não logado.");
+      return;
+    }
+      
+    const startTime = new Date(date);
+    const [hours, minutes] = timeSlot.split(':').map(Number);
+    startTime.setHours(hours, minutes, 0, 0);
+
+    const endTime = new Date(startTime.getTime() + totalDuration * 60000);
+
+    const appointmentData: Omit<Appointment, 'id'> = {
+      clientId: user.uid, 
+      clientName: user.displayName || 'Cliente sem nome', 
+      professionalId: professional.id,
+      professionalName: professional.name,
+      services: selectedServices,
+      startTime,
+      endTime,
+      status: 'pending',
+      totalPrice,
+      totalDuration,
+    };
+    
+    await confirmBooking(appointmentData);
+  };
+  
+  const formattedDate = date ? format(date, "EEEE, dd 'de' MMMM", { locale: ptBR }) : 'Data não selecionada';
+
+  if (bookingSuccess) {
+    return (
+      <div className="text-center max-w-lg mx-auto">
+        <h2 className="text-3xl font-bold text-green-400 mb-4">Agendamento Confirmado!</h2>
+        <p className="text-gray-300 mb-6">Seu horário foi reservado com sucesso. Você pode ver os detalhes na sua área de agendamentos.</p>
+        <button onClick={resetBooking} className="primary-button">Fazer Novo Agendamento</button>
+      </div>
+    );
+  }
+
+  // O JSX não precisa de mudanças, pois já estava pronto para isso.
+  return (
+    <div className="max-w-2xl mx-auto bg-black/30 p-8 rounded-2xl">
+      <h2 className="text-2xl font-bold text-white mb-6 text-center">Confirme os Detalhes</h2>
+      <div className="space-y-4">
+        <div className="bg-gray-800/50 p-4 rounded-lg">
+          <h3 className="font-semibold text-[#daa520] mb-3 flex items-center gap-2"><Scissors size={18}/> Serviços Selecionados</h3>
+          <ul className="space-y-2">
+            {selectedServices.map(service => (
+                <li key={service.id} className="flex justify-between items-center text-gray-300">
+                <span>{service.name}</span>
+                <span className="font-mono">R$ {service.price.toFixed(2)}</span>
+                </li>
+            ))}
+            <li className="flex justify-between items-center text-white font-bold border-t border-gray-700 pt-3 mt-3">
+                <span>Total</span>
+                <span className="font-mono">R$ {totalPrice.toFixed(2)}</span>
+            </li>
+          </ul>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-800/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-[#daa520] mb-2 flex items-center gap-2"><Calendar size={18}/> Início do Atendimento</h3>
+                <p className="text-white">{formattedDate}</p>
+                <p className="text-white font-bold text-lg">{timeSlot}</p>
+            </div>
+             <div className="bg-gray-800/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-[#daa520] mb-2 flex items-center gap-2"><User size={18}/> Profissional</h3>
+                <p className="text-white">{professional?.name || 'Não selecionado'}</p>
+            </div>
+        </div>
+        <div className="bg-gray-800/50 p-4 rounded-lg text-center">
+             <h3 className="font-semibold text-[#daa520] mb-2 flex items-center justify-center gap-2"><Clock size={18}/> Duração Total Estimada</h3>
+             <p className="text-white text-lg font-bold">{totalDuration} minutos</p>
+        </div>
+      </div>
+      {bookingError && <p className="text-red-400 text-center mt-4">{bookingError}</p>}
+      <div className="flex flex-col md:flex-row gap-4 mt-8">
+        <button onClick={goToPreviousStep} className="secondary-button w-full">Voltar</button>
+        <button onClick={handleConfirm} disabled={isBooking} className="primary-button w-full">
+          {isBooking ? <Loader2 className="animate-spin mx-auto" /> : 'Confirmar Agendamento'}
+        </button>
+      </div>
+    </div>
+  );
 };

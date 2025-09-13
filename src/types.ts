@@ -86,14 +86,15 @@ export interface Appointment {
   clientName: string;
   professionalId: string;
   professionalName: string;
-  serviceId: string;
+  services: Service[]; 
   serviceName: string;
   startTime: Date;
   endTime: Date;
   status: "pending" | "scheduled" | "completed" | "cancelled";
+  totalPrice: number;
+  totalDuration: number; // in minutes
   notes?: string;
   review?: Review;
-  // Opcional: útil para quando o prestador recusa o agendamento
   rejectionReason?: string;
 }
 

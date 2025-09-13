@@ -1,53 +1,96 @@
-import type { Appointment } from '../../types';
+import type { EnrichedAppointment } from '../../store/userAppointmentsStore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Building, Scissors, Calendar, Clock, Star } from 'lucide-react';
+import { User, Calendar, Clock, MapPin, Scissors, CheckCircle, AlertCircle, XCircle, MoreHorizontal } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-interface ClientAppointmentCardProps {
-  appointment: Appointment;
-  onReview: (appointment: Appointment) => void; // Função para abrir o modal de avaliação
-}
+// Componente para exibir o status com cor e ícone
+const StatusBadge = ({ status }: { status: EnrichedAppointment['status'] }) => {
+    const statusInfo = {
+        scheduled: { text: 'Confirmado', color: 'bg-green-500/20 text-green-400', icon: <CheckCircle size={14} /> },
+        pending: { text: 'Pendente', color: 'bg-yellow-500/20 text-yellow-400', icon: <MoreHorizontal size={14} /> },
+        completed: { text: 'Concluído', color: 'bg-blue-500/20 text-blue-400', icon: <CheckCircle size={14} /> },
+        cancelled: { text: 'Cancelado', color: 'bg-red-500/20 text-red-400', icon: <XCircle size={14} /> }
+    };
 
-// Mapeia o status para estilos visuais
-const statusStyles = {
-  pending: { borderColor: 'border-yellow-500', textColor: 'text-yellow-400', text: 'Pendente' },
-  scheduled: { borderColor: 'border-green-500', textColor: 'text-green-400', text: 'Confirmado' },
-  completed: { borderColor: 'border-blue-500', textColor: 'text-blue-400', text: 'Concluído' },
-  cancelled: { borderColor: 'border-red-500', textColor: 'text-red-400', text: 'Cancelado' },
+    const currentStatus = statusInfo[status] || { text: 'Desconhecido', color: 'bg-gray-500/20 text-gray-400', icon: <AlertCircle size={14} /> };
+
+    return (
+        <div className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full ${currentStatus.color}`}>
+            {currentStatus.icon}
+            <span>{currentStatus.text}</span>
+        </div>
+    );
 };
 
-export const ClientAppointmentCard = ({ appointment, onReview }: ClientAppointmentCardProps) => {
-  const style = statusStyles[appointment.status] || statusStyles.pending;
-  const appointmentDate = new Date(appointment.startTime);
+export const ClientAppointmentCard = ({ appointment }: { appointment: EnrichedAppointment }) => {
+    const { professionalName, startTime, services, provider, professionalPhotoUrl, status } = appointment;
 
-  return (
-    <div className={`bg-black/30 rounded-2xl p-5 border-l-4 ${style.borderColor} flex flex-col justify-between`}>
-      <div>
-        <div className="flex justify-between items-start">
-          <h3 className="text-xl font-bold text-white mb-2">{appointment.serviceName}</h3>
-          <span className={`text-sm font-semibold px-3 py-1 rounded-full ${style.textColor} bg-gray-800`}>
-            {style.text}
-          </span>
-        </div>
+    const formattedDate = format(startTime, "EEEE, dd 'de' MMMM", { locale: ptBR });
+    const formattedTime = format(startTime, "HH:mm");
 
-        <div className="space-y-2 text-gray-400">
-          <p className="flex items-center gap-2 text-sm"><Building size={16} /> {appointment.professionalName}</p>
-          <p className="flex items-center gap-2 text-sm"><Calendar size={16} /> {format(appointmentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
-          <p className="flex items-center gap-2 text-sm"><Clock size={16} /> {format(appointmentDate, "HH:mm")}</p>
-        </div>
-      </div>
+    return (
+        <motion.div 
+            className="bg-gray-800/50 border border-gray-700 rounded-2xl overflow-hidden shadow-lg transition-all hover:border-gray-600 hover:shadow-xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+        >
+            {/* Cabeçalho do Card */}
+            <div className="p-5 flex items-start gap-4 bg-gray-800/60">
+                <div className="w-16 h-16 rounded-full bg-gray-700 flex-shrink-0 overflow-hidden">
+                    {professionalPhotoUrl ? (
+                        <img src={professionalPhotoUrl} alt={professionalName} className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <User size={32} className="text-gray-500" />
+                        </div>
+                    )}
+                </div>
+                <div className="flex-grow">
+                    <h3 className="text-lg font-bold text-white">{professionalName}</h3>
+                    <p className="text-sm text-gray-400">em <span className="font-semibold text-gray-300">{provider?.businessName || 'Local não informado'}</span></p>
+                    <div className="mt-2">
+                        <StatusBadge status={status} />
+                    </div>
+                </div>
+            </div>
 
-      {/* Botão de Avaliação */}
-      {appointment.status === 'completed' && !appointment.review && (
-        <div className="mt-4 pt-4 border-t border-gray-700/50">
-          <button 
-            onClick={() => onReview(appointment)}
-            className="w-full secondary-button flex items-center justify-center gap-2"
-          >
-            <Star size={16}/> Avaliar Serviço
-          </button>
-        </div>
-      )}
-    </div>
-  );
+            {/* Corpo do Card com Detalhes */}
+            <div className="p-5 space-y-4">
+                <div className="flex items-center gap-3 text-gray-300">
+                    <Calendar size={18} className="text-[#daa520]" />
+                    <span className="capitalize">{formattedDate}</span>
+                </div>
+                <div className="flex items-center gap-3 text-gray-300">
+                    <Clock size={18} className="text-[#daa520]" />
+                    <span>{formattedTime}</span>
+                </div>
+                {provider?.businessAddress && (
+                    <div className="flex items-start gap-3 text-gray-300">
+                        <MapPin size={18} className="text-[#daa520] mt-0.5" />
+                        <span>{`${provider.businessAddress.street}, ${provider.businessAddress.city}`}</span>
+                    </div>
+                )}
+                
+                {/* Lista de Serviços */}
+                <div className="pt-4 border-t border-gray-700">
+                     <h4 className="font-semibold text-white mb-3 flex items-center gap-2"><Scissors size={18} className="text-[#daa520]" /> Serviços</h4>
+                     <div className="flex flex-wrap gap-2">
+                        {services.map(service => (
+                            <div key={service.id} className="bg-gray-700/50 text-xs text-gray-300 px-2 py-1 rounded-md">
+                                {service.name}
+                            </div>
+                        ))}
+                     </div>
+                </div>
+            </div>
+
+             {/* Rodapé com Preço Total */}
+            <div className="bg-gray-900/50 px-5 py-3 flex justify-between items-center">
+                <span className="text-sm font-semibold text-gray-400">Valor Total</span>
+                <span className="text-lg font-bold text-white">R$ {appointment.totalPrice.toFixed(2)}</span>
+            </div>
+        </motion.div>
+    );
 };

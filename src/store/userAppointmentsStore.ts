@@ -1,52 +1,115 @@
 import { create } from "zustand";
-import type { Appointment } from "../types";
 import {
-  getAppointmentsByClientId
-} from "../firebase/bookingService";
+  collection,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "../firebase/config";
+import type { Appointment, ServiceProviderProfile } from "../types";
+import { getUserProfile } from "../firebase/userService";
 
-interface UserAppointmentsState {
-  appointments: Appointment[];
-  isLoading: boolean;
-  error: string | null;
-  fetchAppointments: (clientId: string) => Promise<void>;
-  cancelAppointment: (appointmentId: string) => Promise<void>;
+export interface EnrichedAppointment extends Appointment {
+  provider?: ServiceProviderProfile;
+  professionalPhotoUrl?: string;
 }
 
-export const useUserAppointmentsStore = create<UserAppointmentsState>(
-  (set, get) => ({
-    appointments: [],
-    isLoading: false,
-    error: null,
+interface UserAppointmentsState {
+  appointments: EnrichedAppointment[];
+  isLoading: boolean;
+  error: string | null;
+  unsubscribe: () => void;
+}
 
-    fetchAppointments: async (clientId: string) => {
-      if (!clientId) return;
-      set({ isLoading: true, error: null });
-      try {
-        const appointments = await getAppointmentsByClientId(clientId);
-        set({ appointments, isLoading: false });
-      } catch (err: unknown) {
-        let errorMessage = "Erro ao buscar agendamentos.";
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-        set({ error: errorMessage, isLoading: false });
-      }
-    },
+interface UserAppointmentsActions {
+  fetchAppointments: (userId: string) => void;
+  clearAppointments: () => void;
+}
 
-    cancelAppointment: async (appointmentId: string) => {
-      try {
-        // Atualiza o status no Firebase
-        const updatedAppointments = get().appointments.map((app) =>
-          app.id === appointmentId
-            ? ({ ...app, status: "cancelled" } as Appointment) // Correção aqui!
-            : app
+const initialState: Omit<UserAppointmentsState, "unsubscribe"> = {
+  appointments: [],
+  isLoading: true,
+  error: null,
+};
+
+export const useUserAppointmentsStore = create<
+  UserAppointmentsState & UserAppointmentsActions
+>((set, get) => ({
+  ...initialState,
+  unsubscribe: () => {},
+
+  fetchAppointments: (userId) => {
+    set({ isLoading: true });
+
+    const q = query(
+      collection(db, "appointments"),
+      where("clientId", "==", userId),
+      orderBy("startTime", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      async (querySnapshot) => {
+        const appointmentsPromises = querySnapshot.docs.map(
+          async (doc): Promise<EnrichedAppointment> => {
+            const data = doc.data();
+            const appointmentData = {
+              id: doc.id,
+              ...data,
+              // Adiciona verificação para evitar erro se startTime/endTime não existirem
+              startTime: (data.startTime as Timestamp)?.toDate(),
+              endTime: (data.endTime as Timestamp)?.toDate(),
+            } as Appointment;
+
+            // ================== AQUI ESTÁ A CORREÇÃO ==================
+            // Verifica se providerId existe antes de tentar buscar o perfil
+            if (appointmentData.providerId) {
+              const providerProfile = (await getUserProfile(
+                appointmentData.providerId
+              )) as ServiceProviderProfile | null;
+              const professionalPhotoUrl = providerProfile?.professionals?.find(
+                (p) => p.id === appointmentData.professionalId
+              )?.photoURL;
+
+              return {
+                ...appointmentData,
+                provider: providerProfile || undefined,
+                professionalPhotoUrl: professionalPhotoUrl || undefined,
+              };
+            } else {
+              // Se não houver providerId, retorna o agendamento sem os dados extras
+              console.warn(
+                `Agendamento com ID ${appointmentData.id} está sem providerId.`
+              );
+              return appointmentData;
+            }
+            // ==========================================================
+          }
         );
-        set({ appointments: updatedAppointments });
-      } catch (err: unknown) {
-        console.error("Erro ao cancelar agendamento:", err);
-        // Aqui poderíamos reverter o estado se a chamada falhar, se necessário
-        // Por enquanto, apenas logamos o erro para não complicar.
+
+        const enrichedAppointments = await Promise.all(appointmentsPromises);
+        set({
+          appointments: enrichedAppointments,
+          isLoading: false,
+          error: null,
+        });
+      },
+      (error) => {
+        console.error("Erro ao buscar agendamentos: ", error);
+        set({
+          isLoading: false,
+          error: "Não foi possível carregar os agendamentos.",
+        });
       }
-    },
-  })
-);
+    );
+
+    set({ unsubscribe });
+  },
+
+  clearAppointments: () => {
+    get().unsubscribe();
+    set(initialState);
+  },
+}));

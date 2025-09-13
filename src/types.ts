@@ -84,6 +84,7 @@ export interface Appointment {
   id: string;
   clientId: string;
   clientName: string;
+  providerId: string;
   professionalId: string;
   professionalName: string;
   services: Service[]; 

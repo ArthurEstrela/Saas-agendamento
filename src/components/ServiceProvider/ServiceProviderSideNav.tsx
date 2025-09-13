@@ -5,6 +5,8 @@ import {
   LayoutDashboard, User, Scissors, Users, Clock, DollarSign, Bell, Star, LogOut, X,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { useProfileStore } from '../../store/profileStore'; // 1. Importamos a store do perfil
+import type { ServiceProviderProfile } from '../../types'; // 2. Importamos o tipo correto
 import type { ProviderDashboardView } from '../ServiceProviderDashboard'; // Importa o tipo
 
 interface NavItemProps {
@@ -39,7 +41,10 @@ interface SideNavProps {
 }
 
 export const ServiceProviderSideNav = ({ activeView, setActiveView, isOpen, setIsOpen }: SideNavProps) => {
-  const { logout, userProfile } = useAuthStore();
+  const { userProfile } = useProfileStore(); 
+  const { logout } = useAuthStore();
+
+  const providerProfile = userProfile as ServiceProviderProfile;
 
   const handleNavClick = (view: ProviderDashboardView) => {
       setActiveView(view);
@@ -84,7 +89,24 @@ export const ServiceProviderSideNav = ({ activeView, setActiveView, isOpen, setI
             <NavItem icon={Bell} text="Notificações" view="notifications" active={activeView === 'notifications'} onClick={handleNavClick} />
         </nav>
         <div className="mt-auto border-t border-gray-800 pt-4">
-            <NavItem icon={User} text="Meu Perfil" view="profile" active={activeView === 'profile'} onClick={handleNavClick} />
+             <button
+              onClick={() => handleNavClick('profile')}
+              className={`flex items-center w-full p-2 text-left rounded-lg transition-all duration-300 ease-in-out group
+                ${activeView === 'profile' ? 'bg-gray-700/80' : 'hover:bg-gray-800/50'}
+              `}
+            >
+              <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 overflow-hidden flex items-center justify-center mr-3">
+                {providerProfile?.logoUrl ? (
+                  <img src={providerProfile.logoUrl} alt={providerProfile.businessName} className="w-full h-full object-cover" />
+                ) : (
+                  <User size={20} className="text-gray-400" />
+                )}
+              </div>
+              <div className="overflow-hidden">
+                <p className="font-semibold text-white text-sm truncate">{providerProfile?.businessName}</p>
+                <p className="text-xs text-gray-400">Ver Perfil</p>
+              </div>
+            </button>
             <button
               onClick={logout}
               className="flex items-center w-full h-12 px-4 mt-1 text-left text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all duration-300 ease-in-out group"

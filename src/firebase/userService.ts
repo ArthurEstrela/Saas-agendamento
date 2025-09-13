@@ -15,7 +15,6 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db } from "./config";
-// Correção aqui: usando 'import type'
 import type {
   UserProfile,
   ClientProfile,
@@ -23,6 +22,7 @@ import type {
   UserRole,
 } from "../types";
 
+// ... (suas outras funções como convertTimestamps, createSlug, etc. continuam aqui)
 const convertTimestamps = (
   data: Record<string, unknown>
 ): Record<string, unknown> => {
@@ -47,8 +47,8 @@ const createSlug = (text: string) => {
     .replace(/\s+/g, "-")
     .replace(p, (c) => b.charAt(a.indexOf(c)))
     .replace(/&/g, "-e-")
-    .replace(/[^\w-]+/g, "") // Remove todos os caracteres não-palavra (sem a barra antes do hífen)
-    .replace(/--+/g, "-") // Substitui múltiplos - por um único - (sem a barra)
+    .replace(/[^\w-]+/g, "")
+    .replace(/--+/g, "-")
     .replace(/^-+/, "")
     .replace(/-+$/, "");
 };
@@ -74,10 +74,7 @@ export const createUserProfile = async (
   let specificProfile: UserProfile;
 
   if (role === "client") {
-    // AQUI ESTÁ A CORREÇÃO:
-    // Nós convertemos 'additionalData' para o tipo específico do cliente.
     const clientData = additionalData as Partial<ClientProfile>;
-
     specificProfile = {
       ...baseProfile,
       role: "client",
@@ -89,10 +86,8 @@ export const createUserProfile = async (
     } as ClientProfile;
 
   } else {
-    // E AQUI FAZEMOS O MESMO PARA O PRESTADOR DE SERVIÇO:
     const providerData = additionalData as Partial<ServiceProviderProfile>;
     const businessName = providerData?.businessName || `${name}'s Business`;
-
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
@@ -100,8 +95,6 @@ export const createUserProfile = async (
       cnpj: providerData?.cnpj || "",
       businessAddress: providerData?.businessAddress || {
         street: "",
-        number: "",
-        neighborhood: "",
         city: "",
         state: "",
         zipCode: "",
@@ -117,7 +110,6 @@ export const createUserProfile = async (
       reviews: [],
     } as ServiceProviderProfile;
   }
-
   await setDoc(userRef, specificProfile);
 };
 
@@ -145,6 +137,44 @@ export const updateUserProfile = async (
   await updateDoc(userRef, data);
 };
 
+export const uploadFile = async (file: File, path: string): Promise<string> => {
+  const storage = getStorage();
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  const downloadURL = await getDownloadURL(storageRef);
+  return downloadURL;
+};
+
+// ================== NOSSO NOVO ESPECIALISTA ==================
+/**
+ * Faz o upload da logo de um prestador de serviço e atualiza o perfil.
+ * @param providerId O ID do prestador de serviço (usuário).
+ * @param file O arquivo da logo.
+ * @returns A URL de download da nova logo.
+ */
+export const uploadProviderLogo = async (providerId: string, file: File): Promise<string> => {
+  const filePath = `logos/${providerId}/${file.name}`;
+  const downloadURL = await uploadFile(file, filePath); // Usa o "motor"
+  
+  // Ação especialista: atualiza o campo correto no perfil
+  await updateUserProfile(providerId, { logoUrl: downloadURL });
+
+  return downloadURL;
+};
+// ==============================================================
+
+export const uploadProfilePicture = async (
+  uid: string,
+  file: File
+): Promise<string> => {
+  const filePath = `profile_pictures/${uid}/${file.name}`;
+  const downloadURL = await uploadFile(file, filePath);
+  await updateUserProfile(uid, { profilePictureUrl: downloadURL });
+  return downloadURL;
+};
+
+
+// ... (o resto do seu arquivo continua igual)
 export const toggleFavoriteProfessional = async (
   clientId: string,
   professionalId: string
@@ -175,21 +205,16 @@ export const getProfessionalsByIds = async (
 
   try {
     const usersCollection = collection(db, "users");
-
-    // --- CORREÇÃO AQUI ---
-    // Adicionamos 'where('role', '==', 'serviceProvider')' para alinhar com as regras de segurança.
-    // Isso garante que a query só peça por documentos que o usuário tem permissão para ler.
     const q = query(
       usersCollection,
       where("id", "in", professionalIds),
-      where("role", "==", "serviceProvider") // Garante que só buscamos prestadores
+      where("role", "==", "serviceProvider")
     );
 
     const querySnapshot = await getDocs(q);
 
     return querySnapshot.docs.map((doc) => {
       const data = doc.data();
-      // Lembre-se de converter Timestamps se necessário
       return data as ServiceProviderProfile;
     });
   } catch (error) {
@@ -205,16 +230,14 @@ export const searchServiceProviders = async (
   searchTerm: string = ""
 ): Promise<ServiceProviderProfile[]> => {
   const usersCollection = collection(db, "users");
-  const q = query(usersCollection, where("role", "==", "serviceProvider")); // Vamos manter a query, mas a regra de segurança é a chave
+  const q = query(usersCollection, where("role", "==", "serviceProvider"));
 
   try {
     const querySnapshot = await getDocs(q);
-
     const providers = querySnapshot.docs.map(
       (doc) => doc.data() as ServiceProviderProfile
     );
 
-    // Filtro por termo de busca (se houver)
     if (searchTerm.trim() !== "") {
       return providers.filter(
         (p) =>
@@ -222,33 +245,14 @@ export const searchServiceProviders = async (
           p.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
-    return providers; // Retorna todos se não houver termo de busca
+    return providers;
   } catch (error) {
     console.error(
       "Erro ao buscar prestadores de serviço. Verifique suas regras de segurança do Firestore.",
       error
     );
-    // Retorna um array vazio em caso de erro para não quebrar a UI
     return [];
   }
-};
-
-export const uploadProfilePicture = async (
-  uid: string,
-  file: File
-): Promise<string> => {
-  const storage = getStorage();
-  const filePath = `profile_pictures/${uid}/${file.name}`;
-  const storageRef = ref(storage, filePath);
-
-  await uploadBytes(storageRef, file);
-  const downloadURL = await getDownloadURL(storageRef);
-
-  // Atualiza a URL da foto no perfil do usuário no Firestore
-  await updateUserProfile(uid, { profilePictureUrl: downloadURL });
-
-  return downloadURL;
 };
 
 export const getProviderProfileBySlug = async (

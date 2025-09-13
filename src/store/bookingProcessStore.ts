@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Service, Professional, ServiceProviderProfile, Appointment } from '../types'; // Importe Appointment
 import { createAppointment } from '../firebase/bookingService';
-import { getProviderProfileBySlug } from '../firebase/userService';
+import { getProviderProfileBySlug, getUserProfile  } from '../firebase/userService';
 
 interface BookingState {
   provider: ServiceProviderProfile | null;
@@ -20,6 +20,7 @@ interface BookingState {
 
 interface BookingActions {
   fetchProviderDetails: (slug: string) => Promise<void>;
+  fetchProviderDetailsById: (providerId: string) => Promise<void>;
   selectService: (service: Service) => void;
   selectProfessional: (professional: Professional) => void;
   // Renomeado para consistência com o que o componente espera
@@ -62,6 +63,22 @@ export const useBookingProcessStore = create(
           }
         } catch (error) {
           console.error("Erro ao buscar detalhes do prestador:", error);
+          set({ isLoading: false, provider: null });
+        }
+      },
+      
+       fetchProviderDetailsById: async (providerId) => {
+        set({ isLoading: true });
+        try {
+          // Reutilizamos a função que busca qualquer perfil de usuário por ID
+          const providerProfile = await getUserProfile(providerId);
+          if (providerProfile && providerProfile.role === 'serviceProvider') {
+            set({ provider: providerProfile as ServiceProviderProfile, isLoading: false });
+          } else {
+            throw new Error('Prestador de serviço não encontrado ou usuário não é um prestador.');
+          }
+        } catch (error) {
+          console.error("Erro ao buscar detalhes do prestador por ID:", error);
           set({ isLoading: false, provider: null });
         }
       },

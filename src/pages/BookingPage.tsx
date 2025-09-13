@@ -35,23 +35,23 @@ const BookingStepper = ({ currentStep }: { currentStep: number }) => {
 };
 
 export const BookingPage = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { providerId } = useParams<{ providerId: string }>();
   const {
     provider,
     currentStep,
     isLoading,
-    fetchProviderDetails,
+    fetchProviderDetailsById,
     resetBooking,
   } = useBookingProcessStore();
 
   useEffect(() => {
-    if (slug) {
-      fetchProviderDetails(slug);
+    if (providerId) {
+      fetchProviderDetailsById(providerId);
     }
     return () => {
       resetBooking();
     };
-  }, [slug, fetchProviderDetails, resetBooking]);
+  }, [providerId, fetchProviderDetailsById, resetBooking]);
 
   const renderCurrentStep = () => {
     switch (currentStep) {

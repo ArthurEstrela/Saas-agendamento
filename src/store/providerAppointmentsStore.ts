@@ -1,82 +1,88 @@
+// Em: src/store/providerAppointmentsStore.ts
 import { create } from 'zustand';
-import type { Appointment } from '../types';
-import { getAppointmentsByProviderId, updateAppointmentStatus } from '../firebase/bookingService';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import type { Appointment, ClientProfile } from '../types';
+import { getUserProfile } from '../firebase/userService';
+// Usando a sua função, que é mais completa
+import { updateAppointmentStatus } from '../firebase/bookingService';
 
-interface ProviderAppointmentsState {
-  appointments: Appointment[];
-  isLoading: boolean;
-  error: string | null;
-  fetchAppointments: (providerId: string) => Promise<void>;
-  approveAppointment: (appointmentId: string) => Promise<void>;
-  completeAppointment: (appointmentId: string) => Promise<void>;
-  rejectAppointment: (appointmentId: string, reason: string) => Promise<void>;
+export interface EnrichedProviderAppointment extends Appointment {
+  client?: ClientProfile;
 }
 
-export const useProviderAppointmentsStore = create<ProviderAppointmentsState>((set) => ({
+interface ProviderAppointmentsState {
+  appointments: EnrichedProviderAppointment[];
+  isLoading: boolean;
+  selectedProfessionalId: string;
+  unsubscribe: () => void;
+  // Assinatura atualizada para incluir o motivo da recusa
+  updateStatus: (appointmentId: string, status: Appointment['status'], rejectionReason?: string) => Promise<void>;
+}
+
+interface ProviderAppointmentsActions {
+  fetchAppointments: (providerId: string) => void;
+  setSelectedProfessionalId: (id: string) => void;
+  clearAppointments: () => void;
+}
+
+const initialState = {
   appointments: [],
-  isLoading: false,
-  error: null,
+  isLoading: true,
+  selectedProfessionalId: 'all',
+  unsubscribe: () => {},
+};
 
-  fetchAppointments: async (providerId: string) => {
-    if (!providerId) return;
-    set({ isLoading: true, error: null });
+export const useProviderAppointmentsStore = create<ProviderAppointmentsState & ProviderAppointmentsActions>((set, get) => ({
+  ...initialState,
+
+  fetchAppointments: (providerId) => {
+    get().unsubscribe();
+    set({ isLoading: true });
+
+    const q = query(
+      collection(db, "appointments"),
+      where("providerId", "==", providerId),
+      orderBy("startTime", "asc")
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const appointmentsPromises = snapshot.docs.map(async (doc): Promise<EnrichedProviderAppointment> => {
+        const apptData = {
+          id: doc.id,
+          ...doc.data(),
+          startTime: doc.data().startTime.toDate(),
+          endTime: doc.data().endTime.toDate(),
+        } as Appointment;
+
+        const clientProfile = await getUserProfile(apptData.clientId) as ClientProfile | null;
+
+        return { ...apptData, client: clientProfile || undefined };
+      });
+
+      const enrichedAppointments = await Promise.all(appointmentsPromises);
+      set({ appointments: enrichedAppointments, isLoading: false });
+    }, (error) => {
+      console.error("Erro ao buscar agendamentos do prestador:", error);
+      set({ isLoading: false });
+    });
+
+    set({ unsubscribe });
+  },
+
+  setSelectedProfessionalId: (id) => set({ selectedProfessionalId: id }),
+
+  // Função ajustada para usar a sua bookingService
+  updateStatus: async (appointmentId, status, rejectionReason) => {
     try {
-      const appointments = await getAppointmentsByProviderId(providerId);
-      set({ appointments, isLoading: false });
-    } catch (err: unknown) {
-      let errorMessage = "Erro ao buscar agendamentos do prestador.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      set({ error: errorMessage, isLoading: false });
+      await updateAppointmentStatus(appointmentId, status, rejectionReason);
+    } catch (error) {
+      console.error("Erro ao atualizar status do agendamento:", error);
     }
   },
 
-  // Ação para aprovar um agendamento de 'pending' para 'scheduled'
-  approveAppointment: async (appointmentId: string) => {
-    try {
-      await updateAppointmentStatus(appointmentId, 'scheduled');
-      
-      set((state) => ({
-        appointments: state.appointments.map((app) =>
-          app.id === appointmentId ? ({ ...app, status: 'scheduled' } as Appointment) : app
-        ),
-      }));
-    } catch (err: unknown) {
-      console.error("Erro ao aprovar agendamento:", err);
-      // Adicionar lógica para notificar o usuário do erro, se necessário
-    }
-  },
-
-  // Ação para finalizar um agendamento de 'scheduled' para 'completed'
-  completeAppointment: async (appointmentId: string) => {
-    try {
-      await updateAppointmentStatus(appointmentId, 'completed');
-
-      set((state) => ({
-        appointments: state.appointments.map((app) =>
-          app.id === appointmentId ? ({ ...app, status: 'completed' } as Appointment) : app
-        ),
-      }));
-    } catch (err: unknown) {
-      console.error("Erro ao completar agendamento:", err);
-    }
-  },
-  
-  // Ação para rejeitar um agendamento de 'pending' para 'cancelled'
-  rejectAppointment: async (appointmentId: string, reason: string) => {
-    try {
-      await updateAppointmentStatus(appointmentId, 'cancelled', reason);
-
-      set((state) => ({
-        appointments: state.appointments.map((app) =>
-          app.id === appointmentId 
-            ? ({ ...app, status: 'cancelled', rejectionReason: reason } as Appointment) 
-            : app
-        ),
-      }));
-    } catch (err: unknown) {
-      console.error("Erro ao rejeitar agendamento:", err);
-    }
+  clearAppointments: () => {
+    get().unsubscribe();
+    set(initialState);
   },
 }));

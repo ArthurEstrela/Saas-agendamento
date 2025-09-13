@@ -1,70 +1,116 @@
+// Em: src/components/ServiceProvider/AgendaView.tsx
 import { useState, useEffect, useMemo } from 'react';
+import { useProfileStore } from '../../store/profileStore';
 import { useProviderAppointmentsStore } from '../../store/providerAppointmentsStore';
-import { AppointmentCard } from './AppointmentCard';
-import { Loader2, CalendarX, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, addDays, subDays, isSameDay } from 'date-fns';
+import { DayPicker } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
+import { isSameDay, format } from 'date-fns';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AppointmentRequestCard } from './AppointmentRequestCard';
+import { AppointmentCard } from './AppointmentCard'; // Reutilizaremos o AppointmentCard
+import { Loader2, Users, CalendarDays, Inbox } from 'lucide-react';
+import type { ServiceProviderProfile } from '../../types';
 
 export const AgendaView = () => {
-  const { appointments, isLoading, fetchAppointments, updateAppointmentStatus } = useProviderAppointmentsStore();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const { userProfile } = useProfileStore();
+  const { appointments, isLoading, fetchAppointments, selectedProfessionalId, setSelectedProfessionalId, updateStatus } = useProviderAppointmentsStore();
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  
+  const provider = userProfile as ServiceProviderProfile;
 
   useEffect(() => {
-    // Busca os agendamentos quando o componente monta
-    fetchAppointments();
-  }, [fetchAppointments]);
+    if (provider?.id) {
+      fetchAppointments(provider.id);
+    }
+  }, [provider?.id, fetchAppointments]);
 
-  // Filtra e ordena os agendamentos para a data selecionada
-  const dailyAppointments = useMemo(() => {
-    return appointments
-      .filter(app => isSameDay(new Date(app.startTime), selectedDate))
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  }, [appointments, selectedDate]);
+  const { pending, confirmedOnDate } = useMemo(() => {
+    const pending = appointments
+      .filter(a => a.status === 'pending')
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
-  const handleUpdateStatus = (id: string, status: 'scheduled' | 'cancelled') => {
-    updateAppointmentStatus(id, status);
-    // Aqui você pode adicionar uma notificação de sucesso (toast)
-  };
-  
-  const handleDateChange = (days: number) => {
-    setSelectedDate(current => days > 0 ? addDays(current, days) : subDays(current, -days));
-  };
+    const filteredByProf = selectedProfessionalId === 'all' 
+      ? appointments 
+      : appointments.filter(a => a.professionalId === selectedProfessionalId);
+
+    const confirmedOnDate = filteredByProf
+      .filter(a => a.status === 'scheduled' && isSameDay(a.startTime, selectedDate))
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+    return { pending, confirmedOnDate };
+  }, [appointments, selectedDate, selectedProfessionalId]);
+
+  if (isLoading) {
+    return <div className="flex h-full items-center justify-center"><Loader2 size={48} className="animate-spin text-[#daa520]" /></div>;
+  }
 
   return (
-    <div>
-      {/* Cabeçalho e Controle de Data */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-10">
-        <div>
-          <h1 className="text-4xl font-bold text-white">Minha Agenda</h1>
-          <p className="text-lg text-gray-400 mt-2">Visualize e gerencie seus compromissos.</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col lg:flex-row gap-8">
+      
+      {/* Coluna de Solicitações Pendentes */}
+      <aside className="w-full lg:w-1/3 xl:w-1/4 flex-shrink-0">
+        <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3"><Inbox size={24} className="text-[#daa520]" /> Novas Solicitações</h2>
+        <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 h-[75vh] overflow-y-auto">
+          <AnimatePresence>
+            {pending.length > 0 ? (
+              pending.map(appt => (
+                <AppointmentRequestCard key={appt.id} appointment={appt} onAccept={updateStatus} onReject={updateStatus} />
+              ))
+            ) : (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                <Inbox size={48} />
+                <p className="mt-4 font-semibold">Caixa de entrada limpa!</p>
+                <p className="text-sm">Nenhuma nova solicitação no momento.</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        <div className="flex items-center gap-2 bg-black/30 p-2 rounded-lg">
-          <button onClick={() => handleDateChange(-1)} className="p-2 rounded-md hover:bg-gray-700 transition-colors"><ChevronLeft /></button>
-          <button onClick={() => setSelectedDate(new Date())} className="px-6 py-2 rounded-md hover:bg-gray-700 transition-colors text-center">
-            <span className="font-bold text-lg capitalize">{format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</span>
-          </button>
-          <button onClick={() => handleDateChange(1)} className="p-2 rounded-md hover:bg-gray-700 transition-colors"><ChevronRight /></button>
-        </div>
-      </div>
+      </aside>
 
-      {/* Lista de Agendamentos */}
-      <div className="space-y-4">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="animate-spin text-amber-500" size={48} />
+      {/* Agenda Principal */}
+      <main className="flex-grow">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-3"><CalendarDays size={24} className="text-[#daa520]" /> Agenda</h2>
+          {/* Filtro de Profissionais */}
+          <div className="mt-4 sm:mt-0">
+            <select
+              value={selectedProfessionalId}
+              onChange={(e) => setSelectedProfessionalId(e.target.value)}
+              className="bg-gray-900 p-2 rounded-md border border-gray-700 text-white"
+            >
+              <option value="all">Todos os Profissionais</option>
+              {provider?.professionals?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
-        ) : dailyAppointments.length > 0 ? (
-          dailyAppointments.map(app => (
-            <AppointmentCard key={app.id} appointment={app} onUpdateStatus={handleUpdateStatus} />
-          ))
-        ) : (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
-            <CalendarX size={48} className="mb-4" />
-            <h3 className="text-xl font-semibold text-gray-300">Nenhum agendamento para este dia</h3>
-            <p>Aproveite o dia ou divulgue seus horários!</p>
+        </div>
+        
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <div className="xl:col-span-1 bg-gray-800/50 border border-gray-700 rounded-2xl p-4 flex justify-center">
+            <DayPicker mode="single" selected={selectedDate} onSelect={(date) => date && setSelectedDate(date)} locale={ptBR} className="text-white"/>
           </div>
-        )}
-      </div>
-    </div>
+
+          <div className="xl:col-span-2">
+            <h3 className="text-xl font-semibold text-white mb-4">
+              Agendamentos para <span className="text-[#daa520]">{format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</span>
+            </h3>
+            <div className="space-y-4 h-[65vh] overflow-y-auto pr-2">
+              <AnimatePresence>
+                {confirmedOnDate.length > 0 ? (
+                  confirmedOnDate.map(appt => (
+                    <AppointmentCard key={appt.id} appointment={appt} />
+                  ))
+                ) : (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                    <Users size={48} />
+                    <p className="mt-4 font-semibold">Nenhum horário confirmado</p>
+                    <p className="text-sm">Não há agendamentos para este dia ou profissional.</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+      </main>
+    </motion.div>
   );
 };

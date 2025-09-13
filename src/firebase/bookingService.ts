@@ -146,3 +146,5 @@ export const getAppointmentsForProfessionalOnDate = async (
 
   return appointments;
 };
+
+

@@ -1,4 +1,4 @@
-// Em: src/components/ServiceProvider/AppointmentCard.tsx
+// src/components/ServiceProvider/AppointmentCard.tsx
 import type { EnrichedProviderAppointment } from '../../store/providerAppointmentsStore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

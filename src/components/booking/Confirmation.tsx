@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 export const Confirmation = () => {
   const {
     selectedServices,
+    provider,
     professional,
     date,
     timeSlot,
@@ -45,6 +46,7 @@ export const Confirmation = () => {
     // 1. Verificamos se 'user' existe antes de continuar
     if (
       !user ||
+      !provider ||
       !professional ||
       !date ||
       !timeSlot ||
@@ -63,6 +65,7 @@ export const Confirmation = () => {
 
     const appointmentData: Omit<Appointment, "id"> = {
       clientId: user.uid,
+      providerId: provider.id,
       clientName: user.displayName || "Cliente sem nome",
       professionalId: professional.id,
       professionalName: professional.name,

@@ -47,7 +47,7 @@ export const AgendaView = () => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-black text-white p-4 sm:p-6">
+    <div className="h-full flex flex-col bg-black rounded-2xl text-white p-4 sm:p-6">
       {/* NAVEGAÇÃO DAS ABAS */}
       <div className="flex border-b border-gray-800 mb-6">
         {tabs.map((tab) => (

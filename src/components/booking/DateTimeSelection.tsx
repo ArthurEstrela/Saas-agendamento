@@ -3,7 +3,6 @@ import { useBookingProcessStore } from '../../store/bookingProcessStore';
 import { getAppointmentsForProfessionalOnDate } from '../../firebase/bookingService';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
-import '../../Calendar.css';
 import { ptBR } from 'date-fns/locale';
 import { format, isToday, setHours, setMinutes } from 'date-fns';
 import { motion } from 'framer-motion';

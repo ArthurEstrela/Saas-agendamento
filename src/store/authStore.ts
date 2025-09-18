@@ -1,7 +1,7 @@
 // src/store/authStore.ts
 import { create } from "zustand";
 import {
-  type User,
+  type User as FirebaseUser,
   onAuthStateChanged,
   signOut,
   signInWithEmailAndPassword,
@@ -11,16 +11,20 @@ import {
 import { auth } from "../firebase/config";
 import { useProfileStore } from "./profileStore";
 import { createUserProfile, getUserProfile } from "../firebase/userService"; // Verifique o nome do seu arquivo de serviço
-import type { ServiceProviderProfile, ClientProfile } from "../types";
+import type {
+  UserProfile,
+  ServiceProviderProfile,
+  ClientProfile,
+} from "../types";
 
 interface AuthState {
-  user: User | null;
+  user: FirebaseUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isSubmitting: boolean;
   error: string | null;
   initializeAuth: () => () => void;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserProfile | null>;
   signup: (
     email: string,
     password: string,
@@ -55,10 +59,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email, password) => {
     set({ isSubmitting: true, error: null });
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // O onAuthStateChanged vai cuidar de atualizar o estado do usuário.
-      // A gente só limpa o isSubmitting aqui.
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      // ALTERAÇÃO 3: Após o login, buscamos o perfil do usuário imediatamente.
+      const userProfile = await getUserProfile(userCredential.user.uid);
+
+      if (!userProfile) {
+        // Se por algum motivo o perfil não existir no Firestore, tratamos como um erro.
+        throw new Error("Perfil de usuário não encontrado no banco de dados.");
+      }
+
       set({ isSubmitting: false });
+
+      // ALTERAÇÃO 4: Retornamos o perfil completo para o LoginForm.
+      return userProfile;
     } catch (err) {
       const error = err as AuthError;
       let errorMessage = "Ocorreu um erro ao tentar fazer login.";
@@ -83,7 +101,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       set({ error: errorMessage, isSubmitting: false });
       // Lança o erro para que o formulário saiba que a operação falhou
-      throw error;
+      return null;
     }
   },
 

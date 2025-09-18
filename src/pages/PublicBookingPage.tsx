@@ -3,11 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import type { ServiceProviderProfile } from "../types";
 import { getProviderProfileBySlug } from "../firebase/userService";
 import { Loader2, AlertCircle, MapPin, Phone, Calendar } from "lucide-react";
-import Footer from "../components/Footer";
+import { useAuthStore } from "../store/authStore";
+import { useBookingProcessStore } from "../store/bookingProcessStore";
 
 const PublicBookingPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
+  const setPendingProviderId = useBookingProcessStore((state) => state.setPendingProviderId);
 
   const [provider, setProvider] = useState<ServiceProviderProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,9 +41,17 @@ const PublicBookingPage = () => {
   }, [slug]);
 
   const handleGoToBooking = () => {
-    // Garantimos que o provider e o id existem antes de navegar
     if (provider?.id) {
-      navigate(`/book/${provider.id}`);
+      if (isAuthenticated) {
+        // Se já está logado, vai direto para o agendamento
+        navigate(`/book/${provider.id}`);
+      } else {
+        // 3. Se não está logado:
+        // - Salva o ID do prestador na nossa store
+        setPendingProviderId(provider.id);
+        // - Redireciona para a página de login
+        navigate("/login");
+      }
     } else {
       setError(
         "Não foi possível iniciar o agendamento. ID do prestador não encontrado."

@@ -3,9 +3,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Mail, Lock } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { useNavigate } from "react-router-dom";
+import type { UserProfile } from "../../types";
 
-// O schema de validação continua o mesmo
 const schema = z.object({
   email: z.string().email("Por favor, insira um e-mail válido"),
   password: z.string().min(1, "A senha é obrigatória"),
@@ -13,9 +12,11 @@ const schema = z.object({
 
 type LoginFormData = z.infer<typeof schema>;
 
-export const LoginForm = () => {
-  const navigate = useNavigate();
-  // Removemos o 'authError' daqui, pois ele já é exibido na LoginPage
+interface LoginFormProps {
+  onLoginSuccess: (user: UserProfile) => void;
+}
+
+export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
   const { login, isSubmitting } = useAuthStore();
 
   const {
@@ -29,10 +30,16 @@ export const LoginForm = () => {
 
   const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
     try {
-      await login(data.email, data.password);
-      navigate('/dashboard');
+      // 3. Assumindo que a função 'login' da sua store retorna o UserProfile
+      const user = await login(data.email, data.password);
+      
+      // Se o login deu certo e retornou os dados do usuário...
+      if (user) {
+        // ...executa a função que veio da LoginPage, passando os dados do usuário.
+        onLoginSuccess(user);
+      }
     } catch (error) {
-      // A LoginPage já vai mostrar o erro, aqui só logamos se precisar debugar
+      // A LoginPage vai cuidar de exibir o erro para o usuário
       console.error("Falha no login:", error);
     }
   };

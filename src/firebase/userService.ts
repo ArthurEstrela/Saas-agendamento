@@ -14,7 +14,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db } from "./config";
+import { db, storage } from "./config";
 import type {
   UserProfile,
   ClientProfile,
@@ -274,4 +274,18 @@ export const getProviderProfileBySlug = async (
 
   const providerData = querySnapshot.docs[0].data();
   return providerData as ServiceProviderProfile;
+};
+
+export const uploadProviderBanner = async (
+  userId: string,
+  file: File
+): Promise<string> => {
+  if (!userId) throw new Error("ID do usuário é necessário para o upload.");
+  const filePath = `providerBanners/${userId}/${file.name}`;
+  const storageRef = ref(storage, filePath);
+  
+  await uploadBytes(storageRef, file);
+  const downloadURL = await getDownloadURL(storageRef);
+  
+  return downloadURL;
 };

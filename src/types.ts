@@ -144,6 +144,7 @@ export interface ServiceProviderProfile extends BaseUser {
   reviews: Review[];
   areaOfWork?: string; // Área de atuação
   logoUrl?: string; // URL da foto ou logo
+  bannerUrl?: string; // <-- ADICIONADO AQUI
   socialLinks?: {
     instagram?: string;
     facebook?: string;

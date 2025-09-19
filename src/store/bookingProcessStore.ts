@@ -1,3 +1,5 @@
+// src/store/bookingProcessStore.ts
+
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type {
@@ -9,7 +11,7 @@ import type {
 import { createAppointment } from "../firebase/bookingService";
 import { getUserProfile } from "../firebase/userService";
 
-// ... (Interface BookingState e initialState permanecem as mesmas da versão anterior)
+// Interface para o estado
 interface BookingState {
   provider: ServiceProviderProfile | null;
   isLoading: boolean;
@@ -24,6 +26,7 @@ interface BookingState {
   pendingProviderId: string | null;
 }
 
+// Interface para as ações
 interface BookingActions {
   fetchProviderDetailsById: (providerId: string) => Promise<void>;
   toggleService: (service: Service) => void;
@@ -35,6 +38,9 @@ interface BookingActions {
   setPendingProviderId: (providerId: string | null) => void;
   confirmBooking: (appointmentData: Omit<Appointment, "id">) => Promise<void>;
 }
+
+// Une as duas em uma única interface para a store
+interface BookingStore extends BookingState, BookingActions {}
 
 const initialState: BookingState = {
   provider: null,
@@ -50,12 +56,12 @@ const initialState: BookingState = {
   pendingProviderId: null,
 };
 
-export const useBookingProcessStore = create(
-  persist<BookingState & BookingActions>(
+export const useBookingProcessStore = create<BookingStore>()(
+  persist(
     (set, get) => ({
       ...initialState,
 
-      // ... (fetchProviderDetailsById, toggleService, etc. continuam iguais)
+      // --- Suas Funções (Actions) ---
       fetchProviderDetailsById: async (providerId) => {
         set({ isLoading: true });
         try {
@@ -92,12 +98,9 @@ export const useBookingProcessStore = create(
         const provider = get().provider;
         set({ ...initialState, provider, isLoading: false });
       },
-
-      // Lógica de confirmação simplificada
       confirmBooking: async (appointmentData) => {
         set({ isBooking: true, bookingError: null });
         try {
-          // Apenas passa o objeto pronto para o serviço do Firebase
           await createAppointment(appointmentData);
           set({ isBooking: false, bookingSuccess: true });
         } catch (error) {
@@ -108,22 +111,23 @@ export const useBookingProcessStore = create(
           });
         }
       },
-
-      pendingProviderId: null,
-
       setPendingProviderId: (providerId) =>
         set({ pendingProviderId: providerId }),
     }),
     {
       name: "booking-storage",
       storage: createJSONStorage(() => localStorage),
+
+      // AQUI ESTÁ A CORREÇÃO PRINCIPAL
       partialize: (state) => ({
         selectedServices: state.selectedServices,
         professional: state.professional,
         date: state.date,
         timeSlot: state.timeSlot,
         currentStep: state.currentStep,
-        pendingProviderId: state.pendingProviderId, 
+        pendingProviderId: state.pendingProviderId,
+        provider: state.provider,
+        isLoading: state.isLoading,
       }),
     }
   )

@@ -12,7 +12,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useMemo } from "react";
 import type { Appointment } from "../../types";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useProfileStore } from "../../store/profileStore";
 
 export const Confirmation = () => {
   const {
@@ -27,9 +28,12 @@ export const Confirmation = () => {
     confirmBooking,
     goToPreviousStep,
     resetBooking,
+    setPendingProviderId,
   } = useBookingProcessStore();
 
-  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuthStore();
+  const { userProfile } = useProfileStore();
 
   const { totalDuration, totalPrice } = useMemo(() => {
     return selectedServices.reduce(
@@ -42,10 +46,23 @@ export const Confirmation = () => {
     );
   }, [selectedServices]);
 
-  const handleConfirm = async () => {
+ const handleConfirm = async () => {
+    if (!isAuthenticated) {
+      if (provider?.id) {
+        // A gente ainda salva na store, como um fallback. Está correto.
+        setPendingProviderId(provider.id);
+
+        // ALTERAÇÃO: Passamos o caminho de volta como um parâmetro na URL
+        const redirectPath = `/book/${provider.id}`;
+        // O encodeURIComponent garante que a URL seja formatada corretamente
+        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+      }
+      return; // Para a execução da função aqui.
+    }
     // 1. Verificamos se 'user' existe antes de continuar
     if (
       !user ||
+      !userProfile ||
       !provider ||
       !professional ||
       !date ||
@@ -63,13 +80,18 @@ export const Confirmation = () => {
 
     const endTime = new Date(startTime.getTime() + totalDuration * 60000);
 
+    const serviceName = selectedServices
+      .map((service) => service.name)
+      .join(", ");
+
     const appointmentData: Omit<Appointment, "id"> = {
       clientId: user.uid,
       providerId: provider.id,
-      clientName: user.displayName || "Cliente sem nome",
+      clientName: userProfile.name || "Cliente sem nome",
       professionalId: professional.id,
       professionalName: professional.name,
       services: selectedServices,
+      serviceName: serviceName, 
       startTime,
       endTime,
       status: "pending",

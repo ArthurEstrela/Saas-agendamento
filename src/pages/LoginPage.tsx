@@ -1,34 +1,45 @@
 import { useAuthStore } from "../store/authStore";
 import { LoginForm } from "../components/auth/LoginForm";
-import { Link, useNavigate  } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useBookingProcessStore } from "../store/bookingProcessStore";
 import logo from "../assets/stylo-logo.png";
-import type { UserProfile } from '../types';
+import type { UserProfile } from "../types";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // 2. Hook para ler informações da URL atual
   const { error: authError } = useAuthStore();
   const { pendingProviderId, setPendingProviderId } = useBookingProcessStore();
 
   const handleLoginSuccess = (user: UserProfile) => {
-    // Primeiro, checa se há um agendamento pendente
-    if (pendingProviderId) {
-      navigate(`/book/${pendingProviderId}`);
-      setPendingProviderId(null); // Limpa o ID para não ser usado de novo
-      return; // Encerra a função aqui
+    // 3. Lógica de redirecionamento APRIMORADA
+
+    // Primeiro, procuramos na URL por uma instrução de redirect.
+    const params = new URLSearchParams(location.search);
+    const redirectPath = params.get("redirect");
+
+    if (redirectPath) {
+      // Se encontramos, essa é a nossa prioridade máxima.
+      navigate(redirectPath);
+      setPendingProviderId(null); // Limpamos a store por segurança.
+      return; // Encerra a função aqui.
     }
 
-    // Se não houver agendamento pendente, usa o 'role' para decidir o destino
+    // Se não tiver na URL, tentamos a store (como já estava).
+    if (pendingProviderId) {
+      navigate(`/book/${pendingProviderId}`);
+      setPendingProviderId(null);
+      return;
+    }
+
+    // Se não tiver em nenhum dos dois, vai para o dashboard.
     switch (user.role) {
-      case 'serviceProvider':
-        navigate('/dashboard/');
+      case "serviceProvider":
+      case "client":
+        navigate("/dashboard/");
         break;
-      case 'client':
-        navigate('/dashboard/');
-        break;
-      // Adicione outros 'roles' se necessário
       default:
-        navigate('/dashboard'); // Um fallback seguro
+        navigate("/dashboard");
         break;
     }
   };

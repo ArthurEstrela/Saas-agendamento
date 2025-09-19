@@ -75,6 +75,7 @@ export interface Review {
   appointmentId: string;
   clientId: string;
   clientName: string;
+  professionalName: string;
   rating: number;
   comment: string;
   createdAt: Date;

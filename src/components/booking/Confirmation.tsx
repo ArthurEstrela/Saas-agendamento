@@ -5,7 +5,6 @@ import {
   Calendar,
   User,
   Scissors,
-  DollarSign,
   Clock,
 } from "lucide-react";
 import { format } from "date-fns";

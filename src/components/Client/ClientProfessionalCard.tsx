@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { ServiceProviderProfile } from '../../types';
+import type { ClientProfile, ServiceProviderProfile } from '../../types';
 import { MapPin, Sparkles, Heart } from 'lucide-react';
 import { useProfileStore } from '../../store/profileStore'; // 1. Importe a profileStore
 
@@ -14,7 +14,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
   
   // Verifica se o provedor atual está na lista de favoritos do cliente
   const isFavorited = isClientProfile 
-    ? (userProfile as any).favoriteProfessionals?.includes(provider.id) 
+    ? (userProfile as ClientProfile).favoriteProfessionals?.includes(provider.id) 
     : false;
 
   const handleFavoriteClick = (e: React.MouseEvent) => {

@@ -7,7 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import { format, isToday, setHours, setMinutes } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Clock, Loader2, CalendarX } from 'lucide-react';
-import type { Appointment, DailyAvailability } from '../../types';
+import type { DailyAvailability } from '../../types';
 
 const weekDayMap: { [key: number]: DailyAvailability['dayOfWeek'] } = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
 

@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from "../../store/authStore";
 import { useNavigate } from "react-router-dom";
 import { uploadProfilePicture } from "../../firebase/userService";
+import type { ClientProfile } from "../../types";
 
 // Schema de validação completo
 const schema = z.object({
@@ -63,7 +64,7 @@ export const ClientRegisterForm = () => {
         phoneNumber: data.phoneNumber,
         cpf: data.cpf,
         dateOfBirth: data.dateOfBirth,
-        gender: data.gender as any,
+        gender: data.gender as  ClientProfile['gender'],
       });
 
       if (profileImage) {

@@ -137,9 +137,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       } else {
         throw new Error("Falha ao buscar perfil do usuário após o cadastro.");
       }
-    } catch (error: any) {
+    } catch (err: unknown) {
       let errorMessage = "Ocorreu um erro desconhecido.";
-      if (error.code) {
+      if (typeof err === "object" && err !== null && "code" in err) {
+        const error = err as AuthError;
         switch (error.code) {
           case "auth/email-already-in-use":
             errorMessage =
@@ -154,18 +155,20 @@ export const useAuthStore = create<AuthState>((set) => ({
           default:
             errorMessage = `Erro no cadastro: ${error.message}`;
         }
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
       }
-      console.error("Firebase signup error:", error); // Mantém o erro detalhado no console para debug
+
+      console.error("Firebase signup error:", err);
       set({ error: errorMessage, isSubmitting: false });
 
-      throw error;
+      throw err;
     }
   },
 
   logout: async () => {
     try {
       await signOut(auth);
-      // O onAuthStateChanged vai limpar o resto
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
     }

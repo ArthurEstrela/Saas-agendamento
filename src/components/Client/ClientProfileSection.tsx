@@ -57,7 +57,7 @@ export const ClientProfileSection = () => {
 
   // Popula o formulário com os dados do perfil quando o componente carrega ou o perfil muda
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile && userProfile.role === 'client') {
       reset({
         name: userProfile.name,
         phoneNumber: userProfile.phoneNumber,
@@ -96,7 +96,13 @@ export const ClientProfileSection = () => {
 
       // 2. Prepara os dados para atualização
       const updatedProfileData: Partial<ClientProfile> = {
-        ...data,
+        // ... outras propriedades
+      name: data.name,
+      phoneNumber: data.phoneNumber,
+      cpf: data.cpf,
+      dateOfBirth: data.dateOfBirth,
+      // 1. Faça a correção aqui
+      gender: data.gender as ClientProfile['gender'],
         profilePictureUrl: newProfilePictureUrl,
       };
 
@@ -121,7 +127,7 @@ export const ClientProfileSection = () => {
   const cancelEdit = () => {
     setIsEditing(false);
     // Reseta o formulário para os valores originais
-    if (userProfile) {
+    if (userProfile && userProfile.role === 'client') {
       reset({
         name: userProfile.name,
         phoneNumber: userProfile.phoneNumber,

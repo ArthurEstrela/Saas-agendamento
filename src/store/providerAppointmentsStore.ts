@@ -1,10 +1,9 @@
-// Em: src/store/providerAppointmentsStore.ts
+// src/store/providerAppointmentsStore.ts
 import { create } from 'zustand';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import type { Appointment, ClientProfile } from '../types';
 import { getUserProfile } from '../firebase/userService';
-// Usando a sua função, que é mais completa
 import { updateAppointmentStatus } from '../firebase/bookingService';
 
 export interface EnrichedProviderAppointment extends Appointment {
@@ -16,8 +15,7 @@ interface ProviderAppointmentsState {
   isLoading: boolean;
   selectedProfessionalId: string;
   unsubscribe: () => void;
-  // Assinatura atualizada para incluir o motivo da recusa
-  updateStatus: (appointmentId: string, status: Appointment['status'], rejectionReason?: string) => Promise<void>;
+  updateStatus: (appointmentId: string, status: Appointment['status'], finalPrice?: number, rejectionReason?: string) => Promise<void>;
 }
 
 interface ProviderAppointmentsActions {
@@ -72,10 +70,9 @@ export const useProviderAppointmentsStore = create<ProviderAppointmentsState & P
 
   setSelectedProfessionalId: (id) => set({ selectedProfessionalId: id }),
 
-  // Função ajustada para usar a sua bookingService
-  updateStatus: async (appointmentId, status, rejectionReason) => {
+  updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
     try {
-      await updateAppointmentStatus(appointmentId, status, rejectionReason);
+      await updateAppointmentStatus(appointmentId, status, finalPrice, rejectionReason);
     } catch (error) {
       console.error("Erro ao atualizar status do agendamento:", error);
     }

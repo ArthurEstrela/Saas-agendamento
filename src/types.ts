@@ -13,7 +13,7 @@ export interface BaseUser {
   email: string;
   name: string;
   role: UserRole;
-  createdAt: Date | FieldValue; 
+  createdAt: Date | FieldValue;
   lastLogin?: Date;
   phoneNumber?: string;
   profilePictureUrl?: string;
@@ -87,16 +87,18 @@ export interface Appointment {
   providerId: string;
   professionalId: string;
   professionalName: string;
-  services: Service[]; 
+  services: Service[];
   serviceName: string;
   startTime: Date;
   endTime: Date;
   status: "pending" | "scheduled" | "completed" | "cancelled";
   totalPrice: number;
+  finalPrice?: number;
   totalDuration: number; // in minutes
   notes?: string;
   review?: Review;
   rejectionReason?: string;
+  completedAt?: Date | FieldValue;
 }
 
 export interface Notification {
@@ -115,7 +117,7 @@ export interface ClientProfile extends BaseUser {
   favoriteProfessionals?: string[];
   cpf?: string;
   dateOfBirth?: string;
-  gender?: 'Masculino' | 'Feminino' | 'Outro' | 'Prefiro não dizer';
+  gender?: "Masculino" | "Feminino" | "Outro" | "Prefiro não dizer";
 }
 
 export interface Address {

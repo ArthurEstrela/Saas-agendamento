@@ -13,21 +13,17 @@ import {
 import { db } from "./config";
 import type { Appointment } from "../types";
 
-// Helper para converter Timestamps que vem do Firestore
 const convertAppointmentTimestamps = (
   data: Record<string, unknown>
 ): Record<string, unknown> => {
-  // Define um tipo local para a review aninhada
   type ReviewWithTimestamp = { createdAt?: unknown };
 
-  // Converte startTime e endTime, se existirem
   if (data["startTime"] instanceof Timestamp) {
     data["startTime"] = (data["startTime"] as Timestamp).toDate();
   }
   if (data["endTime"] instanceof Timestamp) {
     data["endTime"] = (data["endTime"] as Timestamp).toDate();
   }
-  // Converte createdAt em reviews, se houver
   const review = data["review"] as ReviewWithTimestamp;
   if (review && review.createdAt instanceof Timestamp) {
     review.createdAt = review.createdAt.toDate();
@@ -98,19 +94,22 @@ export const getAppointmentsByProviderId = async (
  */
 export const updateAppointmentStatus = async (
   appointmentId: string,
-  status: Appointment["status"], // Usa o tipo que definimos!
+  status: Appointment["status"],
+  finalPrice?: number,
   rejectionReason?: string
 ): Promise<void> => {
   const appointmentRef = doc(db, "appointments", appointmentId);
-  const updateData: {
-    status: Appointment["status"];
-    rejectionReason?: string;
-  } = { status };
+  const updateData: { status: Appointment["status"]; rejectionReason?: string; finalPrice?: number, completedAt?: any } = { status };
   if (rejectionReason) {
     updateData.rejectionReason = rejectionReason;
   }
+  if (status === 'completed' && finalPrice !== undefined) {
+    updateData.finalPrice = finalPrice;
+    updateData.completedAt = serverTimestamp();
+  }
   await updateDoc(appointmentRef, updateData);
 };
+
 
 export const getAppointmentsForProfessionalOnDate = async (
   professionalId: string,

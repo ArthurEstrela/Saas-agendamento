@@ -1,3 +1,4 @@
+// functions/src/index.ts
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
@@ -11,7 +12,6 @@ import {
 } from "firebase-functions/v2/firestore";
 import { format } from "date-fns";
 
-// Inicialização do Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
@@ -36,7 +36,6 @@ const createNotificationDocument = async (
     return;
   }
   try {
-    // Acessa a subcoleção 'notifications' dentro do documento do usuário
     const notificationsCol = db.collection("users").doc(userId).collection("notifications");
     await notificationsCol.add({
       userId,
@@ -51,7 +50,6 @@ const createNotificationDocument = async (
   }
 };
 
-// Função auxiliar para enviar notificações (sem alterações)
 const sendNotification = async (
   recipientId: string,
   title: string,
@@ -79,7 +77,6 @@ const sendNotification = async (
     logger.warn("Token FCM não encontrado para o usuário", { recipientId });
   }
 };
-// --- FUNÇÃO ACIONADA QUANDO UM NOVO AGENDAMENTO É CRIADO ---
 export const onAppointmentCreate = onDocumentCreated(
   {
     document: "appointments/{appointmentId}",
@@ -112,7 +109,6 @@ export const onAppointmentCreate = onDocumentCreated(
   }
 );
 
-// --- FUNÇÃO ACIONADA QUANDO UM AGENDAMENTO É ATUALIZADO (EX: CANCELADO) ---
 export const onAppointmentUpdate = onDocumentUpdated(
   {
     document: "appointments/{appointmentId}",
@@ -132,7 +128,6 @@ export const onAppointmentUpdate = onDocumentUpdated(
       startTime,
     } = afterData;
 
-    // Função para formatar a data de forma segura
     const getFormattedDateTime = (timestamp: any) => {
       try {
         if (timestamp && typeof timestamp.toDate === 'function') {
@@ -172,8 +167,6 @@ export const onAppointmentUpdate = onDocumentUpdated(
   }
 );
 
-
-// Adicione aqui suas outras funções, como a de criação de usuário, se tiver.
 export const onUserCreate = onDocumentCreated(
   {
     document: "users/{userId}",
@@ -281,26 +274,26 @@ export const onappointmentcompleted = onDocumentUpdated(
     }
 
     const {
-      serviceProviderId,
+      providerId,
       clientId,
       clientName,
       serviceName,
-      servicePrice,
+      finalPrice,
       professionalName,
     } = newData;
 
-    if (!serviceProviderId || !servicePrice) {
+    if (!providerId || !finalPrice) {
       logger.error(`Dados ausentes no agendamento ${appointmentId}.`, newData);
       return;
     }
 
     const transactionData = {
-      serviceProviderId,
+      providerId,
       appointmentId,
       clientId: clientId || "N/A",
       clientName: clientName || "N/A",
       serviceName: serviceName || "Serviço não informado",
-      amount: servicePrice,
+      amount: finalPrice,
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
       professionalName: professionalName || "N/A",
     };

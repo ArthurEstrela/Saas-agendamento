@@ -3,6 +3,8 @@ import { format } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { EnrichedProviderAppointment } from '../../store/providerAppointmentsStore';
 import { Users } from 'lucide-react';
+import { useMemo } from 'react';
+import type { ServiceProviderProfile } from '../../types';
 
 const getWorkingHours = (
   provider: ServiceProviderProfile,

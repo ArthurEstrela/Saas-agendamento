@@ -3,32 +3,28 @@ import { useEffect, useState } from "react";
 import { useProviderAppointmentsStore } from "../../store/providerAppointmentsStore";
 import { AnimatePresence, motion } from "framer-motion";
 import { Calendar, Inbox, History, Loader2 } from "lucide-react";
-import { TodaysAgendaTab } from "./TodaysAgendaTab";
 import { RequestsTab } from "./RequestsTab";
 import { HistoryTab } from "./HistoryTab";
 import { useProfileStore } from "../../store/profileStore";
 import type { ServiceProviderProfile } from "../../types";
+import { AdvancedAgendaView } from "./AdvancedAgendaView";
 
-// Vamos importar os componentes de cada aba
-
-type Tab = "today" | "requests" | "history";
+type Tab = "agenda" | "requests" | "history";
 
 const tabs = [
-  { id: "today", label: "Agenda do Dia", icon: Calendar },
+  { id: "agenda", label: "Agenda", icon: Calendar },
   { id: "requests", label: "Solicitações", icon: Inbox },
   { id: "history", label: "Histórico", icon: History },
 ];
 
 export const AgendaView = () => {
-  const [activeTab, setActiveTab] = useState<Tab>("today");
+  const [activeTab, setActiveTab] = useState<Tab>("agenda");
   const { userProfile } = useProfileStore();
   const { appointments, isLoading, fetchAppointments, updateStatus } =
     useProviderAppointmentsStore();
   const provider = userProfile as ServiceProviderProfile;
 
-  // ESTE useEffect AGORA VIVE AQUI, NO COMPONENTE PAI
   useEffect(() => {
-    // Garante que só busca os dados uma vez quando o perfil do provider estiver carregado
     if (provider?.id) {
       fetchAppointments(provider.id);
     }
@@ -38,7 +34,7 @@ export const AgendaView = () => {
     (a) => a.status === "pending"
   ).length;
 
-  if (isLoading) {
+  if (isLoading && appointments.length === 0) {
     return (
       <div className="flex h-full items-center justify-center bg-black">
         <Loader2 size={48} className="animate-spin text-[#daa520]" />
@@ -48,7 +44,6 @@ export const AgendaView = () => {
 
   return (
     <div className="h-full flex flex-col bg-black rounded-2xl text-white p-4 sm:p-6">
-      {/* NAVEGAÇÃO DAS ABAS */}
       <div className="flex border-b border-gray-800 mb-6">
         {tabs.map((tab) => (
           <button
@@ -77,7 +72,6 @@ export const AgendaView = () => {
         ))}
       </div>
 
-      {/* CONTEÚDO DAS ABAS */}
       <main className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
           <motion.div
@@ -86,8 +80,9 @@ export const AgendaView = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -10, opacity: 0 }}
             transition={{ duration: 0.2 }}
+            className="h-full"
           >
-            {activeTab === "today" && <TodaysAgendaTab appointments={appointments} />}
+            {activeTab === "agenda" && <AdvancedAgendaView />}
             {activeTab === "requests" && (
               <RequestsTab
                 appointments={appointments.filter(

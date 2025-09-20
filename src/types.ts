@@ -105,9 +105,10 @@ export interface Appointment {
 export interface Notification {
   id: string;
   userId: string;
+  title: string; // <-- ADICIONADO
   message: string;
   isRead: boolean;
-  createdAt: Date;
+  createdAt: Date | FieldValue;
   link?: string; // Opcional, para redirecionar o usuário
 }
 

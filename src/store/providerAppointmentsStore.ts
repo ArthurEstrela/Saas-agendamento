@@ -6,21 +6,32 @@ import {
   where,
   onSnapshot,
   orderBy,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import type { Appointment, ClientProfile } from "../types";
 import { getUserProfile } from "../firebase/userService";
 import { updateAppointmentStatus } from "../firebase/bookingService";
 import { useFinanceStore } from "./financeStore";
+import { startOfDay, endOfDay } from "date-fns";
 
 export interface EnrichedProviderAppointment extends Appointment {
   client?: ClientProfile;
 }
 
+export type DateFilter = {
+  startDate: Date;
+  endDate: Date;
+};
+
 interface ProviderAppointmentsState {
   appointments: EnrichedProviderAppointment[];
   isLoading: boolean;
   selectedProfessionalId: string;
+  dateFilter: DateFilter;
+  // Adicionei os estados de filtro que faltavam na interface
+  serviceFilter: string;
+  statusFilter: Appointment["status"] | "all";
   unsubscribe: () => void;
   updateStatus: (
     appointmentId: string,
@@ -33,17 +44,24 @@ interface ProviderAppointmentsState {
 interface ProviderAppointmentsActions {
   fetchAppointments: (providerId: string) => void;
   setSelectedProfessionalId: (id: string) => void;
+  setDateFilter: (filter: DateFilter) => void;
+  setServiceFilter: (serviceId: string) => void;
+  setStatusFilter: (status: Appointment["status"] | "all") => void;
   clearAppointments: () => void;
   completeAppointment: (
     appointmentId: string,
     finalPrice: number
-  ) => Promise<void>; // Adicione esta linha se não existir
+  ) => Promise<void>;
 }
 
+const today = new Date();
 const initialState = {
   appointments: [],
   isLoading: true,
   selectedProfessionalId: "all",
+  dateFilter: { startDate: startOfDay(today), endDate: endOfDay(today) },
+  serviceFilter: 'all',
+  statusFilter: 'scheduled' as const,
   unsubscribe: () => {},
 };
 
@@ -67,11 +85,13 @@ export const useProviderAppointmentsStore = create<
       async (snapshot) => {
         const appointmentsPromises = snapshot.docs.map(
           async (doc): Promise<EnrichedProviderAppointment> => {
+            const rawData = doc.data();
+            // CORREÇÃO AQUI: A variável agora se chama 'apptData'
             const apptData = {
               id: doc.id,
-              ...doc.data(),
-              startTime: doc.data().startTime.toDate(),
-              endTime: doc.data().endTime.toDate(),
+              ...rawData,
+              startTime: (rawData.startTime as Timestamp).toDate(),
+              endTime: (rawData.endTime as Timestamp).toDate(),
             } as Appointment;
 
             const clientProfile = (await getUserProfile(
@@ -90,22 +110,18 @@ export const useProviderAppointmentsStore = create<
         set({ isLoading: false });
       }
     );
-
     set({ unsubscribe });
   },
 
   completeAppointment: async (appointmentId, finalPrice) => {
+    // Sua lógica existente... (sem alterações)
     set({ isLoading: true });
     try {
       await updateAppointmentStatus(appointmentId, "completed", finalPrice);
-
-      // AVISO PARA ATUALIZAR AS FINANÇAS!
-      // Pegamos o ID do provedor do agendamento que acabamos de concluir
       const providerId = get().appointments.find(
         (a) => a.id === appointmentId
       )?.providerId;
       if (providerId) {
-        // Chamamos a função da financeStore para buscar os dados novos
         useFinanceStore.getState().fetchFinancialData(providerId);
       }
     } catch (error) {
@@ -117,7 +133,13 @@ export const useProviderAppointmentsStore = create<
 
   setSelectedProfessionalId: (id) => set({ selectedProfessionalId: id }),
 
+  // Novas ações de filtro
+  setDateFilter: (filter) => set({ dateFilter: filter }),
+  setServiceFilter: (serviceId) => set({ serviceFilter: serviceId }),
+  setStatusFilter: (status) => set({ statusFilter: status }),
+
   updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
+    // Sua lógica existente... (sem alterações)
     try {
       await updateAppointmentStatus(
         appointmentId,
@@ -125,8 +147,6 @@ export const useProviderAppointmentsStore = create<
         finalPrice,
         rejectionReason
       );
-
-      // Se o serviço foi concluído, atualiza os dados financeiros!
       if (status === "completed") {
         const providerId = get().appointments.find(
           (a) => a.id === appointmentId

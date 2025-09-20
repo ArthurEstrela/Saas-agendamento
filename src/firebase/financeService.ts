@@ -20,7 +20,7 @@ export const getFinancialData = async (
   const appointmentsCollection = collection(db, "appointments");
   const q = query(
     appointmentsCollection,
-    where("professionalId", "==", providerId),
+    where("providerId", "==", providerId),
     where("status", "==", "completed")
   );
 

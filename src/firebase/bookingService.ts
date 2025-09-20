@@ -9,6 +9,7 @@ import {
   Timestamp,
   orderBy,
   serverTimestamp,
+  FieldValue,
 } from "firebase/firestore";
 import { db } from "./config";
 import type { Appointment } from "../types";
@@ -99,17 +100,21 @@ export const updateAppointmentStatus = async (
   rejectionReason?: string
 ): Promise<void> => {
   const appointmentRef = doc(db, "appointments", appointmentId);
-  const updateData: { status: Appointment["status"]; rejectionReason?: string; finalPrice?: number, completedAt?: any } = { status };
+  const updateData: {
+    status: Appointment["status"];
+    rejectionReason?: string;
+    finalPrice?: number;
+    completedAt?: FieldValue;
+  } = { status };
   if (rejectionReason) {
     updateData.rejectionReason = rejectionReason;
   }
-  if (status === 'completed' && finalPrice !== undefined) {
+  if (status === "completed" && finalPrice !== undefined) {
     updateData.finalPrice = finalPrice;
     updateData.completedAt = serverTimestamp();
   }
   await updateDoc(appointmentRef, updateData);
 };
-
 
 export const getAppointmentsForProfessionalOnDate = async (
   professionalId: string,
@@ -145,5 +150,3 @@ export const getAppointmentsForProfessionalOnDate = async (
 
   return appointments;
 };
-
-

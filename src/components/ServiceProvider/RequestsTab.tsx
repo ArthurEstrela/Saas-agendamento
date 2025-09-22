@@ -1,5 +1,4 @@
 // src/components/ServiceProvider/RequestsTab.tsx
-
 import type { EnrichedProviderAppointment } from '../../store/providerAppointmentsStore';
 import { AppointmentRequestCard } from './AppointmentRequestCard';
 import { Inbox } from 'lucide-react';
@@ -14,7 +13,7 @@ export const RequestsTab = ({ appointments, onUpdateStatus }: RequestsTabProps) 
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-6">Novas Solicitações de Agendamento</h2>
+      <h2 className="text-xl font-bold mb-6 text-amber-400">Novas Solicitações</h2>
       {sortedAppointments.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sortedAppointments.map((appt) => (

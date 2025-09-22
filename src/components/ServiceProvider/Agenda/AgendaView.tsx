@@ -1,32 +1,26 @@
 // src/components/ServiceProvider/Agenda/AgendaView.tsx
-
-import { useState, useEffect, useMemo } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
-import { AgendaToolbar } from "./AgendaToolbar";
-import { AgendaListView } from "./AgendaListView";
-import { AgendaColumnView } from "./AgendaColumnView";
-// import { AgendaCalendario } from './AgendaCalendario'; // Futura implementação
-import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
-import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
-import type { ServiceProviderProfile } from "../../../types";
+import { useState, useMemo, useEffect } from "react";
+import {
+  useProviderAppointmentsStore,
+  type EnrichedProviderAppointment,
+} from "../../../store/providerAppointmentsStore";
 import { useProfileStore } from "../../../store/profileStore";
-import { AgendaCalendario } from "./AgendaCalendario";
+import type { ServiceProviderProfile } from "../../../types";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, CalendarCheck, Inbox, History } from "lucide-react";
 
-export type AgendaViewMode = "list" | "column" | "calendar";
+// Importando os componentes de cada aba
+import { RequestsTab } from "../RequestsTab";
+import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab"; // <-- Novo componente para a agenda principal
+import { HistoryTab } from "../HistoryTab";
+
+type AgendaTab = "requests" | "scheduled" | "history";
 
 export const AgendaView = () => {
-  const [viewMode, setViewMode] = useState<AgendaViewMode>("list");
-  const [selectedDate, setSelectedDate] = useState(new Date());
-
+  const [activeTab, setActiveTab] = useState<AgendaTab>("requests");
   const { userProfile } = useProfileStore();
-  const {
-    appointments,
-    isLoading,
-    fetchAppointments,
-    selectedProfessionalId,
-    setSelectedProfessionalId,
-  } = useProviderAppointmentsStore();
+  const { appointments, isLoading, fetchAppointments, updateStatus } =
+    useProviderAppointmentsStore();
 
   const provider = userProfile as ServiceProviderProfile;
 
@@ -36,35 +30,41 @@ export const AgendaView = () => {
     }
   }, [provider?.id, fetchAppointments]);
 
+  // Filtra os agendamentos baseado na aba ativa
   const filteredAppointments = useMemo(() => {
-    return appointments.filter((appointment) => {
-      const isSameDay = isWithinInterval(appointment.startTime, {
-        start: startOfDay(selectedDate),
-        end: endOfDay(selectedDate),
-      });
-      if (!isSameDay) return false;
+    const statusMap: Record<
+      AgendaTab,
+      Array<EnrichedProviderAppointment["status"]>
+    > = {
+      requests: ["pending"],
+      scheduled: ["scheduled"],
+      history: ["completed", "cancelled"],
+    };
+    return appointments.filter((appt) =>
+      statusMap[activeTab].includes(appt.status)
+    );
+  }, [appointments, activeTab]);
 
-      if (
-        selectedProfessionalId !== "all" &&
-        appointment.professionalId !== selectedProfessionalId
-      ) {
-        return false;
-      }
+  const pendingCount = useMemo(
+    () => appointments.filter((a) => a.status === "pending").length,
+    [appointments]
+  );
 
-      return appointment.status === "scheduled";
-    });
-  }, [appointments, selectedDate, selectedProfessionalId]);
-
-  const renderActiveView = () => {
-    switch (viewMode) {
-      case "column":
-        return <AgendaColumnView appointments={filteredAppointments} />;
-      case "list":
-        return <AgendaListView appointments={filteredAppointments} />;
-      case "calendar":
-        return <AgendaCalendario appointments={appointments} />;
+  const renderContent = () => {
+    switch (activeTab) {
+      case "requests":
+        return (
+          <RequestsTab
+            appointments={filteredAppointments}
+            onUpdateStatus={updateStatus}
+          />
+        );
+      case "scheduled":
+        return <ScheduledAppointmentsTab appointments={filteredAppointments} />;
+      case "history":
+        return <HistoryTab appointments={filteredAppointments} />;
       default:
-        return <AgendaListView appointments={filteredAppointments} />;
+        return null;
     }
   };
 
@@ -77,28 +77,60 @@ export const AgendaView = () => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-black rounded-2xl text-white p-4 sm:p-6">
-      <AgendaToolbar
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        selectedDate={selectedDate}
-        setSelectedDate={setSelectedDate}
-        selectedProfessionalId={selectedProfessionalId}
-        onProfessionalChange={setSelectedProfessionalId}
-        professionals={provider?.professionals || []}
-      />
-      <main className="flex-1 overflow-y-auto mt-6">
+    <div className="h-full flex flex-col bg-black/30 rounded-2xl text-white p-4 sm:p-6 border border-gray-800">
+      <header className="flex flex-col sm:flex-row justify-between items-center gap-4 pb-4 border-b border-gray-800">
+        <h1 className="text-2xl font-bold text-white">Minha Agenda</h1>
+        <div className="flex items-center bg-gray-900 rounded-lg p-1 space-x-1">
+          {/* Botão da Aba de Solicitações */}
+          <button
+            onClick={() => setActiveTab("requests")}
+            className={`relative px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              activeTab === "requests"
+                ? "bg-amber-500 text-black"
+                : "text-gray-400 hover:bg-gray-800"
+            }`}
+          >
+            Solicitações
+            {pendingCount > 0 && (
+              <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+          {/* Botão da Aba de Agenda */}
+          <button
+            onClick={() => setActiveTab("scheduled")}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              activeTab === "scheduled"
+                ? "bg-amber-500 text-black"
+                : "text-gray-400 hover:bg-gray-800"
+            }`}
+          >
+            Agenda
+          </button>
+          {/* Botão da Aba de Histórico */}
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+              activeTab === "history"
+                ? "bg-amber-500 text-black"
+                : "text-gray-400 hover:bg-gray-800"
+            }`}
+          >
+            Histórico
+          </button>
+        </div>
+      </header>
+      <main className="flex-1 overflow-y-auto mt-6 pr-2">
         <AnimatePresence mode="wait">
           <motion.div
-            key={
-              viewMode + selectedDate.toDateString() + selectedProfessionalId
-            }
+            key={activeTab}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.25 }}
           >
-            {renderActiveView()}
+            {renderContent()}
           </motion.div>
         </AnimatePresence>
       </main>

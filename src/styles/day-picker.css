@@ -1,0 +1,55 @@
+/* src/styles/day-picker.css */
+
+.rdp {
+  --rdp-cell-size: 40px;
+  --rdp-caption-font-size: 18px;
+  --rdp-accent-color: #daa520; /* Cor primária do Stylo */
+  --rdp-background-color: #fde68a; /* Um âmbar mais claro para o hover */
+  --rdp-accent-color-dark: #daa520;
+  --rdp-background-color-dark: #fde68a;
+  --rdp-outline: 2px solid var(--rdp-accent-color);
+  --rdp-outline-selected: 3px solid var(--rdp-accent-color);
+  --rdp-border-radius: 8px; 
+  margin: 1em 0;
+}
+
+.rdp-caption_label {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.rdp-head_cell {
+  color: #a1a1aa; /* Cinza para os dias da semana */
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.rdp-button {
+  transition: all 0.2s ease-in-out;
+  border-radius: var(--rdp-border-radius);
+}
+
+.rdp-day_today {
+  color: #fde68a;
+  font-weight: 800;
+  border: 1px solid #daa520;
+}
+
+.rdp-day_selected,
+.rdp-day_selected:hover {
+  background-color: #daa520 !important;
+  color: #111827 !important; /* Texto escuro para contraste */
+  font-weight: 700;
+}
+
+.rdp-nav_button {
+  color: #daa520;
+  border-radius: var(--rdp-border-radius);
+}
+.rdp-nav_button:hover {
+  background-color: rgba(218, 165, 32, 0.1);
+}
+
+.rdp-day:not(.rdp-day_disabled):hover {
+    background-color: rgba(218, 165, 32, 0.2);
+}

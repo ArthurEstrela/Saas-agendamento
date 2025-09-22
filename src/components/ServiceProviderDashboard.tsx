@@ -3,7 +3,7 @@ import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav
 
 // Importe todas as suas seções refatoradas aqui
 
-import { AgendaView } from "./ServiceProvider/AgendaView";
+import { AgendaView } from "./ServiceProvider/Agenda/AgendaView";
 import { FinancialManagement } from "./ServiceProvider/FinancialManagement";
 import { ProfessionalsManagement } from "./ServiceProvider/ProfessionalsManagement";
 import { AvailabilityManagement } from "./ServiceProvider/AvailabilityManagement";

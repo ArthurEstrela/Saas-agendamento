@@ -39,6 +39,10 @@ interface ProviderAppointmentsState {
     finalPrice?: number,
     rejectionReason?: string
   ) => Promise<void>;
+  selectedAppointment: EnrichedProviderAppointment | null;
+  setSelectedAppointment: (
+    appointment: EnrichedProviderAppointment | null
+  ) => void;
 }
 
 interface ProviderAppointmentsActions {
@@ -60,8 +64,8 @@ const initialState = {
   isLoading: true,
   selectedProfessionalId: "all",
   dateFilter: { startDate: startOfDay(today), endDate: endOfDay(today) },
-  serviceFilter: 'all',
-  statusFilter: 'scheduled' as const,
+  serviceFilter: "all",
+  statusFilter: "scheduled" as const,
   unsubscribe: () => {},
 };
 
@@ -164,4 +168,7 @@ export const useProviderAppointmentsStore = create<
     get().unsubscribe();
     set(initialState);
   },
+  selectedAppointment: null,
+  setSelectedAppointment: (appointment) =>
+    set({ selectedAppointment: appointment }),
 }));

@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import Header from "./Header";
 import Footer from "./Footer";
 import { useAuthStore } from "../store/authStore";
+import { AppointmentDetailsModal } from "./ServiceProvider/Agenda/AppointmentDetailsModal";
 
 const AppLayout = () => {
   const { user, userProfile, loading } = useAuthStore();
@@ -25,6 +26,7 @@ const AppLayout = () => {
         <Outlet />
       </main>
       <Footer />
+      <AppointmentDetailsModal />
     </div>
   );
 };

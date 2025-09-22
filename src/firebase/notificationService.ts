@@ -8,7 +8,9 @@ import {
   updateDoc,
   addDoc,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  onSnapshot,
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Notification } from '../types';
@@ -21,6 +23,34 @@ const convertNotificationTimestamp = (data: Record<string, unknown>): Record<str
     return data;
 };
 
+/**
+ * Escuta as notificações de um usuário em tempo real.
+ * @param userId O ID do usuário.
+ * @param callback A função para ser chamada com as novas notificações.
+ * @returns Uma função para cancelar a inscrição (unsubscribe).
+ */
+export const onNotifications = (userId: string, callback: (notifications: Notification[]) => void) => {
+  const notificationsCollection = collection(db, 'notifications');
+  const q = query(
+    notificationsCollection,
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc')
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const notifications = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const convertedData = convertNotificationTimestamp(data);
+      return { id: doc.id, ...convertedData } as unknown as Notification;
+    });
+    callback(notifications);
+  });
+};
+
+export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+  const notificationRef = doc(db, 'notifications', notificationId);
+  await updateDoc(notificationRef, { isRead: true });
+};
 
 /**
  * Busca as notificações de um usuário específico, ordenadas pelas mais recentes.
@@ -42,12 +72,9 @@ export const getNotificationsByUserId = async (userId: string): Promise<Notifica
   });
 };
 
-/**
- * Marca uma notificação específica como lida.
- */
-export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+export const deleteNotificationById = async (notificationId: string): Promise<void> => {
   const notificationRef = doc(db, 'notifications', notificationId);
-  await updateDoc(notificationRef, { isRead: true });
+  await deleteDoc(notificationRef);
 };
 
 /**

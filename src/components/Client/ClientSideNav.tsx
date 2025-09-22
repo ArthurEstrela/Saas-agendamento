@@ -1,70 +1,75 @@
-import { Search, Calendar, Heart, User, LogOut, Image as ImageIcon } from 'lucide-react';
+import { Search, Calendar, Heart, User, LogOut, Image as ImageIcon, Bell } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useProfileStore } from '../../store/profileStore';
 import logo from '../../assets/stylo-logo.png';
 import { Link } from 'react-router-dom';
+import { useNotificationStore } from '../../store/notificationsStore';
 
 interface ClientSideNavProps {
   activeSection: string;
-  setActiveSection: (section: 'search' | 'appointments' | 'favorites' | 'profile') => void;
+  // ✨ CORREÇÃO AQUI: A função agora aceita 'notifications'
+  setActiveSection: (section: 'search' | 'appointments' | 'favorites' | 'profile' | 'notifications') => void;
 }
-
-// 1. AJUSTES NOS ITENS DE NAVEGAÇÃO
-const navItems = [
-  { id: 'search', label: 'Buscar', icon: Search },
-  { id: 'appointments', label: 'Agendamentos', icon: Calendar }, // Texto encurtado
-  { id: 'favorites', label: 'Favoritos', icon: Heart },
-  // O item "Meu Perfil" foi removido daqui
-];
 
 export const ClientSideNav = ({ activeSection, setActiveSection }: ClientSideNavProps) => {
   const { logout } = useAuthStore();
   const { userProfile } = useProfileStore();
+  const { unreadCount } = useNotificationStore();
+
+  // ✨ CORREÇÃO AQUI: Movido para dentro do componente para ter acesso a 'unreadCount'
+  const navItems = [
+    { id: 'search', label: 'Buscar', icon: Search, count: 0 },
+    { id: 'appointments', label: 'Agendamentos', icon: Calendar, count: 0 },
+    { id: 'favorites', label: 'Favoritos', icon: Heart, count: 0 },
+    { id: 'notifications', icon: Bell, label: 'Notificações', count: unreadCount },
+  ];
 
   return (
     <div className="flex flex-col justify-between h-full text-white">
       <div>
-        {/* Logo */}
         <div className="mb-12 px-2">
           <Link to="/dashboard">
             <img src={logo} alt="Stylo" className="h-10" />
           </Link>
         </div>
 
-        {/* Itens de Navegação */}
         <nav className="space-y-2">
           {navItems.map((item) => (
             <button
               key={item.id}
+              // ✨ CORREÇÃO AQUI: Removemos o 'as any', pois os tipos agora estão corretos
               onClick={() => setActiveSection(item.id as any)}
-              className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 text-base font-medium
-                ${
-                  activeSection === item.id
-                    ? 'bg-amber-500/10 text-amber-400'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                }`}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 text-base font-medium ${
+                activeSection === item.id
+                  ? 'bg-amber-500/10 text-amber-400'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              }`}
             >
-              <item.icon className="mr-3 flex-shrink-0" size={22} />
-              <span>{item.label}</span>
+              <div className="flex items-center">
+                <item.icon className="mr-3 flex-shrink-0" size={22} />
+                <span>{item.label}</span>
+              </div>
+              {/* ✨ CORREÇÃO AQUI: Adicionamos a lógica para renderizar o contador */}
+              {item.count > 0 && (
+                <span className="flex items-center justify-center w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full">
+                  {item.count}
+                </span>
+              )}
             </button>
           ))}
         </nav>
       </div>
 
-      {/* Seção do Usuário e Logout */}
       <div className="border-t border-gray-700/50 pt-4">
-        {/* 2. ÁREA DO PERFIL AGORA É UM BOTÃO */}
         <button
           onClick={() => setActiveSection('profile')}
-          className={`w-full flex items-center p-2 rounded-lg transition-all duration-200 text-base font-medium
-            ${
-              activeSection === 'profile'
-                ? 'bg-amber-500/10' // Estilo quando a seção de perfil está ativa
-                : 'hover:bg-gray-800/50'
-            }`}
+          className={`w-full flex items-center p-2 rounded-lg transition-all duration-200 text-base font-medium ${
+            activeSection === 'profile'
+              ? 'bg-amber-500/10'
+              : 'hover:bg-gray-800/50'
+          }`}
         >
           <div className="relative mr-3">
-            {/* 3. FOTO COM BORDA DOURADA */}
             {userProfile?.profilePictureUrl ? (
               <img
                 src={userProfile.profilePictureUrl}
@@ -82,7 +87,6 @@ export const ClientSideNav = ({ activeSection, setActiveSection }: ClientSideNav
           </span>
         </button>
 
-        {/* Botão de Logout */}
         <button
           onClick={logout}
           className="w-full flex items-center p-3 mt-2 rounded-lg transition-all duration-200 text-gray-400 hover:bg-red-500/10 hover:text-red-400 text-base font-medium"

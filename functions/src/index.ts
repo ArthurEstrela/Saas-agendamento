@@ -67,6 +67,7 @@ const sendPushNotification = async (
       error
     );
   }
+  await createFirestoreNotification(recipientId, title, body);
 };
 
 // --- GATILHOS DO FIRESTORE (TRIGGERS) ---
@@ -89,11 +90,12 @@ export const onAppointmentCreate = onDocumentCreated(
     if (!professionalId) return;
 
     const { formattedDate, formattedTime } = formatDate(startTime);
-    const title = "Novo Agendamento!";
-    const body = `${clientName || "Um cliente"} agendou "${
+    const title = "Nova Solicitação de Agendamento";
+    const body = `${clientName || "Um cliente"} quer agendar "${
       serviceName || "um serviço"
     }" para ${formattedDate} às ${formattedTime}.`;
 
+    // A notificação agora é criada pela sendPushNotification
     await sendPushNotification(professionalId, title, body);
   }
 );
@@ -114,23 +116,26 @@ export const onAppointmentUpdate = onDocumentUpdated(
     }
 
     // 1. Notificação para o CLIENTE sobre status (Confirmado / Cancelado)
+    // A lógica aqui permanece a mesma, apenas a função chamada muda.
     if (afterData.status === "confirmed" || afterData.status === "cancelled") {
       const { clientId, serviceName, startTime } = afterData;
       if (!clientId) return;
 
       const { formattedDate, formattedTime } = formatDate(startTime);
-      const title =
-        afterData.status === "confirmed"
-          ? "Agendamento Confirmado!"
-          : "Agendamento Recusado";
+      const isConfirmed = afterData.status === "confirmed";
+
+      const title = isConfirmed
+        ? "Agendamento Confirmado!"
+        : "Agendamento Recusado";
+
       const body = `Seu agendamento para "${serviceName}" em ${formattedDate} às ${formattedTime} foi ${
-        afterData.status === "confirmed" ? "confirmado" : "recusado"
+        isConfirmed ? "confirmado" : "recusado"
       }.`;
 
       await sendPushNotification(clientId, title, body);
     }
 
-    // 2. Criação de Transação Financeira quando o status for CONCLUÍDO
+    // 2. Criação de Transação Financeira (Esta parte não muda)
     if (afterData.status === "completed") {
       const { professionalId, finalPrice } = afterData;
       if (!professionalId || typeof finalPrice === "undefined") {
@@ -141,7 +146,6 @@ export const onAppointmentUpdate = onDocumentUpdated(
         return;
       }
 
-      // Usando uma transação para garantir que a operação seja atômica
       await db.runTransaction(async (transaction) => {
         const transRef = db
           .collection("transactions")
@@ -155,7 +159,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
 
         const { clientId, clientName, serviceName, professionalName } =
           afterData;
-        const newTransRef = db.collection("transactions").doc(); // Gera um ID único
+        const newTransRef = db.collection("transactions").doc();
         transaction.set(newTransRef, {
           providerId: professionalId,
           appointmentId,
@@ -238,18 +242,14 @@ export const onReviewCreate = onDocumentCreated(
 export const sendAppointmentReminders = onSchedule(
   { schedule: "every day 09:00", timeZone: TIME_ZONE, region: REGION },
   async () => {
-    logger.info(
-      "Executando tarefa agendada: Envio de lembretes de agendamento."
-    );
+    logger.info("Executando envio de lembretes de agendamento.");
 
-    // CORREÇÃO: As funções startOfTomorrow e endOfTomorrow não precisam de argumentos.
-    // Elas usam a hora atual do servidor para calcular o dia seguinte.
     const tomorrowStart = startOfTomorrow();
     const tomorrowEnd = endOfTomorrow();
 
     const appointmentsRef = db.collection("appointments");
     const q = appointmentsRef
-      .where("status", "==", "confirmed")
+      .where("status", "==", "scheduled") // Alterado para 'scheduled'
       .where(
         "startTime",
         ">=",
@@ -281,9 +281,7 @@ export const sendAppointmentReminders = onSchedule(
     });
 
     await Promise.all(remindersSent);
-    logger.info(
-      `${remindersSent.length} lembretes de agendamento enviados com sucesso.`
-    );
+    logger.info(`${remindersSent.length} lembretes de agendamento enviados.`);
   }
 );
 
@@ -309,3 +307,38 @@ export const createStripeCheckout = onCall(
     );
   }
 );
+
+/**
+ * Cria uma notificação no Firestore para o usuário.
+ * @param recipientId O ID do usuário.
+ * @param title O título da notificação.
+ * @param message A mensagem da notificação.
+ */
+const createFirestoreNotification = async (
+  recipientId: string,
+  title: string,
+  message: string
+) => {
+  if (!recipientId) {
+    logger.warn("Tentativa de criar notificação para um ID de usuário vazio.");
+    return;
+  }
+  try {
+    await db.collection("notifications").add({
+      userId: recipientId,
+      title,
+      message,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      link: "/dashboard", // Link padrão para a dashboard
+    });
+    logger.info(
+      `Notificação do Firestore criada para ${recipientId}: "${title}"`
+    );
+  } catch (error) {
+    logger.error(
+      `Erro ao criar notificação no Firestore para ${recipientId}:`,
+      error
+    );
+  }
+};

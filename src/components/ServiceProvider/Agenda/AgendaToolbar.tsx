@@ -1,119 +1,51 @@
 // src/components/ServiceProvider/Agenda/AgendaToolbar.tsx
-
-import {
-  LayoutGrid,
-  List,
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
-import { DateSelector } from "../DateSelector"; // Componente que você já tinha, só movido
-import { ProfessionalSelector } from "../ProfessionalSelector"; // Componente que você já tinha
-import type { AgendaViewMode } from "./AgendaView";
-import { format, addDays, subDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import type { Professional } from "../../../types";
+import { LayoutGrid, List, Columns } from "lucide-react";
+import { ProfessionalFilter } from "./ProfessionalFilter";
+import type { ViewMode } from "./AgendaView"; // <-- Vamos definir este tipo no AgendaView
 
 interface AgendaToolbarProps {
-  viewMode: AgendaViewMode;
-  setViewMode: (mode: AgendaViewMode) => void;
-  selectedDate: Date;
-  setSelectedDate: (date: Date) => void;
-  selectedProfessionalId: string;
-  onProfessionalChange: (id: string) => void;
-  professionals: Professional[];
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  selectedProfessionalId: string | null;
+  onSelectProfessional: (id: string | null) => void;
 }
 
 export const AgendaToolbar = ({
   viewMode,
-  setViewMode,
-  selectedDate,
-  setSelectedDate,
+  onViewModeChange,
   selectedProfessionalId,
-  onProfessionalChange,
-  professionals,
+  onSelectProfessional,
 }: AgendaToolbarProps) => {
-  const handleDateChange = (days: number) => {
-    const newDate =
-      days > 0
-        ? addDays(selectedDate, days)
-        : subDays(selectedDate, Math.abs(days));
-    setSelectedDate(newDate);
-  };
+  const viewOptions: { id: ViewMode; icon: React.ReactNode; label: string }[] =
+    [
+      { id: "card", icon: <LayoutGrid size={18} />, label: "Cards" },
+      { id: "list", icon: <List size={18} />, label: "Lista" },
+      { id: "column", icon: <Columns size={18} />, label: "Colunas" },
+    ];
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-gray-800">
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-bold text-white capitalize">
-          {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-        </h2>
-        <div className="flex items-center">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+      <ProfessionalFilter
+        selectedProfessionalId={selectedProfessionalId}
+        onSelectProfessional={onSelectProfessional}
+      />
+      <div className="flex items-center bg-gray-900 rounded-lg p-1 space-x-1">
+        {viewOptions.map((option) => (
           <button
-            onClick={() => handleDateChange(-1)}
-            className="p-2 rounded-md hover:bg-gray-800"
+            key={option.id}
+            onClick={() => onViewModeChange(option.id)}
+            className={`px-3 py-2 flex items-center gap-2 text-sm font-semibold rounded-md transition-colors ${
+              viewMode === option.id
+                ? "bg-amber-500 text-black"
+                : "text-gray-400 hover:bg-gray-800"
+            }`}
+            title={option.label}
           >
-            <ChevronLeft size={20} />
+            {option.icon}
+            <span className="hidden sm:inline">{option.label}</span>
           </button>
-          <button
-            onClick={() => handleDateChange(1)}
-            className="p-2 rounded-md hover:bg-gray-800"
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
+        ))}
       </div>
-
-      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-        <DateSelector
-          selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-        />
-
-        {professionals.length > 1 && (
-          <ProfessionalSelector
-            professionals={professionals}
-            selectedProfessionalId={selectedProfessionalId}
-            setSelectedProfessionalId={onProfessionalChange}
-          />
-        )}
-
-        {/* Seletores de Visualização */}
-        <div className="flex items-center bg-gray-900 rounded-lg p-1">
-          <button
-            onClick={() => setViewMode("list")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "list"
-                ? "bg-amber-500 text-black"
-                : "text-gray-400 hover:bg-gray-800"
-            }`}
-            aria-label="Visualização em Lista"
-          >
-            <List size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode("column")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "column"
-                ? "bg-amber-500 text-black"
-                : "text-gray-400 hover:bg-gray-800"
-            }`}
-            aria-label="Visualização em Coluna"
-          >
-            <LayoutGrid size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode("calendar")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "calendar"
-                ? "bg-amber-500 text-black"
-                : "text-gray-400 hover:bg-gray-800"
-            }`}
-            aria-label="Visualização em Calendário"
-          >
-            <CalendarIcon size={18} />
-          </button>
-        </div>
-      </div>
-    </header>
+    </div>
   );
 };

@@ -1,21 +1,16 @@
-// src/components/ServiceProvider/Agenda/AgendaToolbar.tsx
+// src/components/ServiceProvider/Agenda/AgendaViewSwitcher.tsx
 import { LayoutGrid, List, Columns } from "lucide-react";
-import { ProfessionalFilter } from "./ProfessionalFilter";
-import type { ViewMode } from "./AgendaView"; // <-- Vamos definir este tipo no AgendaView
+import type { ViewMode } from "./AgendaView";
 
-interface AgendaToolbarProps {
+interface AgendaViewSwitcherProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  selectedProfessionalId: string | null;
-  onSelectProfessional: (id: string | null) => void;
 }
 
-export const AgendaToolbar = ({
+export const AgendaViewSwitcher = ({
   viewMode,
   onViewModeChange,
-  selectedProfessionalId,
-  onSelectProfessional,
-}: AgendaToolbarProps) => {
+}: AgendaViewSwitcherProps) => {
   const viewOptions: { id: ViewMode; icon: React.ReactNode; label: string }[] =
     [
       { id: "card", icon: <LayoutGrid size={18} />, label: "Cards" },
@@ -24,11 +19,9 @@ export const AgendaToolbar = ({
     ];
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-      <ProfessionalFilter
-        selectedProfessionalId={selectedProfessionalId}
-        onSelectProfessional={onSelectProfessional}
-      />
+    <div className="flex items-center justify-end mb-6">
+      {" "}
+      {/* Alinhado à direita para um visual limpo */}
       <div className="flex items-center bg-gray-900 rounded-lg p-1 space-x-1">
         {viewOptions.map((option) => (
           <button

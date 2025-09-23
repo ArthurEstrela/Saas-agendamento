@@ -1,5 +1,4 @@
 // src/store/bookingProcessStore.ts
-
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type {
@@ -28,18 +27,20 @@ interface BookingState {
 
 // Interface para as ações
 interface BookingActions {
-  fetchProviderDetailsById: (providerId: string) => Promise<void>;
+  fetchProviderDetailsById: (
+    providerId: string
+  ) => Promise<ServiceProviderProfile | null>; // Alterado para retornar o perfil
+  syncStateWithFreshProvider: (freshProvider: ServiceProviderProfile) => void; // <-- NOVA FUNÇÃO
   toggleService: (service: Service) => void;
   selectProfessional: (professional: Professional) => void;
   selectDateTime: (date: Date, timeSlot: string) => void;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
-  resetBooking: () => void;
+  resetBooking: (keepProvider?: boolean) => void; // Melhoria para manter o provider ao resetar
   setPendingProviderId: (providerId: string | null) => void;
   confirmBooking: (appointmentData: Omit<Appointment, "id">) => Promise<void>;
 }
 
-// Une as duas em uma única interface para a store
 interface BookingStore extends BookingState, BookingActions {}
 
 const initialState: BookingState = {
@@ -61,24 +62,65 @@ export const useBookingProcessStore = create<BookingStore>()(
     (set, get) => ({
       ...initialState,
 
-      // --- Suas Funções (Actions) ---
       fetchProviderDetailsById: async (providerId) => {
         set({ isLoading: true });
         try {
           const providerProfile = await getUserProfile(providerId);
           if (providerProfile && providerProfile.role === "serviceProvider") {
+            const freshProvider = providerProfile as ServiceProviderProfile;
             set({
-              provider: providerProfile as ServiceProviderProfile,
+              provider: freshProvider,
               isLoading: false,
             });
+            return freshProvider; // Retorna os dados frescos
           } else {
             throw new Error("Prestador não encontrado.");
           }
         } catch (error) {
           console.error("Erro ao buscar detalhes do prestador por ID:", error);
           set({ isLoading: false, provider: null });
+          return null;
         }
       },
+
+      // --- NOVA FUNÇÃO DE SINCRONIZAÇÃO ---
+      // Recebe os dados mais recentes do provedor e valida as seleções salvas
+      syncStateWithFreshProvider: (freshProvider) => {
+        const { selectedServices, professional } = get();
+
+        // 1. Valida os serviços selecionados
+        const validSelectedServices = selectedServices.filter((selected) =>
+          freshProvider.services.some(
+            (freshService) => freshService.id === selected.id
+          )
+        );
+
+        // 2. Valida o profissional selecionado
+        const isProfessionalStillAvailable = freshProvider.professionals.some(
+          (freshProf) => freshProf.id === professional?.id
+        );
+        const validProfessional = isProfessionalStillAvailable
+          ? professional
+          : null;
+
+        // Se alguma seleção foi invalidada, reseta os passos seguintes
+        const shouldResetDateTime =
+          !isProfessionalStillAvailable ||
+          validSelectedServices.length !== selectedServices.length;
+
+        set({
+          provider: freshProvider,
+          selectedServices: validSelectedServices,
+          professional: validProfessional,
+          date: shouldResetDateTime ? null : get().date,
+          timeSlot: shouldResetDateTime ? null : get().timeSlot,
+          // Se o profissional foi removido, volta para a seleção de profissional
+          currentStep:
+            get().currentStep > 2 && !validProfessional ? 2 : get().currentStep,
+          isLoading: false,
+        });
+      },
+
       toggleService: (service) => {
         const { selectedServices } = get();
         const isSelected = selectedServices.some((s) => s.id === service.id);
@@ -94,9 +136,13 @@ export const useBookingProcessStore = create<BookingStore>()(
         set((state) => ({ currentStep: state.currentStep + 1 })),
       goToPreviousStep: () =>
         set((state) => ({ currentStep: state.currentStep - 1 })),
-      resetBooking: () => {
-        const provider = get().provider;
-        set({ ...initialState, provider, isLoading: false });
+      resetBooking: (keepProvider = false) => {
+        const providerToKeep = keepProvider ? get().provider : null;
+        set({
+          ...initialState,
+          provider: providerToKeep,
+          isLoading: !keepProvider,
+        });
       },
       confirmBooking: async (appointmentData) => {
         set({ isBooking: true, bookingError: null });
@@ -117,17 +163,14 @@ export const useBookingProcessStore = create<BookingStore>()(
     {
       name: "booking-storage",
       storage: createJSONStorage(() => localStorage),
-
-      // AQUI ESTÁ A CORREÇÃO PRINCIPAL
       partialize: (state) => ({
+        // Não salvamos mais o 'provider' e 'isLoading'. Eles serão sempre buscados.
         selectedServices: state.selectedServices,
         professional: state.professional,
         date: state.date,
         timeSlot: state.timeSlot,
         currentStep: state.currentStep,
         pendingProviderId: state.pendingProviderId,
-        provider: state.provider,
-        isLoading: state.isLoading,
       }),
     }
   )

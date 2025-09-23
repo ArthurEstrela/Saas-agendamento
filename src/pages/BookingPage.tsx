@@ -52,50 +52,38 @@ export const BookingPage = () => {
     currentStep,
     isLoading,
     fetchProviderDetailsById,
+    syncStateWithFreshProvider,
     resetBooking,
   } = useBookingProcessStore();
 
-  useEffect(() => {
+ useEffect(() => {
     const initializeBooking = async () => {
-      if (!providerId) {
-        return; // Sai se não tiver ID na URL
+      if (!providerId) return;
+
+      const { provider: providerInStore, pendingProviderId } = useBookingProcessStore.getState();
+
+      // Se o provider na URL é diferente do que está no processo pendente,
+      // significa um agendamento totalmente novo. Resetamos tudo.
+      if (providerId !== pendingProviderId) {
+        console.log("Iniciando novo agendamento. Provider ID mudou.");
+        useBookingProcessStore.getState().resetBooking();
+        useBookingProcessStore.getState().setPendingProviderId(providerId); // Marca qual o provider atual
       }
 
-      // "Espiamos" a memória (store) para ver o que está salvo
-      const { provider: currentProviderInStore, isLoading: isStoreLoading } =
-        useBookingProcessStore.getState();
+      console.log("Buscando dados mais recentes do provedor...");
+      const freshProvider = await fetchProviderDetailsById(providerId);
 
-      // CASO 1: É o mesmo agendamento que o usuário estava fazendo?
-      if (currentProviderInStore?.id === providerId) {
-        console.log("Continuando agendamento existente.");
-
-        // CHECAGEM EXTRA: O agendamento salvo ficou travado no "carregando"?
-        if (isStoreLoading) {
-          console.log(
-            "Estado salvo estava 'carregando', buscando dados novamente para destravar."
-          );
-          // Se sim, a gente busca os dados de novo para garantir que o isLoading seja setado para 'false'.
-          await useBookingProcessStore
-            .getState()
-            .fetchProviderDetailsById(providerId);
-        }
-        // Se não estava carregando, não fazemos nada e deixamos o progresso salvo aparecer.
-        return;
+      if (freshProvider) {
+        console.log("Dados frescos recebidos. Sincronizando com o estado local...");
+        // Esta é a mágica: Sincroniza os dados frescos com o que estava salvo
+        syncStateWithFreshProvider(freshProvider);
       }
-
-      // CASO 2: É um agendamento novo para um profissional diferente.
-      console.log("Iniciando novo agendamento para o provider:", providerId);
-      // Resetamos tudo e buscamos os dados do zero.
-      useBookingProcessStore.getState().resetBooking();
-      await useBookingProcessStore
-        .getState()
-        .fetchProviderDetailsById(providerId);
+      // Se freshProvider for nulo, a store já terá setado o erro e a UI vai reagir.
     };
 
     initializeBooking();
-
-    // O efeito só precisa rodar de novo se o ID na URL mudar. Isso quebra qualquer loop.
-  }, [providerId]);
+    
+  }, [providerId, fetchProviderDetailsById, syncStateWithFreshProvider]); // Dependências corretas
 
   const renderCurrentStep = () => {
     switch (currentStep) {

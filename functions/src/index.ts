@@ -116,13 +116,13 @@ export const onAppointmentUpdate = onDocumentUpdated(
     }
 
     // 1. Notificação para o CLIENTE sobre status (Confirmado / Cancelado)
-    // A lógica aqui permanece a mesma, apenas a função chamada muda.
-    if (afterData.status === "confirmed" || afterData.status === "cancelled") {
+    // AQUI ESTÁ A CORREÇÃO: trocamos "confirmed" por "scheduled"
+    if (afterData.status === "scheduled" || afterData.status === "cancelled") {
       const { clientId, serviceName, startTime } = afterData;
       if (!clientId) return;
 
       const { formattedDate, formattedTime } = formatDate(startTime);
-      const isConfirmed = afterData.status === "confirmed";
+      const isConfirmed = afterData.status === "scheduled"; // Ajustado aqui também
 
       const title = isConfirmed
         ? "Agendamento Confirmado!"

@@ -54,35 +54,32 @@ export const BookingPage = () => {
     fetchProviderDetailsById,
     syncStateWithFreshProvider,
     resetBooking,
+    redirectUrlAfterLogin,
   } = useBookingProcessStore();
 
- useEffect(() => {
+  useEffect(() => {
     const initializeBooking = async () => {
       if (!providerId) return;
 
-      const { provider: providerInStore, pendingProviderId } = useBookingProcessStore.getState();
-
       // Se o provider na URL é diferente do que está no processo pendente,
       // significa um agendamento totalmente novo. Resetamos tudo.
-      if (providerId !== pendingProviderId) {
-        console.log("Iniciando novo agendamento. Provider ID mudou.");
-        useBookingProcessStore.getState().resetBooking();
-        useBookingProcessStore.getState().setPendingProviderId(providerId); // Marca qual o provider atual
+      const state = useBookingProcessStore.getState();
+      if (providerId !== state.provider?.id && !state.redirectUrlAfterLogin) {
+        console.log("Iniciando novo agendamento para um provedor diferente.");
+        state.resetBooking();
       }
 
       console.log("Buscando dados mais recentes do provedor...");
       const freshProvider = await fetchProviderDetailsById(providerId);
 
       if (freshProvider) {
-        console.log("Dados frescos recebidos. Sincronizando com o estado local...");
-        // Esta é a mágica: Sincroniza os dados frescos com o que estava salvo
+        console.log("Sincronizando dados frescos com o estado local...");
+        // Esta função é excelente e já resolve o problema de dados "velhos" (stale)
         syncStateWithFreshProvider(freshProvider);
       }
-      // Se freshProvider for nulo, a store já terá setado o erro e a UI vai reagir.
     };
 
     initializeBooking();
-    
   }, [providerId, fetchProviderDetailsById, syncStateWithFreshProvider]); // Dependências corretas
 
   const renderCurrentStep = () => {

@@ -1,12 +1,6 @@
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { useAuthStore } from "../../store/authStore";
-import {
-  Loader2,
-  Calendar,
-  User,
-  Scissors,
-  Clock,
-} from "lucide-react";
+import { Loader2, Calendar, User, Scissors, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useMemo } from "react";
@@ -28,6 +22,7 @@ export const Confirmation = () => {
     goToPreviousStep,
     resetBooking,
     setPendingProviderId,
+    setRedirectUrlAfterLogin,
   } = useBookingProcessStore();
 
   const navigate = useNavigate();
@@ -45,18 +40,17 @@ export const Confirmation = () => {
     );
   }, [selectedServices]);
 
- const handleConfirm = async () => {
+  const handleConfirm = async () => {
     if (!isAuthenticated) {
       if (provider?.id) {
-        // A gente ainda salva na store, como um fallback. Está correto.
-        setPendingProviderId(provider.id);
-
-        // ALTERAÇÃO: Passamos o caminho de volta como um parâmetro na URL
+        // ✨ LÓGICA APRIMORADA
         const redirectPath = `/book/${provider.id}`;
-        // O encodeURIComponent garante que a URL seja formatada corretamente
-        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+        // 1. Salvamos a URL de retorno na nossa store.
+        setRedirectUrlAfterLogin(redirectPath);
+        // 2. Navegamos para o login. Não precisamos mais de query params!
+        navigate(`/login`);
       }
-      return; // Para a execução da função aqui.
+      return;
     }
     // 1. Verificamos se 'user' existe antes de continuar
     if (
@@ -90,7 +84,7 @@ export const Confirmation = () => {
       professionalId: professional.id,
       professionalName: professional.name,
       services: selectedServices,
-      serviceName: serviceName, 
+      serviceName: serviceName,
       startTime,
       endTime,
       status: "pending",

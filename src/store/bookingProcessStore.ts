@@ -22,7 +22,7 @@ interface BookingState {
   isBooking: boolean;
   bookingSuccess: boolean;
   bookingError: string | null;
-  pendingProviderId: string | null;
+  redirectUrlAfterLogin: string | null;
 }
 
 // Interface para as ações
@@ -37,7 +37,7 @@ interface BookingActions {
   goToNextStep: () => void;
   goToPreviousStep: () => void;
   resetBooking: (keepProvider?: boolean) => void; // Melhoria para manter o provider ao resetar
-  setPendingProviderId: (providerId: string | null) => void;
+  setRedirectUrlAfterLogin: (url: string | null) => void;
   confirmBooking: (appointmentData: Omit<Appointment, "id">) => Promise<void>;
 }
 
@@ -54,7 +54,7 @@ const initialState: BookingState = {
   isBooking: false,
   bookingSuccess: false,
   bookingError: null,
-  pendingProviderId: null,
+  redirectUrlAfterLogin: null,
 };
 
 export const useBookingProcessStore = create<BookingStore>()(
@@ -136,14 +136,19 @@ export const useBookingProcessStore = create<BookingStore>()(
         set((state) => ({ currentStep: state.currentStep + 1 })),
       goToPreviousStep: () =>
         set((state) => ({ currentStep: state.currentStep - 1 })),
+
       resetBooking: (keepProvider = false) => {
         const providerToKeep = keepProvider ? get().provider : null;
         set({
           ...initialState,
           provider: providerToKeep,
           isLoading: !keepProvider,
+          redirectUrlAfterLogin: null,
         });
       },
+
+      setRedirectUrlAfterLogin: (url) => set({ redirectUrlAfterLogin: url }),
+
       confirmBooking: async (appointmentData) => {
         set({ isBooking: true, bookingError: null });
         try {
@@ -157,8 +162,6 @@ export const useBookingProcessStore = create<BookingStore>()(
           });
         }
       },
-      setPendingProviderId: (providerId) =>
-        set({ pendingProviderId: providerId }),
     }),
     {
       name: "booking-storage",
@@ -170,7 +173,7 @@ export const useBookingProcessStore = create<BookingStore>()(
         date: state.date,
         timeSlot: state.timeSlot,
         currentStep: state.currentStep,
-        pendingProviderId: state.pendingProviderId,
+        redirectUrlAfterLogin: state.redirectUrlAfterLogin,
       }),
     }
   )

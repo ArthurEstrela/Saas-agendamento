@@ -1,38 +1,26 @@
 import { useAuthStore } from "../store/authStore";
 import { LoginForm } from "../components/auth/LoginForm";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useBookingProcessStore } from "../store/bookingProcessStore";
 import logo from "../assets/stylo-logo.png";
 import type { UserProfile } from "../types";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // 2. Hook para ler informações da URL atual
   const { error: authError } = useAuthStore();
-  const { pendingProviderId, setPendingProviderId } = useBookingProcessStore();
+  const { redirectUrlAfterLogin, setRedirectUrlAfterLogin } =
+    useBookingProcessStore();
 
-  const handleLoginSuccess = (user: UserProfile) => {
-    // 3. Lógica de redirecionamento APRIMORADA
-
-    // Primeiro, procuramos na URL por uma instrução de redirect.
-    const params = new URLSearchParams(location.search);
-    const redirectPath = params.get("redirect");
-
-    if (redirectPath) {
-      // Se encontramos, essa é a nossa prioridade máxima.
-      navigate(redirectPath);
-      setPendingProviderId(null); // Limpamos a store por segurança.
-      return; // Encerra a função aqui.
-    }
-
-    // Se não tiver na URL, tentamos a store (como já estava).
-    if (pendingProviderId) {
-      navigate(`/book/${pendingProviderId}`);
-      setPendingProviderId(null);
+const handleLoginSuccess = (user: UserProfile) => {
+    // ✨ LÓGICA DE REDIRECIONAMENTO SIMPLIFICADA E ROBUSTA
+    if (redirectUrlAfterLogin) {
+      const url = redirectUrlAfterLogin;
+      setRedirectUrlAfterLogin(null); // Limpamos a intenção
+      navigate(url); // E redirecionamos
       return;
     }
 
-    // Se não tiver em nenhum dos dois, vai para o dashboard.
+    // Se não há intenção de redirecionamento, fluxo padrão.
     switch (user.role) {
       case "serviceProvider":
       case "client":

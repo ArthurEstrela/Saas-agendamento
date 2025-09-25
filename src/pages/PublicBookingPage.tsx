@@ -37,6 +37,7 @@ const PublicBookingPage = () => {
           setProvider(profile);
         }
       } catch (err) {
+        console.error("Falha ao carregar o perfil público:", err);
         setError("Ocorreu um erro ao carregar o perfil.");
       } finally {
         setIsLoading(false);

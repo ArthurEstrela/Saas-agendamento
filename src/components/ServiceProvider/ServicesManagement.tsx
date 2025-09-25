@@ -5,6 +5,7 @@ import { ServiceModal } from "./ServiceModal";
 import { ServiceCard } from "./ServiceCard";
 import { ConfirmationModal } from "../Common/ConfirmationModal";
 import { Loader2, ListPlus, Wrench } from "lucide-react";
+import type { Service } from "../../types";
 
 export const ServicesManagement = () => {
   const { userProfile } = useProfileStore();
@@ -16,9 +17,12 @@ export const ServicesManagement = () => {
   } = useServiceManagementStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState(null);
+  const [editingService, setEditingService] = useState<Service | null>(null);
 
-  const [confirmationState, setConfirmationState] = useState({
+  const [confirmationState, setConfirmationState] = useState<{
+    isOpen: boolean;
+    serviceToDelete: Service | null;
+  }>({
     isOpen: false,
     serviceToDelete: null,
   });
@@ -28,7 +32,7 @@ export const ServicesManagement = () => {
       ? userProfile.services
       : [];
 
-  const handleOpenModal = (service = null) => {
+  const handleOpenModal = (service: Service | null = null) => {
     setEditingService(service);
     setIsModalOpen(true);
   };
@@ -38,17 +42,17 @@ export const ServicesManagement = () => {
     setEditingService(null);
   };
 
-  const handleSaveService = async (data) => {
+  const handleSaveService = async (data: Omit<Service, "id">) => {
     if (!userProfile) return;
     if (editingService) {
-      await updateService(userProfile.id, { ...editingService, ...data });
+      await updateService(userProfile.id, editingService.id, data);
     } else {
       await addService(userProfile.id, data);
     }
     handleCloseModal();
   };
 
-  const handleDeleteRequest = (service) => {
+  const handleDeleteRequest = (service: Service) => {
     setConfirmationState({ isOpen: true, serviceToDelete: service });
   };
 

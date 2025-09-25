@@ -1,4 +1,11 @@
-import { useState, useEffect, useCallback, forwardRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  forwardRef,
+  type InputHTMLAttributes,
+  type ElementType,
+} from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { ServiceProviderProfile } from "../../types";
 import {
@@ -16,23 +23,39 @@ import {
   Facebook,
   Image as ImageIcon,
   Crop,
+  type LucideProps,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   uploadProviderLogo,
   uploadProviderBanner,
 } from "../../firebase/userService";
-import { useForm, type SubmitHandler, Controller } from "react-hook-form";
+import {
+  useForm,
+  type SubmitHandler,
+  Controller,
+  type FieldError,
+  type FieldValues,
+  type Control,
+  type Path,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useViaCep } from "../../hooks/useViaCep";
 import { IMaskInput } from "react-imask";
 import Cropper, { type Area } from "react-easy-crop";
 import getCroppedImg from "../utils/cropImage";
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  useMapEvents,
+  useMap,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import L, { LatLng } from "leaflet";
 
-// @ts-ignore
+// @ts-expect-error - O Vite pode ter problemas com o carregamento de assets do Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -40,6 +63,27 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
+
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string;
+  icon?: ElementType<LucideProps>;
+  error?: FieldError;
+}
+
+interface MaskedInputFieldProps<T extends FieldValues> {
+  control: Control<T>;
+  name: Path<T>;
+  label: string;
+  mask: string; // A máscara é geralmente uma string
+  icon: ElementType<LucideProps>;
+  error?: FieldError;
+  placeholder?: string;
+  onBlur?: () => void; // Função opcional de onBlur
+}
+
+interface MapEventsProps {
+  onLocationSelect: (latlng: LatLng) => void;
+}
 
 const ChangeView = ({
   center,
@@ -55,13 +99,17 @@ const ChangeView = ({
   return null;
 };
 
-const MapEvents = ({ onLocationSelect }) => {
+const MapEvents = ({ onLocationSelect }: MapEventsProps) => {
+  const [position, setPosition] = useState<LatLng | null>(null);
+
   useMapEvents({
     click(e) {
+      setPosition(e.latlng);
       onLocationSelect(e.latlng);
     },
   });
-  return null;
+
+  return position === null ? null : <Marker position={position}></Marker>;
 };
 
 // Schema e componentes de Input não mudam...
@@ -91,30 +139,55 @@ const profileSchema = z.object({
 });
 type ProfileFormData = z.infer<typeof profileSchema>;
 
-const InputField = forwardRef(
-  ({ label, id, icon: Icon, error, ...props }: any, ref) => (
-    <div>
-      <label htmlFor={id} className="label-text">
-        {label}
-      </label>
-      <div className="input-container mt-1">
-        {Icon && <Icon className="input-icon" size={18} />}
-        <input
-          ref={ref}
-          id={id}
-          {...props}
-          className={`input-field ${Icon ? "pl-10" : ""} ${
-            props.disabled ? "bg-gray-800/50 cursor-not-allowed" : ""
-          }`}
-        />
-      </div>
-      {error && <p className="error-message mt-1">{error?.message}</p>}
-    </div>
-  )
-);
-InputField.displayName = "InputField";
+export const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ label, id, icon: Icon, error, ...props }, ref) => {
+    const hasError = !!error;
 
-const MaskedInputField = ({
+    return (
+      <div className="relative flex flex-col">
+        <label htmlFor={id} className="mb-2 text-sm font-medium text-gray-300">
+          {label}
+        </label>
+        <div className="relative">
+          {/* Adicionamos uma verificação para só renderizar o ícone se ele for passado */}
+          {Icon && (
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <Icon
+                className={`h-5 w-5 ${
+                  hasError ? "text-red-400" : "text-gray-400"
+                }`}
+                aria-hidden="true"
+              />
+            </span>
+          )}
+          <input
+            id={id}
+            ref={ref}
+            // Adiciona padding à esquerda somente se houver um ícone
+            className={`block w-full rounded-md border-0 bg-white/5 py-3 ${
+              Icon ? "pl-10" : "pl-3"
+            } pr-3 text-white shadow-sm ring-1 ring-inset ${
+              hasError
+                ? "ring-red-500 focus:ring-red-500"
+                : "ring-gray-600 focus:ring-amber-500"
+            } placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6 transition-all duration-200`}
+            {...props}
+          />
+        </div>
+        {error && (
+          <p className="mt-2 text-sm text-red-400" id={`${id}-error`}>
+            {error.message}
+          </p>
+        )}
+      </div>
+    );
+  }
+);
+
+// Definir um displayName é uma boa prática para depuração
+Input.displayName = "Input";
+
+export const MaskedInputField = <T extends FieldValues>({
   control,
   name,
   label,
@@ -123,33 +196,61 @@ const MaskedInputField = ({
   error,
   placeholder,
   onBlur,
-}: any) => (
-  <div>
-    <label htmlFor={name} className="label-text">
-      {label}
-    </label>
+}: MaskedInputFieldProps<T>) => {
+  const hasError = !!error;
+
+  return (
     <Controller
       name={name}
       control={control}
       render={({ field }) => (
-        <div className="input-container mt-1">
-          {Icon && <Icon className="input-icon" size={18} />}
-          <IMaskInput
-            {...field}
-            mask={mask}
-            id={name}
-            placeholder={placeholder}
-            onBlur={onBlur}
-            className={`input-field pl-10 ${error ? "border-red-500" : ""}`}
-          />
+        <div className="relative flex flex-col">
+          <label
+            htmlFor={name}
+            className="mb-2 text-sm font-medium text-gray-300"
+          >
+            {label}
+          </label>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+              <Icon
+                className={`h-5 w-5 ${
+                  hasError ? "text-red-400" : "text-gray-400"
+                }`}
+                aria-hidden="true"
+              />
+            </span>
+            <IMaskInput
+              mask={mask}
+              id={name}
+              value={field.value || ""}
+              onAccept={(value: unknown) => field.onChange(value)} // 3. Usar onAccept para compatibilidade
+              onBlur={() => {
+                field.onBlur();
+                if (onBlur) {
+                  onBlur();
+                }
+              }}
+              placeholder={placeholder}
+              className={`block w-full rounded-md border-0 bg-white/5 py-3 pl-10 pr-3 text-white shadow-sm ring-1 ring-inset ${
+                hasError
+                  ? "ring-red-500 focus:ring-red-500"
+                  : "ring-gray-600 focus:ring-amber-500"
+              } placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6 transition-all duration-200`}
+            />
+          </div>
+          {error && (
+            <p className="mt-2 text-sm text-red-400" id={`${name}-error`}>
+              {error.message}
+            </p>
+          )}
         </div>
       )}
     />
-    {error && <p className="error-message mt-1">{error.message}</p>}
-  </div>
-);
+  );
+};
 
-export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
+export const ProfileManagement = () => {
   const { userProfile, updateUserProfile } = useProfileStore();
 
   // Estados de UI
@@ -274,22 +375,27 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && userProfile) {
+
+    // Adicionamos a verificação de 'role' aqui
+    if (file && userProfile && userProfile.role === "serviceProvider") {
       setIsUploadingLogo(true);
       const tempUrl = URL.createObjectURL(file);
       setLogoPreview(tempUrl);
 
       try {
         const photoURL = await uploadProviderLogo(userProfile.id, file);
-        // AQUI ESTÁ A MÁGICA: Salva a alteração da logo imediatamente
         await updateUserProfile(userProfile.id, { logoUrl: photoURL });
         // Opcional: mostrar um toast de sucesso
       } catch (error) {
         console.error("Erro no upload do logo:", error);
-        setLogoPreview(userProfile.logoUrl || null); // Reverte o preview em caso de erro
+
+        // Correção: Envolvemos a linha em outra verificação para garantir
+        // que o TypeScript entenda o tipo de userProfile aqui também.
+        if (userProfile.role === "serviceProvider") {
+          setLogoPreview(userProfile.logoUrl || null); // Reverte o preview em caso de erro
+        }
       } finally {
         setIsUploadingLogo(false);
-        // Não precisamos mais de `URL.revokeObjectURL(tempUrl)` pois o componente vai re-renderizar com a nova URL final
       }
     }
   };
@@ -332,7 +438,9 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
       // Opcional: mostrar um toast de sucesso
     } catch (e) {
       console.error(e);
-      setBannerPreview(userProfile.bannerUrl || null); // Reverte o preview em caso de erro
+      if (userProfile.role === "serviceProvider") {
+        setBannerPreview(userProfile.bannerUrl || null);
+      }
     } finally {
       setIsUploadingBanner(false);
     }
@@ -483,28 +591,28 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
             Informações do Negócio
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <InputField
+            <Input
               label="Nome do Negócio"
               id="businessName"
               icon={Building}
               error={errors.businessName}
               {...register("businessName")}
             />
-            <InputField
+            <Input
               label="CNPJ"
               id="cnpj"
               icon={UserCheck}
               {...register("cnpj")}
               disabled
             />
-            <InputField
+            <Input
               label="Nome do Responsável"
               id="name"
               icon={User}
               error={errors.name}
               {...register("name")}
             />
-            <InputField
+            <Input
               label="E-mail de Contato"
               id="email"
               icon={Mail}
@@ -544,7 +652,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               {cepError && <p className="error-message mt-1">{cepError}</p>}
             </div>
             <div className="md:col-span-4">
-              <InputField
+              <Input
                 label="Rua / Logradouro"
                 id="street"
                 error={errors.businessAddress?.street}
@@ -552,7 +660,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               />
             </div>
             <div className="md:col-span-2">
-              <InputField
+              <Input
                 label="Número"
                 id="number"
                 error={errors.businessAddress?.number}
@@ -560,7 +668,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               />
             </div>
             <div className="md:col-span-4">
-              <InputField
+              <Input
                 label="Bairro"
                 id="neighborhood"
                 error={errors.businessAddress?.neighborhood}
@@ -568,7 +676,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               />
             </div>
             <div className="md:col-span-4">
-              <InputField
+              <Input
                 label="Cidade"
                 id="city"
                 error={errors.businessAddress?.city}
@@ -576,7 +684,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               />
             </div>
             <div className="md:col-span-2">
-              <InputField
+              <Input
                 label="Estado (UF)"
                 id="state"
                 error={errors.businessAddress?.state}
@@ -612,7 +720,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
             Redes Sociais & Website
           </h2>
           <div className="space-y-4">
-            <InputField
+            <Input
               label="Instagram"
               id="instagram"
               icon={Instagram}
@@ -620,7 +728,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               {...register("socialLinks.instagram")}
               placeholder="https://instagram.com/seu_negocio"
             />
-            <InputField
+            <Input
               label="Facebook"
               id="facebook"
               icon={Facebook}
@@ -628,7 +736,7 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
               {...register("socialLinks.facebook")}
               placeholder="https://facebook.com/seu_negocio"
             />
-            <InputField
+            <Input
               label="Website"
               id="website"
               icon={LinkIcon}

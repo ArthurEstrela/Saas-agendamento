@@ -11,7 +11,7 @@ import { ProfileManagement } from "./ServiceProvider/ProfileManagement";
 import { ServicesManagement } from "./ServiceProvider/ServicesManagement";
 import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 import { Notifications } from "./Common/Notifications";
-// ... importe as outras seções quando estiverem prontas
+import { Menu } from "lucide-react";
 
 // Tipagem para garantir que apenas seções válidas sejam chamadas
 export type ProviderDashboardView =
@@ -63,13 +63,13 @@ const ServiceProviderDashboard = () => {
       <main className="bg-gray-900/65 flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
         {/* Botão de menu para mobile */}
         <div className="md:hidden flex justify-between items-center mb-6">
-          <button
-            onClick={() => setIsMobileNavOpen(true)}
-            className="text-gray-300"
-          >
-            {/* Substitua por um ícone se preferir, como <Menu size={28} /> */}
-          </button>
-          <span className="text-xl font-bold text-white">Stylo</span>
+            <button
+                onClick={() => setIsMobileNavOpen(true)}
+                className="text-gray-300 p-2"
+            >
+                <Menu size={28} />
+            </button>
+            <span className="text-xl font-bold text-white">Stylo</span>
         </div>
         {renderContent()}
       </main>

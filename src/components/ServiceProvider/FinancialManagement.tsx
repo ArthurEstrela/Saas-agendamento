@@ -22,7 +22,7 @@ import {
 import type { Expense } from "../../types";
 import { ExpenseModal } from "./ExpenseModal";
 
-// Card para exibir métricas principais
+// Card para exibir métricas principais (sem alterações)
 const StatCard = ({
   title,
   value,
@@ -69,16 +69,15 @@ export const FinancialManagement = () => {
   ) => {
     if (userProfile?.id) {
       await addNewExpense(userProfile.id, expenseData);
-      setExpenseModalOpen(false); // Fecha o modal após salvar
+      setExpenseModalOpen(false);
     }
   };
 
-  // Prepara os dados para o gráfico
   const chartData = useMemo(() => {
     if (!financialData?.monthlyRevenue) return [];
     return Object.entries(financialData.monthlyRevenue)
       .map(([month, revenue]) => ({ name: month, Faturamento: revenue }))
-      .sort((a, b) => a.name.localeCompare(b.name)); // Ordena por mês
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [financialData]);
 
   const formatCurrency = (value: number) =>
@@ -138,7 +137,7 @@ export const FinancialManagement = () => {
       </div>
 
       {/* Seção do Gráfico */}
-      <div className="bg-gray-800/70 p-6 rounded-xl border border-gray-700 mb-10">
+      <div className="bg-gray-800/70 p-4 sm:p-6 rounded-xl border border-gray-700 mb-10">
         <h2 className="text-xl font-semibold text-white mb-4">
           Faturamento Mensal
         </h2>
@@ -146,9 +145,10 @@ export const FinancialManagement = () => {
           <ResponsiveContainer>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
-              <XAxis dataKey="name" stroke="#9CA3AF" />
+              <XAxis dataKey="name" stroke="#9CA3AF" fontSize={12} />
               <YAxis
                 stroke="#9CA3AF"
+                fontSize={12}
                 tickFormatter={(value) => formatCurrency(Number(value))}
               />
               <Tooltip
@@ -165,20 +165,22 @@ export const FinancialManagement = () => {
         </div>
       </div>
 
-      {/* Seção de Despesas */}
+      {/* Seção de Despesas com Layout Responsivo */}
       <div>
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
           <h2 className="text-xl font-semibold text-white">
             Registro de Despesas
           </h2>
           <button
             onClick={() => setExpenseModalOpen(true)}
-            className="flex items-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors"
+            className="flex items-center justify-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors w-full sm:w-auto"
           >
             <PlusCircle size={20} /> Adicionar Despesa
           </button>
         </div>
-        <div className="bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden">
+        
+        {/* Tabela para telas maiores */}
+        <div className="hidden md:block bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-gray-900/50">
               <tr>
@@ -216,12 +218,41 @@ export const FinancialManagement = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Lista de Cards para telas menores */}
+        <div className="md:hidden space-y-4">
+            {financialData.expenses.map((expense) => (
+                 <div key={expense.id} className="bg-gray-800/70 p-4 rounded-xl border border-gray-700">
+                     <div className="flex justify-between items-start">
+                         <div>
+                             <p className="font-semibold text-white">{expense.description}</p>
+                             <p className="text-sm text-gray-400">{expense.category}</p>
+                         </div>
+                         <button
+                            onClick={() => userProfile?.id && removeExpense(userProfile.id, expense.id)}
+                            className="text-gray-500 hover:text-red-400 p-1"
+                         >
+                             <Trash2 size={18} />
+                         </button>
+                     </div>
+                     <div className="flex justify-between items-end mt-2">
+                         <span className="text-xs text-gray-500">
+                             {new Date(expense.date).toLocaleDateString("pt-BR")}
+                         </span>
+                         <span className="font-bold text-red-400 text-lg">
+                             {formatCurrency(expense.amount)}
+                         </span>
+                     </div>
+                 </div>
+            ))}
+        </div>
+
       </div>
       <ExpenseModal
         isOpen={isExpenseModalOpen}
         onClose={() => setExpenseModalOpen(false)}
         onSave={handleSaveExpense}
-        isLoading={isLoading} // Você pode usar um estado de loading específico se preferir
+        isLoading={isLoading}
       />
     </div>
   );

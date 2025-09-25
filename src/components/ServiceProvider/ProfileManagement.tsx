@@ -29,7 +29,7 @@ import { useViaCep } from "../../hooks/useViaCep";
 import { IMaskInput } from "react-imask";
 import Cropper, { type Area } from "react-easy-crop";
 import getCroppedImg from "../utils/cropImage";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 // @ts-ignore

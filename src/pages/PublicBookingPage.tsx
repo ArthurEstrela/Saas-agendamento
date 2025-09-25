@@ -10,8 +10,12 @@ import {
   Calendar,
   Star,
   Scissors,
+  Instagram,
+  Facebook,
+  Globe,
 } from "lucide-react";
 import { PublicReviewsSection } from "../components/Public/PublicReviewsSection";
+import { FaWhatsapp } from "react-icons/fa";
 
 const PublicBookingPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -122,6 +126,51 @@ const PublicBookingPage = () => {
                     </span>
                   )}
                 </div>
+              )}
+            </div>
+            <div className="flex items-center justify-center sm:justify-start gap-3 mt-4">
+              {provider.socialLinks?.instagram && (
+                <a
+                  href={provider.socialLinks.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-[#daa520] transition-colors"
+                >
+                  <Instagram size={22} />
+                </a>
+              )}
+              {provider.socialLinks?.facebook && (
+                <a
+                  href={provider.socialLinks.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-[#daa520] transition-colors"
+                >
+                  <Facebook size={22} />
+                </a>
+              )}
+              {provider.socialLinks?.whatsapp && (
+                <a
+                  href={`https://wa.me/${provider.socialLinks.whatsapp.replace(
+                    /\D/g,
+                    ""
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-green-500 transition-colors"
+                >
+                  <FaWhatsapp size={22} />
+                </a>
+              )}
+              {provider.socialLinks?.website && (
+                <a
+                  href={provider.socialLinks.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-[#daa520] transition-colors"
+                >
+                  <Globe size={22} />
+                </a>
               )}
             </div>
             <button

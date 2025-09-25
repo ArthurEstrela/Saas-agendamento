@@ -112,7 +112,10 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
           />
           <div className="flex items-center text-gray-500 mt-4 text-xs">
             <MapPin size={14} className="mr-2 flex-shrink-0" />
-            <span>{`${provider.businessAddress.city}, ${provider.businessAddress.state}`}</span>
+            <span>
+              {`${provider.businessAddress.city}, ${provider.businessAddress.state}`}
+              {provider.distance && ` - ${provider.distance.toFixed(1)} km`}
+            </span>
           </div>
         </div>
       </Link>

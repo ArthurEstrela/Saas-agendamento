@@ -1,9 +1,10 @@
-import { useState, useEffect, forwardRef } from "react";
+import { useState, useEffect, forwardRef, useCallback } from "react";
 import { useForm, type SubmitHandler, Controller } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { IMaskInput } from "react-imask";
+import L from "leaflet";
 import {
   Loader2,
   Instagram,
@@ -25,41 +26,64 @@ import type { PaymentMethod, ServiceProviderProfile } from "../../types";
 import { useAuthStore } from "../../store/authStore";
 import { useViaCep } from "../../hooks/useViaCep";
 import { StepProgressBar } from "./StepProgressBar";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  useMapEvents,
+  useMap,
+} from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 
-// Validação com Zod, agora com mensagens mais amigáveis em português.
+// --- Correção do Ícone Padrão do Leaflet ---
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+});
+
+// --- COMPONENTES AUXILIARES DO MAPA ---
+const ChangeView = ({
+  center,
+  zoom,
+}: {
+  center: [number, number];
+  zoom: number;
+}) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+};
+
+const MapEvents = ({ onLocationSelect }) => {
+  useMapEvents({
+    click(e) {
+      onLocationSelect(e.latlng);
+    },
+  });
+  return null;
+};
+
+// --- VALIDAÇÃO COM ZOD ---
 const schema = z.object({
-  // Etapa 1: Dados Pessoais
   name: z.string().min(3, "Nome completo é obrigatório"),
   email: z.string().email("Por favor, insira um email válido"),
   password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
-
-  // Etapa 2: Detalhes do Negócio
   businessName: z.string().min(2, "O nome do negócio é obrigatório"),
   cnpj: z
     .string()
     .refine((cnpj) => cnpj.replace(/\D/g, "").length === 14, "CNPJ inválido"),
   businessPhone: z.string().min(14, "O telefone/WhatsApp é obrigatório"),
   areaOfWork: z.string().min(3, "A área de atuação é obrigatória"),
-
-  // Etapa 3: Presença Online
-  instagram: z
-    .string()
-    .url("Insira uma URL válida para o Instagram")
-    .optional()
-    .or(z.literal("")),
-  facebook: z
-    .string()
-    .url("Insira uma URL válida para o Facebook")
-    .optional()
-    .or(z.literal("")),
-  website: z
-    .string()
-    .url("Insira uma URL válida para o seu website")
-    .optional()
-    .or(z.literal("")),
+  instagram: z.string().url("URL inválida").optional().or(z.literal("")),
+  facebook: z.string().url("URL inválida").optional().or(z.literal("")),
+  website: z.string().url("URL inválida").optional().or(z.literal("")),
   paymentMethods: z.array(z.string()).optional(),
-
-  // Etapa 4: Endereço
   zipCode: z
     .string()
     .refine((zip) => zip.replace(/\D/g, "").length === 8, "CEP inválido"),
@@ -68,6 +92,8 @@ const schema = z.object({
   neighborhood: z.string().min(1, "O bairro é obrigatório"),
   city: z.string().min(1, "A cidade é obrigatória"),
   state: z.string().min(2, "O estado (UF) é obrigatório"),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 });
 
 type ProviderFormData = z.infer<typeof schema>;
@@ -84,7 +110,6 @@ const paymentOptions: {
 
 const InputField = forwardRef(({ icon: Icon, error, ...props }: any, ref) => (
   <div className="relative">
-    {/* Só mostra o ícone se ele for fornecido */}
     {Icon && (
       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
         <Icon className="text-gray-400" size={20} />
@@ -102,6 +127,7 @@ const InputField = forwardRef(({ icon: Icon, error, ...props }: any, ref) => (
 ));
 InputField.displayName = "InputField";
 
+// --- COMPONENTE PRINCIPAL ---
 export const ServiceProviderRegisterForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const { signup, isSubmitting, error: authError } = useAuthStore();
@@ -126,7 +152,16 @@ export const ServiceProviderRegisterForm = () => {
     mode: "onTouched",
   });
 
+  const [position, setPosition] = useState<L.LatLng | null>(null);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([
+    -15.79, -47.88,
+  ]);
+  const [mapZoom, setMapZoom] = useState(4);
+
   const zipCodeValue = watch("zipCode");
+  const streetValue = watch("street");
+  const numberValue = watch("number");
+  const cityValue = watch("city");
 
   useEffect(() => {
     if (address) {
@@ -136,6 +171,40 @@ export const ServiceProviderRegisterForm = () => {
       setValue("state", address.uf, { shouldValidate: true });
     }
   }, [address, setValue]);
+
+  const fetchCoordinates = useCallback(async () => {
+    if (streetValue && numberValue && cityValue) {
+      try {
+        const query = encodeURIComponent(
+          `${streetValue}, ${numberValue}, ${cityValue}`
+        );
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`
+        );
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const { lat, lon } = data[0];
+          const newPos = new L.LatLng(parseFloat(lat), parseFloat(lon));
+          setPosition(newPos);
+          setMapCenter([newPos.lat, newPos.lng]);
+          setMapZoom(17);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar geolocalização:", error);
+      }
+    }
+  }, [streetValue, numberValue, cityValue]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchCoordinates();
+    }, 1200);
+    return () => clearTimeout(handler);
+  }, [streetValue, numberValue, cityValue, fetchCoordinates]);
+
+  const handleMapClick = (latlng: L.LatLng) => {
+    setPosition(latlng);
+  };
 
   const handleCepBlur = () => {
     const cleanedZip = zipCodeValue?.replace(/\D/g, "") || "";
@@ -156,7 +225,6 @@ export const ServiceProviderRegisterForm = () => {
       ];
     if (currentStep === 3)
       fieldsToValidate = ["instagram", "facebook", "website"];
-
     const isValid = await trigger(fieldsToValidate);
     if (isValid) setCurrentStep((prev) => prev + 1);
   };
@@ -182,6 +250,8 @@ export const ServiceProviderRegisterForm = () => {
         neighborhood: data.neighborhood,
         city: data.city,
         state: data.state,
+        lat: position?.lat,
+        lng: position?.lng,
       },
     };
     try {
@@ -192,7 +262,6 @@ export const ServiceProviderRegisterForm = () => {
         "serviceProvider",
         additionalData
       );
-
       navigate("/dashboard");
     } catch (error) {
       console.error("Falha no cadastro:", error);
@@ -237,7 +306,6 @@ export const ServiceProviderRegisterForm = () => {
             />
           </section>
         )}
-
         {currentStep === 2 && (
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white text-center">
@@ -255,7 +323,6 @@ export const ServiceProviderRegisterForm = () => {
               {...register("areaOfWork")}
               placeholder="Área de atuação (Ex: Barbearia)"
             />
-
             <Controller
               name="cnpj"
               control={control}
@@ -280,7 +347,6 @@ export const ServiceProviderRegisterForm = () => {
                 </div>
               )}
             />
-
             <Controller
               name="businessPhone"
               control={control}
@@ -309,7 +375,6 @@ export const ServiceProviderRegisterForm = () => {
             />
           </section>
         )}
-
         {currentStep === 3 && (
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white text-center">
@@ -362,7 +427,6 @@ export const ServiceProviderRegisterForm = () => {
             </div>
           </section>
         )}
-
         {currentStep === 4 && (
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white text-center">
@@ -447,11 +511,28 @@ export const ServiceProviderRegisterForm = () => {
             {cepError && (
               <p className="error-message text-center">{cepError}</p>
             )}
+            <div className="mt-4">
+              <label className="label-text">Localização no Mapa</label>
+              <p className="text-xs text-gray-400 mb-2">
+                A posição será encontrada automaticamente. Clique no mapa para
+                ajustar.
+              </p>
+              <div className="h-80 w-full rounded-lg overflow-hidden border-2 border-gray-700">
+                <MapContainer
+                  center={mapCenter}
+                  zoom={mapZoom}
+                  style={{ height: "100%", width: "100%" }}
+                >
+                  <ChangeView center={mapCenter} zoom={mapZoom} />
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <MapEvents onLocationSelect={handleMapClick} />
+                  {position && <Marker position={position}></Marker>}
+                </MapContainer>
+              </div>
+            </div>
           </section>
         )}
-
         {authError && <p className="error-message text-center">{authError}</p>}
-
         <div className="flex items-center pt-4 gap-4">
           {currentStep > 1 ? (
             <button
@@ -464,7 +545,6 @@ export const ServiceProviderRegisterForm = () => {
           ) : (
             <div className="w-1/3"></div>
           )}
-
           {currentStep < 4 && (
             <button
               type="button"
@@ -474,7 +554,6 @@ export const ServiceProviderRegisterForm = () => {
               Avançar
             </button>
           )}
-
           {currentStep === 4 && (
             <button
               type="submit"

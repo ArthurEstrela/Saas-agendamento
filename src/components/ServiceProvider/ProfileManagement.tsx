@@ -29,7 +29,40 @@ import { useViaCep } from "../../hooks/useViaCep";
 import { IMaskInput } from "react-imask";
 import Cropper, { type Area } from "react-easy-crop";
 import getCroppedImg from "../utils/cropImage";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+});
+
+const ChangeView = ({
+  center,
+  zoom,
+}: {
+  center: [number, number];
+  zoom: number;
+}) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+};
+
+const MapEvents = ({ onLocationSelect }) => {
+  useMapEvents({
+    click(e) {
+      onLocationSelect(e.latlng);
+    },
+  });
+  return null;
+};
 
 // Schema e componentes de Input não mudam...
 const profileSchema = z.object({
@@ -57,31 +90,29 @@ const profileSchema = z.object({
     .optional(),
 });
 type ProfileFormData = z.infer<typeof profileSchema>;
-const InputField = ({
-  label,
-  id,
-  icon: Icon,
-  error,
-  children,
-  ...props
-}: any) => (
-  <div>
-    <label htmlFor={id} className="label-text"></label>
 
-    <div className="input-container mt-1">
-      {Icon && <Icon className="input-icon" size={18} />}
-
-      <input
-        id={id}
-        {...props}
-        className={`input-field ${Icon ? "pl-10" : ""} ${
-          props.disabled ? "bg-gray-800/50 cursor-not-allowed" : ""
-        }`}
-      />
+const InputField = forwardRef(
+  ({ label, id, icon: Icon, error, ...props }: any, ref) => (
+    <div>
+      <label htmlFor={id} className="label-text">
+        {label}
+      </label>
+      <div className="input-container mt-1">
+        {Icon && <Icon className="input-icon" size={18} />}
+        <input
+          ref={ref}
+          id={id}
+          {...props}
+          className={`input-field ${Icon ? "pl-10" : ""} ${
+            props.disabled ? "bg-gray-800/50 cursor-not-allowed" : ""
+          }`}
+        />
+      </div>
+      {error && <p className="error-message mt-1">{error?.message}</p>}
     </div>
-    {error && <p className="error-message mt-1">{error?.message}</p>}
-  </div>
+  )
 );
+InputField.displayName = "InputField";
 
 const MaskedInputField = ({
   control,
@@ -94,21 +125,21 @@ const MaskedInputField = ({
   onBlur,
 }: any) => (
   <div>
-    <label htmlFor={name} className="label-text"></label>
-
+    <label htmlFor={name} className="label-text">
+      {label}
+    </label>
     <Controller
       name={name}
       control={control}
       render={({ field }) => (
         <div className="input-container mt-1">
           {Icon && <Icon className="input-icon" size={18} />}
-
           <IMaskInput
             {...field}
             mask={mask}
             id={name}
             placeholder={placeholder}
-            onBlur={onBlur} // Passando o onBlur para o IMaskInput
+            onBlur={onBlur}
             className={`input-field pl-10 ${error ? "border-red-500" : ""}`}
           />
         </div>
@@ -119,14 +150,16 @@ const MaskedInputField = ({
 );
 
 export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
-  const { userProfile, updateUserProfile } = useProfileStore(); // Removido setUserProfile, pois updateUserProfile já faz isso
-  const [isSaving, setIsSaving] = useState(false);
+  const { userProfile, updateUserProfile } = useProfileStore();
 
+  // Estados de UI
+  const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+
+  // Estados do Cropper
   const [bannerToCrop, setBannerToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -147,7 +180,18 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
     },
   });
 
+  // Estados do Mapa
+  const [position, setPosition] = useState<L.LatLng | null>(null);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([
+    -15.79, -47.88,
+  ]);
+  const [mapZoom, setMapZoom] = useState(4);
+
+  // Observadores para endereço e CEP
   const cepValue = watch("businessAddress.zipCode");
+  const streetValue = watch("businessAddress.street");
+  const numberValue = watch("businessAddress.number");
+  const cityValue = watch("businessAddress.city");
   const {
     address,
     loading: cepLoading,
@@ -158,17 +202,74 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
   useEffect(() => {
     if (userProfile && userProfile.role === "serviceProvider") {
       const profile = userProfile as ServiceProviderProfile;
-      reset(profile); // Popula o formulário
+      reset(profile);
       setLogoPreview(profile.logoUrl || null);
       setBannerPreview(profile.bannerUrl || null);
+
+      const { lat, lng } = profile.businessAddress;
+      if (lat && lng) {
+        const initialPos = new L.LatLng(lat, lng);
+        setPosition(initialPos);
+        setMapCenter([lat, lng]);
+        setMapZoom(17);
+      }
     }
   }, [userProfile, reset]);
 
-  const handleCepSearch = useCallback(() => {
-    /* ... */
-  }, []);
+  const fetchCoordinates = useCallback(async () => {
+    if (streetValue && numberValue && cityValue) {
+      try {
+        const query = encodeURIComponent(
+          `${streetValue}, ${numberValue}, ${cityValue}`
+        );
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`
+        );
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const { lat, lon } = data[0];
+          const newPos = new L.LatLng(parseFloat(lat), parseFloat(lon));
+          setPosition(newPos);
+          setMapCenter([newPos.lat, newPos.lng]);
+          setMapZoom(17);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar geolocalização:", error);
+      }
+    }
+  }, [streetValue, numberValue, cityValue]);
+
   useEffect(() => {
-    /* ... */
+    const handler = setTimeout(() => {
+      fetchCoordinates();
+    }, 1200);
+    return () => clearTimeout(handler);
+  }, [streetValue, numberValue, cityValue, fetchCoordinates]);
+
+  const handleMapClick = (latlng: L.LatLng) => {
+    setPosition(latlng);
+  };
+
+  const handleCepSearch = useCallback(() => {
+    const cleanedCep = cepValue?.replace(/\D/g, "");
+    if (cleanedCep && cleanedCep.length === 8) {
+      fetchAddress(cleanedCep);
+    }
+  }, [cepValue, fetchAddress]);
+
+  useEffect(() => {
+    if (address) {
+      setValue("businessAddress.street", address.logradouro, {
+        shouldValidate: true,
+      });
+      setValue("businessAddress.neighborhood", address.bairro, {
+        shouldValidate: true,
+      });
+      setValue("businessAddress.city", address.localidade, {
+        shouldValidate: true,
+      });
+      setValue("businessAddress.state", address.uf, { shouldValidate: true });
+    }
   }, [address, setValue]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -240,9 +341,19 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
     if (!userProfile || !isDirty) return;
     setIsSaving(true);
-    await updateUserProfile(userProfile.id, data);
+
+    const updatedData = {
+      ...data,
+      businessAddress: {
+        ...data.businessAddress,
+        lat: position?.lat,
+        lng: position?.lng,
+      },
+    };
+
+    await updateUserProfile(userProfile.id, updatedData);
     setIsSaving(false);
-    reset(data); // Reseta o formulário para o novo estado "limpo", desabilitando o botão
+    reset(updatedData);
   };
 
   // ... O resto do JSX continua o mesmo
@@ -471,6 +582,28 @@ export const ProfileManagement = ({ onBack }: { onBack?: () => void }) => {
                 error={errors.businessAddress?.state}
                 {...register("businessAddress.state")}
               />
+            </div>
+            <div className="md:col-span-6 mt-4">
+              <label className="label-text">Localização no Mapa</label>
+              <p className="text-xs text-gray-400 mb-2">
+                A posição será atualizada automaticamente. Clique no mapa para
+                ajustar.
+              </p>
+              <div className="h-80 w-full rounded-lg overflow-hidden border-2 border-gray-700">
+                <MapContainer
+                  center={mapCenter}
+                  zoom={mapZoom}
+                  style={{ height: "100%", width: "100%" }}
+                >
+                  <ChangeView center={mapCenter} zoom={mapZoom} />
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  <MapEvents onLocationSelect={handleMapClick} />
+                  {position && <Marker position={position}></Marker>}
+                </MapContainer>
+              </div>
             </div>
           </div>
         </section>

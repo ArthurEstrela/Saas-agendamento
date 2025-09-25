@@ -76,8 +76,6 @@ const PublicBookingPage = () => {
     );
   }
 
-  const reviewCount = provider.reviews?.length || 0;
-
   return (
     <div className="bg-gray-900 text-white min-h-screen">
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
@@ -160,15 +158,6 @@ const PublicBookingPage = () => {
               >
                 <Star size={16} />
                 Avaliações
-                <span
-                  className={`ml-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    activeTab === "reviews"
-                      ? "bg-amber-500/20 text-amber-400"
-                      : "bg-gray-700 text-gray-300"
-                  }`}
-                >
-                  {reviewCount}
-                </span>
               </button>
             </nav>
           </div>

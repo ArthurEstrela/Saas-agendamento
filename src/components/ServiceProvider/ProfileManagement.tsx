@@ -54,6 +54,8 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L, { LatLng } from "leaflet";
+import { FaWhatsapp } from "react-icons/fa";
+
 
 // @ts-expect-error - O Vite pode ter problemas com o carregamento de assets do Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -134,6 +136,7 @@ const profileSchema = z.object({
       instagram: z.string().url("URL inválida").optional().or(z.literal("")),
       facebook: z.string().url("URL inválida").optional().or(z.literal("")),
       website: z.string().url("URL inválida").optional().or(z.literal("")),
+      whatsapp: z.string().optional(),
     })
     .optional(),
 });
@@ -622,7 +625,7 @@ export const ProfileManagement = () => {
             <MaskedInputField
               control={control}
               name="businessPhone"
-              label="Telefone/WhatsApp"
+              label="Telefone"
               mask="(00) 00000-0000"
               icon={Phone}
               error={errors.businessPhone}
@@ -727,6 +730,15 @@ export const ProfileManagement = () => {
               error={errors.socialLinks?.instagram}
               {...register("socialLinks.instagram")}
               placeholder="https://instagram.com/seu_negocio"
+            />
+            <MaskedInputField
+              control={control}
+              name="socialLinks.whatsapp"
+              label="WhatsApp"
+              mask="(00) 00000-0000"
+              icon={FaWhatsapp}
+              error={errors.socialLinks?.whatsapp}
+              placeholder="(XX) XXXXX-XXXX"
             />
             <Input
               label="Facebook"

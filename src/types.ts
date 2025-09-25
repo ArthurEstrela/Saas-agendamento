@@ -150,6 +150,7 @@ export interface ServiceProviderProfile extends BaseUser {
     instagram?: string;
     facebook?: string;
     website?: string;
+    whatsapp?: string;
   };
   paymentMethods?: PaymentMethod[];
 }

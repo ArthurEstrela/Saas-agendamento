@@ -22,14 +22,11 @@ export const ClientSearchSection = () => {
   const { userProfile } = useProfileStore();
   const [userLocation, setUserLocation] = useState(null);
 
-  // AQUI ESTÁ A CORREÇÃO:
-  // Trocamos 'providers' por 'results' e 'searchProviders' por 'search'
   const { results, isLoading, search } = useSearchStore();
 
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Busca inicial quando o componente monta
-   useEffect(() => {
+  useEffect(() => {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 setUserLocation({
@@ -61,13 +58,13 @@ export const ClientSearchSection = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    search(searchTerm); // Usando a função 'search'
+    search(searchTerm);
   };
 
   const WelcomeMessage = () => {
     const firstName = userProfile?.name.split(" ")[0];
     return (
-      <h1 className="text-4xl font-bold text-white mb-2">
+      <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
         Bem-vindo, <span className="text-amber-400">{firstName}</span>!
       </h1>
     );
@@ -78,7 +75,7 @@ export const ClientSearchSection = () => {
       {/* Cabeçalho e Barra de Busca */}
       <div className="mb-10">
         <WelcomeMessage />
-        <p className="text-lg text-gray-400">
+        <p className="text-md sm:text-lg text-gray-400">
           Encontre os melhores profissionais para o seu estilo.
         </p>
 
@@ -107,7 +104,7 @@ export const ClientSearchSection = () => {
           <div className="flex justify-center items-center h-64">
             <Loader2 className="animate-spin text-amber-500" size={48} />
           </div>
-        ) : results.length > 0 ? ( // AQUI TAMBÉM: Usando 'results.length'
+        ) : results.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {providersWithDistance.map((provider) => (
               <ClientProfessionalCard key={provider.id} provider={provider} />

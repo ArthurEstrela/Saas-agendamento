@@ -1,3 +1,5 @@
+// src/components/ServiceProvider/ProfileManagement.tsx
+
 import {
   useState,
   useEffect,
@@ -16,7 +18,7 @@ import {
   Mail,
   Phone,
   MapPin,
-  Link as LinkIcon,
+  Link as LinkIcon, // Renomeado para evitar conflito com o Link do react-router-dom
   User,
   UserCheck,
   Instagram,
@@ -55,7 +57,6 @@ import {
 import "leaflet/dist/leaflet.css";
 import L, { LatLng } from "leaflet";
 import { FaWhatsapp } from "react-icons/fa";
-
 
 // @ts-expect-error - O Vite pode ter problemas com o carregamento de assets do Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -114,9 +115,17 @@ const MapEvents = ({ onLocationSelect }: MapEventsProps) => {
   return position === null ? null : <Marker position={position}></Marker>;
 };
 
-// Schema e componentes de Input não mudam...
+// ATUALIZAÇÃO DO SCHEMA COM O NOVO CAMPO
 const profileSchema = z.object({
   businessName: z.string().min(3, "O nome do negócio é obrigatório"),
+  publicProfileSlug: z
+    .string()
+    .min(3, "O link deve ter pelo menos 3 caracteres")
+    .regex(
+      /^[a-z0-9-]+$/,
+      "O link deve conter apenas letras minúsculas, números e hifens."
+    )
+    .optional(),
   name: z.string().min(3, "O nome do responsável é obrigatório"),
   businessPhone: z.string().optional(),
   email: z.string().email("Email inválido"),
@@ -152,7 +161,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {label}
         </label>
         <div className="relative">
-          {/* Adicionamos uma verificação para só renderizar o ícone se ele for passado */}
           {Icon && (
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
               <Icon
@@ -166,7 +174,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             id={id}
             ref={ref}
-            // Adiciona padding à esquerda somente se houver um ícone
             className={`block w-full rounded-md border-0 bg-white/5 py-3 ${
               Icon ? "pl-10" : "pl-3"
             } pr-3 text-white shadow-sm ring-1 ring-inset ${
@@ -187,7 +194,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   }
 );
 
-// Definir um displayName é uma boa prática para depuração
 Input.displayName = "Input";
 
 export const MaskedInputField = <T extends FieldValues>({
@@ -256,14 +262,12 @@ export const MaskedInputField = <T extends FieldValues>({
 export const ProfileManagement = () => {
   const { userProfile, updateUserProfile } = useProfileStore();
 
-  // Estados de UI
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
 
-  // Estados do Cropper
   const [bannerToCrop, setBannerToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -284,14 +288,12 @@ export const ProfileManagement = () => {
     },
   });
 
-  // Estados do Mapa
   const [position, setPosition] = useState<L.LatLng | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     -15.79, -47.88,
   ]);
   const [mapZoom, setMapZoom] = useState(4);
 
-  // Observadores para endereço e CEP
   const cepValue = watch("businessAddress.zipCode");
   const streetValue = watch("businessAddress.street");
   const numberValue = watch("businessAddress.number");
@@ -379,7 +381,6 @@ export const ProfileManagement = () => {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
-    // Adicionamos a verificação de 'role' aqui
     if (file && userProfile && userProfile.role === "serviceProvider") {
       setIsUploadingLogo(true);
       const tempUrl = URL.createObjectURL(file);
@@ -388,14 +389,10 @@ export const ProfileManagement = () => {
       try {
         const photoURL = await uploadProviderLogo(userProfile.id, file);
         await updateUserProfile(userProfile.id, { logoUrl: photoURL });
-        // Opcional: mostrar um toast de sucesso
       } catch (error) {
         console.error("Erro no upload do logo:", error);
-
-        // Correção: Envolvemos a linha em outra verificação para garantir
-        // que o TypeScript entenda o tipo de userProfile aqui também.
         if (userProfile.role === "serviceProvider") {
-          setLogoPreview(userProfile.logoUrl || null); // Reverte o preview em caso de erro
+          setLogoPreview(userProfile.logoUrl || null);
         }
       } finally {
         setIsUploadingLogo(false);
@@ -429,16 +426,14 @@ export const ProfileManagement = () => {
         croppedAreaPixels
       );
       const tempUrl = URL.createObjectURL(croppedImageFile);
-      setBannerPreview(tempUrl); // Mostra o preview otimista
+      setBannerPreview(tempUrl);
 
       const bannerUrl = await uploadProviderBanner(
         userProfile.id,
         croppedImageFile
       );
 
-      // AQUI ESTÁ A MÁGICA: Salva a alteração do banner imediatamente
       await updateUserProfile(userProfile.id, { bannerUrl: bannerUrl });
-      // Opcional: mostrar um toast de sucesso
     } catch (e) {
       console.error(e);
       if (userProfile.role === "serviceProvider") {
@@ -467,7 +462,6 @@ export const ProfileManagement = () => {
     reset(updatedData);
   };
 
-  // ... O resto do JSX continua o mesmo
   if (!userProfile)
     return (
       <div className="flex justify-center items-center h-full">
@@ -601,6 +595,17 @@ export const ProfileManagement = () => {
               error={errors.businessName}
               {...register("businessName")}
             />
+            {/* NOVO CAMPO ADICIONADO AQUI */}
+            <div className="md:col-span-1">
+              <Input
+                label="Link Público (ex: stylo.com/agendar/SEU-LINK)"
+                id="publicProfileSlug"
+                icon={LinkIcon}
+                error={errors.publicProfileSlug}
+                {...register("publicProfileSlug")}
+                placeholder="nome-do-seu-negocio"
+              />
+            </div>
             <Input
               label="CNPJ"
               id="cnpj"

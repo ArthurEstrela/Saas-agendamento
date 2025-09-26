@@ -99,16 +99,16 @@ const PublicBookingPage = () => {
         </header>
 
         <div className="relative bg-gray-800/80 backdrop-blur-sm p-6 rounded-2xl border border-gray-700 shadow-lg">
-          <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <img
               src={
-                provider.profilePictureUrl ||
+                provider.logoUrl ||
                 `https://ui-avatars.com/api/?name=${encodeURIComponent(
                   provider.businessName
                 )}&background=1f2937&color=daa520&size=128`
               }
               alt={provider.businessName}
-              className="h-32 w-32 rounded-full object-cover border-4 border-[#daa520] -mt-24 sm:-mt-16"
+              className="h-32 w-32 rounded-full object-cover border-4 border-amber-500 -mt-24 sm:-mt-16 flex-shrink-0"
             />
             <div className="flex-grow text-center sm:text-left">
               <h1 className="text-3xl sm:text-4xl font-bold text-white">
@@ -127,51 +127,51 @@ const PublicBookingPage = () => {
                   )}
                 </div>
               )}
-            </div>
-            <div className="flex items-center justify-center sm:justify-start gap-3 mt-4">
-              {provider.socialLinks?.instagram && (
-                <a
-                  href={provider.socialLinks.instagram}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-[#daa520] transition-colors"
-                >
-                  <Instagram size={22} />
-                </a>
-              )}
-              {provider.socialLinks?.facebook && (
-                <a
-                  href={provider.socialLinks.facebook}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-[#daa520] transition-colors"
-                >
-                  <Facebook size={22} />
-                </a>
-              )}
-              {provider.socialLinks?.whatsapp && (
-                <a
-                  href={`https://wa.me/${provider.socialLinks.whatsapp.replace(
-                    /\D/g,
-                    ""
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-green-500 transition-colors"
-                >
-                  <FaWhatsapp size={22} />
-                </a>
-              )}
-              {provider.socialLinks?.website && (
-                <a
-                  href={provider.socialLinks.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-[#daa520] transition-colors"
-                >
-                  <Globe size={22} />
-                </a>
-              )}
+              <div className="flex items-center justify-center sm:justify-start gap-3 mt-4">
+                {provider.socialLinks?.instagram && (
+                  <a
+                    href={provider.socialLinks.instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-amber-500 transition-colors"
+                  >
+                    <Instagram size={22} />
+                  </a>
+                )}
+                {provider.socialLinks?.facebook && (
+                  <a
+                    href={provider.socialLinks.facebook}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-amber-500 transition-colors"
+                  >
+                    <Facebook size={22} />
+                  </a>
+                )}
+                {provider.socialLinks?.whatsapp && (
+                  <a
+                    href={`https://wa.me/${provider.socialLinks.whatsapp.replace(
+                      /\D/g,
+                      ""
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-green-500 transition-colors"
+                  >
+                    <FaWhatsapp size={22} />
+                  </a>
+                )}
+                {provider.socialLinks?.website && (
+                  <a
+                    href={provider.socialLinks.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-amber-500 transition-colors"
+                  >
+                    <Globe size={22} />
+                  </a>
+                )}
+              </div>
             </div>
             <button
               onClick={handleGoToBooking}

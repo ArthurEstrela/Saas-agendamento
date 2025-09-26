@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { getAppointmentsForProfessionalOnDate } from '../firebase/bookingService';
-import type { Professional, Service } from '../types';
-import { getDay, format, parse } from 'date-fns';
+import { create } from "zustand";
+import { getAppointmentsForProfessionalOnDate } from "../firebase/bookingService";
+import type { Professional, Service } from "../types";
+import { getDay, format, parse } from "date-fns";
 
 interface AvailabilityState {
   availableSlots: string[];
@@ -23,11 +23,22 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
     set({ isLoading: true, error: null, availableSlots: [] });
     try {
       // 1. Pega os agendamentos já existentes para o dia
-      const existingAppointments = await getAppointmentsForProfessionalOnDate(professional.id, date);
+      const existingAppointments = await getAppointmentsForProfessionalOnDate(
+        professional.id,
+        date
+      );
 
       // 2. Pega o horário de trabalho do profissional para o dia da semana selecionado
       const dayOfWeek = getDay(date); // Domingo = 0, Segunda = 1, etc.
-      const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const weekDays = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
       const professionalDaySchedule = professional.availability.find(
         (day) => day.dayOfWeek === weekDays[dayOfWeek]
       );
@@ -39,35 +50,42 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
       // 3. Gera todos os possíveis horários de início
       const slots: string[] = [];
       const serviceDuration = service.duration; // em minutos
+      // NOVO: Define um intervalo fixo (em minutos) para a granularidade de cada slot
+      const SLOT_INTERVAL_MINUTES = 15;
 
       for (const period of professionalDaySchedule.slots) {
-        let currentTime = parse(period.start, 'HH:mm', new Date());
-        const endTime = parse(period.end, 'HH:mm', new Date());
+        let currentTime = parse(period.start, "HH:mm", new Date());
+        const endTime = parse(period.end, "HH:mm", new Date());
 
         while (currentTime < endTime) {
-          const slotTime = format(currentTime, 'HH:mm');
-          const slotEndTime = new Date(currentTime.getTime() + serviceDuration * 60000);
+          const slotTime = format(currentTime, "HH:mm");
+          // Usa a duração do serviço para calcular onde o slot terminaria
+          const slotEndTime = new Date(
+            currentTime.getTime() + serviceDuration * 60000
+          );
 
-          // Verifica se o slot termina depois do fim do expediente
+          // Verifica se o slot (com a duração do serviço) termina depois do fim do expediente
           if (slotEndTime > endTime) break;
 
           // 4. Verifica se o slot colide com algum agendamento existente
-          const isOccupied = existingAppointments.some(app => 
-            (currentTime >= app.startTime && currentTime < app.endTime) || // Começa durante o agendamento
-            (slotEndTime > app.startTime && slotEndTime <= app.endTime) // Termina durante o agendamento
+          const isOccupied = existingAppointments.some(
+            (app) =>
+              (currentTime >= app.startTime && currentTime < app.endTime) || // Começa durante o agendamento
+              (slotEndTime > app.startTime && slotEndTime <= app.endTime) // Termina durante o agendamento
           );
-          
+
           if (!isOccupied) {
             slots.push(slotTime);
           }
 
-          // Avança para o próximo possível horário
-          currentTime = new Date(currentTime.getTime() + serviceDuration * 60000); // ou + intervalo (ex: 15 min)
+          // ALTERADO: Avança para o próximo possível horário por um intervalo fixo (15 min)
+          currentTime = new Date(
+            currentTime.getTime() + SLOT_INTERVAL_MINUTES * 60000
+          );
         }
       }
 
       set({ availableSlots: slots, isLoading: false });
-
     } catch (err) {
       let errorMessage = "Não foi possível buscar os horários.";
       if (err instanceof Error) errorMessage = err.message;

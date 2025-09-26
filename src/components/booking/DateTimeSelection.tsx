@@ -9,60 +9,6 @@ import { motion } from "framer-motion";
 import { Clock, Loader2, CalendarX } from "lucide-react";
 import type { DailyAvailability } from "../../types";
 
-// Componente de Estilo Interno para garantir a aplicação
-const CalendarStyles = () => (
-  <style>{`
-    .rdp {
-      --rdp-cell-size: 42px;
-      --rdp-accent-color: #daa520;
-      --rdp-background-color: rgba(218, 165, 32, 0.2);
-      --rdp-accent-color-dark: #daa520;
-      --rdp-background-color-dark: rgba(218, 165, 32, 0.2);
-      --rdp-outline: 2px solid var(--rdp-accent-color);
-      --rdp-border-radius: 8px;
-    }
-    .rdp-caption_label {
-      color: #ffffff;
-      font-weight: 700;
-      font-size: 1.125rem;
-    }
-    .rdp-head_cell {
-      color: #a1a1aa;
-      font-weight: 600;
-      font-size: 0.8rem;
-    }
-    .rdp-button {
-      transition: all 0.2s ease-in-out;
-      border-radius: var(--rdp-border-radius);
-      color: #e4e4e7;
-    }
-    .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
-      background-color: var(--rdp-background-color);
-    }
-    .rdp-day_today {
-      font-weight: 800;
-      color: #fde68a !important;
-      border: 1px solid #daa520;
-    }
-    .rdp-day_selected,
-    .rdp-day_selected:hover {
-      background-color: #daa520 !important;
-      color: #111827 !important;
-      font-weight: 700;
-    }
-    .rdp-day_disabled {
-        color: #52525b;
-        opacity: 0.4;
-    }
-    .rdp-nav_button {
-      color: #daa520;
-      border-radius: var(--rdp-border-radius);
-    }
-    .rdp-nav_button:hover {
-      background-color: rgba(218, 165, 32, 0.1);
-    }
-  `}</style>
-);
 
 const weekDayMap: { [key: number]: DailyAvailability["dayOfWeek"] } = {
   0: "Sunday",
@@ -203,7 +149,6 @@ export const DateTimeSelection = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-      <CalendarStyles /> {/* O ESTILO SENDO APLICADO AQUI */}
       <h2 className="text-3xl font-bold text-center text-white mb-8">
         Escolha a Data e Hora
       </h2>

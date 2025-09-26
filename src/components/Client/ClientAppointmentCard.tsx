@@ -86,7 +86,7 @@ export const ClientAppointmentCard = ({
       const { street, city, state } = provider.businessAddress; // Criando a query de endereço para o Google Maps
       const address = encodeURIComponent(`${street}, ${city}, ${state}`); // Usando a API de navegação do Google Maps para abrir o aplicativo/site
       window.open(
-        `https://www.google.com/maps/dir/?api=1&destination=${address}`
+        `https://www.google.com/maps/search/?api=1&query=${address}`
       );
     }
   };

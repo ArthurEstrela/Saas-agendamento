@@ -177,4 +177,6 @@ export interface FinancialData {
   monthlyRevenue: Record<string, number>; 
   expenses: Expense[];
   appointments: Appointment[];
+  topServices: { name: string; revenue: number }[];
+  topProfessionals: { name: string; revenue: number }[];
 }

@@ -65,12 +65,43 @@ export const getFinancialData = async (
     }
   });
 
+  const serviceRevenue: Record<string, number> = {};
+  const professionalRevenue: Record<string, number> = {};
+
+  appointments.forEach((appt) => {
+    const revenue = appt.finalPrice || appt.totalPrice;
+
+    // Agrega receita por nome do serviço principal
+    if (appt.serviceName) {
+      serviceRevenue[appt.serviceName] =
+        (serviceRevenue[appt.serviceName] || 0) + revenue;
+    }
+
+    // Agrega receita por nome do profissional
+    if (appt.professionalName) {
+      professionalRevenue[appt.professionalName] =
+        (professionalRevenue[appt.professionalName] || 0) + revenue;
+    }
+  });
+
+  const topServices = Object.entries(serviceRevenue)
+    .map(([name, revenue]) => ({ name, revenue }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5); // Pega os 5 melhores
+
+  const topProfessionals = Object.entries(professionalRevenue)
+    .map(([name, revenue]) => ({ name, revenue }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5); // Pega os 5 melhores
+
   return {
     totalRevenue,
     totalExpenses,
     netIncome,
-    monthlyRevenue,
+    monthlyRevenue: {},
     expenses,
-    appointments, // A propriedade 'appointments' agora é esperada pelo tipo FinancialData
+    appointments,
+    topServices,
+    topProfessionals,
   };
 };

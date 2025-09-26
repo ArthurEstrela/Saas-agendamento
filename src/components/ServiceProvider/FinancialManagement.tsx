@@ -11,7 +11,9 @@ import {
   TrendingUp,
   Edit,
   Trash2,
-  Download, // Ícone importado
+  Download,
+  ClipboardList,
+  Users,
 } from "lucide-react";
 import {
   Bar,
@@ -39,10 +41,10 @@ import { Calendar } from "../ui/calendar";
 import { Timestamp } from "firebase/firestore";
 import { updateExpense, deleteExpense } from "../../firebase/expenseService";
 import { ConfirmationModal } from "../Common/ConfirmationModal";
-import { exportTransactionsToCsv } from "../../lib/utils/exportToCsv"; // Importando a nova função
+import { exportTransactionsToCsv } from "../../lib/utils/exportToCsv";
+import { PerformanceRanking } from "./PerformanceRanking";
 
-// --- Funções Utilitárias ---
-// ... (normalizeTimestamp e formatCurrency permanecem as mesmas)
+// --- Funções Utilitárias e Componentes Internos ---
 const normalizeTimestamp = (dateValue: unknown): Date => {
   if (dateValue instanceof Timestamp) {
     return dateValue.toDate();
@@ -57,8 +59,6 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// --- Componentes de UI Internos ---
-// ... (StatCard, FinancialTransactionsTable, ChartContainer permanecem os mesmos)
 const StatCard = ({
   title,
   value,
@@ -150,7 +150,7 @@ const FinancialTransactionsTable = ({
                   : `- ${formatCurrency(item.amount)}`}
               </td>
               <td className="px-6 py-4 text-right">
-                {"amount" in item && ( // Mostra ações apenas para despesas
+                {"amount" in item && (
                   <>
                     <Button
                       variant="ghost"
@@ -197,10 +197,12 @@ export const FinancialManagement = () => {
   const { financialData, loading, error, fetchFinancialData, addExpense } =
     useFinanceStore();
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
-  });
+  // MUDANÇA: Estados separados para início e fim
+  const [startDate, setStartDate] = useState<Date | undefined>(
+    subDays(new Date(), 29)
+  );
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
   const [expenseIdToDelete, setExpenseIdToDelete] = useState<string | null>(
@@ -208,10 +210,11 @@ export const FinancialManagement = () => {
   );
 
   useEffect(() => {
-    if (user && dateRange?.from && dateRange?.to) {
-      fetchFinancialData(user.uid, dateRange.from, dateRange.to);
+    // MUDANÇA: Verifica ambos os estados antes de buscar
+    if (user && startDate && endDate) {
+      fetchFinancialData(user.uid, startDate, endDate);
     }
-  }, [user, dateRange, fetchFinancialData]);
+  }, [user, startDate, endDate, fetchFinancialData]);
 
   const handleOpenEditModal = (expense: Expense) => {
     setExpenseToEdit(expense);
@@ -219,21 +222,21 @@ export const FinancialManagement = () => {
   };
 
   const handleSaveExpense = async (data: Omit<Expense, "id">, id?: string) => {
-    if (!user || !dateRange?.from || !dateRange?.to) return;
+    if (!user || !startDate || !endDate) return;
     if (id) {
       await updateExpense(user.uid, id, data);
     } else {
       await addExpense(user.uid, data);
     }
-    fetchFinancialData(user.uid, dateRange.from, dateRange.to);
+    fetchFinancialData(user.uid, startDate, endDate);
     setIsExpenseModalOpen(false);
     setExpenseToEdit(null);
   };
 
   const executeDeleteExpense = async () => {
-    if (user && expenseIdToDelete && dateRange?.from && dateRange?.to) {
+    if (user && expenseIdToDelete && startDate && endDate) {
       await deleteExpense(user.uid, expenseIdToDelete);
-      fetchFinancialData(user.uid, dateRange.from, dateRange.to);
+      fetchFinancialData(user.uid, startDate, endDate);
       setExpenseIdToDelete(null);
     }
   };
@@ -242,16 +245,16 @@ export const FinancialManagement = () => {
     if (
       !allTransactions ||
       allTransactions.length === 0 ||
-      !dateRange?.from ||
-      !dateRange.to
+      !startDate ||
+      !endDate
     ) {
       alert("Nenhuma transação para exportar no período selecionado.");
       return;
     }
 
-    const startDate = format(dateRange.from, "yyyy-MM-dd");
-    const endDate = format(dateRange.to, "yyyy-MM-dd");
-    const filename = `relatorio_financeiro_${startDate}_a_${endDate}.csv`;
+    const start = format(startDate, "yyyy-MM-dd");
+    const end = format(endDate, "yyyy-MM-dd");
+    const filename = `relatorio_financeiro_${start}_a_${end}.csv`;
 
     exportTransactionsToCsv(filename, allTransactions);
   };
@@ -269,25 +272,21 @@ export const FinancialManagement = () => {
     );
   }, [financialData]);
 
-  // ... (barChartData e pieChartData permanecem os mesmos)
   const barChartData = useMemo(() => {
     if (!financialData) return [];
     const dailyData: Record<string, { revenue: number; expenses: number }> = {};
-
     financialData.appointments.forEach((appt) => {
       const date = normalizeTimestamp(appt.completedAt || appt.startTime);
       const day = format(date, "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
       dailyData[day].revenue += appt.totalPrice;
     });
-
     financialData.expenses.forEach((exp) => {
       const date = normalizeTimestamp(exp.date);
       const day = format(date, "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
       dailyData[day].expenses += exp.amount;
     });
-
     return Object.entries(dailyData)
       .map(([date, values]) => ({
         date: format(new Date(date), "dd/MM"),
@@ -349,36 +348,46 @@ export const FinancialManagement = () => {
             Acompanhe a saúde financeira do seu negócio.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* MUDANÇA: Novo seletor de data com dois campos */}
+        <div className="flex flex-col sm:flex-row items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant={"outline"}
-                className="w-full sm:w-[280px] justify-start text-left font-normal"
+                className="w-full sm:w-[140px] justify-start text-left font-normal"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    `${format(dateRange.from, "dd/MM/yyyy", {
-                      locale: ptBR,
-                    })} - ${format(dateRange.to, "dd/MM/yyyy", {
-                      locale: ptBR,
-                    })}`
-                  ) : (
-                    format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })
-                  )
-                ) : (
-                  <span>Selecione um período</span>
-                )}
+                {startDate ? format(startDate, "dd/MM/yy") : <span>De</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
               <Calendar
-                mode="range"
-                selected={dateRange}
-                onSelect={setDateRange}
+                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
+                disabled={{ after: endDate }}
                 initialFocus
-                locale={ptBR}
+              />
+            </PopoverContent>
+          </Popover>
+          <span className="text-gray-400 hidden sm:block">até</span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className="w-full sm:w-[140px] justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {endDate ? format(endDate, "dd/MM/yy") : <span>Até</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
+                disabled={{ before: startDate }}
+                initialFocus
               />
             </PopoverContent>
           </Popover>
@@ -401,6 +410,24 @@ export const FinancialManagement = () => {
           value={formatCurrency(financialData?.netIncome || 0)}
           icon={DollarSign}
         />
+      </section>
+
+      <section>
+        <h2 className="text-2xl font-bold text-white mb-4">
+          Análise de Performance
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <PerformanceRanking
+            title="Serviços Mais Rentáveis"
+            icon={ClipboardList}
+            data={financialData?.topServices || []}
+          />
+          <PerformanceRanking
+            title="Profissionais com Maior Rendimento"
+            icon={Users}
+            data={financialData?.topProfessionals || []}
+          />
+        </div>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">

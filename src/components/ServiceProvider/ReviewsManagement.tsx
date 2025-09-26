@@ -17,7 +17,7 @@ const StarRating = ({ rating }: { rating: number }) => (
   </div>
 );
 
-// NOVO COMPONENTE: Resumo das Avaliações
+// NOVO COMPONENTE: Resumo das Avaliações (inalterado)
 const ReviewSummary = ({ reviews }: { reviews: { rating: number }[] }) => {
   const summary = useMemo(() => {
     if (reviews.length === 0) {
@@ -87,19 +87,29 @@ const filterOptions = [
 
 export const ReviewsManagement = () => {
   const { user } = useAuthStore();
-  const { reviews, isLoading, fetchReviews } = useProviderReviewsStore();
+  
+  // CORREÇÃO: Usando seletores individuais para extrair cada propriedade.
+  // Isso garante que o componente só re-renderize quando a propriedade específica mudar,
+  // resolvendo o loop de renderização e os erros de tipagem.
+  const reviews = useProviderReviewsStore(state => state.reviews);
+  const isLoading = useProviderReviewsStore(state => state.isLoading);
+  const fetchReviews = useProviderReviewsStore(state => state.fetchReviews);
+
+
   const [filter, setFilter] = useState<string | number>('all');
 
   useEffect(() => {
     if (user?.uid) {
       fetchReviews(user.uid);
     }
-  }, [user, fetchReviews]);
+  // user?.uid e fetchReviews são dependências. user?.uid é estável o suficiente.
+  }, [user?.uid, fetchReviews]); 
 
   const filteredReviews = useMemo(() => {
     if (filter === 'all') {
       return reviews;
     }
+    // A tipagem 'number' no filtro é resolvida aqui.
     return reviews.filter(review => review.rating === filter);
   }, [reviews, filter]);
 

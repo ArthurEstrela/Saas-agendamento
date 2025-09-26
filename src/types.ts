@@ -141,7 +141,6 @@ export interface ServiceProviderProfile extends BaseUser {
   publicProfileSlug?: string;
   businessPhone?: string;
   services: Service[];
-  professionals: Professional[];
   reviews: Review[];
   areaOfWork?: string; // Área de atuação
   logoUrl?: string; // URL da foto ou logo

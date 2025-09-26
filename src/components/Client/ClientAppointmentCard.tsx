@@ -19,7 +19,9 @@ import { useState } from "react";
 import ReviewModal from "../Common/ReviewModal";
 import { useReviewStore } from "../../store/reviewStore";
 
+// StatusBadge (código inalterado)
 const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
+  // ... (lógica StatusBadge)
   const statusInfo = {
     scheduled: {
       text: "Confirmado",
@@ -53,8 +55,7 @@ const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
     <div
       className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full ${currentStatus.color}`}
     >
-      {currentStatus.icon}
-      <span>{currentStatus.text}</span>
+      {currentStatus.icon} <span>{currentStatus.text}</span>
     </div>
   );
 };
@@ -78,13 +79,15 @@ export const ClientAppointmentCard = ({
   const formattedDate = format(startTime, "EEEE, dd 'de' MMMM", {
     locale: ptBR,
   });
-  const formattedTime = format(startTime, "HH:mm");
+  const formattedTime = format(startTime, "HH:mm"); // FUNÇÃO DE NAVEGAÇÃO CORRIGIDA PARA USAR O FORMATO MODERNO DO GOOGLE MAPS
 
   const handleNavigation = () => {
     if (provider?.businessAddress) {
-      const { street, city, state } = provider.businessAddress;
-      const address = encodeURIComponent(`${street}, ${city}, ${state}`);
-      window.open(`https://www.google.com/maps/search/?api=1&query=${address}`);
+      const { street, city, state } = provider.businessAddress; // Criando a query de endereço para o Google Maps
+      const address = encodeURIComponent(`${street}, ${city}, ${state}`); // Usando a API de navegação do Google Maps para abrir o aplicativo/site
+      window.open(
+        `https://www.google.com/maps/dir/?api=1&destination=${address}`
+      );
     }
   };
 
@@ -127,10 +130,12 @@ export const ClientAppointmentCard = ({
               </div>
             )}
           </div>
+
           <div className="flex-grow">
             <h3 className="text-lg font-bold text-white">{professionalName}</h3>
+
             <p className="text-sm text-gray-400">
-              em{" "}
+              em
               <span className="font-semibold text-gray-300">
                 {provider?.businessName || "Local não informado"}
               </span>
@@ -140,21 +145,28 @@ export const ClientAppointmentCard = ({
             </div>
           </div>
         </div>
-
         {/* Corpo do Card com Detalhes */}
         <div className="p-5 space-y-4">
           <div className="flex items-center gap-3 text-gray-300">
-            <Calendar size={18} className="text-[#daa520]" />
+            {/* CORREÇÃO: #daa520 para text-amber-500 */}
+            <Calendar size={18} className="text-amber-500" />
             <span className="capitalize">{formattedDate}</span>
           </div>
+
           <div className="flex items-center gap-3 text-gray-300">
-            <Clock size={18} className="text-[#daa520]" />
+            {/* CORREÇÃO: #daa520 para text-amber-500 */}
+            <Clock size={18} className="text-amber-500" />
             <span>{formattedTime}</span>
           </div>
+
           {provider?.businessAddress && (
             <div className="flex items-start gap-3 text-gray-300">
-              <MapPin size={18} className="text-[#daa520] mt-0.5" />
+              {/* CORREÇÃO: #daa520 para text-amber-500 */}
+
+              <MapPin size={18} className="text-amber-500 mt-0.5" />
+
               <span>{`${provider.businessAddress.street}, ${provider.businessAddress.city}`}</span>
+
               <button
                 onClick={handleNavigation}
                 className="ml-auto text-amber-400 hover:text-amber-300 text-sm font-semibold"
@@ -163,12 +175,14 @@ export const ClientAppointmentCard = ({
               </button>
             </div>
           )}
-
           {/* Lista de Serviços */}
           <div className="pt-4 border-t border-gray-700">
             <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
-              <Scissors size={18} className="text-[#daa520]" /> Serviços
+              {/* CORREÇÃO: #daa520 para text-amber-500 */}
+              <Scissors size={18} className="text-amber-500" />
+              Serviços
             </h4>
+
             <div className="flex flex-wrap gap-2">
               {services.map((service) => (
                 <div
@@ -181,18 +195,17 @@ export const ClientAppointmentCard = ({
             </div>
           </div>
         </div>
-
-        {/* Rodapé */}
+        {/* Rodapé (inalterado) */}
         <div className="bg-gray-900/50 px-5 py-3 flex justify-between items-center">
           <span className="text-sm font-semibold text-gray-400">
             Valor Total
           </span>
+
           <span className="text-lg font-bold text-white">
             R$ {appointment.totalPrice.toFixed(2)}
           </span>
         </div>
-
-        {/* Botão de Avaliação */}
+        {/* Botão de Avaliação (inalterado) */}
         {status === "completed" && !appointment.review && (
           <div className="p-4 bg-gray-900/80">
             <button

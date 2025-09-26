@@ -1,13 +1,29 @@
 import { useState } from "react";
+// O shallow não é estritamente necessário se usarmos seletores individuais,
+// mas pode ser mantido para seletores mais complexos se necessário.
+// Neste caso, vamos priorizar a chamada individual.
 import { useProfileStore } from "../../store/profileStore";
 import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
 import { ProfessionalModal } from "./ProfessionalModal";
-import { ProfessionalCard } from "./ProfessionalCard"; // Importa o novo card
-import { ConfirmationModal } from "../Common/ConfirmationModal"; // Importa o modal de confirmação
+import { ProfessionalCard } from "./ProfessionalCard";
+import { ConfirmationModal } from "../Common/ConfirmationModal";
 import { Loader2, Users, UserPlus } from "lucide-react";
+// Importar o tipo ServiceProviderProfile é essencial para o "narrowing" de tipo
+import type {
+  Professional,
+  Service,
+  ServiceProviderProfile,
+} from "../../types";
 
 export const ProfessionalsManagement = () => {
-  const { userProfile } = useProfileStore();
+  // 1. CHAME TODOS OS HOOKS NO TOPO DO COMPONENTE
+  // Isso resolve as warnings: "React Hook 'use...' is called conditionally."
+
+  // Seletores individuais do Zustand para buscar as propriedades estáveis
+  const userProfile = useProfileStore((state) => state.userProfile);
+  const professionalsState = useProfileStore((state) => state.professionals);
+
+  // Hooks do ProfessionalsManagementStore
   const {
     isSubmitting: isLoading,
     addProfessional,
@@ -15,25 +31,43 @@ export const ProfessionalsManagement = () => {
     removeProfessional: deleteProfessional,
   } = useProfessionalsManagementStore();
 
+  // Hooks de Estado Local (useState)
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProfessional, setEditingProfessional] = useState(null);
+  const [editingProfessional, setEditingProfessional] =
+    useState<Professional | null>(null);
 
-  // Estado para o modal de confirmação
-  const [confirmationState, setConfirmationState] = useState({
+  const [confirmationState, setConfirmationState] = useState<{
+    isOpen: boolean;
+    professionalToDelete: Professional | null;
+  }>({
     isOpen: false,
     professionalToDelete: null,
   });
 
-  const professionals =
-    userProfile?.role === "serviceProvider" && userProfile.professionals
-      ? userProfile.professionals
-      : [];
-  const services =
-    userProfile?.role === "serviceProvider" && userProfile.services
-      ? userProfile.services
-      : [];
+  // 2. LÓGICA CONDICIONAL E EARLY RETURN DEPOIS DOS HOOKS
+  // Verifica se o perfil carregou e se é do tipo ServiceProvider.
+  if (!userProfile || userProfile.role !== "serviceProvider") {
+    // Exibe um loader se estiver carregando, ou null se não for o papel correto
+    if (!userProfile) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="animate-spin text-amber-500" size={48} />
+        </div>
+      );
+    }
+    return null;
+  }
 
-  const handleOpenModal = (professional = null) => {
+  // 3. NARRAÇÃO DE TIPO (Type Narrowing)
+  // Depois do check, o TypeScript sabe que userProfile é ServiceProviderProfile
+  const providerProfile = userProfile as ServiceProviderProfile;
+
+  // 4. DERIVAÇÃO SEGURA DE ESTADO (Fora do Seletor)
+  const services: Service[] = providerProfile.services || [];
+  const professionals: Professional[] = professionalsState || [];
+  const availableServices: Service[] = services;
+
+  const handleOpenModal = (professional: Professional | null = null) => {
     setEditingProfessional(professional);
     setIsModalOpen(true);
   };
@@ -43,42 +77,49 @@ export const ProfessionalsManagement = () => {
     setEditingProfessional(null);
   };
 
-  const handleSaveProfessional = async (formData, photoFile) => {
-    if (!userProfile) return;
-    const selectedServices = services.filter((s) =>
+  const handleSaveProfessional = async (
+    formData: any,
+    photoFile: File | null
+  ) => {
+    const providerId = providerProfile.id; // Usando o perfil tipado
+
+    const selectedServices = availableServices.filter((s) =>
       formData.serviceIds.includes(s.id)
     );
+
     const payload = {
       name: formData.name,
       services: selectedServices,
-      availability: [],
+      availability: editingProfessional?.availability || [],
       photoFile,
     };
+
     if (editingProfessional) {
       const updatedPayload = {
         ...payload,
         photoURL: editingProfessional.photoURL,
       };
       await updateProfessional(
-        userProfile.id,
+        providerId,
         editingProfessional.id,
         updatedPayload
       );
     } else {
-      await addProfessional(userProfile.id, payload);
+      await addProfessional(providerId, payload);
     }
     handleCloseModal();
   };
 
-  const handleDeleteRequest = (professional) => {
+  const handleDeleteRequest = (professional: Professional) => {
     setConfirmationState({ isOpen: true, professionalToDelete: professional });
   };
 
   const confirmDelete = () => {
-    if (userProfile && confirmationState.professionalToDelete) {
+    // Já checamos o userProfile no topo, só precisamos checar a seleção
+    if (confirmationState.professionalToDelete) {
       deleteProfessional(
-        userProfile.id,
-        confirmationState.professionalToDelete
+        providerProfile.id,
+        confirmationState.professionalToDelete.id
       );
     }
     setConfirmationState({ isOpen: false, professionalToDelete: null });
@@ -86,7 +127,8 @@ export const ProfessionalsManagement = () => {
 
   return (
     <div>
-      {/* Cabeçalho */}
+      {/* O resto do componente permanece inalterado, pois a lógica estava correta */}
+      {/* ... (Cabeçalho) */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-10">
         <div>
           <h1 className="text-4xl font-bold text-white">Meus Profissionais</h1>
@@ -106,7 +148,7 @@ export const ProfessionalsManagement = () => {
       </div>
 
       {/* Lista de Profissionais */}
-      {!userProfile ? (
+      {professionalsState === null ? (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="animate-spin text-amber-500" size={48} />
         </div>
@@ -137,7 +179,7 @@ export const ProfessionalsManagement = () => {
         onClose={handleCloseModal}
         onSave={handleSaveProfessional}
         professional={editingProfessional}
-        availableServices={services}
+        availableServices={availableServices}
         isLoading={isLoading}
       />
       <ConfirmationModal
@@ -147,7 +189,9 @@ export const ProfessionalsManagement = () => {
         }
         onConfirm={confirmDelete}
         title="Confirmar Exclusão"
-        message={`Tem certeza que deseja excluir permanentemente o profissional "${confirmationState.professionalToDelete?.name}"? Esta ação não pode ser desfeita.`}
+        message={`Tem certeza que deseja excluir permanentemente o profissional "${
+          confirmationState.professionalToDelete?.name || ""
+        }"? Esta ação não pode ser desfeita.`}
         confirmText="Excluir"
       />
     </div>

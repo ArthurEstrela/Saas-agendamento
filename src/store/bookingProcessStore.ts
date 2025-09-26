@@ -9,11 +9,17 @@ import type {
 } from "../types";
 import { createAppointment } from "../firebase/bookingService";
 import { getUserProfile } from "../firebase/userService";
+// NOVO: Importa a função de busca da sub-coleção de profissionais
+import { getProfessionalsByProviderId } from "../firebase/professionalsManagementService";
 
-// Interface para o estado
+// Interface para o estado (ATUALIZADA)
 interface BookingState {
   provider: ServiceProviderProfile | null;
   isLoading: boolean;
+  // NOVOS ESTADOS PARA A SUB-COLEÇÃO
+  providerProfessionals: Professional[] | null; // Lista de profissionais do provider
+  isLoadingProfessionals: boolean; // Estado de carregamento da sub-coleção
+
   selectedServices: Service[];
   professional: Professional | null;
   date: Date | null;
@@ -25,18 +31,20 @@ interface BookingState {
   redirectUrlAfterLogin: string | null;
 }
 
-// Interface para as ações
+// Interface para as ações (ATUALIZADA)
 interface BookingActions {
   fetchProviderDetailsById: (
     providerId: string
-  ) => Promise<ServiceProviderProfile | null>; // Alterado para retornar o perfil
-  syncStateWithFreshProvider: (freshProvider: ServiceProviderProfile) => void; // <-- NOVA FUNÇÃO
+  ) => Promise<ServiceProviderProfile | null>; 
+  // NOVA AÇÃO: Para buscar a sub-coleção de profissionais
+  fetchProviderProfessionals: (providerId: string) => Promise<void>; 
+  syncStateWithFreshProvider: (freshProvider: ServiceProviderProfile) => void; 
   toggleService: (service: Service) => void;
   selectProfessional: (professional: Professional) => void;
   selectDateTime: (date: Date, timeSlot: string) => void;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
-  resetBooking: (keepProvider?: boolean) => void; // Melhoria para manter o provider ao resetar
+  resetBooking: (keepProvider?: boolean) => void;
   setRedirectUrlAfterLogin: (url: string | null) => void;
   confirmBooking: (appointmentData: Omit<Appointment, "id">) => Promise<void>;
 }
@@ -46,6 +54,10 @@ interface BookingStore extends BookingState, BookingActions {}
 const initialState: BookingState = {
   provider: null,
   isLoading: true,
+  // NOVOS ESTADOS INICIALIZADOS
+  providerProfessionals: null,
+  isLoadingProfessionals: false,
+  
   selectedServices: [],
   professional: null,
   date: null,
@@ -62,17 +74,44 @@ export const useBookingProcessStore = create<BookingStore>()(
     (set, get) => ({
       ...initialState,
 
+      // NOVO MÉTODO: Busca a sub-coleção de profissionais
+      fetchProviderProfessionals: async (providerId) => {
+        set({ isLoadingProfessionals: true });
+        try {
+          // Usa a função de serviço refatorada para buscar a sub-coleção
+          const professionalsList = await getProfessionalsByProviderId(providerId);
+          set({
+            providerProfessionals: professionalsList,
+            isLoadingProfessionals: false,
+          });
+        } catch (error) {
+          console.error("Erro ao buscar profissionais do provedor:", error);
+          set({ 
+            isLoadingProfessionals: false, 
+            providerProfessionals: [], // Retorna vazio em caso de erro para não travar a UI
+            bookingError: "Não foi possível carregar a lista de profissionais.",
+          });
+        }
+      },
+
+      // MÉTODO ATUALIZADO: Chama a busca por profissionais
       fetchProviderDetailsById: async (providerId) => {
         set({ isLoading: true });
         try {
           const providerProfile = await getUserProfile(providerId);
           if (providerProfile && providerProfile.role === "serviceProvider") {
             const freshProvider = providerProfile as ServiceProviderProfile;
+            
+            // 1. Define o perfil principal (sem a lista de profissionais)
             set({
               provider: freshProvider,
               isLoading: false,
             });
-            return freshProvider; // Retorna os dados frescos
+            
+            // 2. CHAMA A NOVA FUNÇÃO DE BUSCA DA SUB-COLEÇÃO
+            get().fetchProviderProfessionals(providerId); 
+
+            return freshProvider;
           } else {
             throw new Error("Prestador não encontrado.");
           }
@@ -83,30 +122,33 @@ export const useBookingProcessStore = create<BookingStore>()(
         }
       },
 
-      // --- NOVA FUNÇÃO DE SINCRONIZAÇÃO ---
-      // Recebe os dados mais recentes do provedor e valida as seleções salvas
+      // FUNÇÃO DE SINCRONIZAÇÃO REFATORADA (O PONTO CRÍTICO)
       syncStateWithFreshProvider: (freshProvider) => {
-        const { selectedServices, professional } = get();
+        // Pega a lista de profissionais do NOVO estado dedicado
+        const { selectedServices, professional, providerProfessionals: currentProfessionals } = get();
+        
+        // A lista de profissionais a ser usada para validação
+        const professionalsList = currentProfessionals || [];
 
-        // 1. Valida os serviços selecionados
+        // 1. Valida os serviços selecionados (lógica inalterada)
         const validSelectedServices = selectedServices.filter((selected) =>
           freshProvider.services.some(
             (freshService) => freshService.id === selected.id
           )
         );
 
-        // 2. Valida o profissional selecionado
-        const isProfessionalStillAvailable = freshProvider.professionals.some(
+        // 2. Valida o profissional selecionado usando a NOVA lista de sub-coleção
+        const isProfessionalStillAvailable = professionalsList.some( 
           (freshProf) => freshProf.id === professional?.id
         );
         const validProfessional = isProfessionalStillAvailable
           ? professional
           : null;
 
-        // Se alguma seleção foi invalidada, reseta os passos seguintes
-        const shouldResetDateTime =
-          !isProfessionalStillAvailable ||
-          validSelectedServices.length !== selectedServices.length;
+        // 3. Define as condições de reset
+        const servicesChanged = validSelectedServices.length !== selectedServices.length;
+        const professionalRemoved = !isProfessionalStillAvailable && professional !== null;
+        const shouldResetDateTime = servicesChanged || professionalRemoved;
 
         set({
           provider: freshProvider,
@@ -114,10 +156,12 @@ export const useBookingProcessStore = create<BookingStore>()(
           professional: validProfessional,
           date: shouldResetDateTime ? null : get().date,
           timeSlot: shouldResetDateTime ? null : get().timeSlot,
-          // Se o profissional foi removido, volta para a seleção de profissional
+          // Se o profissional foi removido, volta para a seleção de profissional (currentStep: 2)
           currentStep:
-            get().currentStep > 2 && !validProfessional ? 2 : get().currentStep,
+            get().currentStep > 2 && (servicesChanged || professionalRemoved) ? 2 : get().currentStep,
           isLoading: false,
+          // IMPORTANTE: Não atualizamos providerProfessionals ou isLoadingProfessionals aqui.
+          // Eles são gerenciados exclusivamente por fetchProviderProfessionals.
         });
       },
 
@@ -127,7 +171,14 @@ export const useBookingProcessStore = create<BookingStore>()(
         const newSelectedServices = isSelected
           ? selectedServices.filter((s) => s.id !== service.id)
           : [...selectedServices, service];
-        set({ selectedServices: newSelectedServices });
+        set({ 
+            selectedServices: newSelectedServices,
+            // Boa Prática: Reseta os passos seguintes ao mudar serviços
+            professional: null,
+            date: null,
+            timeSlot: null,
+            currentStep: 2, 
+        });
       },
       selectProfessional: (professional) =>
         set({ professional, date: null, timeSlot: null, currentStep: 3 }),
@@ -137,12 +188,16 @@ export const useBookingProcessStore = create<BookingStore>()(
       goToPreviousStep: () =>
         set((state) => ({ currentStep: state.currentStep - 1 })),
 
+      // MÉTODO ATUALIZADO: Inclui reset dos novos estados
       resetBooking: (keepProvider = false) => {
         const providerToKeep = keepProvider ? get().provider : null;
         set({
           ...initialState,
           provider: providerToKeep,
           isLoading: !keepProvider,
+          // Assegura que o estado dos profissionais também seja resetado
+          providerProfessionals: null, 
+          isLoadingProfessionals: false,
           redirectUrlAfterLogin: null,
         });
       },
@@ -166,8 +221,8 @@ export const useBookingProcessStore = create<BookingStore>()(
     {
       name: "booking-storage",
       storage: createJSONStorage(() => localStorage),
+      // PARTIALIZE ATUALIZADO: Não persisitimos dados de carregamento ou lista de profissionais
       partialize: (state) => ({
-        // Não salvamos mais o 'provider' e 'isLoading'. Eles serão sempre buscados.
         selectedServices: state.selectedServices,
         professional: state.professional,
         date: state.date,

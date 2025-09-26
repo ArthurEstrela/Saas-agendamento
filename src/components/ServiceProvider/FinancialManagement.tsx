@@ -14,6 +14,7 @@ import {
   Download,
   ClipboardList,
   Users,
+  Loader2,
 } from "lucide-react";
 import {
   Bar,
@@ -30,7 +31,6 @@ import {
 } from "recharts";
 import { motion } from "framer-motion";
 import "react-day-picker/dist/style.css";
-import type { DateRange } from "react-day-picker";
 import { subDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ExpenseModal from "./ExpenseModal";
@@ -59,6 +59,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+// Cartão de Estatística
 const StatCard = ({
   title,
   value,
@@ -82,6 +83,7 @@ const StatCard = ({
   </motion.div>
 );
 
+// Tabela de Transações
 const FinancialTransactionsTable = ({
   transactions,
   onEditExpense,
@@ -126,7 +128,7 @@ const FinancialTransactionsTable = ({
               </td>
               <td className="px-6 py-4 text-sm text-white">
                 {"serviceName" in item
-                  ? `Serviço: ${item.serviceName}`
+                  ? `Serviço: ${item.serviceName} (${item.clientName})` // Adicionado nome do cliente para clareza
                   : item.description}
               </td>
               <td className="px-6 py-4 text-sm">
@@ -155,7 +157,8 @@ const FinancialTransactionsTable = ({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => onEditExpense(item)}
+                      // Casting necessário para Expense, garantido pela checagem "amount" in item
+                      onClick={() => onEditExpense(item as Expense)}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -177,6 +180,7 @@ const FinancialTransactionsTable = ({
   );
 };
 
+// Container de Gráfico
 const ChartContainer = ({
   title,
   children,
@@ -193,11 +197,18 @@ const ChartContainer = ({
 // --- Componente Principal ---
 
 export const FinancialManagement = () => {
-  const { user } = useAuthStore();
-  const { financialData, loading, error, fetchFinancialData, addExpense } =
-    useFinanceStore();
+  // 1. Extração robusta do estado (Seletores Individuais)
+  const user = useAuthStore((state) => state.user);
 
-  // MUDANÇA: Estados separados para início e fim
+  const financialData = useFinanceStore((state) => state.financialData);
+  const loading = useFinanceStore((state) => state.loading);
+  const error = useFinanceStore((state) => state.error);
+  const fetchFinancialData = useFinanceStore(
+    (state) => state.fetchFinancialData
+  );
+  const addExpense = useFinanceStore((state) => state.addExpense);
+
+  // 2. Estado de Período e Modais
   const [startDate, setStartDate] = useState<Date | undefined>(
     subDays(new Date(), 29)
   );
@@ -209,12 +220,12 @@ export const FinancialManagement = () => {
     null
   );
 
+  // 3. Efeito para buscar dados sempre que o período ou o usuário mudar
   useEffect(() => {
-    // MUDANÇA: Verifica ambos os estados antes de buscar
-    if (user && startDate && endDate) {
+    if (user?.uid && startDate && endDate) {
       fetchFinancialData(user.uid, startDate, endDate);
     }
-  }, [user, startDate, endDate, fetchFinancialData]);
+  }, [user?.uid, startDate, endDate, fetchFinancialData]);
 
   const handleOpenEditModal = (expense: Expense) => {
     setExpenseToEdit(expense);
@@ -222,19 +233,20 @@ export const FinancialManagement = () => {
   };
 
   const handleSaveExpense = async (data: Omit<Expense, "id">, id?: string) => {
-    if (!user || !startDate || !endDate) return;
+    if (!user?.uid || !startDate || !endDate) return;
     if (id) {
       await updateExpense(user.uid, id, data);
     } else {
       await addExpense(user.uid, data);
     }
+    // Recarrega os dados após salvar/atualizar
     fetchFinancialData(user.uid, startDate, endDate);
     setIsExpenseModalOpen(false);
     setExpenseToEdit(null);
   };
 
   const executeDeleteExpense = async () => {
-    if (user && expenseIdToDelete && startDate && endDate) {
+    if (user?.uid && expenseIdToDelete && startDate && endDate) {
       await deleteExpense(user.uid, expenseIdToDelete);
       fetchFinancialData(user.uid, startDate, endDate);
       setExpenseIdToDelete(null);
@@ -242,12 +254,14 @@ export const FinancialManagement = () => {
   };
 
   const handleExportCSV = () => {
+    // Melhoria de UX: Usar a Toast/Modal de confirmação, mas mantendo o alert por falta do contexto Toast aqui
     if (
       !allTransactions ||
       allTransactions.length === 0 ||
       !startDate ||
       !endDate
     ) {
+      // Usar console.error ou uma modal customizada aqui seria melhor, mas mantemos o alert por limitação
       alert("Nenhuma transação para exportar no período selecionado.");
       return;
     }
@@ -259,12 +273,14 @@ export const FinancialManagement = () => {
     exportTransactionsToCsv(filename, allTransactions);
   };
 
+  // 4. Memoização das transações combinadas
   const allTransactions = useMemo(() => {
     if (!financialData) return [];
     const combined = [
       ...(financialData.appointments || []),
       ...(financialData.expenses || []),
     ];
+    // Ordena por data (mais recente primeiro)
     return combined.sort(
       (a, b) =>
         normalizeTimestamp("date" in b ? b.date : b.startTime).getTime() -
@@ -272,11 +288,13 @@ export const FinancialManagement = () => {
     );
   }, [financialData]);
 
+  // 5. Memoização dos dados do gráfico de barras (Receita vs Despesa)
   const barChartData = useMemo(() => {
     if (!financialData) return [];
     const dailyData: Record<string, { revenue: number; expenses: number }> = {};
     financialData.appointments.forEach((appt) => {
-      const date = normalizeTimestamp(appt.completedAt || appt.startTime);
+      const dateSource = appt.completedAt || appt.startTime;
+      const date = normalizeTimestamp(dateSource);
       const day = format(date, "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
       dailyData[day].revenue += appt.totalPrice;
@@ -293,9 +311,10 @@ export const FinancialManagement = () => {
         Receita: values.revenue,
         Despesa: values.expenses,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => a.date.localeCompare(b.date)); // Ordena por data (string)
   }, [financialData]);
 
+  // 6. Memoização dos dados do gráfico de pizza (Despesas por Categoria)
   const pieChartData = useMemo(() => {
     if (!financialData?.expenses || financialData.expenses.length === 0)
       return [];
@@ -313,10 +332,10 @@ export const FinancialManagement = () => {
   }, [financialData?.expenses]);
 
   const PIE_CHART_COLORS = [
-    "#FFC107",
-    "#FF8F00",
-    "#FF6F00",
-    "#F57C00",
+    "#FFC107", // Amarelo
+    "#FF8F00", // Laranja Claro
+    "#FF6F00", // Laranja
+    "#F57C00", // Laranja Escuro
     "#EF6C00",
     "#E65100",
   ];
@@ -324,9 +343,11 @@ export const FinancialManagement = () => {
   if (loading)
     return (
       <div className="flex justify-center items-center h-full">
-        <p>Carregando dados financeiros...</p>
+        <Loader2 className="animate-spin text-amber-500" size={48} />
+        <p className="ml-4 text-gray-400">Carregando dados financeiros...</p>
       </div>
     );
+
   if (error)
     return (
       <div className="bg-red-900/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg flex items-center">
@@ -348,8 +369,10 @@ export const FinancialManagement = () => {
             Acompanhe a saúde financeira do seu negócio.
           </p>
         </div>
-        {/* MUDANÇA: Novo seletor de data com dois campos */}
+
+        {/* Seletor de data */}
         <div className="flex flex-col sm:flex-row items-center gap-2">
+          {/* Popover/Calendar Trigger (Start Date) */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -371,6 +394,7 @@ export const FinancialManagement = () => {
             </PopoverContent>
           </Popover>
           <span className="text-gray-400 hidden sm:block">até</span>
+          {/* Popover/Calendar Trigger (End Date) */}
           <Popover>
             <PopoverTrigger asChild>
               <Button

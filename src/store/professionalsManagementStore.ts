@@ -27,7 +27,7 @@ interface ProfessionalsManagementState {
   ) => Promise<void>;
   removeProfessional: (
     providerId: string,
-    professional: Professional
+    professional: string
   ) => Promise<void>;
 }
 
@@ -105,14 +105,16 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    removeProfessional: async (providerId, professional) => {
+    removeProfessional: async (providerId, professionalId) => {
       set({ isSubmitting: true, error: null });
       try {
-        await removeProfessionalFromProvider(providerId, professional);
+        // Chama a função de serviço refatorada, passando apenas o ID
+        await removeProfessionalFromProvider(providerId, professionalId);
+
+        // Recarrega o perfil para atualizar o estado global, se necessário.
         await useProfileStore.getState().fetchUserProfile(providerId);
         set({ isSubmitting: false });
       } catch (err: unknown) {
-        // --- TRATAMENTO DE ERRO COMPLETO ---
         let errorMessage = "Falha ao remover o profissional.";
         if (err instanceof Error) {
           errorMessage = err.message;

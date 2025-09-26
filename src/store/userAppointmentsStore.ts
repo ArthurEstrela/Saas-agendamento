@@ -6,9 +6,16 @@ import {
   onSnapshot,
   orderBy,
   Timestamp,
+  // NOVOS IMPORTS para buscar o documento do profissional
+  doc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
-import type { Appointment, ServiceProviderProfile } from "../types";
+import type {
+  Appointment,
+  ServiceProviderProfile,
+  Professional,
+} from "../types"; // Importar Professional para tipagem
 import { getUserProfile } from "../firebase/userService";
 
 export interface EnrichedAppointment extends Appointment {
@@ -34,6 +41,33 @@ const initialState: Omit<UserAppointmentsState, "unsubscribe"> = {
   error: null,
 };
 
+// 1. FUNÇÃO AUXILIAR PARA BUSCAR A FOTO NA SUB-COLEÇÃO
+const fetchProfessionalPhotoUrl = async (
+  providerId: string,
+  professionalId: string
+): Promise<string | undefined> => {
+  try {
+    // Cria a referência direta ao documento na sub-coleção
+    const professionalRef = doc(
+      db,
+      "users",
+      providerId,
+      "professionals",
+      professionalId
+    );
+    const professionalSnap = await getDoc(professionalRef);
+
+    if (professionalSnap.exists()) {
+      const professionalData = professionalSnap.data() as Professional;
+      return professionalData.photoURL;
+    }
+    return undefined;
+  } catch (error) {
+    console.error("Erro ao buscar foto do profissional na sub-coleção:", error);
+    return undefined;
+  }
+};
+
 export const useUserAppointmentsStore = create<
   UserAppointmentsState & UserAppointmentsActions
 >((set, get) => ({
@@ -42,6 +76,9 @@ export const useUserAppointmentsStore = create<
 
   fetchAppointments: (userId) => {
     set({ isLoading: true });
+
+    // Cancela qualquer listener anterior antes de criar um novo
+    get().unsubscribe();
 
     const q = query(
       collection(db, "appointments"),
@@ -58,34 +95,37 @@ export const useUserAppointmentsStore = create<
             const appointmentData = {
               id: doc.id,
               ...data,
-              // Adiciona verificação para evitar erro se startTime/endTime não existirem
               startTime: (data.startTime as Timestamp)?.toDate(),
               endTime: (data.endTime as Timestamp)?.toDate(),
             } as Appointment;
 
-            // ================== AQUI ESTÁ A CORREÇÃO ==================
-            // Verifica se providerId existe antes de tentar buscar o perfil
+            let providerProfile: ServiceProviderProfile | null = null;
+            let professionalPhotoUrl: string | undefined = undefined;
+
             if (appointmentData.providerId) {
-              const providerProfile = (await getUserProfile(
+              // 1. Busca o perfil do provedor (necessário para businessName, address, etc.)
+              providerProfile = (await getUserProfile(
                 appointmentData.providerId
               )) as ServiceProviderProfile | null;
-              const professionalPhotoUrl = providerProfile?.professionals?.find(
-                (p) => p.id === appointmentData.professionalId
-              )?.photoURL;
 
-              return {
-                ...appointmentData,
-                provider: providerProfile || undefined,
-                professionalPhotoUrl: professionalPhotoUrl || undefined,
-              };
+              // 2. BUSCA A FOTO NA NOVA SUB-COLEÇÃO (Lógica Corrigida)
+              if (providerProfile && appointmentData.professionalId) {
+                professionalPhotoUrl = await fetchProfessionalPhotoUrl(
+                  appointmentData.providerId,
+                  appointmentData.professionalId
+                );
+              }
             } else {
-              // Se não houver providerId, retorna o agendamento sem os dados extras
               console.warn(
                 `Agendamento com ID ${appointmentData.id} está sem providerId.`
               );
-              return appointmentData;
             }
-            // ==========================================================
+
+            return {
+              ...appointmentData,
+              provider: providerProfile || undefined,
+              professionalPhotoUrl: professionalPhotoUrl || undefined,
+            };
           }
         );
 

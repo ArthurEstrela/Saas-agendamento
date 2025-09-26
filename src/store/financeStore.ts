@@ -1,66 +1,50 @@
-import { create } from 'zustand';
-import type { FinancialData, Expense } from '../types';
-import { getFinancialData } from '../firebase/financeService';
-import { addExpense, deleteExpense } from '../firebase/expenseService';
+// src/store/financeStore.ts
+
+import {create} from "zustand";
+import { getFinancialData } from "../firebase/financeService";
+import { addExpense as addExpenseService } from "../firebase/expenseService";
+import type { FinancialData, Expense } from "../types";
 
 interface FinanceState {
   financialData: FinancialData | null;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
-  fetchFinancialData: (providerId: string) => Promise<void>;
-  addNewExpense: (providerId: string, expenseData: Omit<Expense, 'id' | 'date'>) => Promise<void>;
-  removeExpense: (providerId: string, expenseId: string) => Promise<void>;
+  fetchFinancialData: (
+    providerId: string,
+    startDate: Date,
+    endDate: Date
+  ) => Promise<void>;
+  addExpense: (
+    providerId: string,
+    expense: Omit<Expense, "id">
+  ) => Promise<void>;
 }
 
-export const useFinanceStore = create<FinanceState>((set, get) => ({
+export const useFinanceStore = create<FinanceState>((set) => ({
   financialData: null,
-  isLoading: false,
+  loading: true,
   error: null,
-
-  fetchFinancialData: async (providerId) => {
-    if (!providerId) return;
-    set({ isLoading: true, error: null });
+  fetchFinancialData: async (providerId, startDate, endDate) => {
+    set({ loading: true, error: null });
     try {
-      const data = await getFinancialData(providerId);
-      set({ financialData: data, isLoading: false });
-    } catch (err: unknown) {
-      let errorMessage = "Erro ao buscar dados financeiros.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      console.error(errorMessage, err);
-      set({ error: errorMessage, isLoading: false });
+      const data = await getFinancialData(providerId, startDate, endDate);
+      set({ financialData: data, loading: false });
+    } catch (error) {
+      console.error("Error fetching financial data:", error);
+      set({
+        error: "Falha ao buscar dados financeiros.",
+        loading: false,
+      });
     }
   },
-  
-  addNewExpense: async (providerId, expenseData) => {
+  addExpense: async (providerId, expenseData) => {
     try {
-      await addExpense(providerId, expenseData);
-      // Atualiza os dados financeiros para refletir a nova despesa
-      get().fetchFinancialData(providerId); 
-    } catch (err: unknown) {
-      let errorMessage = "Erro ao adicionar nova despesa.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      console.error(errorMessage, err);
-      // Opcional: definir o erro no estado se a UI precisar reagir
-      set({ error: errorMessage });
+      await addExpenseService(providerId, expenseData);
+      // A lógica para recarregar os dados já está no componente,
+      // que chama fetchFinancialData novamente após a adição.
+    } catch (error) {
+      console.error("Error adding expense:", error);
+      set({ error: "Falha ao adicionar despesa." });
     }
   },
-
-  removeExpense: async (providerId, expenseId) => {
-    try {
-      await deleteExpense(providerId, expenseId);
-      // Atualiza os dados para refletir a remoção da despesa
-      get().fetchFinancialData(providerId);
-    } catch (err: unknown) {
-      let errorMessage = "Erro ao remover despesa.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      console.error(errorMessage, err);
-      set({ error: errorMessage });
-    }
-  }
 }));

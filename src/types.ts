@@ -164,14 +164,17 @@ export interface Expense {
   id: string;
   description: string;
   amount: number;
-  date: Date;
+  date: Date | FieldValue;
   category: string;
+  type: "one-time" | "recurring"; 
+  frequency?: "monthly";
 }
 
 export interface FinancialData {
   totalRevenue: number;
   totalExpenses: number;
   netIncome: number;
-  monthlyRevenue: Record<string, number>; // Ex: { "2023-01": 5000, "2023-02": 6000 }
+  monthlyRevenue: Record<string, number>; 
   expenses: Expense[];
+  appointments: Appointment[];
 }

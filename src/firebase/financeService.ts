@@ -1,3 +1,5 @@
+// src/firebase/financeService.ts
+
 import {
   collection,
   query,
@@ -6,55 +8,60 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./config";
-import type { Appointment, FinancialData } from "../types";
-import { getExpensesByProviderId } from "./expenseService";
+import type { Appointment, Expense, FinancialData } from "../types";
 
-/**
- * Calcula os dados financeiros para um prestador de serviço com base nos agendamentos concluídos.
- * @param providerId O ID do prestador de serviço (usuário).
- */
 export const getFinancialData = async (
-  providerId: string
+  providerId: string,
+  startDate: Date,
+  endDate: Date
 ): Promise<FinancialData> => {
-  // 1. Buscar todos os agendamentos concluídos
-  const appointmentsCollection = collection(db, "appointments");
-  const q = query(
-    appointmentsCollection,
+  const startTimestamp = Timestamp.fromDate(startDate);
+  const endTimestamp = Timestamp.fromDate(endDate);
+
+  // 1. Buscar Agendamentos (Receitas)
+  const appointmentsRef = collection(db, "appointments");
+  const appointmentsQuery = query(
+    appointmentsRef,
     where("providerId", "==", providerId),
-    where("status", "==", "completed")
+    where("status", "==", "completed"),
+    where("completedAt", ">=", startTimestamp),
+    where("completedAt", "<=", endTimestamp)
   );
 
-  const querySnapshot = await getDocs(q);
-  const completedAppointments = querySnapshot.docs.map(
-    (doc) => doc.data() as Appointment
+  const appointmentsSnapshot = await getDocs(appointmentsQuery);
+  const appointments = appointmentsSnapshot.docs.map(
+    (doc) => ({ id: doc.id, ...doc.data() } as Appointment)
   );
 
-  // 2. Buscar todas as despesas
-  const expenses = await getExpensesByProviderId(providerId);
+  // 2. Buscar Despesas
+  const expensesRef = collection(db, `serviceProviders/${providerId}/expenses`);
+  const expensesQuery = query(
+    expensesRef,
+    where("date", ">=", startTimestamp),
+    where("date", "<=", endTimestamp)
+  );
+  const expensesSnapshot = await getDocs(expensesQuery);
+  const expenses = expensesSnapshot.docs.map(
+    (doc) => ({ id: doc.id, ...doc.data() } as Expense)
+  );
 
-  // 3. Calcular os totais
-  const totalRevenue = completedAppointments.reduce((acc, app) => {
-    // Utiliza o finalPrice do agendamento, com um fallback para 0 se não estiver definido
-    const servicePrice = app.finalPrice || 0;
-    return acc + servicePrice;
-  }, 0);
-
-  const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+  // 3. Calcular Totais
+  const totalRevenue = appointments.reduce(
+    (sum, appt) => sum + (appt.finalPrice || appt.totalPrice),
+    0
+  );
+  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const netIncome = totalRevenue - totalExpenses;
 
-  // 4. Calcular receita mensal
+  // 4. Estruturar dados mensais
   const monthlyRevenue: Record<string, number> = {};
-  completedAppointments.forEach((app) => {
-    if (app.endTime) {
-      const month = (app.endTime as unknown as Timestamp)
-        .toDate()
-        .toISOString()
-        .slice(0, 7);
-      const servicePrice = app.finalPrice || 0;
-      if (!monthlyRevenue[month]) {
-        monthlyRevenue[month] = 0;
+  appointments.forEach((appt) => {
+    if (appt.completedAt && appt.completedAt instanceof Timestamp) {
+      const monthYear = appt.completedAt.toDate().toISOString().slice(0, 7); // "YYYY-MM"
+      if (!monthlyRevenue[monthYear]) {
+        monthlyRevenue[monthYear] = 0;
       }
-      monthlyRevenue[month] += servicePrice;
+      monthlyRevenue[monthYear] += appt.finalPrice || appt.totalPrice;
     }
   });
 
@@ -64,5 +71,6 @@ export const getFinancialData = async (
     netIncome,
     monthlyRevenue,
     expenses,
+    appointments, // A propriedade 'appointments' agora é esperada pelo tipo FinancialData
   };
 };

@@ -46,7 +46,7 @@ import * as z from "zod";
 import { useViaCep } from "../../hooks/useViaCep";
 import { IMaskInput } from "react-imask";
 import Cropper, { type Area } from "react-easy-crop";
-import getCroppedImg from "../utils/cropImage";
+import getCroppedImg from "../../lib/utils/cropImage";
 import {
   MapContainer,
   TileLayer,

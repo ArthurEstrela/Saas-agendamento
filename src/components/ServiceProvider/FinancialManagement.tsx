@@ -1,259 +1,529 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFinanceStore } from "../../store/financeStore";
-import { useProfileStore } from "../../store/profileStore";
+import { useAuthStore } from "../../store/authStore";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
-import {
-  DollarSign,
+  AlertCircle,
   ArrowDown,
   ArrowUp,
+  Calendar as CalendarIcon,
+  DollarSign,
   PlusCircle,
+  TrendingUp,
+  Edit,
   Trash2,
-  Loader2,
+  Download, // Ícone importado
 } from "lucide-react";
-import type { Expense } from "../../types";
-import { ExpenseModal } from "./ExpenseModal";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Pie,
+  Cell,
+  PieChart as RechartsPieChart,
+} from "recharts";
+import { motion } from "framer-motion";
+import "react-day-picker/dist/style.css";
+import type { DateRange } from "react-day-picker";
+import { subDays, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import ExpenseModal from "./ExpenseModal";
+import type { Appointment, Expense } from "../../types";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
+import { Timestamp } from "firebase/firestore";
+import { updateExpense, deleteExpense } from "../../firebase/expenseService";
+import { ConfirmationModal } from "../Common/ConfirmationModal";
+import { exportTransactionsToCsv } from "../../lib/utils/exportToCsv"; // Importando a nova função
 
-// Card para exibir métricas principais (sem alterações)
+// --- Funções Utilitárias ---
+// ... (normalizeTimestamp e formatCurrency permanecem as mesmas)
+const normalizeTimestamp = (dateValue: unknown): Date => {
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate();
+  }
+  return new Date(dateValue as string | number | Date);
+};
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+};
+
+// --- Componentes de UI Internos ---
+// ... (StatCard, FinancialTransactionsTable, ChartContainer permanecem os mesmos)
 const StatCard = ({
   title,
   value,
   icon: Icon,
-  color,
 }: {
   title: string;
   value: string;
   icon: React.ElementType;
-  color: string;
 }) => (
-  <div className="bg-gray-800/70 p-6 rounded-xl border border-gray-700 flex items-center gap-4">
-    <div className={`p-3 rounded-lg bg-${color}-500/20 text-${color}-400`}>
-      <Icon size={28} />
+  <motion.div
+    whileHover={{ scale: 1.05 }}
+    className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 flex flex-col justify-between"
+  >
+    <div className="flex items-center justify-between text-gray-400">
+      <span className="text-sm font-medium">{title}</span>
+      <Icon className="w-6 h-6" />
     </div>
-    <div>
-      <p className="text-sm text-gray-400">{title}</p>
-      <p className="text-2xl font-bold text-white">{value}</p>
+    <div className="mt-4">
+      <h3 className="text-3xl font-bold text-white">{value}</h3>
     </div>
+  </motion.div>
+);
+
+const FinancialTransactionsTable = ({
+  transactions,
+  onEditExpense,
+  onDeleteExpense,
+}: {
+  transactions: (Appointment | Expense)[];
+  onEditExpense: (expense: Expense) => void;
+  onDeleteExpense: (expenseId: string) => void;
+}) => {
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-700">
+        <thead className="bg-gray-800/60">
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              Data
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              Descrição
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              Tipo
+            </th>
+            <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+              Valor
+            </th>
+            <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+              Ações
+            </th>
+          </tr>
+        </thead>
+        <tbody className="bg-gray-800/30 divide-y divide-gray-700/50">
+          {transactions.map((item) => (
+            <tr key={item.id}>
+              <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">
+                {format(
+                  normalizeTimestamp(
+                    "date" in item ? item.date : item.startTime
+                  ),
+                  "dd/MM/yyyy"
+                )}
+              </td>
+              <td className="px-6 py-4 text-sm text-white">
+                {"serviceName" in item
+                  ? `Serviço: ${item.serviceName}`
+                  : item.description}
+              </td>
+              <td className="px-6 py-4 text-sm">
+                {"totalPrice" in item ? (
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-900 text-emerald-300">
+                    Receita
+                  </span>
+                ) : (
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900 text-red-300">
+                    Despesa
+                  </span>
+                )}
+              </td>
+              <td
+                className={`px-6 py-4 text-sm text-right font-medium ${
+                  "totalPrice" in item ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {"totalPrice" in item
+                  ? `+ ${formatCurrency(item.totalPrice)}`
+                  : `- ${formatCurrency(item.amount)}`}
+              </td>
+              <td className="px-6 py-4 text-right">
+                {"amount" in item && ( // Mostra ações apenas para despesas
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEditExpense(item)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDeleteExpense(item.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const ChartContainer = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50">
+    <h2 className="text-xl font-semibold text-white mb-4">{title}</h2>
+    <div className="h-80">{children}</div>
   </div>
 );
 
-// -- Componente Principal do Financeiro --
+// --- Componente Principal ---
+
 export const FinancialManagement = () => {
-  const { userProfile } = useProfileStore();
-  const {
-    financialData,
-    isLoading,
-    error,
-    fetchFinancialData,
-    removeExpense,
-    addNewExpense,
-  } = useFinanceStore();
-  const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
+  const { user } = useAuthStore();
+  const { financialData, loading, error, fetchFinancialData, addExpense } =
+    useFinanceStore();
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 29),
+    to: new Date(),
+  });
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
+  const [expenseIdToDelete, setExpenseIdToDelete] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
-    if (userProfile?.id) {
-      fetchFinancialData(userProfile.id);
+    if (user && dateRange?.from && dateRange?.to) {
+      fetchFinancialData(user.uid, dateRange.from, dateRange.to);
     }
-  }, [userProfile, fetchFinancialData]);
+  }, [user, dateRange, fetchFinancialData]);
 
-  const handleSaveExpense = async (
-    expenseData: Omit<Expense, "id" | "date">
-  ) => {
-    if (userProfile?.id) {
-      await addNewExpense(userProfile.id, expenseData);
-      setExpenseModalOpen(false);
+  const handleOpenEditModal = (expense: Expense) => {
+    setExpenseToEdit(expense);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleSaveExpense = async (data: Omit<Expense, "id">, id?: string) => {
+    if (!user || !dateRange?.from || !dateRange?.to) return;
+    if (id) {
+      await updateExpense(user.uid, id, data);
+    } else {
+      await addExpense(user.uid, data);
+    }
+    fetchFinancialData(user.uid, dateRange.from, dateRange.to);
+    setIsExpenseModalOpen(false);
+    setExpenseToEdit(null);
+  };
+
+  const executeDeleteExpense = async () => {
+    if (user && expenseIdToDelete && dateRange?.from && dateRange?.to) {
+      await deleteExpense(user.uid, expenseIdToDelete);
+      fetchFinancialData(user.uid, dateRange.from, dateRange.to);
+      setExpenseIdToDelete(null);
     }
   };
 
-  const chartData = useMemo(() => {
-    if (!financialData?.monthlyRevenue) return [];
-    return Object.entries(financialData.monthlyRevenue)
-      .map(([month, revenue]) => ({ name: month, Faturamento: revenue }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+  const handleExportCSV = () => {
+    if (
+      !allTransactions ||
+      allTransactions.length === 0 ||
+      !dateRange?.from ||
+      !dateRange.to
+    ) {
+      alert("Nenhuma transação para exportar no período selecionado.");
+      return;
+    }
+
+    const startDate = format(dateRange.from, "yyyy-MM-dd");
+    const endDate = format(dateRange.to, "yyyy-MM-dd");
+    const filename = `relatorio_financeiro_${startDate}_a_${endDate}.csv`;
+
+    exportTransactionsToCsv(filename, allTransactions);
+  };
+
+  const allTransactions = useMemo(() => {
+    if (!financialData) return [];
+    const combined = [
+      ...(financialData.appointments || []),
+      ...(financialData.expenses || []),
+    ];
+    return combined.sort(
+      (a, b) =>
+        normalizeTimestamp("date" in b ? b.date : b.startTime).getTime() -
+        normalizeTimestamp("date" in a ? a.date : a.startTime).getTime()
+    );
   }, [financialData]);
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
+  // ... (barChartData e pieChartData permanecem os mesmos)
+  const barChartData = useMemo(() => {
+    if (!financialData) return [];
+    const dailyData: Record<string, { revenue: number; expenses: number }> = {};
 
-  if (isLoading) {
+    financialData.appointments.forEach((appt) => {
+      const date = normalizeTimestamp(appt.completedAt || appt.startTime);
+      const day = format(date, "yyyy-MM-dd");
+      if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
+      dailyData[day].revenue += appt.totalPrice;
+    });
+
+    financialData.expenses.forEach((exp) => {
+      const date = normalizeTimestamp(exp.date);
+      const day = format(date, "yyyy-MM-dd");
+      if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
+      dailyData[day].expenses += exp.amount;
+    });
+
+    return Object.entries(dailyData)
+      .map(([date, values]) => ({
+        date: format(new Date(date), "dd/MM"),
+        Receita: values.revenue,
+        Despesa: values.expenses,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [financialData]);
+
+  const pieChartData = useMemo(() => {
+    if (!financialData?.expenses || financialData.expenses.length === 0)
+      return [];
+    const categoryTotals = financialData.expenses.reduce((acc, expense) => {
+      const category = expense.category || "Outros";
+      if (!acc[category]) acc[category] = 0;
+      acc[category] += expense.amount;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(categoryTotals).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }, [financialData?.expenses]);
+
+  const PIE_CHART_COLORS = [
+    "#FFC107",
+    "#FF8F00",
+    "#FF6F00",
+    "#F57C00",
+    "#EF6C00",
+    "#E65100",
+  ];
+
+  if (loading)
     return (
-      <div className="flex justify-center items-center p-20">
-        <Loader2 className="animate-spin text-[#daa520]" size={40} />
+      <div className="flex justify-center items-center h-full">
+        <p>Carregando dados financeiros...</p>
       </div>
     );
-  }
-
-  if (error) {
+  if (error)
     return (
-      <div className="text-center text-red-400 p-10 bg-red-500/10 rounded-lg">
-        {error}
+      <div className="bg-red-900/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg flex items-center">
+        <AlertCircle className="mr-3" />
+        <p>Erro ao carregar dados: {error}</p>
       </div>
     );
-  }
-
-  if (!financialData) {
-    return (
-      <div className="text-center text-gray-500">
-        Não há dados financeiros para exibir.
-      </div>
-    );
-  }
 
   return (
-    <div className="animate-fade-in-down">
-      <h1 className="text-3xl font-bold text-white mb-8">Visão Financeira</h1>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <header className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Painel Financeiro</h1>
+          <p className="text-gray-400 mt-1">
+            Acompanhe a saúde financeira do seu negócio.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className="w-full sm:w-[280px] justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    `${format(dateRange.from, "dd/MM/yyyy", {
+                      locale: ptBR,
+                    })} - ${format(dateRange.to, "dd/MM/yyyy", {
+                      locale: ptBR,
+                    })}`
+                  ) : (
+                    format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })
+                  )
+                ) : (
+                  <span>Selecione um período</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="range"
+                selected={dateRange}
+                onSelect={setDateRange}
+                initialFocus
+                locale={ptBR}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </header>
 
-      {/* Seção de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
-          title="Faturamento Bruto"
-          value={formatCurrency(financialData.totalRevenue)}
-          icon={ArrowUp}
-          color="green"
+          title="Receita Bruta"
+          value={formatCurrency(financialData?.totalRevenue || 0)}
+          icon={TrendingUp}
         />
         <StatCard
-          title="Total de Despesas"
-          value={formatCurrency(financialData.totalExpenses)}
+          title="Despesas"
+          value={formatCurrency(financialData?.totalExpenses || 0)}
           icon={ArrowDown}
-          color="red"
         />
         <StatCard
           title="Lucro Líquido"
-          value={formatCurrency(financialData.netIncome)}
+          value={formatCurrency(financialData?.netIncome || 0)}
           icon={DollarSign}
-          color="yellow"
         />
-      </div>
+      </section>
 
-      {/* Seção do Gráfico */}
-      <div className="bg-gray-800/70 p-4 sm:p-6 rounded-xl border border-gray-700 mb-10">
-        <h2 className="text-xl font-semibold text-white mb-4">
-          Faturamento Mensal
-        </h2>
-        <div style={{ width: "100%", height: 300 }}>
-          <ResponsiveContainer>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
-              <XAxis dataKey="name" stroke="#9CA3AF" fontSize={12} />
-              <YAxis
-                stroke="#9CA3AF"
-                fontSize={12}
-                tickFormatter={(value) => formatCurrency(Number(value))}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#1F2937",
-                  border: "1px solid #4B5563",
-                }}
-                labelStyle={{ color: "#F9FAFB" }}
-              />
-              <Legend />
-              <Bar dataKey="Faturamento" fill="#daa520" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartContainer title="Receitas vs. Despesas">
+          {barChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
+                <XAxis dataKey="date" stroke="#A0AEC0" />
+                <YAxis
+                  stroke="#A0AEC0"
+                  tickFormatter={(value) => formatCurrency(Number(value))}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1A202C",
+                    borderColor: "#4A5568",
+                  }}
+                  formatter={(value: number) => formatCurrency(value)}
+                />
+                <Legend />
+                <Bar
+                  dataKey="Receita"
+                  fill="#48BB78"
+                  name="Receita"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="Despesa"
+                  fill="#F56565"
+                  name="Despesa"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              Sem dados para exibir o gráfico.
+            </div>
+          )}
+        </ChartContainer>
+        <ChartContainer title="Despesas por Categoria">
+          {pieChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <RechartsPieChart>
+                <Pie
+                  data={pieChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  fill="#8884d8"
+                >
+                  {pieChartData.map((_entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Legend />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              Nenhuma despesa registrada no período.
+            </div>
+          )}
+        </ChartContainer>
+      </section>
 
-      {/* Seção de Despesas com Layout Responsivo */}
-      <div>
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+      <section className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
           <h2 className="text-xl font-semibold text-white">
-            Registro de Despesas
+            Extrato Financeiro
           </h2>
-          <button
-            onClick={() => setExpenseModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-[#daa520] text-black font-semibold px-4 py-2 rounded-lg hover:bg-[#c8961e] transition-colors w-full sm:w-auto"
-          >
-            <PlusCircle size={20} /> Adicionar Despesa
-          </button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleExportCSV}>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar CSV
+            </Button>
+            <Button
+              onClick={() => {
+                setExpenseToEdit(null);
+                setIsExpenseModalOpen(true);
+              }}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Adicionar Despesa
+            </Button>
+          </div>
         </div>
-        
-        {/* Tabela para telas maiores */}
-        <div className="hidden md:block bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden">
-          <table className="w-full text-left">
-            <thead className="bg-gray-900/50">
-              <tr>
-                <th className="p-4">Descrição</th>
-                <th className="p-4">Categoria</th>
-                <th className="p-4">Data</th>
-                <th className="p-4 text-right">Valor</th>
-                <th className="p-4 text-center">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {financialData.expenses.map((expense) => (
-                <tr key={expense.id} className="border-t border-gray-700">
-                  <td className="p-4">{expense.description}</td>
-                  <td className="p-4 text-gray-400">{expense.category}</td>
-                  <td className="p-4 text-gray-400">
-                    {new Date(expense.date).toLocaleDateString("pt-BR")}
-                  </td>
-                  <td className="p-4 text-right font-mono text-red-400">
-                    {formatCurrency(expense.amount)}
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() =>
-                        userProfile?.id &&
-                        removeExpense(userProfile.id, expense.id)
-                      }
-                      className="text-gray-500 hover:text-red-400"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Lista de Cards para telas menores */}
-        <div className="md:hidden space-y-4">
-            {financialData.expenses.map((expense) => (
-                 <div key={expense.id} className="bg-gray-800/70 p-4 rounded-xl border border-gray-700">
-                     <div className="flex justify-between items-start">
-                         <div>
-                             <p className="font-semibold text-white">{expense.description}</p>
-                             <p className="text-sm text-gray-400">{expense.category}</p>
-                         </div>
-                         <button
-                            onClick={() => userProfile?.id && removeExpense(userProfile.id, expense.id)}
-                            className="text-gray-500 hover:text-red-400 p-1"
-                         >
-                             <Trash2 size={18} />
-                         </button>
-                     </div>
-                     <div className="flex justify-between items-end mt-2">
-                         <span className="text-xs text-gray-500">
-                             {new Date(expense.date).toLocaleDateString("pt-BR")}
-                         </span>
-                         <span className="font-bold text-red-400 text-lg">
-                             {formatCurrency(expense.amount)}
-                         </span>
-                     </div>
-                 </div>
-            ))}
-        </div>
+        {allTransactions.length > 0 ? (
+          <FinancialTransactionsTable
+            transactions={allTransactions}
+            onEditExpense={handleOpenEditModal}
+            onDeleteExpense={setExpenseIdToDelete}
+          />
+        ) : (
+          <div className="text-center py-12 text-gray-500">
+            Nenhuma transação encontrada para este período.
+          </div>
+        )}
+      </section>
 
-      </div>
       <ExpenseModal
         isOpen={isExpenseModalOpen}
-        onClose={() => setExpenseModalOpen(false)}
+        onClose={() => {
+          setIsExpenseModalOpen(false);
+          setExpenseToEdit(null);
+        }}
         onSave={handleSaveExpense}
-        isLoading={isLoading}
+        expenseToEdit={expenseToEdit}
       />
-    </div>
+      <ConfirmationModal
+        isOpen={!!expenseIdToDelete}
+        onClose={() => setExpenseIdToDelete(null)}
+        onConfirm={executeDeleteExpense}
+        title="Confirmar Exclusão"
+        message="Você tem certeza que deseja excluir esta despesa? Esta ação não pode ser desfeita."
+      />
+    </motion.div>
   );
 };

@@ -11,7 +11,7 @@ const LoginPage: React.FC = () => {
   const { redirectUrlAfterLogin, setRedirectUrlAfterLogin } =
     useBookingProcessStore();
 
-const handleLoginSuccess = (user: UserProfile) => {
+  const handleLoginSuccess = (user: UserProfile) => {
     // ✨ LÓGICA DE REDIRECIONAMENTO SIMPLIFICADA E ROBUSTA
     if (redirectUrlAfterLogin) {
       const url = redirectUrlAfterLogin;
@@ -63,6 +63,14 @@ const handleLoginSuccess = (user: UserProfile) => {
               className="font-semibold text-[#daa520] hover:text-yellow-400"
             >
               Cadastre-se agora!
+            </Link>
+          </p>
+          <p>
+            <Link
+              to="/forgot-password"
+              className="text-sm font-semibold text-gray-400 hover:text-[#daa520] transition-colors"
+            >
+              Esqueci minha senha
             </Link>
           </p>
         </div>

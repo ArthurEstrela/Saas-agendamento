@@ -1,19 +1,19 @@
-import { useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
-import { useAuthStore } from './store/authStore';
-import { AnimatePresence } from 'framer-motion';
+import { useEffect } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
+import { useAuthStore } from "./store/authStore";
+import { AnimatePresence } from "framer-motion";
 
 // Importando os Layouts e Páginas
-import AppLayout from './components/AppLayout';
-import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import { ProtectedRoute } from './components/Common/ProtectedRoute';
-import RegisterTypeSelection from './pages/RegisterTypeSelection';
-import RegisterPage from './pages/RegisterPage';
-import { BookingPage } from './pages/BookingPage';
-import PublicBookingPage from './pages/PublicBookingPage';
-
+import AppLayout from "./components/AppLayout";
+import HomePage from "./pages/HomePage";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import { ProtectedRoute } from "./components/Common/ProtectedRoute";
+import RegisterTypeSelection from "./pages/RegisterTypeSelection";
+import RegisterPage from "./pages/RegisterPage";
+import { BookingPage } from "./pages/BookingPage";
+import PublicBookingPage from "./pages/PublicBookingPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
 function App() {
   const location = useLocation();
@@ -34,7 +34,8 @@ function App() {
         </Route>
 
         {/* Rotas Públicas sem o Layout Principal */}
-         <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/register-type" element={<RegisterTypeSelection />} />
         <Route path="/register/:userType" element={<RegisterPage />} />
         <Route path="/agendar/:slug" element={<PublicBookingPage />} />

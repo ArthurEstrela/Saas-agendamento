@@ -10,9 +10,9 @@ import { Timestamp } from "firebase/firestore";
 
 const expenseSchema = z.object({
   description: z.string().min(3, "A descrição é obrigatória."),
-  amount: z.coerce.number().positive("O valor deve ser positivo."),
+  amount: z.coerce.number().min(0.01, "O valor deve ser maior que zero."),
   category: z.string().min(1, "A categoria é obrigatória."),
-  date: z.date({ required_error: "A data é obrigatória." }),
+  date: z.date({ invalid_type_error: "A data é obrigatória." }),
   type: z.enum(["one-time", "recurring"]),
   frequency: z.enum(["monthly"]).optional(),
 });

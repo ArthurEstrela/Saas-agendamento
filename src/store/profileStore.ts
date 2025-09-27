@@ -2,7 +2,6 @@ import { create } from "zustand";
 import type {
   UserProfile,
   ClientProfile,
-  ServiceProviderProfile,
   Service,
   Professional,
 } from "../types";

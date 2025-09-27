@@ -4,7 +4,6 @@ import { useAuthStore } from "../../store/authStore";
 import {
   AlertCircle,
   ArrowDown,
-  ArrowUp,
   Calendar as CalendarIcon,
   DollarSign,
   PlusCircle,
@@ -32,7 +31,6 @@ import {
 import { motion } from "framer-motion";
 import "react-day-picker/dist/style.css";
 import { subDays, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import ExpenseModal from "./ExpenseModal";
 import type { Appointment, Expense } from "../../types";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -388,7 +386,7 @@ export const FinancialManagement = () => {
                 mode="single"
                 selected={startDate}
                 onSelect={setStartDate}
-                disabled={{ after: endDate }}
+                disabled={endDate ? { after: endDate } : undefined}
                 initialFocus
               />
             </PopoverContent>
@@ -410,7 +408,7 @@ export const FinancialManagement = () => {
                 mode="single"
                 selected={endDate}
                 onSelect={setEndDate}
-                disabled={{ before: startDate }}
+                disabled={endDate ? { after: endDate } : undefined}
                 initialFocus
               />
             </PopoverContent>

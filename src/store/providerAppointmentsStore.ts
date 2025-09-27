@@ -117,16 +117,24 @@ export const useProviderAppointmentsStore = create<
     set({ unsubscribe });
   },
 
-  completeAppointment: async (appointmentId, finalPrice) => {
-    // Sua lógica existente... (sem alterações)
+completeAppointment: async (appointmentId, finalPrice) => {
     set({ isLoading: true });
     try {
       await updateAppointmentStatus(appointmentId, "completed", finalPrice);
       const providerId = get().appointments.find(
         (a) => a.id === appointmentId
       )?.providerId;
+      
+      // >>> CORREÇÃO: Pega o dateFilter da store atual
+      const { dateFilter } = get();
+      
       if (providerId) {
-        useFinanceStore.getState().fetchFinancialData(providerId);
+        // >>> CORREÇÃO: Chama com os 3 argumentos
+        useFinanceStore.getState().fetchFinancialData(
+          providerId,
+          dateFilter.startDate,
+          dateFilter.endDate 
+        );
       }
     } catch (error) {
       console.error("Erro ao concluir agendamento:", error);
@@ -142,7 +150,7 @@ export const useProviderAppointmentsStore = create<
   setServiceFilter: (serviceId) => set({ serviceFilter: serviceId }),
   setStatusFilter: (status) => set({ statusFilter: status }),
 
-  updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
+ updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
     // Sua lógica existente... (sem alterações)
     try {
       await updateAppointmentStatus(
@@ -155,8 +163,17 @@ export const useProviderAppointmentsStore = create<
         const providerId = get().appointments.find(
           (a) => a.id === appointmentId
         )?.providerId;
+        
+        // >>> CORREÇÃO: Pega o dateFilter da store atual
+        const { dateFilter } = get();
+
         if (providerId) {
-          useFinanceStore.getState().fetchFinancialData(providerId);
+          // >>> CORREÇÃO: Chama com os 3 argumentos
+          useFinanceStore.getState().fetchFinancialData(
+            providerId,
+            dateFilter.startDate,
+            dateFilter.endDate
+          );
         }
       }
     } catch (error) {

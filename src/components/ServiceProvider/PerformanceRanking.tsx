@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Crown, TrendingUp } from "lucide-react";
+import { Crown } from "lucide-react";
 
 interface RankingItem {
   name: string;

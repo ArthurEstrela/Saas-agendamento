@@ -4,7 +4,7 @@ import type { Professional } from "../../../types";
 import { ChevronDown, User, Users } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useProfileStore } from "../../../store/profileStore";
-import type { ServiceProviderProfile } from "../../../types";
+import type { ServiceProviderProfile } from "../../../types"; // Mantido por conta do tipo do userProfile, mas o dado vem de 'professionals'
 
 interface ProfessionalFilterProps {
   selectedProfessionalId: string | null;
@@ -16,10 +16,12 @@ export const ProfessionalFilter = ({
   onSelectProfessional,
 }: ProfessionalFilterProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { userProfile } = useProfileStore();
-  const professionals =
-    (userProfile as ServiceProviderProfile)?.professionals || [];
 
+  // 1. MUDANÇA CRÍTICA: Obtendo a lista de profissionais do estado dedicado
+  const professionalsState = useProfileStore((state) => state.professionals);
+  const professionals: Professional[] = professionalsState || [];
+
+  // 2. Usando o dado da nova fonte
   const selectedProfessional = professionals.find(
     (p) => p.id === selectedProfessionalId
   );
@@ -74,6 +76,7 @@ export const ProfessionalFilter = ({
                 <Users size={18} />
                 <span>Todos os Profissionais</span>
               </li>
+              {/* 3. Renderiza a lista de profissionais */}
               {professionals.map((prof) => (
                 <li
                   key={prof.id}
@@ -84,7 +87,14 @@ export const ProfessionalFilter = ({
                   className="flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-amber-500/10 hover:text-amber-400 cursor-pointer"
                 >
                   <img
-                    src={prof.photoURL || "/placeholder-user.svg"}
+                    // Adicionado fallback mais robusto para a imagem do perfil
+                    src={
+                      prof.photoURL ||
+                      `https://ui-avatars.com/api/?name=${prof.name.replace(
+                        /\s/g,
+                        "+"
+                      )}&background=1f2937&color=daa520`
+                    }
                     alt={prof.name}
                     className="w-6 h-6 rounded-full object-cover"
                   />

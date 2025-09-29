@@ -61,65 +61,127 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* src/index.css */
+/* ======================================= */
+/* CUSTOM STYLES FOR REACT-BIG-CALENDAR */
+/* ======================================= */
 
-/* Tema Dark para React Big Calendar */
-.rbc-dark .rbc-calendar {
-  background-color: transparent;
-  color: #e5e7eb; /* gray-200 */
+/* 1. Reset e Fundo Principal (Dark Theme) */
+.rbc-calendar {
+    font-family: 'Inter', sans-serif;
+    color: #e5e7eb; /* Cor do texto padrão (cinza claro) */
+    background-color: #1f2937; /* Fundo cinza escuro */
+    border: 1px solid #374151; /* Borda sutil */
+    border-radius: 1rem;
+    padding: 1rem; /* Aumenta o espaçamento interno */
 }
 
-.rbc-dark .rbc-toolbar {
-  border-bottom: 1px solid #374151; /* gray-700 */
-  margin-bottom: 1rem;
+/* 2. Cabeçalho (Navegação Mês/Semana/Dia) */
+.rbc-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #374151;
 }
 
-.rbc-dark .rbc-toolbar button {
-  color: #f59e0b; /* amber-500 */
-  border-radius: 0.375rem;
-  transition: background-color 0.2s;
+.rbc-toolbar button {
+    color: #e5e7eb;
+    background-color: #374151;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    margin: 0 0.25rem;
 }
 
-.rbc-dark .rbc-toolbar button:hover,
-.rbc-dark .rbc-toolbar button:focus {
-  background-color: #374151; /* gray-700 */
-  color: #fcd34d; /* amber-300 */
-  outline: none;
+.rbc-toolbar button:hover {
+    background-color: #4b5563;
+    color: #fcd34d; /* Cor âmbar no hover */
 }
 
-.rbc-dark .rbc-btn-group .rbc-active {
-  background-color: #f59e0b; /* amber-500 */
-  color: #111827; /* gray-900 */
+.rbc-toolbar button.rbc-active {
+    background-color: #fcd34d; /* Cor primária (âmbar) */
+    color: #1f2937; /* Texto escuro */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
 }
 
-.rbc-dark .rbc-header {
-  border-bottom: 1px solid #374151; /* gray-700 */
-  padding: 0.5rem;
-  font-weight: bold;
+.rbc-toolbar-label {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fcd34d; /* Cor âmbar para o título */
+    flex-grow: 1;
+    text-align: center;
 }
 
-.rbc-dark .rbc-day-bg {
-  border-left: 1px solid #374151; /* gray-700 */
+/* 3. Estilos de Células e Grid */
+.rbc-header {
+    background-color: #374151;
+    color: #fcd34d;
+    font-weight: 700;
+    padding: 0.5rem 0;
+    border-bottom: 2px solid #374151;
+    border-top: 2px solid #374151;
+    font-size: 0.875rem; /* texto menor */
 }
 
-.rbc-dark .rbc-time-gutter,
-.rbc-dark .rbc-time-header-gutter {
-  border-right: 1px solid #374151; /* gray-700 */
+.rbc-day-bg {
+    background-color: #1f2937;
+    border-left: 1px solid #374151;
 }
 
-.rbc-dark .rbc-month-view {
-  border: 1px solid #374151; /* gray-700 */
-  border-radius: 0.5rem;
+.rbc-day-bg.rbc-today {
+    background-color: #111827; /* Fundo mais escuro para o dia atual */
+    border: 2px solid #fcd34d60; /* Borda sutil amarela para destacar */
 }
 
-.rbc-dark .rbc-today {
-  background-color: #374151; /* gray-700 */
+.rbc-off-range-bg {
+    background-color: #111827; /* Dias fora do mês */
 }
 
-.rbc-dark .rbc-off-range-bg {
-  background-color: #1f2937; /* gray-800 */
+/* 4. Estilo dos Números dos Dias */
+.rbc-date-cell {
+    padding: 0.5rem;
+    font-weight: 600;
+    color: #e5e7eb;
+    transition: color 0.2s;
 }
 
-.rbc-dark .rbc-timeslot-group {
-  border-bottom: 1px solid #374151; /* gray-700 */
+.rbc-date-cell.rbc-current {
+    color: #fcd34d;
+}
+
+/* 5. Aumento da Altura das Linhas (Resolve o "apertado") */
+.rbc-month-view {
+    /* Aumenta a altura das células no modo mês */
+    min-height: 500px;
+}
+
+/* Garante que o container de eventos tenha bastante espaço */
+.rbc-row-content {
+    min-height: 80px; 
+}
+
+
+/* 6. Estilos específicos do modo Week/Day */
+
+.rbc-time-content > * {
+    border-color: #374151 !important; /* Bordas das colunas de tempo */
+}
+
+.rbc-label {
+    color: #e5e7eb;
+    font-weight: 500;
+}
+
+.rbc-time-header-gutter, .rbc-time-header-content {
+    border-bottom: 1px solid #374151;
+}
+
+/* Oculta o fundo azul padrão dos eventos, pois usaremos o customizado */
+.rbc-event {
+    background-color: transparent !important; 
+    border: none !important;
 }

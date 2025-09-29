@@ -4,33 +4,42 @@ import { useProviderAppointmentsStore } from "../../../store/providerAppointment
 import { useProfileStore } from "../../../store/profileStore";
 import { useAuthStore } from "../../../store/authStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
-import type { ServiceProviderProfile } from "../../../types";
+import type { ServiceProviderProfile, Appointment } from "../../../types";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { isSameDay, startOfDay } from "date-fns";
 
 import { RequestsTab } from "../RequestsTab";
 import { HistoryTab } from "../HistoryTab";
-import { ProfessionalFilter } from "./ProfessionalFilter"; // <-- O filtro
-import { AgendaViewSwitcher } from "./AgendaViewSwitcher"; // <-- O novo switcher
+import { ProfessionalFilter } from "./ProfessionalFilter";
+import { AgendaViewSwitcher } from "./AgendaViewSwitcher";
+import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab"; // Reutilizado para Card View
 import { AgendaListView } from "./AgendaListView";
 import { AgendaColumnView } from "./AgendaColumnView";
-import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab";
+import { AgendaCalendario } from "./AgendaCalendario";
+import { DateSelector } from "../DateSelector";
 
 type AgendaTab = "requests" | "scheduled" | "history";
-export type ViewMode = "card" | "list" | "column";
+// NOVO: Adicionado 'calendar' como um modo de visualização
+export type ViewMode = "card" | "list" | "column" | "calendar";
 
 export const AgendaView = () => {
-  const [activeTab, setActiveTab] = useState<AgendaTab>("requests");
+  const { user } = useAuthStore();
+  const { userProfile } = useProfileStore();
+  const provider = userProfile as ServiceProviderProfile;
+
+  // Estado Central para a data focada (inicia no dia de hoje, sem horário)
+  const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
+
+  // Estados com persistência e inicialização da Store
+  const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
     "card"
   );
 
-  const { user } = useAuthStore();
-  const { userProfile } = useProfileStore();
-  const provider = userProfile as ServiceProviderProfile;
-
   const getInitialProfessionalId = (): string | null => {
+    // Lógica para inicializar o filtro pelo profissional se o usuário for um profissional (e não o dono)
     if (
       user?.role === "professional" &&
       provider?.professionals?.some((p) => p.id === user.id)
@@ -46,7 +55,6 @@ export const AgendaView = () => {
       getInitialProfessionalId()
     );
 
-  // ... O resto dos hooks e lógicas de busca/filtragem permanecem os mesmos ...
   const { appointments, isLoading, fetchAppointments, updateStatus } =
     useProviderAppointmentsStore();
 
@@ -56,24 +64,37 @@ export const AgendaView = () => {
     }
   }, [provider?.id, fetchAppointments]);
 
+  // Lógica de filtragem mais robusta e dinâmica
   const filteredAppointments = useMemo(() => {
     const statusMap: Record<AgendaTab, Array<Appointment["status"]>> = {
       requests: ["pending"],
       scheduled: ["scheduled"],
       history: ["completed", "cancelled"],
     };
+
     let filtered = appointments.filter((appt) =>
       statusMap[activeTab].includes(appt.status)
     );
+
+    // 1. FILTRO POR PROFISSIONAL
     if (selectedProfessionalId) {
       filtered = filtered.filter(
         (appt) => appt.professionalId === selectedProfessionalId
       );
     }
+
+    // 2. FILTRO POR DATA (APENAS para visualizações diárias na aba 'scheduled')
+    if (activeTab === "scheduled" && viewMode !== "calendar") {
+      filtered = filtered.filter((appt) =>
+        isSameDay(appt.startTime, selectedDay)
+      );
+    }
+
+    // 3. ORDENAÇÃO
     return filtered.sort(
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );
-  }, [appointments, activeTab, selectedProfessionalId]);
+  }, [appointments, activeTab, selectedProfessionalId, selectedDay, viewMode]);
 
   const professionalsForColumnView = useMemo(() => {
     const allProfessionals =
@@ -88,10 +109,27 @@ export const AgendaView = () => {
     () => appointments.filter((a) => a.status === "pending").length,
     [appointments]
   );
-  // ... Fim da lógica que não muda ...
 
   const renderScheduledContent = () => {
-    // Esta função agora está mais limpa, sem a toolbar
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center h-96">
+          <Loader2 className="animate-spin text-amber-500" size={48} />
+        </div>
+      );
+    }
+
+    // NOVO: Renderiza o calendário (vista de mês/semana)
+    if (viewMode === "calendar") {
+      // O calendário precisa de todos os agendamentos confirmados
+      return (
+        <AgendaCalendario
+          appointments={appointments.filter((a) => a.status === "scheduled")}
+        />
+      );
+    }
+
+    // Renderiza as visões diárias (Card, Lista, Colunas)
     switch (viewMode) {
       case "card":
         return <ScheduledAppointmentsTab appointments={filteredAppointments} />;
@@ -101,7 +139,10 @@ export const AgendaView = () => {
         return (
           <AgendaColumnView
             appointments={filteredAppointments}
-            professionals={professionalsForColumnView}
+            // Filtra profissionais que realmente têm agendamentos no dia selecionado
+            professionals={professionalsForColumnView.filter((p) =>
+              filteredAppointments.some((a) => a.professionalId === p.id)
+            )}
           />
         );
       default:
@@ -110,74 +151,97 @@ export const AgendaView = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-black/30 rounded-2xl text-white p-4 sm:p-6 border border-gray-800">
-      {/* ===== HEADER ATUALIZADO ===== */}
-      <header className="flex flex-col lg:flex-row justify-between items-center gap-4 pb-4 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-white shrink-0">Minha Agenda</h1>
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-          {/* 1. Filtro de profissional movido para o header global */}
+    <div className="h-full flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
+      {/* ===== HEADER APRIMORADO E ANIMADO ===== */}
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-gray-800">
+        <motion.h1
+          initial={{ x: -20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="text-3xl font-extrabold text-white shrink-0 flex items-center gap-2"
+        >
+          <CalendarIcon size={28} className="text-amber-500" />
+          Agenda Profissional
+        </motion.h1>
+
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
+          {/* Filtro de profissional */}
           <ProfessionalFilter
             selectedProfessionalId={selectedProfessionalId}
             onSelectProfessional={setSelectedProfessionalId}
           />
-          {/* 2. Abas de navegação */}
-          <div className="flex items-center bg-gray-900 rounded-lg p-1 space-x-1">
-            <button
-              onClick={() => setActiveTab("requests")}
-              className={`relative px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-                activeTab === "requests"
-                  ? "bg-amber-500 text-black"
-                  : "text-gray-400 hover:bg-gray-800"
-              }`}
-            >
-              Solicitações
-              {pendingCount > 0 && (
-                <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("scheduled")}
-              className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-                activeTab === "scheduled"
-                  ? "bg-amber-500 text-black"
-                  : "text-gray-400 hover:bg-gray-800"
-              }`}
-            >
-              Agenda
-            </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-                activeTab === "history"
-                  ? "bg-amber-500 text-black"
-                  : "text-gray-400 hover:bg-gray-800"
-              }`}
-            >
-              Histórico
-            </button>
-          </div>
+
+          {/* Seletor de Data (Visível apenas em modos de visualização diária) */}
+          {activeTab === "scheduled" && viewMode !== "calendar" && (
+            <DateSelector
+              selectedDate={selectedDay}
+              setSelectedDate={setSelectedDay}
+            />
+          )}
+
+          {/* View Switcher (Visível apenas na aba 'Agenda') */}
+          {activeTab === "scheduled" && (
+            <AgendaViewSwitcher
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+            />
+          )}
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto mt-6 pr-2">
+      {/* ===== ABAS DE NAVEGAÇÃO SECUNDÁRIA (Abaixo do Header) ===== */}
+      <nav className="flex items-center bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800">
+        <button
+          onClick={() => setActiveTab("requests")}
+          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+            activeTab === "requests"
+              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
+              : "text-gray-400 hover:bg-gray-800"
+          }`}
+        >
+          Solicitações
+          {pendingCount > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold"
+            >
+              {pendingCount}
+            </motion.span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("scheduled")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+            activeTab === "scheduled"
+              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
+              : "text-gray-400 hover:bg-gray-800"
+          }`}
+        >
+          Agenda
+        </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+            activeTab === "history"
+              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
+              : "text-gray-400 hover:bg-gray-800"
+          }`}
+        >
+          Histórico
+        </button>
+      </nav>
+
+      {/* ===== CONTEÚDO DINÂMICO ===== */}
+      <main className="flex-1 overflow-y-auto mt-6">
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
+            key={activeTab + viewMode + selectedDay.toISOString()}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.25 }}
+            className={viewMode === "calendar" ? "h-full" : ""}
           >
-            {/* 3. ViewSwitcher aparece apenas na aba 'Agenda' */}
-            {activeTab === "scheduled" && (
-              <AgendaViewSwitcher
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-              />
-            )}
-
             {activeTab === "requests" && (
               <RequestsTab
                 appointments={filteredAppointments}

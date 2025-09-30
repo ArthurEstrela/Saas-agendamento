@@ -1,4 +1,5 @@
 // src/components/ServiceProvider/Agenda/AgendaView.tsx
+
 import { useState, useMemo, useEffect } from "react";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
 import { useProfileStore } from "../../../store/profileStore";
@@ -6,21 +7,27 @@ import { useAuthStore } from "../../../store/authStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
 import type { ServiceProviderProfile, Appointment } from "../../../types";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Calendar as CalendarIcon } from "lucide-react";
+import {
+  Loader2,
+  Calendar as CalendarIcon,
+  List,
+  LayoutGrid,
+  Clock as ClockIcon,
+} from "lucide-react";
 import { isSameDay, startOfDay } from "date-fns";
 
 import { RequestsTab } from "../RequestsTab";
 import { HistoryTab } from "../HistoryTab";
 import { ProfessionalFilter } from "./ProfessionalFilter";
 import { AgendaViewSwitcher } from "./AgendaViewSwitcher";
-import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab"; // Reutilizado para Card View
+import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab";
 import { AgendaListView } from "./AgendaListView";
 import { AgendaColumnView } from "./AgendaColumnView";
-import { AgendaCalendario } from "./AgendaCalendario";
+// CORREÇÃO DE IMPORT: Importa a exportação TimeGridCalendar do arquivo AgendaCalendario
+import { TimeGridCalendar } from "./TimeGridCalendar"; 
 import { DateSelector } from "../DateSelector";
 
 type AgendaTab = "requests" | "scheduled" | "history";
-// NOVO: Adicionado 'calendar' como um modo de visualização
 export type ViewMode = "card" | "list" | "column" | "calendar";
 
 export const AgendaView = () => {
@@ -28,18 +35,15 @@ export const AgendaView = () => {
   const { userProfile } = useProfileStore();
   const provider = userProfile as ServiceProviderProfile;
 
-  // Estado Central para a data focada (inicia no dia de hoje, sem horário)
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
 
-  // Estados com persistência e inicialização da Store
   const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
-    "card"
+    "calendar" // Define o calendário como visão padrão
   );
 
   const getInitialProfessionalId = (): string | null => {
-    // Lógica para inicializar o filtro pelo profissional se o usuário for um profissional (e não o dono)
     if (
       user?.role === "professional" &&
       provider?.professionals?.some((p) => p.id === user.id)
@@ -64,7 +68,7 @@ export const AgendaView = () => {
     }
   }, [provider?.id, fetchAppointments]);
 
-  // Lógica de filtragem mais robusta e dinâmica
+  // Lógica de filtragem:
   const filteredAppointments = useMemo(() => {
     const statusMap: Record<AgendaTab, Array<Appointment["status"]>> = {
       requests: ["pending"],
@@ -76,15 +80,18 @@ export const AgendaView = () => {
       statusMap[activeTab].includes(appt.status)
     );
 
-    // 1. FILTRO POR PROFISSIONAL
+    // 1. FILTRO POR PROFISSIONAL 
     if (selectedProfessionalId) {
       filtered = filtered.filter(
         (appt) => appt.professionalId === selectedProfessionalId
       );
     }
 
-    // 2. FILTRO POR DATA (APENAS para visualizações diárias na aba 'scheduled')
-    if (activeTab === "scheduled" && viewMode !== "calendar") {
+    // 2. FILTRO POR DATA (APENAS para visualizações diárias, não para o 'calendar')
+    if (
+      (activeTab === "scheduled" || activeTab === "requests") &&
+      viewMode !== "calendar"
+    ) {
       filtered = filtered.filter((appt) =>
         isSameDay(appt.startTime, selectedDay)
       );
@@ -95,15 +102,6 @@ export const AgendaView = () => {
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );
   }, [appointments, activeTab, selectedProfessionalId, selectedDay, viewMode]);
-
-  const professionalsForColumnView = useMemo(() => {
-    const allProfessionals =
-      (userProfile as ServiceProviderProfile)?.professionals || [];
-    if (selectedProfessionalId) {
-      return allProfessionals.filter((p) => p.id === selectedProfessionalId);
-    }
-    return allProfessionals;
-  }, [userProfile, selectedProfessionalId]);
 
   const pendingCount = useMemo(
     () => appointments.filter((a) => a.status === "pending").length,
@@ -119,41 +117,33 @@ export const AgendaView = () => {
       );
     }
 
-    // NOVO: Renderiza o calendário (vista de mês/semana)
     if (viewMode === "calendar") {
-      // O calendário precisa de todos os agendamentos confirmados
       return (
-        <AgendaCalendario
-          appointments={appointments.filter((a) => a.status === "scheduled")}
+        <TimeGridCalendar
+          appointments={filteredAppointments}
+          currentDate={selectedDay}
         />
       );
     }
 
-    // Renderiza as visões diárias (Card, Lista, Colunas)
     switch (viewMode) {
       case "card":
         return <ScheduledAppointmentsTab appointments={filteredAppointments} />;
       case "list":
         return <AgendaListView appointments={filteredAppointments} />;
       case "column":
-        return (
-          <AgendaColumnView
-            appointments={filteredAppointments}
-            // Filtra profissionais que realmente têm agendamentos no dia selecionado
-            professionals={professionalsForColumnView.filter((p) =>
-              filteredAppointments.some((a) => a.professionalId === p.id)
-            )}
-          />
-        );
+        return <AgendaColumnView appointments={filteredAppointments} />;
       default:
         return <ScheduledAppointmentsTab appointments={filteredAppointments} />;
     }
   };
 
   return (
+    // Container principal do AgendaView
     <div className="h-full flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
-      {/* ===== HEADER APRIMORADO E ANIMADO ===== */}
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-gray-800">
+      
+      {/* ===== HEADER (FIXO) ===== */}
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-gray-800 shrink-0">
         <motion.h1
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -164,33 +154,39 @@ export const AgendaView = () => {
         </motion.h1>
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          {/* Filtro de profissional */}
+          
           <ProfessionalFilter
             selectedProfessionalId={selectedProfessionalId}
             onSelectProfessional={setSelectedProfessionalId}
           />
 
-          {/* Seletor de Data (Visível apenas em modos de visualização diária) */}
-          {activeTab === "scheduled" && viewMode !== "calendar" && (
+          {activeTab !== "history" && (
             <DateSelector
               selectedDate={selectedDay}
               setSelectedDate={setSelectedDay}
+              label={viewMode === "calendar" ? "Ir para Semana:" : "Dia:"}
             />
           )}
 
-          {/* View Switcher (Visível apenas na aba 'Agenda') */}
           {activeTab === "scheduled" && (
             <AgendaViewSwitcher
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              icons={{
+                card: <LayoutGrid size={18} />,
+                list: <List size={18} />,
+                column: <LayoutGrid size={18} />,
+                calendar: <ClockIcon size={18} />,
+              }}
             />
           )}
         </div>
       </header>
 
-      {/* ===== ABAS DE NAVEGAÇÃO SECUNDÁRIA (Abaixo do Header) ===== */}
-      <nav className="flex items-center bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800">
-        <button
+      {/* ===== ABAS DE NAVEGAÇÃO (FIXO) ===== */}
+      {/* ... (código das abas) ... */}
+      <nav className="flex items-center bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800 shrink-0">
+         <button
           onClick={() => setActiveTab("requests")}
           className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
             activeTab === "requests"
@@ -231,8 +227,8 @@ export const AgendaView = () => {
         </button>
       </nav>
 
-      {/* ===== CONTEÚDO DINÂMICO ===== */}
-      <main className="flex-1 overflow-y-auto mt-6">
+      {/* ===== CONTEÚDO DINÂMICO (ÁREA DE SCROLL) ===== */}
+      <main className="flex-1 mt-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab + viewMode + selectedDay.toISOString()}
@@ -240,7 +236,12 @@ export const AgendaView = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.25 }}
-            className={viewMode === "calendar" ? "h-full" : ""}
+            // CLASSE CRÍTICA PARA ROLAGEM INTERNA
+            className={
+              viewMode === "calendar" && activeTab === "scheduled"
+                ? "h-full overflow-y-auto"
+                : "h-full"
+            }
           >
             {activeTab === "requests" && (
               <RequestsTab

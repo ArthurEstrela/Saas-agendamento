@@ -67,121 +67,138 @@ input[type="number"] {
 
 /* 1. Reset e Fundo Principal (Dark Theme) */
 .rbc-calendar {
-    font-family: 'Inter', sans-serif;
-    color: #e5e7eb; /* Cor do texto padrão (cinza claro) */
-    background-color: #1f2937; /* Fundo cinza escuro */
-    border: 1px solid #374151; /* Borda sutil */
-    border-radius: 1rem;
-    padding: 1rem; /* Aumenta o espaçamento interno */
+  font-family: "Inter", sans-serif;
+  color: #e5e7eb; /* Cor do texto padrão (cinza claro) */
+  background-color: #1f2937; /* Fundo cinza escuro */
+  border: 1px solid #374151; /* Borda sutil */
+  border-radius: 1rem;
+  padding: 1rem;
 }
 
 /* 2. Cabeçalho (Navegação Mês/Semana/Dia) */
 .rbc-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #374151;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #374151;
 }
 
 .rbc-toolbar button {
-    color: #e5e7eb;
-    background-color: #374151;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-    transition: all 0.2s;
-    margin: 0 0.25rem;
+  color: #e5e7eb;
+  background-color: #374151;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  margin: 0 0.25rem;
 }
 
 .rbc-toolbar button:hover {
-    background-color: #4b5563;
-    color: #fcd34d; /* Cor âmbar no hover */
+  background-color: #4b5563;
+  color: #fcd34d;
 }
 
 .rbc-toolbar button.rbc-active {
-    background-color: #fcd34d; /* Cor primária (âmbar) */
-    color: #1f2937; /* Texto escuro */
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  background-color: #fcd34d;
+  color: #1f2937;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.06);
 }
 
 .rbc-toolbar-label {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #fcd34d; /* Cor âmbar para o título */
-    flex-grow: 1;
-    text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fcd34d;
+  flex-grow: 1;
+  text-align: center;
 }
 
 /* 3. Estilos de Células e Grid */
 .rbc-header {
-    background-color: #374151;
-    color: #fcd34d;
-    font-weight: 700;
-    padding: 0.5rem 0;
-    border-bottom: 2px solid #374151;
-    border-top: 2px solid #374151;
-    font-size: 0.875rem; /* texto menor */
+  background-color: #374151;
+  color: #fcd34d;
+  font-weight: 700;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid #374151;
+  border-top: 2px solid #374151;
+  font-size: 0.875rem;
 }
 
 .rbc-day-bg {
-    background-color: #1f2937;
-    border-left: 1px solid #374151;
+  background-color: #1f2937;
+  border-left: 1px solid #374151;
 }
 
 .rbc-day-bg.rbc-today {
-    background-color: #111827; /* Fundo mais escuro para o dia atual */
-    border: 2px solid #fcd34d60; /* Borda sutil amarela para destacar */
+  background-color: #111827;
+  border: 2px solid #fcd34d60;
 }
 
 .rbc-off-range-bg {
-    background-color: #111827; /* Dias fora do mês */
+  background-color: #111827;
 }
 
-/* 4. Estilo dos Números dos Dias */
+/* 4. Estilo dos Números dos Dias e Rótulos */
 .rbc-date-cell {
-    padding: 0.5rem;
-    font-weight: 600;
-    color: #e5e7eb;
-    transition: color 0.2s;
+  padding: 0.5rem;
+  font-weight: 600;
+  color: #e5e7eb;
+  transition: color 0.2s;
+}
+
+.rbc-date-cell.rbc-off-range {
+  color: #4b5563;
 }
 
 .rbc-date-cell.rbc-current {
-    color: #fcd34d;
-}
-
-/* 5. Aumento da Altura das Linhas (Resolve o "apertado") */
-.rbc-month-view {
-    /* Aumenta a altura das células no modo mês */
-    min-height: 500px;
-}
-
-/* Garante que o container de eventos tenha bastante espaço */
-.rbc-row-content {
-    min-height: 80px; 
-}
-
-
-/* 6. Estilos específicos do modo Week/Day */
-
-.rbc-time-content > * {
-    border-color: #374151 !important; /* Bordas das colunas de tempo */
+  color: #fcd34d;
 }
 
 .rbc-label {
-    color: #e5e7eb;
-    font-weight: 500;
+  color: #e5e7eb;
+  font-weight: 500;
 }
 
-.rbc-time-header-gutter, .rbc-time-header-content {
-    border-bottom: 1px solid #374151;
+/* 5. AUMENTO CRÍTICO DA GRADE (Modo de Tabela) */
+.rbc-time-view {
+  /* Força a barra de rolagem se o conteúdo ultrapassar a altura mínima */
+  overflow-y: auto;
+}
+.rbc-time-content {
+  /* Garante que o conteúdo tenha espaço para a grade */
+  min-height: 1200px; /* Aumentado para 1200px para acomodar 24h em 15min slots com boa visibilidade */
+  border: 1px solid #374151; /* Adiciona borda ao corpo */
+}
+
+/* AUMENTA A ALTURA DA LINHA DO SLOT DE TEMPO PARA CLAREZA */
+/* Como o step é 15min e timeslots=1, cada linha representa 15min. Ajustamos a altura */
+.rbc-time-slot {
+  height: 40px !important; /* Altura generosa para o slot de 15 minutos */
+  border-color: #374151 !important;
+}
+
+/* Garante que as linhas do grid horizontal sejam visíveis */
+.rbc-day-slot {
+  border-top: 1px solid #374151;
+}
+.rbc-time-content > * {
+  border-color: #374151 !important; /* Bordas das colunas verticais */
+}
+
+/* 6. Estilos adicionais para o modo Mês */
+.rbc-month-view {
+  min-height: 500px;
+}
+.rbc-row-content {
+  min-height: 80px;
 }
 
 /* Oculta o fundo azul padrão dos eventos, pois usaremos o customizado */
 .rbc-event {
-    background-color: transparent !important; 
-    border: none !important;
+  background-color: transparent !important;
+  border: none !important;
 }

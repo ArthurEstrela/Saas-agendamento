@@ -60,16 +60,17 @@ const ServiceProviderDashboard = () => {
         isOpen={isMobileNavOpen}
         setIsOpen={setIsMobileNavOpen}
       />
-      <main className="bg-gray-900/65 flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300">
+      <main className="bg-gray-900/65 flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300 flex flex-col">
+        {" "}
         {/* Botão de menu para mobile */}
         <div className="md:hidden flex justify-between items-center mb-6">
-            <button
-                onClick={() => setIsMobileNavOpen(true)}
-                className="text-gray-300 p-2"
-            >
-                <Menu size={28} />
-            </button>
-            <span className="text-xl font-bold text-white">Stylo</span>
+          <button
+            onClick={() => setIsMobileNavOpen(true)}
+            className="text-gray-300 p-2"
+          >
+            <Menu size={28} />
+          </button>
+          <span className="text-xl font-bold text-white">Stylo</span>
         </div>
         {renderContent()}
       </main>

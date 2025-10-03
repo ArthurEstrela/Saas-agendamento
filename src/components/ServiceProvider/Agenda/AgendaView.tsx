@@ -24,7 +24,7 @@ import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab";
 import { AgendaListView } from "./AgendaListView";
 import { AgendaColumnView } from "./AgendaColumnView";
 // CORREÇÃO DE IMPORT: Importa a exportação TimeGridCalendar do arquivo AgendaCalendario
-import { TimeGridCalendar } from "./TimeGridCalendar"; 
+import { TimeGridCalendar } from "./TimeGridCalendar";
 import { DateSelector } from "../DateSelector";
 
 type AgendaTab = "requests" | "scheduled" | "history";
@@ -80,7 +80,7 @@ export const AgendaView = () => {
       statusMap[activeTab].includes(appt.status)
     );
 
-    // 1. FILTRO POR PROFISSIONAL 
+    // 1. FILTRO POR PROFISSIONAL
     if (selectedProfessionalId) {
       filtered = filtered.filter(
         (appt) => appt.professionalId === selectedProfessionalId
@@ -140,8 +140,7 @@ export const AgendaView = () => {
 
   return (
     // Container principal do AgendaView
-    <div className="h-full flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
-      
+    <div className="min-h-0 flex-1 flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
       {/* ===== HEADER (FIXO) ===== */}
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-gray-800 shrink-0">
         <motion.h1
@@ -154,7 +153,6 @@ export const AgendaView = () => {
         </motion.h1>
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          
           <ProfessionalFilter
             selectedProfessionalId={selectedProfessionalId}
             onSelectProfessional={setSelectedProfessionalId}
@@ -186,7 +184,7 @@ export const AgendaView = () => {
       {/* ===== ABAS DE NAVEGAÇÃO (FIXO) ===== */}
       {/* ... (código das abas) ... */}
       <nav className="flex items-center bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800 shrink-0">
-         <button
+        <button
           onClick={() => setActiveTab("requests")}
           className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
             activeTab === "requests"
@@ -239,7 +237,7 @@ export const AgendaView = () => {
             // CLASSE CRÍTICA PARA ROLAGEM INTERNA
             className={
               viewMode === "calendar" && activeTab === "scheduled"
-                ? "h-full overflow-y-auto"
+                ? "h-full" // Apenas h-full, o scroll agora é interno do componente
                 : "h-full"
             }
           >

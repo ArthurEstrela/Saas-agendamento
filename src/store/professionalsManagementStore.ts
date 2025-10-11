@@ -8,6 +8,7 @@ import {
 } from "../firebase/professionalsManagementService";
 import type { Professional } from "../types";
 import { v4 as uuidv4 } from "uuid";
+import { toast } from "react-hot-toast"; // Importar o toast
 
 type ProfessionalPayload = Omit<Professional, "id"> & {
   photoFile?: File | null;
@@ -27,7 +28,7 @@ interface ProfessionalsManagementState {
   ) => Promise<void>;
   removeProfessional: (
     providerId: string,
-    professional: string
+    professionalId: string // Alterado para receber o ID
   ) => Promise<void>;
 }
 
@@ -38,7 +39,8 @@ export const useProfessionalsManagementStore =
 
     addProfessional: async (providerId, payload) => {
       set({ isSubmitting: true, error: null });
-      try {
+
+      const addProfessionalPromise = async () => {
         const { photoFile, ...professionalData } = payload;
         const newProfessionalId = uuidv4();
 
@@ -59,21 +61,29 @@ export const useProfessionalsManagementStore =
 
         await addProfessionalToProvider(providerId, finalProfessional);
         await useProfileStore.getState().fetchUserProfile(providerId);
+      };
+
+      toast.promise(addProfessionalPromise(), {
+        loading: "Adicionando profissional...",
+        success: "Profissional adicionado com sucesso!",
+        error: "Falha ao adicionar profissional.",
+      });
+
+      try {
+        await addProfessionalPromise();
+      } catch (err) {
+        console.error("Erro em addProfessional:", err);
+        const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+        set({ error: errorMessage });
+      } finally {
         set({ isSubmitting: false });
-      } catch (err: unknown) {
-        // --- TRATAMENTO DE ERRO COMPLETO ---
-        let errorMessage = "Falha ao remover o profissional.";
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-        console.error(errorMessage, err);
-        set({ isSubmitting: false, error: errorMessage });
       }
     },
 
     updateProfessional: async (providerId, professionalId, payload) => {
       set({ isSubmitting: true, error: null });
-      try {
+
+      const updateProfessionalPromise = async () => {
         const { photoFile, ...professionalData } = payload;
         let photoURL = professionalData.photoURL || "";
 
@@ -93,34 +103,45 @@ export const useProfessionalsManagementStore =
 
         await updateProfessionalInProvider(providerId, finalProfessional);
         await useProfileStore.getState().fetchUserProfile(providerId);
+      };
+
+      toast.promise(updateProfessionalPromise(), {
+        loading: "Atualizando profissional...",
+        success: "Profissional atualizado com sucesso!",
+        error: "Falha ao atualizar profissional.",
+      });
+
+      try {
+        await updateProfessionalPromise();
+      } catch (err) {
+         console.error("Erro em updateProfessional:", err);
+         const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+         set({ error: errorMessage });
+      } finally {
         set({ isSubmitting: false });
-      } catch (err: unknown) {
-        // --- TRATAMENTO DE ERRO COMPLETO ---
-        let errorMessage = "Falha ao remover o profissional.";
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-        console.error(errorMessage, err);
-        set({ isSubmitting: false, error: errorMessage });
       }
     },
 
     removeProfessional: async (providerId, professionalId) => {
       set({ isSubmitting: true, error: null });
-      try {
-        // Chama a função de serviço refatorada, passando apenas o ID
-        await removeProfessionalFromProvider(providerId, professionalId);
+      
+      const promise = removeProfessionalFromProvider(providerId, professionalId);
 
-        // Recarrega o perfil para atualizar o estado global, se necessário.
+      toast.promise(promise, {
+        loading: "Removendo profissional...",
+        success: "Profissional removido com sucesso!",
+        error: "Falha ao remover o profissional.",
+      });
+
+      try {
+        await promise;
         await useProfileStore.getState().fetchUserProfile(providerId);
+      } catch (err) {
+        console.error("Erro em removeProfessional:", err);
+        const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+        set({ error: errorMessage });
+      } finally {
         set({ isSubmitting: false });
-      } catch (err: unknown) {
-        let errorMessage = "Falha ao remover o profissional.";
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-        console.error(errorMessage, err);
-        set({ isSubmitting: false, error: errorMessage });
       }
     },
   }));

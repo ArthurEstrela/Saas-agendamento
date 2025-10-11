@@ -1,9 +1,8 @@
-// src/store/financeStore.ts
-
-import {create} from "zustand";
+import { create } from "zustand";
 import { getFinancialData } from "../firebase/financeService";
 import { addExpense as addExpenseService } from "../firebase/expenseService";
 import type { FinancialData, Expense } from "../types";
+import { toast } from "react-hot-toast"; // Importar o toast
 
 interface FinanceState {
   financialData: FinancialData | null;
@@ -31,20 +30,35 @@ export const useFinanceStore = create<FinanceState>((set) => ({
       set({ financialData: data, loading: false });
     } catch (error) {
       console.error("Error fetching financial data:", error);
+      const errorMessage = "Falha ao buscar dados financeiros.";
       set({
-        error: "Falha ao buscar dados financeiros.",
+        error: errorMessage,
         loading: false,
       });
+      toast.error(errorMessage); // Toast de erro na busca
     }
   },
   addExpense: async (providerId, expenseData) => {
+    // A promise que será observada pelo toast
+    const promise = addExpenseService(providerId, expenseData);
+
+    toast.promise(promise, {
+      loading: "Adicionando despesa...",
+      success: "Despesa adicionada com sucesso!",
+      error: "Falha ao adicionar despesa.",
+    });
+
     try {
-      await addExpenseService(providerId, expenseData);
-      // A lógica para recarregar os dados já está no componente,
-      // que chama fetchFinancialData novamente após a adição.
+      await promise;
+      // Você pode querer recarregar os dados financeiros aqui
+      // para a UI atualizar sem o usuário precisar fazer nada.
+      // set.getState().fetchFinancialData(...) 
     } catch (error) {
       console.error("Error adding expense:", error);
-      set({ error: "Falha ao adicionar despesa." });
+      const errorMessage = "Falha ao adicionar despesa.";
+      set({ error: errorMessage });
+      // O toast.promise já lida com a exibição do erro,
+      // então não precisamos de outro toast.error aqui.
     }
   },
 }));

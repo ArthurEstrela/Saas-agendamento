@@ -7,7 +7,7 @@ import {
   updateUserProfile,
   uploadProfilePicture,
 } from "../../firebase/userService";
-
+import { useToast } from '../../hooks/useToast';
 import {
   Loader2,
   User,
@@ -39,8 +39,7 @@ export const ClientProfileSection = () => {
   const { userProfile, setUserProfile } = useProfileStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
+   const { showSuccess, showError } = useToast();
   // Estados para o upload da foto
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -81,7 +80,6 @@ export const ClientProfileSection = () => {
     if (!userProfile) return;
 
     setIsSubmitting(true);
-    setSuccessMessage(null);
 
     try {
       let newProfilePictureUrl = userProfile.profilePictureUrl;
@@ -112,11 +110,11 @@ export const ClientProfileSection = () => {
       // 4. Atualiza o estado local na store
       setUserProfile({ ...userProfile, ...updatedProfileData });
 
-      setSuccessMessage("Perfil atualizado com sucesso!");
+      showSuccess("Perfil atualizado com sucesso!");
       setIsEditing(false);
     } catch (error) {
       console.error("Erro ao atualizar o perfil:", error);
-      // Aqui você pode adicionar uma notificação de erro (toast)
+      showError("Falha ao atualizar o perfil. Tente novamente.");
     } finally {
       setIsSubmitting(false);
       setProfileImageFile(null); // Limpa o arquivo após o envio
@@ -149,13 +147,6 @@ export const ClientProfileSection = () => {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold text-white">Meu Perfil</h1>
       </div>
-
-      {successMessage && (
-        <div className="bg-green-500/10 text-green-400 p-4 rounded-lg mb-6 flex items-center gap-3">
-          <CheckCircle size={20} />
-          <span>{successMessage}</span>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <div className="bg-black/30 p-8 rounded-2xl">

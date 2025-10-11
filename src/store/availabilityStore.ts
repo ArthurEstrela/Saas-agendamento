@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getAppointmentsForProfessionalOnDate } from "../firebase/bookingService";
 import type { Professional, Service } from "../types";
 import { getDay, format, parse } from "date-fns";
+import { toast } from "react-hot-toast";
 
 interface AvailabilityState {
   availableSlots: string[];
@@ -90,6 +91,7 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
       let errorMessage = "Não foi possível buscar os horários.";
       if (err instanceof Error) errorMessage = err.message;
       set({ error: errorMessage, isLoading: false });
+      toast.error(errorMessage);
     }
   },
 }));

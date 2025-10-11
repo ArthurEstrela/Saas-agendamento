@@ -1,6 +1,8 @@
+// src/store/favoritesStore.ts
 import { create } from 'zustand';
 import type { ServiceProviderProfile } from '../types';
 import { getProfessionalsByIds } from '../firebase/userService';
+import { toast } from 'react-hot-toast'; // Importe o toast
 
 interface FavoritesState {
   favorites: ServiceProviderProfile[];
@@ -20,8 +22,17 @@ export const useFavoritesStore = create<FavoritesState>((set) => ({
       return;
     }
     set({ isLoading: true, error: null });
+
+    const promise = getProfessionalsByIds(professionalIds);
+
+    toast.promise(promise, {
+      loading: 'Buscando seus favoritos...',
+      success: 'Favoritos carregados!',
+      error: 'Não foi possível carregar os favoritos.',
+    });
+
     try {
-      const favoriteProfiles = await getProfessionalsByIds(professionalIds);
+      const favoriteProfiles = await promise;
       set({ favorites: favoriteProfiles, isLoading: false });
     } catch (err) {
       let errorMessage = "Erro ao buscar favoritos.";

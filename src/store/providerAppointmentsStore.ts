@@ -14,6 +14,7 @@ import { getUserProfile } from "../firebase/userService";
 import { updateAppointmentStatus } from "../firebase/bookingService";
 import { useFinanceStore } from "./financeStore";
 import { startOfDay, endOfDay } from "date-fns";
+import { toast } from "react-hot-toast"; // Importe o toast
 
 export interface EnrichedProviderAppointment extends Appointment {
   client?: ClientProfile;
@@ -29,7 +30,6 @@ interface ProviderAppointmentsState {
   isLoading: boolean;
   selectedProfessionalId: string;
   dateFilter: DateFilter;
-  // Adicionei os estados de filtro que faltavam na interface
   serviceFilter: string;
   statusFilter: Appointment["status"] | "all";
   unsubscribe: () => void;
@@ -67,6 +67,7 @@ const initialState = {
   serviceFilter: "all",
   statusFilter: "scheduled" as const,
   unsubscribe: () => {},
+  selectedAppointment: null,
 };
 
 export const useProviderAppointmentsStore = create<
@@ -90,7 +91,6 @@ export const useProviderAppointmentsStore = create<
         const appointmentsPromises = snapshot.docs.map(
           async (doc): Promise<EnrichedProviderAppointment> => {
             const rawData = doc.data();
-            // CORREÇÃO AQUI: A variável agora se chama 'apptData'
             const apptData = {
               id: doc.id,
               ...rawData,
@@ -111,25 +111,31 @@ export const useProviderAppointmentsStore = create<
       },
       (error) => {
         console.error("Erro ao buscar agendamentos do prestador:", error);
+        toast.error("Falha ao carregar agendamentos.");
         set({ isLoading: false });
       }
     );
     set({ unsubscribe });
   },
 
-completeAppointment: async (appointmentId, finalPrice) => {
-    set({ isLoading: true });
+  completeAppointment: async (appointmentId, finalPrice) => {
+    const promise = updateAppointmentStatus(appointmentId, "completed", finalPrice);
+
+    toast.promise(promise, {
+      loading: "Finalizando agendamento...",
+      success: "Agendamento concluído com sucesso!",
+      error: "Falha ao concluir agendamento.",
+    });
+
     try {
-      await updateAppointmentStatus(appointmentId, "completed", finalPrice);
+      await promise;
       const providerId = get().appointments.find(
         (a) => a.id === appointmentId
       )?.providerId;
       
-      // >>> CORREÇÃO: Pega o dateFilter da store atual
       const { dateFilter } = get();
       
       if (providerId) {
-        // >>> CORREÇÃO: Chama com os 3 argumentos
         useFinanceStore.getState().fetchFinancialData(
           providerId,
           dateFilter.startDate,
@@ -138,37 +144,39 @@ completeAppointment: async (appointmentId, finalPrice) => {
       }
     } catch (error) {
       console.error("Erro ao concluir agendamento:", error);
-    } finally {
-      set({ isLoading: false });
     }
   },
 
   setSelectedProfessionalId: (id) => set({ selectedProfessionalId: id }),
 
-  // Novas ações de filtro
   setDateFilter: (filter) => set({ dateFilter: filter }),
   setServiceFilter: (serviceId) => set({ serviceFilter: serviceId }),
   setStatusFilter: (status) => set({ statusFilter: status }),
 
- updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
-    // Sua lógica existente... (sem alterações)
+  updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
+    const promise = updateAppointmentStatus(
+      appointmentId,
+      status,
+      finalPrice,
+      rejectionReason
+    );
+
+    toast.promise(promise, {
+      loading: "Atualizando status...",
+      success: "Status atualizado com sucesso!",
+      error: "Falha ao atualizar status.",
+    });
+    
     try {
-      await updateAppointmentStatus(
-        appointmentId,
-        status,
-        finalPrice,
-        rejectionReason
-      );
+      await promise;
       if (status === "completed") {
         const providerId = get().appointments.find(
           (a) => a.id === appointmentId
         )?.providerId;
         
-        // >>> CORREÇÃO: Pega o dateFilter da store atual
         const { dateFilter } = get();
 
         if (providerId) {
-          // >>> CORREÇÃO: Chama com os 3 argumentos
           useFinanceStore.getState().fetchFinancialData(
             providerId,
             dateFilter.startDate,
@@ -185,7 +193,7 @@ completeAppointment: async (appointmentId, finalPrice) => {
     get().unsubscribe();
     set(initialState);
   },
-  selectedAppointment: null,
+  
   setSelectedAppointment: (appointment) =>
     set({ selectedAppointment: appointment }),
 }));

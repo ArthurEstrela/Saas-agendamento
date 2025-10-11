@@ -1,3 +1,4 @@
+// src/firebase/reviewService.ts
 import {
   collection,
   addDoc,
@@ -14,15 +15,15 @@ import { db } from "./config";
 import type { Review } from "../types";
 
 /**
- * Adiciona uma nova avaliação a um agendamento.
+ * Adiciona uma nova avaliação na coleção 'reviews' e atualiza o agendamento correspondente.
  * @param appointmentId O ID do agendamento que está sendo avaliado.
- * @param reviewData Os dados da avaliação.
+ * @param reviewData Os dados da avaliação (sem id e createdAt).
  */
-export const addReviewToAppointment = async (
+export const addReview = async (
   appointmentId: string,
   reviewData: Omit<Review, "id" | "createdAt">
 ): Promise<void> => {
-  // Cria a avaliação na coleção 'reviews'
+  // 1. Cria a avaliação na coleção principal 'reviews'
   const reviewsCollection = collection(db, "reviews");
   const reviewDocRef = await addDoc(reviewsCollection, {
     ...reviewData,
@@ -30,26 +31,25 @@ export const addReviewToAppointment = async (
     createdAt: serverTimestamp(),
   });
 
-  // Atualiza o documento do agendamento para incluir a referência da avaliação
+  // 2. Atualiza o documento do agendamento para incluir uma referência à avaliação
   const appointmentRef = doc(db, "appointments", appointmentId);
   await updateDoc(appointmentRef, {
-    review: {
-      id: reviewDocRef.id,
-      ...reviewData,
-      createdAt: new Date(), // Usamos a data atual para a UI
-    },
+    reviewId: reviewDocRef.id, // Adiciona o ID da review para referência futura
   });
 };
 
-export const getReviewsByProviderId = async (
+/**
+ * Busca todas as avaliações de um prestador de serviço específico.
+ * @param providerId O ID do prestador de serviço.
+ * @returns Uma promessa que resolve para um array de avaliações.
+ */
+export const getReviewsForProvider = async (
   providerId: string
 ): Promise<Review[]> => {
-  // Como as reviews estão em uma coleção própria, buscamos por um campo que identifique o prestador.
-  // Vamos assumir que cada review tem um 'serviceProviderId'.
   const reviewsCollection = collection(db, "reviews");
   const q = query(
     reviewsCollection,
-    where("serviceProviderId", "==", providerId),
+    where("providerId", "==", providerId), // Assumindo que a review tem o providerId
     orderBy("createdAt", "desc")
   );
 
@@ -57,10 +57,10 @@ export const getReviewsByProviderId = async (
 
   return querySnapshot.docs.map((doc) => {
     const data = doc.data();
-    // Converte o timestamp, se houver
-    if (data["createdAt"] instanceof Timestamp) {
-      data["createdAt"] = data["createdAt"].toDate();
-    }
-    return { id: doc.id, ...data } as Review;
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: (data.createdAt as Timestamp).toDate(),
+    } as Review;
   });
 };

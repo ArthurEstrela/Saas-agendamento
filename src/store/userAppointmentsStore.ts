@@ -1,3 +1,4 @@
+// src/store/userAppointmentsStore.ts
 import { create } from "zustand";
 import {
   collection,
@@ -6,7 +7,6 @@ import {
   onSnapshot,
   orderBy,
   Timestamp,
-  // NOVOS IMPORTS para buscar o documento do profissional
   doc,
   getDoc,
 } from "firebase/firestore";
@@ -15,8 +15,9 @@ import type {
   Appointment,
   ServiceProviderProfile,
   Professional,
-} from "../types"; // Importar Professional para tipagem
+} from "../types";
 import { getUserProfile } from "../firebase/userService";
+import { toast } from "react-hot-toast"; // Importe o toast
 
 export interface EnrichedAppointment extends Appointment {
   provider?: ServiceProviderProfile;
@@ -41,13 +42,11 @@ const initialState: Omit<UserAppointmentsState, "unsubscribe"> = {
   error: null,
 };
 
-// 1. FUNÇÃO AUXILIAR PARA BUSCAR A FOTO NA SUB-COLEÇÃO
 const fetchProfessionalPhotoUrl = async (
   providerId: string,
   professionalId: string
 ): Promise<string | undefined> => {
   try {
-    // Cria a referência direta ao documento na sub-coleção
     const professionalRef = doc(
       db,
       "users",
@@ -76,8 +75,6 @@ export const useUserAppointmentsStore = create<
 
   fetchAppointments: (userId) => {
     set({ isLoading: true });
-
-    // Cancela qualquer listener anterior antes de criar um novo
     get().unsubscribe();
 
     const q = query(
@@ -103,12 +100,10 @@ export const useUserAppointmentsStore = create<
             let professionalPhotoUrl: string | undefined = undefined;
 
             if (appointmentData.providerId) {
-              // 1. Busca o perfil do provedor (necessário para businessName, address, etc.)
               providerProfile = (await getUserProfile(
                 appointmentData.providerId
               )) as ServiceProviderProfile | null;
 
-              // 2. BUSCA A FOTO NA NOVA SUB-COLEÇÃO (Lógica Corrigida)
               if (providerProfile && appointmentData.professionalId) {
                 professionalPhotoUrl = await fetchProfessionalPhotoUrl(
                   appointmentData.providerId,
@@ -138,6 +133,7 @@ export const useUserAppointmentsStore = create<
       },
       (error) => {
         console.error("Erro ao buscar agendamentos: ", error);
+        toast.error("Não foi possível carregar os agendamentos.");
         set({
           isLoading: false,
           error: "Não foi possível carregar os agendamentos.",

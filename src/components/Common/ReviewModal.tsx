@@ -1,14 +1,14 @@
 // src/components/Common/ReviewModal.tsx
-
 import React, { useState, useEffect } from 'react';
-import type { Booking } from '../../types';
+import type { EnrichedAppointment } from '../../store/userAppointmentsStore'; // Usando um tipo mais consistente
 import { Star, X } from 'lucide-react';
-import { useToast } from '../../context/ToastContext';
+import { toast } from 'react-hot-toast'; // Import direto para a validação
 
 interface ReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  appointment: Booking;
+  // Alterado para um tipo mais específico e consistente com o resto da aplicação
+  appointment: EnrichedAppointment; 
   onSubmit: (rating: number, comment: string) => void;
   isLoading?: boolean;
 }
@@ -16,8 +16,8 @@ interface ReviewModalProps {
 const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false }: ReviewModalProps) => {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const { showToast } = useToast();
 
+  // Reseta o estado quando o modal é fechado/reaberto
   useEffect(() => {
     if (!isOpen) {
       setRating(0);
@@ -26,8 +26,11 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false
   }, [isOpen]);
 
   const handleSubmit = () => {
+    // A validação de formulário é uma das poucas exceções
+    // onde um toast pode ser disparado de um componente,
+    // pois é um feedback direto de uma ação do usuário na UI.
     if (rating === 0) {
-      showToast("Por favor, selecione uma classificação de estrelas.", "warning");
+      toast.error("Por favor, selecione uma classificação de estrelas.");
       return;
     }
     onSubmit(rating, comment);
@@ -37,7 +40,7 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-down">
-      <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-700 max-w-md w-full relative">
+      <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-700 max-w-md w-full relative transform transition-all duration-300">
         <button 
             onClick={onClose} 
             className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
@@ -50,7 +53,7 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false
           Avaliar Agendamento
         </h3>
         <p className="text-gray-300 mb-6 text-center">
-          Compartilhe sua experiência com {appointment?.professionalName}.
+          Compartilhe sua experiência com {appointment.professionalName}.
         </p>
 
         <div className="mb-6 text-center">
@@ -76,26 +79,26 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false
           </label>
           <textarea
             id="comment"
-            className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-[#daa520] focus:border-transparent resize-y"
+            className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-500 focus:border-transparent resize-y transition"
             rows={4}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="Como foi o serviço? O que você achou do profissional?"
-          ></textarea>
+          />
         </div>
 
         <div className="flex justify-end space-x-4">
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+            className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancelar
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="px-6 py-2 bg-[#daa520] text-black font-semibold rounded-lg hover:bg-[#c8961e] transition-colors disabled:opacity-50"
+            className="px-6 py-2 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
             {isLoading ? 'Enviando...' : 'Enviar Avaliação'}
           </button>

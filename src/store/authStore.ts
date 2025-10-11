@@ -6,25 +6,54 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   type AuthError,
 } from "firebase/auth";
+import { toast } from 'react-hot-toast';
 import { auth } from "../firebase/config";
 import { useProfileStore } from "./profileStore";
-import { createUserProfile, getUserProfile } from "../firebase/userService"; // Verifique o nome do seu arquivo de serviço
-import type {
-  UserProfile,
-  ServiceProviderProfile,
-  ClientProfile,
-} from "../types";
+import { createUserProfile } from "../firebase/userService";
+import type { ServiceProviderProfile, ClientProfile } from "../types";
+
+/**
+ * Mapeia erros do Firebase Auth para mensagens amigáveis ao usuário.
+ * @param error O erro capturado, de tipo `unknown`.
+ * @returns Uma string com a mensagem de erro formatada.
+ */
+const getAuthErrorMessage = (error: unknown): string => {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const authError = error as AuthError;
+    switch (authError.code) {
+      case "auth/user-not-found":
+      case "auth/wrong-password":
+      case "auth/invalid-credential":
+        return "E-mail ou senha inválidos.";
+      case "auth/invalid-email":
+        return "O formato do e-mail é inválido.";
+      case "auth/email-already-in-use":
+        return "Este e-mail já está em uso por outra conta.";
+      case "auth/weak-password":
+        return "A senha é muito fraca. Use pelo menos 6 caracteres.";
+      case "auth/too-many-requests":
+        return "Acesso bloqueado temporariamente devido a muitas tentativas.";
+      default:
+        return "Ocorreu um erro inesperado. Tente novamente.";
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Ocorreu um erro desconhecido.";
+};
 
 interface AuthState {
   user: FirebaseUser | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
-  isSubmitting: boolean;
+  isLoading: boolean; // Para a verificação inicial de autenticação no carregamento do app
+  isSubmitting: boolean; // Para controlar o estado de envio de formulários
   error: string | null;
-  initializeAuth: () => () => void;
-  login: (email: string, password: string) => Promise<UserProfile | null>;
+  initializeAuth: () => () => void; // Retorna a função de unsubscribe
+  login: (email: string, password: string) => Promise<void>;
   signup: (
     email: string,
     password: string,
@@ -33,6 +62,7 @@ interface AuthState {
     additionalData?: Partial<ServiceProviderProfile | ClientProfile>
   ) => Promise<void>;
   logout: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -43,14 +73,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   initializeAuth: () => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Fonte única da verdade: se o usuário está logado, busca o perfil.
+        await useProfileStore.getState().fetchUserProfile(user.uid);
         set({ user, isAuthenticated: true, isLoading: false });
-        // Dispara a busca do perfil na store correta
-        useProfileStore.getState().fetchUserProfile(user.uid);
       } else {
-        set({ user: null, isAuthenticated: false, isLoading: false });
+        // Se não há usuário, limpa o perfil e o estado de autenticação.
         useProfileStore.getState().clearProfile();
+        set({ user: null, isAuthenticated: false, isLoading: false });
       }
     });
     return unsubscribe;
@@ -58,119 +89,89 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     set({ isSubmitting: true, error: null });
+    const promise = signInWithEmailAndPassword(auth, email, password);
+
+    toast.promise(promise, {
+      loading: 'Autenticando...',
+      success: 'Login realizado com sucesso! Bem-vindo(a) de volta.',
+      error: (err) => getAuthErrorMessage(err),
+    });
+
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      // ALTERAÇÃO 3: Após o login, buscamos o perfil do usuário imediatamente.
-      const userProfile = await getUserProfile(userCredential.user.uid);
-
-      if (!userProfile) {
-        // Se por algum motivo o perfil não existir no Firestore, tratamos como um erro.
-        throw new Error("Perfil de usuário não encontrado no banco de dados.");
-      }
-
-      set({ isSubmitting: false });
-
-      // ALTERAÇÃO 4: Retornamos o perfil completo para o LoginForm.
-      return userProfile;
+      await promise;
+      // O listener `onAuthStateChanged` cuidará de atualizar o estado e buscar o perfil.
     } catch (err) {
-      const error = err as AuthError;
-      let errorMessage = "Ocorreu um erro ao tentar fazer login.";
-
-      // Mapeia os códigos de erro do Firebase para mensagens amigáveis
-      switch (error.code) {
-        case "auth/user-not-found":
-        case "auth/wrong-password":
-        case "auth/invalid-credential":
-          errorMessage = "E-mail ou senha inválidos.";
-          break;
-        case "auth/invalid-email":
-          errorMessage = "O formato do e-mail fornecido é inválido.";
-          break;
-        case "auth/too-many-requests":
-          errorMessage =
-            "Muitas tentativas de login. Por favor, tente novamente mais tarde.";
-          break;
-        default:
-          errorMessage = "Falha no login. Verifique suas credenciais.";
-      }
-
-      set({ error: errorMessage, isSubmitting: false });
-      // Lança o erro para que o formulário saiba que a operação falhou
-      return null;
+      set({ error: getAuthErrorMessage(err) });
+    } finally {
+      set({ isSubmitting: false });
     }
   },
 
   signup: async (email, password, fullName, userType, additionalData) => {
     set({ isSubmitting: true, error: null });
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
 
+    // Envolve a criação do usuário e do perfil em uma única promise
+    const promise = (async () => {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await createUserProfile(
-        user.uid,
+        userCredential.user.uid,
         email,
         fullName,
         userType,
         additionalData
       );
+    })();
 
-      const userProfile = await getUserProfile(user.uid);
+    toast.promise(promise, {
+      loading: 'Criando sua conta...',
+      success: 'Conta criada com sucesso! Bem-vindo(a).',
+      error: (err) => getAuthErrorMessage(err),
+    });
 
-      if (userProfile) {
-        // Atualiza o estado de autenticação NESTA store
-        set({
-          isAuthenticated: true,
-          user,
-          isSubmitting: false,
-        });
-        // Seta o perfil do usuário na store DELE
-        useProfileStore.getState().setUserProfile(userProfile);
-      } else {
-        throw new Error("Falha ao buscar perfil do usuário após o cadastro.");
-      }
-    } catch (err: unknown) {
-      let errorMessage = "Ocorreu um erro desconhecido.";
-      if (typeof err === "object" && err !== null && "code" in err) {
-        const error = err as AuthError;
-        switch (error.code) {
-          case "auth/email-already-in-use":
-            errorMessage =
-              "Este endereço de e-mail já está em uso por outra conta.";
-            break;
-          case "auth/invalid-email":
-            errorMessage = "O formato do e-mail fornecido é inválido.";
-            break;
-          case "auth/weak-password":
-            errorMessage = "A senha é muito fraca. Tente uma senha mais forte.";
-            break;
-          default:
-            errorMessage = `Erro no cadastro: ${error.message}`;
-        }
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-
-      console.error("Firebase signup error:", err);
-      set({ error: errorMessage, isSubmitting: false });
-
-      throw err;
+    try {
+      await promise;
+      // O listener `onAuthStateChanged` cuidará do resto.
+    } catch (err) {
+      set({ error: getAuthErrorMessage(err) });
+    } finally {
+      set({ isSubmitting: false });
     }
   },
 
   logout: async () => {
+    const promise = signOut(auth);
+
+    toast.promise(promise, {
+      loading: 'Saindo...',
+      success: 'Você foi desconectado. Até breve!',
+      error: 'Ocorreu um erro ao tentar sair.',
+    });
+
     try {
-      await signOut(auth);
+      await promise;
+      // O listener `onAuthStateChanged` limpará o estado global.
     } catch (error) {
-      console.error("Erro ao fazer logout:", error);
+      console.error("Logout failed:", error);
+      toast.error("Ocorreu um erro ao tentar sair.");
+    }
+  },
+
+  sendPasswordReset: async (email: string) => {
+    set({ isSubmitting: true, error: null });
+    const promise = sendPasswordResetEmail(auth, email);
+
+    toast.promise(promise, {
+      loading: 'Enviando e-mail de recuperação...',
+      success: 'E-mail enviado! Verifique sua caixa de entrada e spam.',
+      error: (err) => getAuthErrorMessage(err),
+    });
+    
+    try {
+      await promise;
+    } catch (err) {
+        set({ error: getAuthErrorMessage(err) });
+    } finally {
+      set({ isSubmitting: false });
     }
   },
 }));

@@ -9,14 +9,17 @@ import {
   sendPasswordResetEmail,
   type AuthError,
 } from "firebase/auth";
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 import { auth } from "../firebase/config";
 import { useProfileStore } from "./profileStore";
 import { createUserProfile } from "../firebase/userService";
-import type { ServiceProviderProfile, ClientProfile } from "../types";
+import type {
+  ServiceProviderProfile,
+  ClientProfile,
+  UserProfile,
+} from "../types";
 import { useUserAppointmentsStore } from "./userAppointmentsStore";
 import { useProviderAppointmentsStore } from "./providerAppointmentsStore";
-
 
 /**
  * Mapeia erros do Firebase Auth para mensagens amigáveis ao usuário.
@@ -24,7 +27,7 @@ import { useProviderAppointmentsStore } from "./providerAppointmentsStore";
  * @returns Uma string com a mensagem de erro formatada.
  */
 const getAuthErrorMessage = (error: unknown): string => {
-  if (typeof error === 'object' && error !== null && 'code' in error) {
+  if (typeof error === "object" && error !== null && "code" in error) {
     const authError = error as AuthError;
     switch (authError.code) {
       case "auth/user-not-found":
@@ -56,7 +59,7 @@ interface AuthState {
   isSubmitting: boolean; // Para controlar o estado de envio de formulários
   error: string | null;
   initializeAuth: () => () => void; // Retorna a função de unsubscribe
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserProfile | null>;
   signup: (
     email: string,
     password: string,
@@ -78,11 +81,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   initializeAuth: () => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Fonte única da verdade: se o usuário está logado, busca o perfil.
         await useProfileStore.getState().fetchUserProfile(user.uid);
         set({ user, isAuthenticated: true, isLoading: false });
       } else {
-        // Se não há usuário, limpa o perfil e o estado de autenticação.
         useProfileStore.getState().clearProfile();
         set({ user: null, isAuthenticated: false, isLoading: false });
       }
@@ -92,21 +93,34 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     set({ isSubmitting: true, error: null });
-    const promise = signInWithEmailAndPassword(auth, email, password);
-
-    toast.promise(promise, {
-      loading: 'Autenticando...',
-      success: 'Login realizado com sucesso! Bem-vindo(a) de volta.',
-      error: (err) => getAuthErrorMessage(err),
-    });
+    const loadingToast = toast.loading("Autenticando...");
 
     try {
-      await promise;
-      // O listener `onAuthStateChanged` cuidará de atualizar o estado e buscar o perfil.
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
+
+      // Busca o perfil do usuário IMEDIATAMENTE após o login
+      await useProfileStore.getState().fetchUserProfile(user.uid);
+      const userProfile = useProfileStore.getState().userProfile;
+
+      toast.success("Login realizado com sucesso! Bem-vindo(a) de volta.", {
+        id: loadingToast,
+      });
+
+      // O onAuthStateChanged fará isso também, mas setamos aqui para garantir a consistência
+      set({ user, isAuthenticated: true, isSubmitting: false });
+
+      // Retorna o perfil para o componente de login
+      return userProfile;
     } catch (err) {
-      set({ error: getAuthErrorMessage(err) });
-    } finally {
-      set({ isSubmitting: false });
+      const errorMessage = getAuthErrorMessage(err);
+      toast.error(errorMessage, { id: loadingToast });
+      set({ error: errorMessage, isSubmitting: false });
+      return null; // Retorna nulo em caso de erro
     }
   },
 
@@ -115,7 +129,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     // Envolve a criação do usuário e do perfil em uma única promise
     const promise = (async () => {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       await createUserProfile(
         userCredential.user.uid,
         email,
@@ -126,8 +144,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     })();
 
     toast.promise(promise, {
-      loading: 'Criando sua conta...',
-      success: 'Conta criada com sucesso! Bem-vindo(a).',
+      loading: "Criando sua conta...",
+      success: "Conta criada com sucesso! Bem-vindo(a).",
       error: (err) => getAuthErrorMessage(err),
     });
 
@@ -145,9 +163,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     const promise = signOut(auth);
 
     toast.promise(promise, {
-      loading: 'Saindo...',
-      success: 'Você foi desconectado. Até breve!',
-      error: 'Ocorreu um erro ao tentar sair.',
+      loading: "Saindo...",
+      success: "Você foi desconectado. Até breve!",
+      error: "Ocorreu um erro ao tentar sair.",
     });
 
     try {

@@ -1,6 +1,6 @@
 // src/components/Client/ClientAppointmentCard.tsx
 import type { EnrichedAppointment } from "../../store/userAppointmentsStore";
-import { format } from "date-fns";
+import { format, isBefore, subHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   User,
@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { CancelAppointmentModal } from "../Common/CancelAppointmentModal";
+import { useUserAppointmentsStore } from "../../store/userAppointmentsStore";
 import ReviewModal from "../Common/ReviewModal";
 import { useReviewStore } from "../../store/reviewStore";
 
@@ -74,7 +76,10 @@ export const ClientAppointmentCard = ({
     status,
   } = appointment;
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
+  const [isCancelModalOpen, setCancelModalOpen] = useState(false);
   const { submitReview, isSubmitting } = useReviewStore();
+  const { cancelAppointment, isLoading: isCancelling } =
+    useUserAppointmentsStore();
 
   const formattedDate = format(startTime, "EEEE, dd 'de' MMMM", {
     locale: ptBR,
@@ -85,9 +90,7 @@ export const ClientAppointmentCard = ({
     if (provider?.businessAddress) {
       const { street, city, state } = provider.businessAddress; // Criando a query de endereço para o Google Maps
       const address = encodeURIComponent(`${street}, ${city}, ${state}`); // Usando a API de navegação do Google Maps para abrir o aplicativo/site
-      window.open(
-        `https://www.google.com/maps/search/?api=1&query=${address}`
-      );
+      window.open(`https://www.google.com/maps/search/?api=1&query=${address}`);
     }
   };
 
@@ -106,6 +109,26 @@ export const ClientAppointmentCard = ({
     await submitReview(appointment.id, reviewData);
     setReviewModalOpen(false);
   };
+
+  const handleCancelConfirm = async (reason: string) => {
+    await cancelAppointment(appointment.id, reason);
+    setCancelModalOpen(false);
+  };
+
+  const cancellationDeadline = subHours(appointment.startTime, 2);
+  const now = new Date();
+
+  const canCancel =
+    // O status for 'agendado' ou 'pendente'
+    (appointment.status === "scheduled" || appointment.status === "pending") &&
+    // E a data/hora atual for ANTES do horário limite para cancelamento
+    isBefore(now, cancellationDeadline);
+
+  // 3. Verificamos se o tempo para cancelar já expirou (para mostrar uma mensagem)
+  const hasCancellationTimeExpired =
+    (appointment.status === "scheduled" || appointment.status === "pending") &&
+    !isBefore(now, cancellationDeadline) &&
+    isBefore(now, appointment.startTime);
 
   return (
     <>
@@ -206,16 +229,34 @@ export const ClientAppointmentCard = ({
           </span>
         </div>
         {/* Botão de Avaliação (inalterado) */}
-        {status === "completed" && !appointment.review && (
-          <div className="p-4 bg-gray-900/80">
-            <button
-              onClick={() => setReviewModalOpen(true)}
-              className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
-            >
-              <Star size={16} /> Avaliar Serviço
-            </button>
+        {(status === "completed" && !appointment.review) || canCancel ? (
+          <div className="p-4 bg-gray-900/80 flex gap-2">
+            {status === "completed" && !appointment.review && (
+              <button
+                onClick={() => setReviewModalOpen(true)}
+                className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <Star size={16} /> Avaliar
+              </button>
+            )}
+            {canCancel && (
+              <button
+                onClick={() => setCancelModalOpen(true)}
+                className="w-full danger-button flex items-center justify-center gap-2"
+              >
+                <XCircle size={16} /> Cancelar Agendamento
+              </button>
+            )}
+
+            {/* Mensagem informativa quando o prazo de cancelamento expirou */}
+            {hasCancellationTimeExpired && (
+              <div className="flex items-center justify-center gap-2 text-sm text-yellow-400 p-2 bg-yellow-900/50 rounded-lg">
+                <Clock size={16} />
+                <span>Prazo para cancelamento online expirado.</span>
+              </div>
+            )}
           </div>
-        )}
+        ) : null}
       </motion.div>
 
       <ReviewModal
@@ -224,6 +265,13 @@ export const ClientAppointmentCard = ({
         appointment={appointment}
         onSubmit={handleReviewSubmit}
         isLoading={isSubmitting}
+      />
+      <CancelAppointmentModal
+        isOpen={isCancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        onConfirm={handleCancelConfirm}
+        isLoading={isCancelling}
+        userType="client"
       />
     </>
   );

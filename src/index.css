@@ -36,6 +36,9 @@
   .error-message {
     @apply text-red-400 text-sm mt-1;
   }
+  .danger-button {
+    @apply w-full bg-red-600/90 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed;
+  }
 }
 
 .animate-fade-in-down {

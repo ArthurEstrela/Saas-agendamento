@@ -56,6 +56,7 @@ interface ProviderAppointmentsActions {
     appointmentId: string,
     finalPrice: number
   ) => Promise<void>;
+  
 }
 
 const today = new Date();

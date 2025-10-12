@@ -12,6 +12,7 @@ import { ServicesManagement } from "./ServiceProvider/ServicesManagement";
 import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 import { Notifications } from "./Common/Notifications";
 import { Menu } from "lucide-react";
+import { AppointmentDetailsModal } from "./ServiceProvider/Agenda/AppointmentDetailsModal";
 
 // Tipagem para garantir que apenas seções válidas sejam chamadas
 export type ProviderDashboardView =
@@ -74,6 +75,7 @@ const ServiceProviderDashboard = () => {
         </div>
         {renderContent()}
       </main>
+      <AppointmentDetailsModal />
     </div>
   );
 };

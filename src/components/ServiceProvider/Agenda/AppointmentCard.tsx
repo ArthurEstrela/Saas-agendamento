@@ -12,7 +12,6 @@ export const AppointmentCard = ({
   appointment: EnrichedProviderAppointment;
 }) => {
   const { setSelectedAppointment } = useProviderAppointmentsStore();
-
   const handleCardClick = () => {
     setSelectedAppointment(appointment); // Ação para abrir o modal de detalhes
   };

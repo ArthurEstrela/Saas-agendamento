@@ -17,7 +17,8 @@ import type {
   Professional,
 } from "../types";
 import { getUserProfile } from "../firebase/userService";
-import { toast } from "react-hot-toast"; // Importe o toast
+import { toast } from "react-hot-toast";
+import { updateAppointmentStatus } from '../firebase/bookingService'
 
 export interface EnrichedAppointment extends Appointment {
   provider?: ServiceProviderProfile;
@@ -34,6 +35,7 @@ interface UserAppointmentsState {
 interface UserAppointmentsActions {
   fetchAppointments: (userId: string) => void;
   clearAppointments: () => void;
+  cancelAppointment: (appointmentId: string, reason: string) => Promise<void>;
 }
 
 const initialState: Omit<UserAppointmentsState, "unsubscribe"> = {
@@ -147,5 +149,21 @@ export const useUserAppointmentsStore = create<
   clearAppointments: () => {
     get().unsubscribe();
     set(initialState);
+  },
+   cancelAppointment: async (appointmentId, reason) => {
+    const promise = updateAppointmentStatus(appointmentId, 'cancelled', undefined, reason);
+
+    toast.promise(promise, {
+      loading: 'Cancelando agendamento...',
+      success: 'Agendamento cancelado com sucesso!',
+      error: 'Falha ao cancelar o agendamento.',
+    });
+
+    try {
+      await promise;
+    } catch (error) {
+      console.error('Erro ao cancelar agendamento:', error);
+      // O toast.promise já lida com a exibição do erro.
+    }
   },
 }));

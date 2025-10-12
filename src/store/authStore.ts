@@ -14,6 +14,9 @@ import { auth } from "../firebase/config";
 import { useProfileStore } from "./profileStore";
 import { createUserProfile } from "../firebase/userService";
 import type { ServiceProviderProfile, ClientProfile } from "../types";
+import { useUserAppointmentsStore } from "./userAppointmentsStore";
+import { useProviderAppointmentsStore } from "./providerAppointmentsStore";
+
 
 /**
  * Mapeia erros do Firebase Auth para mensagens amigáveis ao usuário.
@@ -150,6 +153,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await promise;
       // O listener `onAuthStateChanged` limpará o estado global.
+      useProviderAppointmentsStore.getState().clearAppointments();
+      useUserAppointmentsStore.getState().clearAppointments();
     } catch (error) {
       console.error("Logout failed:", error);
       toast.error("Ocorreu um erro ao tentar sair.");

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { PublicReviewsSection } from "../components/Public/PublicReviewsSection";
 import { FaWhatsapp } from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
 
 const PublicBookingPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -212,43 +213,59 @@ const PublicBookingPage = () => {
           </div>
 
           <div>
-            {activeTab === "services" && (
-              <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700">
-                <h2 className="text-2xl font-bold text-white mb-3">
-                  Serviços Oferecidos
-                </h2>
-                <ul className="divide-y divide-gray-700">
-                  {provider.services?.length > 0 ? (
-                    provider.services.map((service) => (
-                      <li
-                        key={service.id}
-                        className="py-3 flex justify-between items-center"
-                      >
-                        <div>
-                          <p className="font-semibold text-white">
-                            {service.name}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {service.duration} min
-                          </p>
-                        </div>
-                        <p className="font-bold text-lg text-[#daa520]">
-                          R$ {service.price.toFixed(2)}
+            <AnimatePresence mode="wait">
+              {/* O motion.div precisa da 'key' para saber QUANDO animar.
+        As props 'initial', 'animate', 'exit' definem COMO animar.
+      */}
+              <motion.div
+                key={activeTab} // <-- 1. A key é essencial!
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {/* 2. A lógica condicional vai AQUI DENTRO,
+             renderizando um ou outro componente.
+        */}
+                {activeTab === "services" && (
+                  <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700">
+                    <h2 className="text-2xl font-bold text-white mb-3">
+                      Serviços Oferecidos
+                    </h2>
+                    <ul className="divide-y divide-gray-700">
+                      {provider.services?.length > 0 ? (
+                        provider.services.map((service) => (
+                          <li
+                            key={service.id}
+                            className="py-3 flex justify-between items-center"
+                          >
+                            <div>
+                              <p className="font-semibold text-white">
+                                {service.name}
+                              </p>
+                              <p className="text-sm text-gray-400">
+                                {service.duration} min
+                              </p>
+                            </div>
+                            <p className="font-bold text-lg text-[#daa520]">
+                              R$ {service.price.toFixed(2)}
+                            </p>
+                          </li>
+                        ))
+                      ) : (
+                        <p className="text-gray-400 text-center py-4">
+                          Nenhum serviço cadastrado.
                         </p>
-                      </li>
-                    ))
-                  ) : (
-                    <p className="text-gray-400 text-center py-4">
-                      Nenhum serviço cadastrado.
-                    </p>
-                  )}
-                </ul>
-              </div>
-            )}
+                      )}
+                    </ul>
+                  </div>
+                )}
 
-            {activeTab === "reviews" && (
-              <PublicReviewsSection providerId={provider.id} />
-            )}
+                {activeTab === "reviews" && (
+                  <PublicReviewsSection providerId={provider.id} />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
       </div>

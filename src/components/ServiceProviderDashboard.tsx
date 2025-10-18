@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
+import { motion, AnimatePresence } from "framer-motion"; // 1. Importar o Framer Motion
 
-// Importe todas as suas seções refatoradas aqui
-
+// Importe todas as suas seções
 import { AgendaView } from "./ServiceProvider/Agenda/AgendaView";
 import { FinancialManagement } from "./ServiceProvider/FinancialManagement";
 import { ProfessionalsManagement } from "./ServiceProvider/ProfessionalsManagement";
@@ -25,33 +25,25 @@ export type ProviderDashboardView =
   | "reviews"
   | "notifications";
 
+// 2. Criar o Mapeamento de Componentes
+// Mapeia a string da view para o componente React correspondente
+const viewComponents: Record<ProviderDashboardView, React.ComponentType<any>> = {
+  agenda: AgendaView,
+  financial: FinancialManagement,
+  profile: ProfileManagement,
+  professionals: ProfessionalsManagement,
+  availability: AvailabilityManagement,
+  services: ServicesManagement,
+  reviews: ReviewsManagement,
+  notifications: Notifications,
+};
+
 const ServiceProviderDashboard = () => {
   const [activeView, setActiveView] = useState<ProviderDashboardView>("agenda");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const renderContent = () => {
-    switch (activeView) {
-      case "agenda":
-        return <AgendaView />;
-      case "financial":
-        return <FinancialManagement />;
-      case "profile":
-        return <ProfileManagement onBack={() => setActiveView("agenda")} />;
-      case "professionals":
-        return <ProfessionalsManagement />;
-      case "availability":
-        return <AvailabilityManagement />;
-      case "services":
-        return <ServicesManagement />;
-      case "reviews":
-        return <ReviewsManagement />;
-      case "notifications":
-        return <Notifications />;
-
-      default:
-        return <AgendaView />;
-    }
-  };
+  // 3. Obter o componente ativo diretamente do mapa
+  const ActiveComponent = viewComponents[activeView];
 
   return (
     <div className="flex min-h-screen bg-black text-gray-200 font-sans">
@@ -62,7 +54,6 @@ const ServiceProviderDashboard = () => {
         setIsOpen={setIsMobileNavOpen}
       />
       <main className="bg-gray-900/65 flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300 flex flex-col">
-        {" "}
         {/* Botão de menu para mobile */}
         <div className="md:hidden flex justify-between items-center mb-6">
           <button
@@ -73,7 +64,29 @@ const ServiceProviderDashboard = () => {
           </button>
           <span className="text-xl font-bold text-white">Stylo</span>
         </div>
-        {renderContent()}
+
+        {/* 4. Remover a função renderContent() e usar AnimatePresence */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            // A 'key' é essencial para o AnimatePresence saber que o componente mudou
+            key={activeView}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.25 }}
+            // Garante que o conteúdo animado preencha o espaço
+            className="flex-grow flex flex-col"
+          >
+            {/* 5. Renderizar o componente ativo
+              Tratamos casos especiais, como props, aqui.
+            */}
+            {activeView === "profile" ? (
+              <ProfileManagement onBack={() => setActiveView("agenda")} />
+            ) : (
+              <ActiveComponent />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
       <AppointmentDetailsModal />
     </div>

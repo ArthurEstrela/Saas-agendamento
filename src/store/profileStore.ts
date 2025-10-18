@@ -28,12 +28,12 @@ interface ProfileState {
   clearProfile: () => void;
   toggleFavorite: (professionalId: string) => Promise<void>;
   updateServicesInProfile: (services: Service[]) => void;
-  updateProfessionalsInProfile: (professionals: Professional[]) => void; 
+  updateProfessionalsInProfile: (professionals: Professional[]) => void;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
   userProfile: null,
-  professionals: null, 
+  professionals: null,
   isLoadingProfile: false,
   error: null,
 
@@ -41,29 +41,28 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     set({ isLoadingProfile: true, error: null });
     try {
       // 1. Busca o perfil principal (sem a lista de profissionais)
-      const profileData = await getUserProfile(uid); 
+      const profileData = await getUserProfile(uid);
 
       if (profileData) {
-        // Inicializa o estado com o perfil base
-        set({ userProfile: profileData, isLoadingProfile: false });
-
-        // 2. Se for um Prestador de Serviço, busca a sub-coleção
-        if (profileData.role === 'serviceProvider') {
-          try {
-            const professionalsList = await getProfessionalsByProviderId(uid);
-            // 3. Atualiza o NOVO estado 'professionals'
-            set({ professionals: professionalsList });
-          } catch (profError) {
-            console.error("Atenção: Falha ao buscar a sub-coleção de profissionais, mas o perfil principal foi carregado.", profError);
-            set({ professionals: [] }); // Define como array vazio para evitar erro de UI
-          }
+        // Se for um Prestador de Serviço, busca a sub-coleção ANTES de finalizar o loading
+        if (profileData.role === "serviceProvider") {
+          const professionalsList = await getProfessionalsByProviderId(uid);
+          // 2. Atualiza o estado com AMBOS os dados de uma vez
+          set({
+            userProfile: profileData,
+            professionals: professionalsList,
+            isLoadingProfile: false,
+          });
         } else {
-             // Garante que o estado de profissionais não exista para clientes
-            set({ professionals: null });
+          // Para clientes, o comportamento se mantém
+          set({
+            userProfile: profileData,
+            professionals: null,
+            isLoadingProfile: false,
+          });
         }
-
       } else {
-        throw new Error("Perfil de usuário não encontrado no Firestore.");
+        throw new Error("Perfil de usuário não encontrado.");
       }
     } catch (err: unknown) {
       let errorMessage = "Erro ao buscar o perfil do usuário.";
@@ -71,7 +70,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         errorMessage = err.message;
       }
       console.error("Erro ao buscar perfil:", err);
-      set({ error: errorMessage, isLoadingProfile: false, professionals: null });
+      set({
+        error: errorMessage,
+        isLoadingProfile: false,
+        professionals: null,
+      });
     }
   },
 
@@ -178,9 +181,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   updateProfessionalsInProfile: (professionals) => {
     // Esta função agora só atualiza o novo estado 'professionals'
     const { userProfile } = get();
-    if (userProfile && userProfile.role === 'serviceProvider') {
-        // A atualização não é mais feita no userProfile, mas sim no estado dedicado.
-        set({ professionals });
+    if (userProfile && userProfile.role === "serviceProvider") {
+      // A atualização não é mais feita no userProfile, mas sim no estado dedicado.
+      set({ professionals });
     }
     // Para tipos que não são ServiceProvider, a ação é ignorada.
   },

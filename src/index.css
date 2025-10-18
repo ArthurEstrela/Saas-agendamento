@@ -50,6 +50,9 @@
     border-image-slice: 1;
     border-image-source: linear-gradient(to right, #fbbf24, #f59e0b);
   }
+  .card-hover-effect {
+    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-amber-500/10;
+  }
 }
 
 /* Esconde as setas no Chrome, Safari, Edge, Opera */

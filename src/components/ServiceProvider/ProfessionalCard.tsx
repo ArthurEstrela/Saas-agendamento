@@ -9,7 +9,7 @@ interface ProfessionalCardProps {
 
 export const ProfessionalCard = ({ professional, onEdit, onDelete }: ProfessionalCardProps) => {
   return (
-    <div className="bg-black/30 rounded-2xl flex flex-col transition-all duration-300 border border-transparent hover:border-amber-500/50">
+    <div className="bg-black/30 rounded-2xl flex flex-col transition-all duration-300 border border-transparent hover:border-amber-500/50 card-hover-effect">
       <div className="p-5 flex-grow">
         {/* Cabeçalho do Card */}
         <div className="flex items-center gap-4 mb-4">

@@ -9,7 +9,7 @@ interface ServiceCardProps {
 
 export const ServiceCard = ({ service, onEdit, onDelete }: ServiceCardProps) => {
   return (
-    <div className="bg-black/30 rounded-2xl flex flex-col justify-between transition-all duration-300 border border-transparent hover:border-amber-500/50">
+    <div className="bg-black/30 rounded-2xl flex flex-col justify-between transition-all duration-300 border border-transparent hover:border-amber-500/50 card-hover-effect">
       {/* Corpo do Card */}
       <div className="p-6">
         <h3 className="text-xl font-bold text-white mb-2">{service.name}</h3>

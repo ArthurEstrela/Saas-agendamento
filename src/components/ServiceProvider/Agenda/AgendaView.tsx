@@ -81,23 +81,34 @@ export const AgendaView = () => {
     );
 
     // 1. FILTRO POR PROFISSIONAL
+    if (activeTab === "requests") {
+      // A. Filtra por profissional (se selecionado)
+      if (selectedProfessionalId) {
+        filtered = filtered.filter(
+          (appt) => appt.professionalId === selectedProfessionalId
+        );
+      }
+      // B. Retorna a lista COMO ESTÁ (já ordenada por 'createdAt' pela store)
+      // NÃO aplica filtro de data e NÃO reordena.
+      return filtered;
+    }
+
+    // 2. FILTRO POR DATA (APENAS para visualizações diárias, não para o 'calendar')
     if (selectedProfessionalId) {
       filtered = filtered.filter(
         (appt) => appt.professionalId === selectedProfessionalId
       );
     }
 
-    // 2. FILTRO POR DATA (APENAS para visualizações diárias, não para o 'calendar')
-    if (
-      (activeTab === "scheduled" || activeTab === "requests") &&
-      viewMode !== "calendar"
-    ) {
+    // B. Filtra por data (EXCETO se for a view 'calendar' que faz isso interno)
+    //    E SÓ se não for a aba 'history' (histórico é sempre geral)
+    if (activeTab === "scheduled" && viewMode !== "calendar") {
       filtered = filtered.filter((appt) =>
         isSameDay(appt.startTime, selectedDay)
       );
     }
 
-    // 3. ORDENAÇÃO
+    // C. Reordena por startTime, pois aqui queremos ver a ordem do dia.
     return filtered.sort(
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );

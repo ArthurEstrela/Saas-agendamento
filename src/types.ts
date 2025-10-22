@@ -100,6 +100,7 @@ export interface Appointment {
   review?: Review;
   rejectionReason?: string;
   completedAt?: Date | FieldValue;
+  createdAt: Date | FieldValue;
 }
 
 export interface Notification {

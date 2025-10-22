@@ -56,7 +56,6 @@ interface ProviderAppointmentsActions {
     appointmentId: string,
     finalPrice: number
   ) => Promise<void>;
-  
 }
 
 const today = new Date();
@@ -83,7 +82,7 @@ export const useProviderAppointmentsStore = create<
     const q = query(
       collection(db, "appointments"),
       where("providerId", "==", providerId),
-      orderBy("startTime", "asc")
+      orderBy("createdAt", "asc")
     );
 
     const unsubscribe = onSnapshot(
@@ -91,19 +90,38 @@ export const useProviderAppointmentsStore = create<
       async (snapshot) => {
         const appointmentsPromises = snapshot.docs.map(
           async (doc): Promise<EnrichedProviderAppointment> => {
+            // 1. Pega os dados crus
             const rawData = doc.data();
-            const apptData = {
+
+            // 2. *** A CORREÇÃO ESTÁ AQUI ***
+            // Primeiro, dizemos ao TS que 'rawData' bate com a 'Appointment'.
+            // Isso "ensina" ao TS que 'clientId', 'status', etc., existem.
+            const typedData = rawData as Appointment;
+
+            // 3. Agora, montamos o objeto final,
+            // substituindo os Timestamps pelas Datas corretas.
+            const apptData: Appointment = {
+              ...typedData, // Agora o TS sabe que 'clientId' está neste spread
               id: doc.id,
-              ...rawData,
               startTime: (rawData.startTime as Timestamp).toDate(),
               endTime: (rawData.endTime as Timestamp).toDate(),
-            } as Appointment;
+              createdAt: (rawData.createdAt as Timestamp).toDate(),
+              completedAt:
+                rawData.completedAt && rawData.completedAt instanceof Timestamp
+                  ? rawData.completedAt.toDate()
+                  : rawData.completedAt,
+            };
 
+            // 4. Agora esta linha funciona, pois apptData é do tipo Appointment
             const clientProfile = (await getUserProfile(
               apptData.clientId
             )) as ClientProfile | null;
 
-            return { ...apptData, client: clientProfile || undefined };
+            // 5. Retorna o objeto enriquecido
+            return {
+              ...apptData,
+              client: clientProfile || undefined,
+            };
           }
         );
 
@@ -120,7 +138,11 @@ export const useProviderAppointmentsStore = create<
   },
 
   completeAppointment: async (appointmentId, finalPrice) => {
-    const promise = updateAppointmentStatus(appointmentId, "completed", finalPrice);
+    const promise = updateAppointmentStatus(
+      appointmentId,
+      "completed",
+      finalPrice
+    );
 
     toast.promise(promise, {
       loading: "Finalizando agendamento...",
@@ -133,15 +155,17 @@ export const useProviderAppointmentsStore = create<
       const providerId = get().appointments.find(
         (a) => a.id === appointmentId
       )?.providerId;
-      
+
       const { dateFilter } = get();
-      
+
       if (providerId) {
-        useFinanceStore.getState().fetchFinancialData(
-          providerId,
-          dateFilter.startDate,
-          dateFilter.endDate 
-        );
+        useFinanceStore
+          .getState()
+          .fetchFinancialData(
+            providerId,
+            dateFilter.startDate,
+            dateFilter.endDate
+          );
       }
     } catch (error) {
       console.error("Erro ao concluir agendamento:", error);
@@ -167,22 +191,24 @@ export const useProviderAppointmentsStore = create<
       success: "Status atualizado com sucesso!",
       error: "Falha ao atualizar status.",
     });
-    
+
     try {
       await promise;
       if (status === "completed") {
         const providerId = get().appointments.find(
           (a) => a.id === appointmentId
         )?.providerId;
-        
+
         const { dateFilter } = get();
 
         if (providerId) {
-          useFinanceStore.getState().fetchFinancialData(
-            providerId,
-            dateFilter.startDate,
-            dateFilter.endDate
-          );
+          useFinanceStore
+            .getState()
+            .fetchFinancialData(
+              providerId,
+              dateFilter.startDate,
+              dateFilter.endDate
+            );
         }
       }
     } catch (error) {
@@ -194,7 +220,7 @@ export const useProviderAppointmentsStore = create<
     get().unsubscribe();
     set(initialState);
   },
-  
+
   setSelectedAppointment: (appointment) =>
     set({ selectedAppointment: appointment }),
 }));

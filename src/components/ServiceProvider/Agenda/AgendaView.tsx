@@ -22,13 +22,11 @@ import { ProfessionalFilter } from "./ProfessionalFilter";
 import { AgendaViewSwitcher } from "./AgendaViewSwitcher";
 import { ScheduledAppointmentsTab } from "./ScheduledAppointmentsTab";
 import { AgendaListView } from "./AgendaListView";
-import { AgendaColumnView } from "./AgendaColumnView";
-// CORREÇÃO DE IMPORT: Importa a exportação TimeGridCalendar do arquivo AgendaCalendario
 import { TimeGridCalendar } from "./TimeGridCalendar";
 import { DateSelector } from "../DateSelector";
 
 type AgendaTab = "requests" | "scheduled" | "history";
-export type ViewMode = "card" | "list" | "column" | "calendar";
+export type ViewMode = "card" | "list" | "calendar";
 
 export const AgendaView = () => {
   const { user } = useAuthStore();
@@ -142,8 +140,7 @@ export const AgendaView = () => {
         return <ScheduledAppointmentsTab appointments={filteredAppointments} />;
       case "list":
         return <AgendaListView appointments={filteredAppointments} />;
-      case "column":
-        return <AgendaColumnView appointments={filteredAppointments} />;
+      
       default:
         return <ScheduledAppointmentsTab appointments={filteredAppointments} />;
     }
@@ -184,7 +181,6 @@ export const AgendaView = () => {
               icons={{
                 card: <LayoutGrid size={18} />,
                 list: <List size={18} />,
-                column: <LayoutGrid size={18} />,
                 calendar: <ClockIcon size={18} />,
               }}
             />

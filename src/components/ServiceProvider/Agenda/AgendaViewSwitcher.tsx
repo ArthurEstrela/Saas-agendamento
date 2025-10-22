@@ -1,5 +1,5 @@
 // src/components/ServiceProvider/Agenda/AgendaViewSwitcher.tsx
-import { LayoutGrid, List, Columns, Calendar } from "lucide-react";
+import { LayoutGrid, List, Calendar } from "lucide-react";
 import type { ViewMode } from "./AgendaView";
 
 interface AgendaViewSwitcherProps {
@@ -17,7 +17,6 @@ export const AgendaViewSwitcher = ({
       { id: "calendar", icon: <Calendar size={18} />, label: "Mês/Semana" }, // Nova opção
       { id: "card", icon: <LayoutGrid size={18} />, label: "Cards" },
       { id: "list", icon: <List size={18} />, label: "Lista" },
-      { id: "column", icon: <Columns size={18} />, label: "Colunas" },
     ];
 
   return (

@@ -13,8 +13,9 @@ import {
   List,
   LayoutGrid,
   Clock as ClockIcon,
+  AlertTriangle,
 } from "lucide-react";
-import { isSameDay, startOfDay } from "date-fns";
+import { isPast, isSameDay, startOfDay } from "date-fns";
 
 import { useToast } from "../../../hooks/useToast";
 
@@ -29,8 +30,9 @@ import { DateSelector } from "../DateSelector";
 import { AppointmentDetailsModal } from "./AppointmentDetailsModal";
 import { ServiceCompletionModal } from "../ServiceCompletionModal";
 import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
+import { PendingIssuesTab } from "./PendingIssuesTab";
 
-type AgendaTab = "requests" | "scheduled" | "history";
+type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
 export type ViewMode = "card" | "list" | "calendar";
 
 export const AgendaView = () => {
@@ -157,46 +159,73 @@ export const AgendaView = () => {
     handleOpenCancel();
   }; // ************************************************************* // ****** LÓGICA DE FILTRO ATUALIZADA ******
   const filteredAppointments = useMemo(() => {
-    const statusMap: Record<AgendaTab, Array<Appointment["status"]>> = {
-      requests: ["pending"],
-      scheduled: ["scheduled", "pending"], // <-- MUDANÇA PRINCIPAL
-      history: ["completed", "cancelled"],
-    };
-
-    let filtered = appointments.filter((appt) =>
-      statusMap[activeTab].includes(appt.status)
-    );
-
+    // 1. Filtro por Profissional (é global)
+    let filtered = appointments;
     if (selectedProfessionalId) {
       filtered = filtered.filter(
         (appt) => appt.professionalId === selectedProfessionalId
       );
     }
 
-    if (activeTab === "requests") {
-      return filtered.sort(
-        (a, b) => a.startTime.getTime() - b.startTime.getTime()
-      );
+    // 2. Filtro principal por Aba
+    const beginningOfToday = startOfDay(new Date());
+
+    switch (activeTab) {
+      case "requests":
+        filtered = filtered.filter((a) => a.status === "pending"); // Não filtra por dia, é um inbox global
+        break;
+
+      case "pendingIssues": // <-- LÓGICA DA NOVA ABA
+        filtered = filtered.filter(
+          (a) =>
+            a.status === "scheduled" &&
+            isPast(a.endTime) &&
+            a.endTime < beginningOfToday
+        );
+        // Também não filtra por dia, é um inbox global
+        break;
+
+      case "scheduled":
+        filtered = filtered.filter(
+          (a) => a.status === "scheduled" || a.status === "pending"
+        );
+        // Na agenda, filtramos por dia (exceto no calendário)
+        if (viewMode !== "calendar") {
+          filtered = filtered.filter((a) =>
+            isSameDay(a.startTime, selectedDay)
+          );
+        }
+        break;
+
+      case "history":
+        filtered = filtered.filter(
+          (a) => a.status === "completed" || a.status === "cancelled"
+        );
+        // No histórico, também filtramos por dia
+        filtered = filtered.filter((a) => isSameDay(a.startTime, selectedDay));
+        break;
     }
 
-    // Filtra por dia selecionado na aba 'scheduled' (card/list) e 'history'
-    if (
-      (activeTab === "scheduled" && viewMode !== "calendar") ||
-      activeTab === "history"
-    ) {
-      filtered = filtered.filter((appt) =>
-        isSameDay(appt.startTime, selectedDay)
-      );
-    }
-
+    // 3. Ordenação final
     return filtered.sort(
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );
-  }, [appointments, activeTab, selectedProfessionalId, selectedDay, viewMode]); // ********************************************
+  }, [appointments, activeTab, selectedProfessionalId, selectedDay, viewMode]);
+
   const pendingCount = useMemo(
     () => appointments.filter((a) => a.status === "pending").length,
     [appointments]
   );
+
+  const pendingPastCount = useMemo(() => {
+    const beginningOfToday = startOfDay(new Date());
+    return appointments.filter(
+      (appt) =>
+        appt.status === "scheduled" && // Foi agendado
+        isPast(appt.endTime) && // O horário já passou
+        appt.endTime < beginningOfToday // E foi antes de hoje
+    ).length;
+  }, [appointments]);
 
   const renderScheduledContent = () => {
     if (isLoading) {
@@ -273,7 +302,7 @@ export const AgendaView = () => {
             onSelectProfessional={setSelectedProfessionalId}
           />
           {/* O DateSelector agora aparece em 'scheduled' e 'history' */}
-          {activeTab !== "requests" && (
+          {(activeTab === "scheduled" || activeTab === "history") && (
             <DateSelector
               selectedDate={selectedDay}
               setSelectedDate={setSelectedDay}
@@ -329,6 +358,26 @@ export const AgendaView = () => {
           Agenda
         </button>
         <button
+          onClick={() => setActiveTab("pendingIssues")}
+          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+            activeTab === "pendingIssues"
+              ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/10" // Cor de destaque
+              : "text-gray-400 hover:bg-gray-800"
+          }`}
+        >
+          Pendências
+          {pendingPastCount > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold"
+            >
+              {pendingPastCount}
+            </motion.span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab("history")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
             activeTab === "history"
@@ -339,6 +388,7 @@ export const AgendaView = () => {
           Histórico
         </button>
       </nav>
+
       <main className="flex-1 mt-6">
         <AnimatePresence mode="wait">
           <motion.div
@@ -366,6 +416,12 @@ export const AgendaView = () => {
               />
             )}
             {activeTab === "scheduled" && renderScheduledContent()} 
+            {activeTab === "pendingIssues" && (
+              <PendingIssuesTab // <-- USANDO O COMPONENTE NOVO
+                appointments={filteredAppointments}
+                onAppointmentSelect={handleOpenDetails}
+              />
+            )}
             {activeTab === "history" && (
               <HistoryTab
                 appointments={filteredAppointments}

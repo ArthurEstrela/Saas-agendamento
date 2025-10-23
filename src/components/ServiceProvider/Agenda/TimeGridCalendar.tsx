@@ -6,8 +6,10 @@ import { ptBR } from "date-fns/locale";
 import { Clock, User, CheckCircle, MoreHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../../lib/utils/cn";
+// ****** 1. IMPORTAMOS O TIPO 'Appointment' ******
+import type { Appointment } from "../../../types"; 
 import {
-  useProviderAppointmentsStore,
+  // ****** 2. REMOVEMOS 'useProviderAppointmentsStore' DAQUI ******
   type EnrichedProviderAppointment,
 } from "../../../store/providerAppointmentsStore";
 
@@ -23,10 +25,14 @@ const getMinutesFromStart = (date: Date) =>
 // --- Componente do Card de Agendamento ---
 const AppointmentCard = ({
   appointment,
+  onSelect, // <-- 3. ADICIONAMOS A NOVA PROP 'onSelect'
 }: {
   appointment: EnrichedProviderAppointment;
+  onSelect: (appointment: Appointment) => void; // <-- 3. TIPAMOS A PROP
 }) => {
-  const { setSelectedAppointment } = useProviderAppointmentsStore();
+  // ****** 4. REMOVEMOS O 'useProviderAppointmentsStore' ******
+  // const { setSelectedAppointment } = useProviderAppointmentsStore(); 
+
   const top = getMinutesFromStart(appointment.startTime);
   const duration =
     (appointment.endTime.getTime() - appointment.startTime.getTime()) /
@@ -54,7 +60,8 @@ const AppointmentCard = ({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       whileHover={{ scale: 1.02, y: -2 }}
-      onClick={() => setSelectedAppointment(appointment)}
+      // ****** 5. ATUALIZAMOS O ONCLICK ******
+      onClick={() => onSelect(appointment)} // <-- MUDADO DE 'setSelectedAppointment'
       style={{
         top: `${top}px`,
         height: `${height}px`,
@@ -66,6 +73,7 @@ const AppointmentCard = ({
         statusClasses
       )}
     >
+      {/* ... (O JSX interno do card permanece o mesmo) ... */}
       <p className="font-bold truncate text-sm flex items-center gap-1">
         <Icon size={14} className="shrink-0" />
         <span className="truncate">
@@ -93,8 +101,9 @@ const AppointmentCard = ({
   );
 };
 
-// --- Componente da Linha de Hora Atual ---
+// --- Componente da Linha de Hora Atual (INTACTO) ---
 const CurrentTimeIndicator = () => {
+  // ... (código do CurrentTimeIndicator permanece o mesmo)
   const [top, setTop] = useState(0);
 
   useEffect(() => {
@@ -127,16 +136,20 @@ const CurrentTimeIndicator = () => {
 interface TimeGridCalendarProps {
   appointments: EnrichedProviderAppointment[];
   currentDate: Date;
+  // ****** 6. ADICIONAMOS A PROP 'onAppointmentSelect' ******
+  onAppointmentSelect: (appointment: Appointment) => void;
 }
 
 export const TimeGridCalendar = ({
   appointments,
   currentDate,
+  onAppointmentSelect, // <-- 7. RECEBEMOS A PROP
 }: TimeGridCalendarProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const timeColumnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // ... (lógica de scroll intacta)
     const scrollContainer = containerRef.current;
     const timeColumn = timeColumnRef.current;
     if (scrollContainer && timeColumn) {
@@ -148,6 +161,7 @@ export const TimeGridCalendar = ({
     }
   }, []);
 
+  // ... (lógica de 'weekDays' e 'timeLabels' intacta)
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -158,6 +172,7 @@ export const TimeGridCalendar = ({
   }, []);
 
   const appointmentsByDay = useMemo(() => {
+    // ... (lógica de 'appointmentsByDay' intacta)
     const map = new Map<string, EnrichedProviderAppointment[]>();
     weekDays.forEach((day) => map.set(format(day, "yyyy-MM-dd"), []));
     appointments.forEach((appt) => {
@@ -171,7 +186,7 @@ export const TimeGridCalendar = ({
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-900 rounded-xl border border-gray-800">
-      {/* Cabeçalho */}
+      {/* ... (JSX do Cabeçalho intacto) ... */}
       <div className="grid grid-cols-[auto,1fr] sticky top-0 z-40 bg-gray-900 border-b border-gray-800 shadow-md">
         <div className="w-20 border-r border-gray-800"></div>
         <div className="grid grid-cols-7">
@@ -198,10 +213,9 @@ export const TimeGridCalendar = ({
           ))}
         </div>
       </div>
-
-      {/* Corpo */}
+      
+      {/* ... (JSX do Corpo / Coluna de Horários intacto) ... */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Coluna de Horários (Sticky) */}
         <div className="w-20 flex-shrink-0 bg-gray-900 border-r border-gray-800 overflow-hidden relative z-30">
           <div ref={timeColumnRef}>
             {timeLabels.map((hour) => (
@@ -215,38 +229,46 @@ export const TimeGridCalendar = ({
           </div>
         </div>
 
-        {/* Grid de Agendamentos (com Scroll) */}
-        <div ref={containerRef} className="flex-1 overflow-auto">
-          <div className="grid grid-cols-7 min-w-max relative">
-            {/* Linhas de fundo */}
-            <div className="absolute inset-0 col-span-7 z-0">
-              {timeLabels.map((hour) => (
-                <div
-                  key={`line-${hour}`}
-                  className="h-[60px] border-t border-gray-800"
-                ></div>
-              ))}
-            </div>
-
-            {/* Colunas dos dias */}
-            {weekDays.map((day) => {
-              const dayKey = format(day, "yyyy-MM-dd");
-              const dailyAppointments = appointmentsByDay.get(dayKey) || [];
-              return (
-                <div
-                  key={dayKey}
-                  className="relative border-r border-gray-800 last:border-r-0"
-                >
-                  {isToday(day) && <CurrentTimeIndicator />}
-                  <AnimatePresence>
-                    {dailyAppointments.map((appt) => (
-                      <AppointmentCard key={appt.id} appointment={appt} />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
+        {/* Grid de Agendamentos */}
+        <div
+          ref={containerRef}
+          // AQUI ESTÁ A CORREÇÃO:
+          // ADICIONE a classe 'relative'
+          className="flex-1 relative grid grid-cols-7 overflow-y-auto"
+        >
+          {/* Linhas de fundo */}
+          <div className="absolute inset-0 col-span-7 z-0">
+            {timeLabels.map((hour) => (
+              <div
+                key={`line-${hour}`}
+                className="h-[60px] border-t border-gray-800"
+              ></div>
+            ))}
           </div>
+
+          {/* Colunas dos dias */}
+          {weekDays.map((day) => {
+            const dayKey = format(day, "yyyy-MM-dd");
+            const dailyAppointments = appointmentsByDay.get(dayKey) || [];
+            return (
+              <div
+                key={dayKey}
+                className="relative border-r border-gray-800 last:border-r-0"
+              >
+                {isToday(day) && <CurrentTimeIndicator />}
+                <AnimatePresence>
+                  {dailyAppointments.map((appt) => (
+                    // ****** 8. PASSAMOS O HANDLER PARA O CARD INTERNO ******
+                    <AppointmentCard
+                      key={appt.id}
+                      appointment={appt}
+                      onSelect={onAppointmentSelect} // <-- ADICIONADO
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

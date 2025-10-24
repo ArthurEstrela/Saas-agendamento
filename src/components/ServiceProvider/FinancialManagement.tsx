@@ -1,3 +1,5 @@
+// src/components/ServiceProvider/FinancialManagement.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import { useFinanceStore } from "../../store/financeStore";
 import { useAuthStore } from "../../store/authStore";
@@ -30,23 +32,26 @@ import {
 } from "recharts";
 import { motion } from "framer-motion";
 import "react-day-picker/dist/style.css";
-import { subDays, format } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import ExpenseModal from "./ExpenseModal";
 import type { Appointment, Expense } from "../../types";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import { Timestamp } from "firebase/firestore";
-import { updateExpense, deleteExpense } from "../../firebase/expenseService";
 import { ConfirmationModal } from "../Common/ConfirmationModal";
 import { exportTransactionsToCsv } from "../../lib/utils/exportToCsv";
 import { PerformanceRanking } from "./PerformanceRanking";
 
 // --- Funções Utilitárias e Componentes Internos ---
+
 const normalizeTimestamp = (dateValue: unknown): Date => {
   if (dateValue instanceof Timestamp) {
     return dateValue.toDate();
   }
+  // Garante que é um valor válido antes de criar a data
+  if (!dateValue) return new Date();
   return new Date(dateValue as string | number | Date);
 };
 
@@ -57,7 +62,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Cartão de Estatística
+// Cartão de Estatística (RE-ADICIONADO)
 const StatCard = ({
   title,
   value,
@@ -81,7 +86,7 @@ const StatCard = ({
   </motion.div>
 );
 
-// Tabela de Transações
+// Tabela de Transações (RE-ADICIONADA e CORRIGIDA)
 const FinancialTransactionsTable = ({
   transactions,
   onEditExpense,
@@ -126,7 +131,7 @@ const FinancialTransactionsTable = ({
               </td>
               <td className="px-6 py-4 text-sm text-white">
                 {"serviceName" in item
-                  ? `Serviço: ${item.serviceName} (${item.clientName})` // Adicionado nome do cliente para clareza
+                  ? `Serviço: ${item.serviceName} (${item.clientName})`
                   : item.description}
               </td>
               <td className="px-6 py-4 text-sm">
@@ -145,8 +150,9 @@ const FinancialTransactionsTable = ({
                   "totalPrice" in item ? "text-emerald-400" : "text-red-400"
                 }`}
               >
+                {/* --- CORREÇÃO DO BUG DE PREÇO --- */}
                 {"totalPrice" in item
-                  ? `+ ${formatCurrency(item.totalPrice)}`
+                  ? `+ ${formatCurrency(item.finalPrice ?? item.totalPrice)}`
                   : `- ${formatCurrency(item.amount)}`}
               </td>
               <td className="px-6 py-4 text-right">
@@ -155,7 +161,6 @@ const FinancialTransactionsTable = ({
                     <Button
                       variant="ghost"
                       size="icon"
-                      // Casting necessário para Expense, garantido pela checagem "amount" in item
                       onClick={() => onEditExpense(item as Expense)}
                     >
                       <Edit className="h-4 w-4" />
@@ -178,7 +183,7 @@ const FinancialTransactionsTable = ({
   );
 };
 
-// Container de Gráfico
+// Container de Gráfico (RE-ADICIONADO)
 const ChartContainer = ({
   title,
   children,
@@ -195,22 +200,16 @@ const ChartContainer = ({
 // --- Componente Principal ---
 
 export const FinancialManagement = () => {
-  // 1. Extração robusta do estado (Seletores Individuais)
   const user = useAuthStore((state) => state.user);
-
   const financialData = useFinanceStore((state) => state.financialData);
-  const loading = useFinanceStore((state) => state.loading);
+  const loading = useFinanceStore((state) => state.isLoading);
   const error = useFinanceStore((state) => state.error);
   const fetchFinancialData = useFinanceStore(
     (state) => state.fetchFinancialData
   );
-  const addExpense = useFinanceStore((state) => state.addExpense);
-
-  // 2. Estado de Período e Modais
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    subDays(new Date(), 29)
-  );
-  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+  const currentDate = useFinanceStore((state) => state.currentDate);
+  const setCurrentDate = useFinanceStore((state) => state.setCurrentDate);
+  const { removeExpense } = useFinanceStore();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
@@ -218,67 +217,41 @@ export const FinancialManagement = () => {
     null
   );
 
-  // 3. Efeito para buscar dados sempre que o período ou o usuário mudar
   useEffect(() => {
-    if (user?.uid && startDate && endDate) {
-      fetchFinancialData(user.uid, startDate, endDate);
+    if (user?.uid) {
+      fetchFinancialData(user.uid, currentDate);
     }
-  }, [user?.uid, startDate, endDate, fetchFinancialData]);
+  }, [user?.uid, currentDate, fetchFinancialData]);
 
   const handleOpenEditModal = (expense: Expense) => {
     setExpenseToEdit(expense);
     setIsExpenseModalOpen(true);
   };
 
-  const handleSaveExpense = async (data: Omit<Expense, "id">, id?: string) => {
-    if (!user?.uid || !startDate || !endDate) return;
-    if (id) {
-      await updateExpense(user.uid, id, data);
-    } else {
-      await addExpense(user.uid, data);
-    }
-    // Recarrega os dados após salvar/atualizar
-    fetchFinancialData(user.uid, startDate, endDate);
-    setIsExpenseModalOpen(false);
-    setExpenseToEdit(null);
-  };
-
   const executeDeleteExpense = async () => {
-    if (user?.uid && expenseIdToDelete && startDate && endDate) {
-      await deleteExpense(user.uid, expenseIdToDelete);
-      fetchFinancialData(user.uid, startDate, endDate);
+    if (expenseIdToDelete) {
+      await removeExpense(expenseIdToDelete);
       setExpenseIdToDelete(null);
     }
   };
 
   const handleExportCSV = () => {
-    // Melhoria de UX: Usar a Toast/Modal de confirmação, mas mantendo o alert por falta do contexto Toast aqui
-    if (
-      !allTransactions ||
-      allTransactions.length === 0 ||
-      !startDate ||
-      !endDate
-    ) {
-      // Usar console.error ou uma modal customizada aqui seria melhor, mas mantemos o alert por limitação
+    if (!allTransactions || allTransactions.length === 0) {
       alert("Nenhuma transação para exportar no período selecionado.");
       return;
     }
-
-    const start = format(startDate, "yyyy-MM-dd");
-    const end = format(endDate, "yyyy-MM-dd");
+    const start = format(startOfMonth(currentDate), "yyyy-MM-dd");
+    const end = format(endOfMonth(currentDate), "yyyy-MM-dd");
     const filename = `relatorio_financeiro_${start}_a_${end}.csv`;
-
     exportTransactionsToCsv(filename, allTransactions);
   };
 
-  // 4. Memoização das transações combinadas
   const allTransactions = useMemo(() => {
     if (!financialData) return [];
     const combined = [
       ...(financialData.appointments || []),
       ...(financialData.expenses || []),
     ];
-    // Ordena por data (mais recente primeiro)
     return combined.sort(
       (a, b) =>
         normalizeTimestamp("date" in b ? b.date : b.startTime).getTime() -
@@ -286,33 +259,40 @@ export const FinancialManagement = () => {
     );
   }, [financialData]);
 
-  // 5. Memoização dos dados do gráfico de barras (Receita vs Despesa)
   const barChartData = useMemo(() => {
     if (!financialData) return [];
     const dailyData: Record<string, { revenue: number; expenses: number }> = {};
+
     financialData.appointments.forEach((appt) => {
       const dateSource = appt.completedAt || appt.startTime;
       const date = normalizeTimestamp(dateSource);
       const day = format(date, "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
-      dailyData[day].revenue += appt.totalPrice;
+      // --- CORREÇÃO DO BUG DE PREÇO ---
+      dailyData[day].revenue += appt.finalPrice ?? appt.totalPrice;
     });
+
     financialData.expenses.forEach((exp) => {
       const date = normalizeTimestamp(exp.date);
       const day = format(date, "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
       dailyData[day].expenses += exp.amount;
     });
+
     return Object.entries(dailyData)
       .map(([date, values]) => ({
         date: format(new Date(date), "dd/MM"),
         Receita: values.revenue,
         Despesa: values.expenses,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date)); // Ordena por data (string)
+      .sort((a, b) => {
+        // Ordena pela data corretamente (convertendo dd/MM para MM/dd)
+        const [dayA, monthA] = a.date.split("/");
+        const [dayB, monthB] = b.date.split("/");
+        return `${monthA}-${dayA}`.localeCompare(`${monthB}-${dayB}`);
+      });
   }, [financialData]);
 
-  // 6. Memoização dos dados do gráfico de pizza (Despesas por Categoria)
   const pieChartData = useMemo(() => {
     if (!financialData?.expenses || financialData.expenses.length === 0)
       return [];
@@ -330,10 +310,10 @@ export const FinancialManagement = () => {
   }, [financialData?.expenses]);
 
   const PIE_CHART_COLORS = [
-    "#FFC107", // Amarelo
-    "#FF8F00", // Laranja Claro
-    "#FF6F00", // Laranja
-    "#F57C00", // Laranja Escuro
+    "#FFC107",
+    "#FF8F00",
+    "#FF6F00",
+    "#F57C00",
     "#EF6C00",
     "#E65100",
   ];
@@ -368,47 +348,26 @@ export const FinancialManagement = () => {
           </p>
         </div>
 
-        {/* Seletor de data */}
         <div className="flex flex-col sm:flex-row items-center gap-2">
-          {/* Popover/Calendar Trigger (Start Date) */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant={"outline"}
-                className="w-full sm:w-[140px] justify-start text-left font-normal"
+                className="w-full sm:w-[200px] justify-start text-left font-normal"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {startDate ? format(startDate, "dd/MM/yy") : <span>De</span>}
+                {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
               <Calendar
                 mode="single"
-                selected={startDate}
-                onSelect={setStartDate}
-                disabled={endDate ? { after: endDate } : undefined}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          <span className="text-gray-400 hidden sm:block">até</span>
-          {/* Popover/Calendar Trigger (End Date) */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className="w-full sm:w-[140px] justify-start text-left font-normal"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {endDate ? format(endDate, "dd/MM/yy") : <span>Até</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={endDate}
-                onSelect={setEndDate}
-                disabled={endDate ? { after: endDate } : undefined}
+                selected={currentDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setCurrentDate(date);
+                  }
+                }}
                 initialFocus
               />
             </PopoverContent>
@@ -563,7 +522,6 @@ export const FinancialManagement = () => {
           setIsExpenseModalOpen(false);
           setExpenseToEdit(null);
         }}
-        onSave={handleSaveExpense}
         expenseToEdit={expenseToEdit}
       />
       <ConfirmationModal

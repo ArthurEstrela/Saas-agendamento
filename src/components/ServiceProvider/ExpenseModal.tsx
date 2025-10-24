@@ -1,3 +1,5 @@
+// src/components/ServiceProvider/ExpenseModal.tsx
+
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6,13 +8,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import { DollarSign, Tag, Calendar, Repeat, X, Save } from "lucide-react";
 import type { Expense } from "../../types";
 import { Button } from "../ui/button";
-import { Timestamp } from "firebase/firestore";
+// Removido Timestamp, pois a store espera 'Date' e o service converte
+// import { Timestamp } from "firebase/firestore";
 
+// --- 1. IMPORTAR A STORE ---
+import { useFinanceStore } from "../../store/financeStore";
+
+// O Schema está perfeito. Apenas garanta que o Zod
+// está convertendo a data para um objeto Date.
 const expenseSchema = z.object({
   description: z.string().min(3, "A descrição é obrigatória."),
   amount: z.coerce.number().min(0.01, "O valor deve ser maior que zero."),
   category: z.string().min(1, "A categoria é obrigatória."),
-  date: z.date({ invalid_type_error: "A data é obrigatória." }),
+  // 'z.date()' é melhor que 'z.string()...transform()'
+  date: z.date({ 
+    required_error: "A data é obrigatória.",
+    invalid_type_error: "Formato de data inválido." 
+  }),
   type: z.enum(["one-time", "recurring"]),
   frequency: z.enum(["monthly"]).optional(),
 });
@@ -33,27 +45,35 @@ const expenseCategories = [
 interface ExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<Expense, "id">, id?: string) => void;
+  // --- 2. REMOVER 'onSave' ---
+  // onSave: (data: Omit<Expense, "id">, id?: string) => void;
   expenseToEdit?: Expense | null;
 }
 
 const ExpenseModal = ({
   isOpen,
   onClose,
-  onSave,
+  // onSave, // <-- Removido
   expenseToEdit,
 }: ExpenseModalProps) => {
+
+  // --- 3. PEGAR AS FUNÇÕES DA STORE ---
+  // O 'isSubmitting' do RHF (react-hook-form) já vai cuidar do estado
+  // de loading do botão, pois vamos dar 'await' nas funções da store.
+  const { addNewExpense, editExpense } = useFinanceStore();
+
   const {
     register,
     handleSubmit,
     control,
     watch,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }, // <-- Este 'isSubmitting' é perfeito
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
     defaultValues: {
       type: "one-time",
+      date: new Date(), // Garantir um valor padrão
     },
   });
 
@@ -61,11 +81,12 @@ const ExpenseModal = ({
 
   useEffect(() => {
     if (expenseToEdit) {
-      const date =
-        expenseToEdit.date instanceof Timestamp
-          ? expenseToEdit.date.toDate()
-          : (expenseToEdit.date as Date);
-      reset({ ...expenseToEdit, date });
+      // O 'date' da despesa já deve ser um objeto Date
+      // vindo do 'financeService'
+      const dateToEdit = (expenseToEdit.date instanceof Timestamp) 
+        ? expenseToEdit.date.toDate() 
+        : expenseToEdit.date;
+      reset({ ...expenseToEdit, date: dateToEdit });
     } else {
       reset({
         description: "",
@@ -77,17 +98,36 @@ const ExpenseModal = ({
     }
   }, [expenseToEdit, isOpen, reset]);
 
-  const onSubmit = (data: ExpenseFormData) => {
+  // --- 4. TORNAR O SUBMIT ASSÍNCRONO ---
+  const onSubmit = async (data: ExpenseFormData) => {
+    
+    // 'data.date' já é um objeto Date graças ao Zod e ao Controller
     const expenseData: Omit<Expense, "id"> = {
       ...data,
-      date: Timestamp.fromDate(data.date),
+      date: data.date, // A store espera um 'Date'
     };
+    
     if (data.type !== "recurring") {
       delete expenseData.frequency;
     } else {
       expenseData.frequency = "monthly"; // Hardcoded por enquanto
     }
-    onSave(expenseData, expenseToEdit?.id);
+
+    // --- 5. CHAMAR A FUNÇÃO DA STORE ---
+    try {
+      if (expenseToEdit?.id) {
+        // 'isSubmitting' ficará true durante este await
+        await editExpense(expenseToEdit.id, expenseData);
+      } else {
+        // 'isSubmitting' ficará true durante este await
+        await addNewExpense(expenseData);
+      }
+      onClose(); // Fecha o modal SÓ se der certo
+    } catch (error) {
+      // O toast.promise na store já vai mostrar o erro
+      console.error("Falha ao salvar despesa:", error);
+    }
+    // 'isSubmitting' voltará a ser false automaticamente
   };
 
   return (
@@ -115,6 +155,8 @@ const ExpenseModal = ({
                 <X className="h-6 w-6" />
               </Button>
             </div>
+            
+            {/* O handleSubmit vai passar o controle para o nosso onSubmit async */}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               {/* Description */}
               <div className="relative">
@@ -160,7 +202,7 @@ const ExpenseModal = ({
                 )}
               </div>
 
-              {/* Date */}
+              {/* Date (Corrigido para 'react-hook-form' com Zod) */}
               <div className="relative">
                 <Controller
                   control={control}
@@ -168,12 +210,23 @@ const ExpenseModal = ({
                   render={({ field }) => (
                     <input
                       type="date"
+                      // Formata o valor (que é um objeto Date) para o input
                       value={
                         field.value
-                          ? new Date(field.value).toISOString().split("T")[0]
+                          ? field.value.toISOString().split("T")[0]
                           : ""
                       }
-                      onChange={(e) => field.onChange(new Date(e.target.value))}
+                      // Converte a string do input (YYYY-MM-DD) para um objeto Date
+                      // Adiciona "T00:00:00" para evitar problemas de fuso horário
+                      onChange={(e) => {
+                        if (e.target.value) {
+                           // Cria a data no fuso horário local
+                           const [year, month, day] = e.target.value.split('-').map(Number);
+                           field.onChange(new Date(year, month - 1, day));
+                        } else {
+                           field.onChange(null); // Ou new Date() se preferir
+                        }
+                      }}
                       className="input-field pl-10"
                     />
                   )}
@@ -226,10 +279,11 @@ const ExpenseModal = ({
                   type="button"
                   variant="outline"
                   onClick={onClose}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting} // Desabilita enquanto salva
                 >
                   Cancelar
                 </Button>
+                {/* O 'isSubmitting' do useForm vai funcionar perfeitamente */}
                 <Button type="submit" disabled={isSubmitting}>
                   <Save className="mr-2 h-4 w-4" />
                   {isSubmitting ? "Salvando..." : "Salvar Despesa"}

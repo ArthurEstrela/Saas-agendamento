@@ -8,16 +8,17 @@ import {
   updateProfessionalInProvider,
   uploadProfessionalPhoto,
 } from "../firebase/professionalsManagementService";
-import type { Professional, Service } from "../types"; // Importando tipos necessários
+// ****** 1. IMPORTAMOS DailyAvailability ******
+import type { Professional, Service, DailyAvailability } from "../types";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "react-hot-toast";
 
 // Payload para criar/atualizar. Corresponde ao formulário.
-// Usamos Pick para pegar só o que vem do formulário, e não 'id', 'availability', etc.
 type ProfessionalFormData = Pick<Professional, "name"> & {
   services: Service[]; // O formulário já deve passar os objetos de serviço completos
   photoURL?: string; // photoURL existente (para atualização)
   photoFile?: File | null; // Novo arquivo de foto
+  availability?: DailyAvailability[]; // <-- 1. ADICIONAMOS A DISPONIBILIDADE AQUI
 };
 
 // Interface do Store
@@ -45,13 +46,11 @@ export const useProfessionalsManagementStore =
     error: null,
 
     /**
-     * Adiciona um novo profissional e, em seguida,
-     * força a atualização do profileStore.
+     * Adiciona um novo profissional
      */
     addProfessional: async (providerId, payload) => {
       set({ isSubmitting: true, error: null });
 
-      // Esta é a função que o toast.promise irá executar
       const addAndRefetchPromise = async () => {
         const { photoFile, ...professionalData } = payload;
         const newProfessionalId = uuidv4();
@@ -65,27 +64,20 @@ export const useProfessionalsManagementStore =
           );
         }
 
-        // Criamos o objeto Professional completo, conforme o type
         const finalProfessional: Professional = {
           id: newProfessionalId,
           name: professionalData.name,
           services: professionalData.services,
           photoURL: photoURL,
-          availability: [], // Profissionais novos começam sem disponibilidade definida
+          // Profissionais novos começam sem disponibilidade (ou com a do payload, se houver)
+          availability: professionalData.availability || [],
         };
 
-        // 1. Adiciona no Firebase
         await addProfessionalToProvider(providerId, finalProfessional);
-        
-        // 2. Atualiza o estado global (essa é a parte nova)
-        // O toast só mostrará "sucesso" depois que isso terminar.
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 
       try {
-        // ****** CORREÇÃO DO BUG ******
-        // Chamamos toast.promise UMA VEZ, e ele executa a função.
-        // Não chamamos a função novamente no try/catch.
         await toast.promise(addAndRefetchPromise(), {
           loading: "Adicionando profissional...",
           success: "Profissional adicionado com sucesso!",
@@ -96,7 +88,6 @@ export const useProfessionalsManagementStore =
         const errorMessage =
           err instanceof Error ? err.message : "Erro desconhecido";
         set({ error: errorMessage });
-        // O toast.promise já exibiu o erro, mas podemos registrar no estado
       } finally {
         set({ isSubmitting: false });
       }
@@ -113,15 +104,15 @@ export const useProfessionalsManagementStore =
         let photoURL = professionalData.photoURL || ""; // Mantém a URL existente
 
         if (photoFile) {
-          // Se um novo arquivo foi enviado, faz o upload
           photoURL = await uploadProfessionalPhoto(
             providerId,
-            professionalId, // ID existente para sobrescrever a foto
+            professionalId, 
             photoFile
           );
         }
 
-        // O 'availability' não vem do formulário, então buscamos do profileStore
+        // Busca o profissional ATUAL para o caso de o payload
+        // NÃO conter a disponibilidade (ex: vindo da tela de "Meus Profissionais")
         const currentProfessional = useProfileStore
           .getState()
           .professionals?.find((p) => p.id === professionalId);
@@ -131,7 +122,14 @@ export const useProfessionalsManagementStore =
           name: professionalData.name,
           services: professionalData.services,
           photoURL: photoURL,
-          availability: currentProfessional?.availability || [], // Mantém o availability
+          
+          // ****** 2. AQUI ESTÁ A CORREÇÃO PRINCIPAL ******
+          // Se 'professionalData' (vindo do payload) tiver a chave 'availability',
+          // use-a. Senão, mantenha a disponibilidade antiga.
+          availability:
+            professionalData.availability !== undefined
+              ? professionalData.availability
+              : currentProfessional?.availability || [],
         };
 
         // 1. Atualiza no Firebase
@@ -143,9 +141,9 @@ export const useProfessionalsManagementStore =
 
       try {
         await toast.promise(updateAndRefetchPromise(), {
-          loading: "Atualizando profissional...",
-          success: "Profissional atualizado com sucesso!",
-          error: "Falha ao atualizar profissional.",
+          loading: "Atualizando dados...", // Mensagem mais genérica
+          success: "Dados atualizados com sucesso!",
+          error: "Falha ao atualizar os dados.",
         });
       } catch (err) {
         console.error("Erro em updateProfessional:", err);
@@ -158,18 +156,13 @@ export const useProfessionalsManagementStore =
     },
 
     /**
-     * Remove um profissional e força a atualização do profileStore.
+     * Remove um profissional
      */
     removeProfessional: async (providerId, professionalId) => {
       set({ isSubmitting: true, error: null });
 
       const removeAndRefetchPromise = async () => {
-        // (Opcional: Adicionar lógica para deletar a foto do Storage aqui)
-        
-        // 1. Remove do Firebase
         await removeProfessionalFromProvider(providerId, professionalId);
-        
-        // 2. Atualiza o estado global
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 
@@ -179,7 +172,8 @@ export const useProfessionalsManagementStore =
           success: "Profissional removido com sucesso!",
           error: "Falha ao remover o profissional.",
         });
-      } catch (err) {
+      } catch (err)
+       {
         console.error("Erro em removeProfessional:", err);
         const errorMessage =
           err instanceof Error ? err.message : "Erro desconhecido";

@@ -115,27 +115,54 @@ export const onAppointmentUpdate = onDocumentUpdated(
       return; // Sai se o status não mudou
     }
 
-    // 1. Notificação para o CLIENTE sobre status (Confirmado / Cancelado)
-    // AQUI ESTÁ A CORREÇÃO: trocamos "confirmed" por "scheduled"
-    if (afterData.status === "scheduled" || afterData.status === "cancelled") {
-      const { clientId, serviceName, startTime } = afterData;
-      if (!clientId) return;
+    const { formattedDate, formattedTime } = formatDate(afterData.startTime);
 
-      const { formattedDate, formattedTime } = formatDate(startTime);
-      const isConfirmed = afterData.status === "scheduled"; // Ajustado aqui também
-
-      const title = isConfirmed
-        ? "Agendamento Confirmado!"
-        : "Agendamento Recusado";
-
-      const body = `Seu agendamento para "${serviceName}" em ${formattedDate} às ${formattedTime} foi ${
-        isConfirmed ? "confirmado" : "recusado"
-      }.`;
-
-      await sendPushNotification(clientId, title, body);
+    // 1. Notificação para o CLIENTE (Confirmado / Recusado pelo Prestador)
+    // Assumimos que 'requested' -> 'scheduled' ou 'requested' -> 'cancelled' é ação do PRESTADOR.
+    if (
+      beforeData.status === "requested" &&
+      (afterData.status === "scheduled" || afterData.status === "cancelled")
+    ) {
+      const { clientId, serviceName } = afterData;
+      if (clientId) {
+        const isConfirmed = afterData.status === "scheduled";
+        const title = isConfirmed
+          ? "Agendamento Confirmado!"
+          : "Agendamento Recusado";
+        const body = `Seu agendamento para "${
+          serviceName || "o serviço"
+        }" em ${formattedDate} às ${formattedTime} foi ${
+          isConfirmed ? "confirmado" : "recusado"
+        }.`;
+        await sendPushNotification(clientId, title, body);
+      } else {
+        logger.warn(
+          `Agendamento ${appointmentId} ${afterData.status} sem clientId para notificar.`
+        );
+      }
     }
 
-    // 2. Criação de Transação Financeira (Esta parte não muda)
+    // 2. Notificação para o PRESTADOR (Cancelado pelo Cliente)
+    // Assumimos que 'scheduled' -> 'cancelled' é ação do CLIENTE.
+    // !! ESTA É A NOVA LÓGICA !!
+    if (beforeData.status === "scheduled" && afterData.status === "cancelled") {
+      const { professionalId, serviceName, clientName } = afterData;
+      if (professionalId) {
+        const title = "Agendamento Cancelado";
+        const body = `${
+          clientName || "Cliente"
+        } cancelou o agendamento de "${
+          serviceName || "serviço"
+        }" de ${formattedDate} às ${formattedTime}.`;
+        await sendPushNotification(professionalId, title, body);
+      } else {
+        logger.warn(
+          `Agendamento ${appointmentId} cancelado pelo cliente, mas sem professionalId para notificar.`
+        );
+      }
+    }
+
+    // 3. Criação de Transação Financeira (Esta parte não muda)
     if (afterData.status === "completed") {
       const { professionalId, finalPrice } = afterData;
       if (!professionalId || typeof finalPrice === "undefined") {

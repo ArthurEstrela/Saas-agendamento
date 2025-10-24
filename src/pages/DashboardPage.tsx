@@ -3,17 +3,21 @@ import ServiceProviderDashboard from '../components/ServiceProviderDashboard';
 import { DashboardSkeleton } from '../components/Common/LoadingSpinner';
 import { ClientDashboard } from '../components/ClientDashboard';
 
-
 // O tipo é exportado pelo ClientDashboard, mas a página precisa dele
 export type { ClientDashboardView } from '../components/ClientDashboard';
 
 const DashboardPage = () => {
   const { userProfile, isLoadingProfile, error } = useProfileStore();
 
-  if (isLoadingProfile) {
+  // 1. Estado de Carregamento Inicial
+  // Mostra o esqueleto APENAS se estiver carregando E o perfil ainda não existir.
+  // Esta é a mudança principal que resolve o problema.
+  if (isLoadingProfile && !userProfile) {
     return <DashboardSkeleton />;
   }
 
+  // 2. Estado de Erro
+  // Se houver um erro, exibe a mensagem de erro.
   if (error) {
     return (
       <div className="flex justify-center items-center h-screen bg-red-50">
@@ -24,26 +28,31 @@ const DashboardPage = () => {
       </div>
     );
   }
-  
-  if (!userProfile) {
-    return (
-        <div className="flex justify-center items-center h-screen">
-            <div className="text-center">
-                <h2 className="text-2xl font-bold">Perfil não encontrado.</h2>
-            </div>
-        </div>
-    );
+
+  // 3. Estado de Perfil Carregado (ou Atualizando em Background)
+  // Se o perfil já existe (userProfile não é null), renderiza o dashboard.
+  // Mesmo que isLoadingProfile seja true (indicando um refresh), o dashboard
+  // não será desmontado, preservando o estado da aba ativa.
+  if (userProfile) {
+    if (userProfile.role === 'client') {
+      return <ClientDashboard />;
+    }
+    if (userProfile.role === 'serviceProvider') {
+      return <ServiceProviderDashboard />;
+    }
+    // Caso tenha perfil, mas um 'role' desconhecido
+    return <div>Tipo de usuário desconhecido.</div>;
   }
 
-  if (userProfile.role === 'client') {
-    return <ClientDashboard />;
-  }
-
-  if (userProfile.role === 'serviceProvider') {
-    return <ServiceProviderDashboard />;
-  }
-
-  return <div>Tipo de usuário desconhecido.</div>;
+  // 4. Estado de Fallback
+  // Se não está carregando, não deu erro, mas o perfil é null.
+  return (
+    <div className="flex justify-center items-center h-screen">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold">Perfil não encontrado.</h2>
+      </div>
+    </div>
+  );
 };
 
 export default DashboardPage;

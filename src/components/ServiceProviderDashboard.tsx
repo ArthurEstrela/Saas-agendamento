@@ -1,8 +1,13 @@
-import { useState } from "react";
-import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
-import { motion, AnimatePresence } from "framer-motion"; // 1. Importar o Framer Motion
+// (Provavelmente em src/pages/DashboardPage.tsx ou src/components/ServiceProviderDashboard.tsx)
 
-// Importe todas as suas seções
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Loader2, Menu } from "lucide-react"; // 1. Importar Loader2
+
+// 2. Importar o store para verificar o loading
+import { useProfileStore } from "../store/profileStore";
+
+import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
 import { AgendaView } from "./ServiceProvider/Agenda/AgendaView";
 import { FinancialManagement } from "./ServiceProvider/FinancialManagement";
 import { ProfessionalsManagement } from "./ServiceProvider/ProfessionalsManagement";
@@ -11,10 +16,9 @@ import { ProfileManagement } from "./ServiceProvider/ProfileManagement";
 import { ServicesManagement } from "./ServiceProvider/ServicesManagement";
 import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 import { Notifications } from "./Common/Notifications";
-import { Menu } from "lucide-react";
-import { AppointmentDetailsModal } from "./ServiceProvider/Agenda/AppointmentDetailsModal";
+// 3. Remover o import do Modal que não é mais usado aqui
+// import { AppointmentDetailsModal } from "./ServiceProvider/Agenda/AppointmentDetailsModal";
 
-// Tipagem para garantir que apenas seções válidas sejam chamadas
 export type ProviderDashboardView =
   | "agenda"
   | "profile"
@@ -25,8 +29,6 @@ export type ProviderDashboardView =
   | "reviews"
   | "notifications";
 
-// 2. Criar o Mapeamento de Componentes
-// Mapeia a string da view para o componente React correspondente
 const viewComponents: Record<ProviderDashboardView, React.ComponentType<any>> = {
   agenda: AgendaView,
   financial: FinancialManagement,
@@ -39,11 +41,22 @@ const viewComponents: Record<ProviderDashboardView, React.ComponentType<any>> = 
 };
 
 const ServiceProviderDashboard = () => {
+  // 4. Pegar o perfil do store
+  const { userProfile } = useProfileStore();
+
   const [activeView, setActiveView] = useState<ProviderDashboardView>("agenda");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  // 3. Obter o componente ativo diretamente do mapa
   const ActiveComponent = viewComponents[activeView];
+
+  // 5. Adicionar a verificação de loading (crucial!)
+  if (!userProfile) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-900">
+        <Loader2 className="animate-spin text-amber-500" size={64} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-black text-gray-200 font-sans">
@@ -65,21 +78,15 @@ const ServiceProviderDashboard = () => {
           <span className="text-xl font-bold text-white">Stylo</span>
         </div>
 
-        {/* 4. Remover a função renderContent() e usar AnimatePresence */}
         <AnimatePresence mode="wait">
           <motion.div
-            // A 'key' é essencial para o AnimatePresence saber que o componente mudou
             key={activeView}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.25 }}
-            // Garante que o conteúdo animado preencha o espaço
             className="flex-grow flex flex-col"
           >
-            {/* 5. Renderizar o componente ativo
-              Tratamos casos especiais, como props, aqui.
-            */}
             {activeView === "profile" ? (
               <ProfileManagement onBack={() => setActiveView("agenda")} />
             ) : (
@@ -88,7 +95,9 @@ const ServiceProviderDashboard = () => {
           </motion.div>
         </AnimatePresence>
       </main>
-      <AppointmentDetailsModal />
+      
+      {/* 6. Remover o Modal solto. Ele agora vive 100% dentro da AgendaView. */}
+      {/* <AppointmentDetailsModal /> */}
     </div>
   );
 };

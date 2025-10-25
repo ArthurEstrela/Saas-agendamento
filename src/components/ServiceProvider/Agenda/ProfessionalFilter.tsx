@@ -27,7 +27,7 @@ export const ProfessionalFilter = ({
   );
 
   return (
-    <div className="relative w-full sm:w-52">
+    <div className="relative z-50 w-full sm:w-52">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center justify-between w-full px-4 py-2 text-sm text-white bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500"

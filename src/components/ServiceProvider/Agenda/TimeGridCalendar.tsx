@@ -7,7 +7,7 @@ import { Clock, User, CheckCircle, MoreHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../../lib/utils/cn";
 // ****** 1. IMPORTAMOS O TIPO 'Appointment' ******
-import type { Appointment } from "../../../types"; 
+import type { Appointment } from "../../../types";
 import {
   // ****** 2. REMOVEMOS 'useProviderAppointmentsStore' DAQUI ******
   type EnrichedProviderAppointment,
@@ -31,7 +31,7 @@ const AppointmentCard = ({
   onSelect: (appointment: Appointment) => void; // <-- 3. TIPAMOS A PROP
 }) => {
   // ****** 4. REMOVEMOS O 'useProviderAppointmentsStore' ******
-  // const { setSelectedAppointment } = useProviderAppointmentsStore(); 
+  // const { setSelectedAppointment } = useProviderAppointmentsStore();
 
   const top = getMinutesFromStart(appointment.startTime);
   const duration =
@@ -187,9 +187,9 @@ export const TimeGridCalendar = ({
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-900 rounded-xl border border-gray-800">
       {/* ... (JSX do Cabeçalho intacto) ... */}
-      <div className="grid grid-cols-[auto,1fr] sticky top-0 z-40 bg-gray-900 border-b border-gray-800 shadow-md">
-        <div className="w-20 border-r border-gray-800"></div>
-        <div className="grid grid-cols-7">
+      <div className="flex sticky top-0 z-40 bg-gray-900 border-b border-gray-800 shadow-md">
+        <div className="w-20 flex-shrink-0 border-r border-gray-800"></div>
+        <div className="flex-1 grid grid-cols-7">
           {weekDays.map((day) => (
             <div
               key={day.toISOString()}
@@ -213,7 +213,7 @@ export const TimeGridCalendar = ({
           ))}
         </div>
       </div>
-      
+
       {/* ... (JSX do Corpo / Coluna de Horários intacto) ... */}
       <div className="flex-1 flex overflow-hidden">
         <div className="w-20 flex-shrink-0 bg-gray-900 border-r border-gray-800 overflow-hidden relative z-30">

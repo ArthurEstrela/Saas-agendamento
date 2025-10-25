@@ -12,6 +12,7 @@ import type {
 import { createAppointment } from "../firebase/bookingService";
 import { getUserProfile } from "../firebase/userService";
 import { getProfessionalsByProviderId } from "../firebase/professionalsManagementService";
+import { serverTimestamp } from "firebase/firestore";
 
 // Representa o estado do processo de agendamento
 interface BookingFlowState {
@@ -201,6 +202,7 @@ export const useBookingProcessStore = create<BookingStore>()(
           status: "pending",
           totalPrice: selectedServices.reduce((acc, s) => acc + s.price, 0),
           totalDuration,
+          createdAt: serverTimestamp(),
         };
 
         const promise = createAppointment(appointmentData);

@@ -164,7 +164,6 @@ export const useProviderAppointmentsStore = create<
           .fetchFinancialData(
             providerId,
             dateFilter.startDate,
-            dateFilter.endDate
           );
       }
     } catch (error) {
@@ -207,7 +206,6 @@ export const useProviderAppointmentsStore = create<
             .fetchFinancialData(
               providerId,
               dateFilter.startDate,
-              dateFilter.endDate
             );
         }
       }

@@ -1,6 +1,6 @@
 // src/pages/BookingPage.tsx
 import { useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useBookingProcessStore } from "../store/bookingProcessStore";
 import { ServiceSelection } from "../components/booking/ServiceSelection";
 import { ProfessionalSelection } from "../components/booking/ProfessionalSelection";
@@ -45,7 +45,6 @@ const BookingStepper = ({ currentStep }: { currentStep: number }) => {
 
 // Componente de Sucesso para reutilização
 const BookingSuccess = () => {
-    const navigate = useNavigate();
     return (
         <div className="text-center max-w-lg mx-auto py-10">
             <CheckCircle size={64} className="mx-auto text-green-400 mb-6" />

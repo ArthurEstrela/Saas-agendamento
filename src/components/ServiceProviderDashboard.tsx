@@ -29,7 +29,7 @@ export type ProviderDashboardView =
   | "reviews"
   | "notifications";
 
-const viewComponents: Record<ProviderDashboardView, React.ComponentType<any>> = {
+const viewComponents: Record<ProviderDashboardView, React.ComponentType> = {
   agenda: AgendaView,
   financial: FinancialManagement,
   profile: ProfileManagement,
@@ -87,15 +87,11 @@ const ServiceProviderDashboard = () => {
             transition={{ duration: 0.25 }}
             className="flex-grow flex flex-col"
           >
-            {activeView === "profile" ? (
-              <ProfileManagement onBack={() => setActiveView("agenda")} />
-            ) : (
-              <ActiveComponent />
-            )}
+            <ActiveComponent />
           </motion.div>
         </AnimatePresence>
       </main>
-      
+
       {/* 6. Remover o Modal solto. Ele agora vive 100% dentro da AgendaView. */}
       {/* <AppointmentDetailsModal /> */}
     </div>

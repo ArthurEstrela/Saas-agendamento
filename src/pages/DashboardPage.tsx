@@ -3,9 +3,6 @@ import ServiceProviderDashboard from '../components/ServiceProviderDashboard';
 import { DashboardSkeleton } from '../components/Common/LoadingSpinner';
 import { ClientDashboard } from '../components/ClientDashboard';
 
-// O tipo é exportado pelo ClientDashboard, mas a página precisa dele
-export type { ClientDashboardView } from '../components/ClientDashboard';
-
 const DashboardPage = () => {
   const { userProfile, isLoadingProfile, error } = useProfileStore();
 

@@ -15,7 +15,14 @@ import {
   Clock as ClockIcon,
   AlertTriangle,
 } from "lucide-react";
-import { isPast, isSameDay, startOfDay } from "date-fns";
+import { isSameDay,
+  isToday,
+  isPast,
+  addDays, 
+  subDays, 
+  isWithinInterval, 
+  startOfDay, 
+  endOfDay, } from "date-fns";
 
 import { useToast } from "../../../hooks/useToast";
 
@@ -157,7 +164,8 @@ export const AgendaView = () => {
 
   const handleDecline = () => {
     handleOpenCancel();
-  }; // ************************************************************* // ****** LÓGICA DE FILTRO ATUALIZADA ******
+  };
+
   const filteredAppointments = useMemo(() => {
     // 1. Filtro por Profissional (é global)
     let filtered = appointments;
@@ -167,32 +175,45 @@ export const AgendaView = () => {
       );
     }
 
-    // 2. Filtro principal por Aba
+    // 2. Definição dos intervalos de data
     const beginningOfToday = startOfDay(new Date());
 
+    // Intervalo de 30 dias para o FUTURO (Agendados)
+    const startOfSelectedDay = startOfDay(selectedDay);
+    const endOf30DaysForward = endOfDay(addDays(selectedDay, 30));
+
+    // Intervalo de 30 dias para o PASSADO (Histórico)
+    const startOf30DaysAgo = startOfDay(subDays(selectedDay, 30));
+    const endOfSelectedDay = endOfDay(selectedDay);
+
+    // 3. Filtro principal por Aba
     switch (activeTab) {
       case "requests":
-        filtered = filtered.filter((a) => a.status === "pending"); // Não filtra por dia, é um inbox global
+        filtered = filtered.filter((a) => a.status === "pending"); // OK - Inbox global
         break;
 
-      case "pendingIssues": // <-- LÓGICA DA NOVA ABA
+      case "pendingIssues":
         filtered = filtered.filter(
           (a) =>
             a.status === "scheduled" &&
             isPast(a.endTime) &&
             a.endTime < beginningOfToday
         );
-        // Também não filtra por dia, é um inbox global
+        // OK - Inbox global
         break;
 
       case "scheduled":
         filtered = filtered.filter(
           (a) => a.status === "scheduled" || a.status === "pending"
         );
-        // Na agenda, filtramos por dia (exceto no calendário)
+        
+        // Na agenda, filtramos por 30 DIAS (exceto no calendário)
         if (viewMode !== "calendar") {
           filtered = filtered.filter((a) =>
-            isSameDay(a.startTime, selectedDay)
+            isWithinInterval(a.startTime, {
+              start: startOfSelectedDay,
+              end: endOf30DaysForward,
+            })
           );
         }
         break;
@@ -201,16 +222,30 @@ export const AgendaView = () => {
         filtered = filtered.filter(
           (a) => a.status === "completed" || a.status === "cancelled"
         );
-        // No histórico, também filtramos por dia
-        filtered = filtered.filter((a) => isSameDay(a.startTime, selectedDay));
+        
+        // No histórico, também filtramos por 30 DIAS (passados)
+        // OBS: A visão de calendário não se aplica ao histórico, 
+        // mas se aplicasse, teria que tratar como no 'scheduled'.
+        filtered = filtered.filter((a) =>
+          isWithinInterval(a.startTime, {
+            start: startOf30DaysAgo,
+            end: endOfSelectedDay,
+          })
+        );
         break;
     }
 
-    // 3. Ordenação final
+    // 4. Ordenação final
     return filtered.sort(
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );
-  }, [appointments, activeTab, selectedProfessionalId, selectedDay, viewMode]);
+  }, [
+    appointments,
+    activeTab,
+    selectedProfessionalId,
+    selectedDay,
+    viewMode,
+  ]);
 
   const pendingCount = useMemo(
     () => appointments.filter((a) => a.status === "pending").length,

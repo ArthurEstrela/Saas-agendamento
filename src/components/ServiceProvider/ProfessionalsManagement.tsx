@@ -15,6 +15,11 @@ import type {
   ServiceProviderProfile,
 } from "../../types";
 
+type ProfessionalFormData = {
+  name: string;
+  serviceIds: string[];
+};
+
 export const ProfessionalsManagement = () => {
   // 1. CHAME TODOS OS HOOKS NO TOPO DO COMPONENTE
   // Isso resolve as warnings: "React Hook 'use...' is called conditionally."
@@ -78,7 +83,7 @@ export const ProfessionalsManagement = () => {
   };
 
   const handleSaveProfessional = async (
-    formData: any,
+    formData: ProfessionalFormData,
     photoFile: File | null
   ) => {
     const providerId = providerProfile.id; // Usando o perfil tipado

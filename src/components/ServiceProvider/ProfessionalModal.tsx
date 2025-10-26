@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Professional, Service } from '../../types';
@@ -29,7 +29,6 @@ export const ProfessionalModal = ({ isOpen, onClose, onSave, professional, avail
   const {
     register,
     handleSubmit,
-    control,
     reset,
     formState: { errors },
   } = useForm<ProfessionalFormData>({

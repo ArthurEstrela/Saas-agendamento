@@ -10,6 +10,10 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { formatInTimeZone } from "date-fns-tz"; // Importa o formatInTimeZone
 import { startOfTomorrow, endOfTomorrow } from "date-fns"; // Importa da biblioteca principal
 
+import * as functions from "firebase-functions"; // Import para config()
+import { onRequest } from "firebase-functions/v2/https";
+import Stripe from "stripe";
+
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -17,6 +21,24 @@ const db = admin.firestore();
 const REGION = "southamerica-east1"; // Região onde suas functions irão rodar
 const TIME_ZONE = "America/Sao_Paulo"; // Fuso horário para as funções agendadas
 
+let stripeInstance: Stripe;
+
+const getStripe = (): Stripe => {
+  if (!stripeInstance) {
+    // Pega a chave secreta do config
+    const stripeSecret = functions.config().stripe.secret;
+    if (!stripeSecret) {
+      // Isso agora vai dar um erro claro no log da nuvem se a chave faltar
+      throw new Error("Stripe secret key is not configured. Run 'firebase functions:config:set stripe.secret=...'");
+    }
+    
+    // Cria a instância
+    stripeInstance = new Stripe(stripeSecret, {
+      apiVersion: "2025-08-27.basil", // A versão que seu TS pediu
+    });
+  }
+  return stripeInstance;
+};
 // --- FUNÇÕES AUXILIARES ---
 
 /**
@@ -318,7 +340,9 @@ export const sendAppointmentReminders = onSchedule(
  * Cria uma sessão de checkout do Stripe para pagamentos de assinatura.
  */
 export const createStripeCheckout = onCall(
-  { region: REGION },
+  // !! MUDANÇA AQUI !!
+  // Especificando os segredos que esta função precisa ler
+  { region: REGION, secrets: ["STRIPE_API_SECRET"] }, 
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -326,12 +350,43 @@ export const createStripeCheckout = onCall(
         "Você precisa estar autenticado."
       );
     }
-    // Se você não usa Stripe, pode remover esta função
-    // O código do Stripe permanece o mesmo que você já tinha.
-    throw new HttpsError(
-      "unimplemented",
-      "A função de pagamento não está habilitada."
-    );
+
+    const { priceId, successUrl, cancelUrl } = request.data;
+    if (!priceId || !successUrl || !cancelUrl) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Faltam parâmetros (priceId, successUrl, cancelUrl)."
+      );
+    }
+
+    const uid = request.auth.uid;
+
+    try {
+      const stripe = getStripe(); // Pega a instância
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card", "boleto", "pix"],
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        client_reference_id: uid,
+      });
+
+      if (!session.url) {
+        throw new HttpsError(
+          "internal",
+          "Não foi possível criar a sessão do Stripe."
+        );
+      }
+
+      return { sessionUrl: session.url };
+    } catch (error) {
+      logger.error("Erro ao criar checkout do Stripe:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        throw new HttpsError("internal", error.message);
+      }
+      throw new HttpsError("internal", "Ocorreu um erro inesperado.");
+    }
   }
 );
 
@@ -369,3 +424,122 @@ const createFirestoreNotification = async (
     );
   }
 };
+
+
+export const stripeWebhook = onRequest(
+  // !! MUDANÇA AQUI !!
+  // Especificando os segredos que esta função precisa ler
+  { region: REGION, secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"] }, 
+  async (request, response) => {
+    // !! MUDANÇA AQUI !!
+    // Lendo do 'process.env' (o jeito novo)
+    const webhookSecret = process.env.STRIPE_WEBHOOK_KEY; 
+    
+    if (!webhookSecret) {
+      logger.error("Stripe webhook secret is not configured in .env file.");
+      response.status(400).send("Webhook Error: Missing secret");
+      return;
+    }
+
+    const sig = request.headers["stripe-signature"] as string;
+    let event: Stripe.Event;
+
+    try {
+      const stripe = getStripe(); // Pega a instância
+      event = stripe.webhooks.constructEvent(
+        request.rawBody,
+        sig,
+        webhookSecret
+      );
+    } catch (err: any) {
+      logger.error("Erro na verificação do webhook:", err);
+      response.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    // Lida com os eventos
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const userId = session.client_reference_id;
+          const subscriptionId = session.subscription;
+
+          if (!userId || !subscriptionId) {
+            logger.error(
+              "checkout.session.completed sem userId ou subscriptionId",
+              session
+            );
+            break;
+          }
+
+          const userRef = db.collection("users").doc(userId);
+          await userRef.update({
+            subscriptionStatus: "active",
+            stripeSubscriptionId: subscriptionId,
+          });
+
+          logger.info(`Usuário ${userId} iniciou assinatura ${subscriptionId}`);
+          break;
+        }
+        
+        case "invoice.payment_succeeded": {
+          const invoice = event.data.object as Stripe.Invoice;
+          
+          if (!invoice.lines || !invoice.lines.data || invoice.lines.data.length === 0) {
+            logger.info("Fatura sem 'line items', ignorando.", invoice);
+            break;
+          }
+          
+          const subscriptionId = invoice.lines.data[0].subscription;
+
+          if (!subscriptionId) {
+            logger.info("invoice.payment_succeeded sem ID de assinatura (pagamento avulso).", invoice);
+            break;
+          }
+
+          const userQuery = await db
+            .collection("users")
+            .where("stripeSubscriptionId", "==", subscriptionId)
+            .limit(1)
+            .get();
+
+          if (!userQuery.empty) {
+            const userId = userQuery.docs[0].id;
+            await db.collection("users").doc(userId).update({
+              subscriptionStatus: "active",
+            });
+            logger.info(`Renovação de assinatura paga para ${userId}`);
+          }
+          break;
+        }
+
+        case "invoice.payment_failed":
+        case "customer.subscription.deleted": {
+          const subscription = event.data.object as Stripe.Subscription;
+          const userQuery = await db
+            .collection("users")
+            .where("stripeSubscriptionId", "==", subscription.id)
+            .limit(1)
+            .get();
+
+          if (!userQuery.empty) {
+            const userId = userQuery.docs[0].id;
+            await db.collection("users").doc(userId).update({
+              subscriptionStatus: "cancelled",
+            });
+            logger.warn(`Assinatura com falha ou cancelada para ${userId}`);
+          }
+          break;
+        }
+      }
+    } catch (error) {
+      logger.error("Erro ao processar evento do webhook:", error);
+      response.status(500).send("Erro interno ao processar webhook.");
+      return;
+    }
+
+    // Responde ao Stripe que recebemos o evento
+    response.status(200).send({ received: true });
+  }
+);

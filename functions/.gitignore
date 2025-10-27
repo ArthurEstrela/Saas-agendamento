@@ -8,3 +8,7 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+
+# Ignora todos os arquivos de ambiente (chaves secretas)
+.env*
+*.env.*

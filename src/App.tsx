@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { AnimatePresence } from "framer-motion";
 
@@ -15,6 +15,42 @@ import { BookingPage } from "./pages/BookingPage";
 import PublicBookingPage from "./pages/PublicBookingPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
+// O componente AuthHandler é onde a mágica acontece
+const AuthHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation(); // <-- 2. INICIE O HOOK
+  const { user, setUser, userProfile, fetchUserProfile } = useAuthStore();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        // Se o perfil ainda não foi buscado, busca
+        if (!userProfile) {
+          await fetchUserProfile(firebaseUser.uid);
+        }
+        
+        // 3. !! LÓGICA DE REDIRECT ATUALIZADA !!
+        // Vê se viemos de algum lugar (como a HomePage querendo pagar)
+        const from = location.state?.from?.pathname || "/dashboard";
+        
+        // Se já estávamos no login/register, manda para o 'from'
+        if (location.pathname === "/login" || location.pathname === "/register") {
+          navigate(from, { replace: true });
+        }
+        
+      } else {
+        setUser(null);
+        // (aqui você pode adicionar um `Maps("/login")` se quiser
+        // forçar o logout para a tela de login)
+      }
+    });
+    return () => unsubscribe();
+  }, [user, userProfile, fetchUserProfile, setUser, navigate, location]);
+
+  return null; // Este componente não renderiza nada
+};
+
 function App() {
   const location = useLocation();
 
@@ -26,6 +62,7 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
+      <AuthHandler /> {/* Adiciona o handler de autenticação */}
       <Routes location={location} key={location.pathname}>
         {/* Rotas Públicas com Layout (Header/Footer) */}
         <Route element={<AppLayout />}>

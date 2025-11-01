@@ -19,6 +19,7 @@ import type { ServiceProviderProfile } from "../../types"; // 2. Importamos o ti
 import type { ProviderDashboardView } from "../ServiceProviderDashboard"; // Importa o tipo
 import { useNotificationStore } from "../../store/notificationsStore"; // Importar a store
 
+
 interface NavItemProps {
   icon: React.ElementType;
   text: string;

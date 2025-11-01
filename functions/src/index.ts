@@ -10,7 +10,6 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { formatInTimeZone } from "date-fns-tz"; // Importa o formatInTimeZone
 import { startOfTomorrow, endOfTomorrow } from "date-fns"; // Importa da biblioteca principal
 
-import * as functions from "firebase-functions"; // Import para config()
 import { onRequest } from "firebase-functions/v2/https";
 import Stripe from "stripe";
 
@@ -25,14 +24,14 @@ let stripeInstance: Stripe;
 
 const getStripe = (): Stripe => {
   if (!stripeInstance) {
-    // Pega a chave secreta do config
-    const stripeSecret = functions.config().stripe.secret;
+    // !! ESTA É A VERSÃO CORRETA !!
+    // Ela usa process.env, que é o correto para v2
+    const stripeSecret = process.env.STRIPE_API_SECRET; 
+    
     if (!stripeSecret) {
-      // Isso agora vai dar um erro claro no log da nuvem se a chave faltar
-      throw new Error("Stripe secret key is not configured. Run 'firebase functions:config:set stripe.secret=...'");
+      throw new Error("Stripe secret key is not configured in .env file (STRIPE_API_SECRET).");
     }
     
-    // Cria a instância
     stripeInstance = new Stripe(stripeSecret, {
       apiVersion: "2025-08-27.basil", // A versão que seu TS pediu
     });
@@ -340,8 +339,7 @@ export const sendAppointmentReminders = onSchedule(
  * Cria uma sessão de checkout do Stripe para pagamentos de assinatura.
  */
 export const createStripeCheckout = onCall(
-  // !! MUDANÇA AQUI !!
-  // Especificando os segredos que esta função precisa ler
+  // Especificando os segredos que esta função v2 precisa
   { region: REGION, secrets: ["STRIPE_API_SECRET"] }, 
   async (request) => {
     if (!request.auth) {
@@ -362,9 +360,9 @@ export const createStripeCheckout = onCall(
     const uid = request.auth.uid;
 
     try {
-      const stripe = getStripe(); // Pega a instância
+      const stripe = getStripe(); // Pega a instância que usa process.env
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card", "boleto", "pix"],
+        payment_method_types: ["card", "boleto"], // Adiciona pix como método de pagamento
         mode: "subscription",
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: successUrl,
@@ -427,16 +425,13 @@ const createFirestoreNotification = async (
 
 
 export const stripeWebhook = onRequest(
-  // !! MUDANÇA AQUI !!
-  // Especificando os segredos que esta função precisa ler
   { region: REGION, secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"] }, 
   async (request, response) => {
-    // !! MUDANÇA AQUI !!
-    // Lendo do 'process.env' (o jeito novo)
+    
     const webhookSecret = process.env.STRIPE_WEBHOOK_KEY; 
     
     if (!webhookSecret) {
-      logger.error("Stripe webhook secret is not configured in .env file.");
+      logger.error("Stripe webhook secret is not configured in .env file (STRIPE_WEBHOOK_KEY).");
       response.status(400).send("Webhook Error: Missing secret");
       return;
     }
@@ -445,7 +440,7 @@ export const stripeWebhook = onRequest(
     let event: Stripe.Event;
 
     try {
-      const stripe = getStripe(); // Pega a instância
+      const stripe = getStripe(); // Pega a instância que usa process.env
       event = stripe.webhooks.constructEvent(
         request.rawBody,
         sig,
@@ -539,7 +534,6 @@ export const stripeWebhook = onRequest(
       return;
     }
 
-    // Responde ao Stripe que recebemos o evento
     response.status(200).send({ received: true });
   }
 );

@@ -153,7 +153,7 @@ export interface ServiceProviderProfile extends BaseUser {
     whatsapp?: string;
   };
   paymentMethods?: PaymentMethod[];
-  subscriptionStatus?: "active" | "cancelled" | "past_due" | string; // O status da assinatura
+  subscriptionStatus?: "active" | "cancelled" | "past_due" | "trial" | "free" | string;
   stripeSubscriptionId?: string; // O ID da assinatura no Stripe
 }
 

@@ -253,6 +253,7 @@ export const ServiceProviderRegisterForm = () => {
         lat: position?.lat,
         lng: position?.lng,
       },
+      subscriptionStatus: "trial",
     };
     try {
       await signup(

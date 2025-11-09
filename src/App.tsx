@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Routes, Route, useLocation, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { AnimatePresence } from "framer-motion";
 
@@ -15,46 +15,20 @@ import { BookingPage } from "./pages/BookingPage";
 import PublicBookingPage from "./pages/PublicBookingPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
-// O componente AuthHandler é onde a mágica acontece
-const AuthHandler = () => {
-  const navigate = useNavigate();
-  const location = useLocation(); // <-- 2. INICIE O HOOK
-  const { user, setUser, userProfile, fetchUserProfile } = useAuthStore();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        // Se o perfil ainda não foi buscado, busca
-        if (!userProfile) {
-          await fetchUserProfile(firebaseUser.uid);
-        }
-        
-        // 3. !! LÓGICA DE REDIRECT ATUALIZADA !!
-        // Vê se viemos de algum lugar (como a HomePage querendo pagar)
-        const from = location.state?.from?.pathname || "/dashboard";
-        
-        // Se já estávamos no login/register, manda para o 'from'
-        if (location.pathname === "/login" || location.pathname === "/register") {
-          navigate(from, { replace: true });
-        }
-        
-      } else {
-        setUser(null);
-        // (aqui você pode adicionar um `Maps("/login")` se quiser
-        // forçar o logout para a tela de login)
-      }
-    });
-    return () => unsubscribe();
-  }, [user, userProfile, fetchUserProfile, setUser, navigate, location]);
-
-  return null; // Este componente não renderiza nada
-};
+// --- NOVAS PÁGINAS IMPORTADAS ---
+// (Note que elas estão vindo da pasta /components, conforme sua estrutura)
+import AboutUs from "./components/AboutUs";
+import Pricing from "./components/Pricing";
+import FAQ from "./components/FAQ";
+import Contact from "./components/Contact";
+import PrivacyPolicy from "./components/PrivacyPolicy";
+import TermsOfUse from "./components/TermsOfUse";
+import NotFoundPage from "./pages/NotFoundPage";
 
 function App() {
   const location = useLocation();
 
-  // Inicializa o listener de autenticação
+  // Inicializa o listener de autenticação (Está perfeito)
   useEffect(() => {
     const unsubscribe = useAuthStore.getState().initializeAuth();
     return () => unsubscribe();
@@ -62,12 +36,18 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
-      <AuthHandler /> {/* Adiciona o handler de autenticação */}
       <Routes location={location} key={location.pathname}>
         {/* Rotas Públicas com Layout (Header/Footer) */}
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
-          {/* Adicione outras páginas públicas aqui */}
+          {/* --- ROTAS PÚBLICAS ADICIONADAS --- */}
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/faq" element={<FAQ />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-use" element={<TermsOfUse />} />
+          {/* --- FIM DAS ROTAS ADICIONADAS --- */}
         </Route>
 
         {/* Rotas Públicas sem o Layout Principal */}
@@ -84,7 +64,8 @@ function App() {
           {/* Adicione outras rotas que precisam de login aqui */}
         </Route>
 
-        <Route path="*" element={<div>Página não encontrada</div>} />
+        {/* Rota 404 - Página Não Encontrada */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AnimatePresence>
   );

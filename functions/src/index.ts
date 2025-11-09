@@ -20,6 +20,15 @@ const db = admin.firestore();
 const REGION = "southamerica-east1"; // Região onde suas functions irão rodar
 const TIME_ZONE = "America/Sao_Paulo"; // Fuso horário para as funções agendadas
 
+const PLANOS_PERMITIDOS = {
+  MENSAL: "price_1SMeWT3zDQy3p6yeWl0LC4wi",
+  TRIMESTRAL: "price_1SMeWT3zDQy3p6yezkMmrByP",
+  ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
+};
+
+const YOUR_APP_URL = "http://localhost:5173"; // Altere para a URL do seu app
+
+
 let stripeInstance: Stripe;
 
 const getStripe = (): Stripe => {
@@ -340,7 +349,7 @@ export const sendAppointmentReminders = onSchedule(
  */
 export const createStripeCheckout = onCall(
   // Especificando os segredos que esta função v2 precisa
-  { region: REGION, secrets: ["STRIPE_API_SECRET"] }, 
+  { region: REGION, secrets: ["STRIPE_API_SECRET"] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -349,25 +358,59 @@ export const createStripeCheckout = onCall(
       );
     }
 
-    const { priceId, successUrl, cancelUrl } = request.data;
-    if (!priceId || !successUrl || !cancelUrl) {
+    // 1. Recebemos o priceId do frontend
+    const { priceId } = request.data;
+
+    // 2. Validação de segurança: Verificamos se o priceId enviado
+    // é um dos IDs que permitimos no backend.
+    if (
+      !priceId ||
+      !Object.values(PLANOS_PERMITIDOS).includes(priceId as string)
+    ) {
+      logger.error("Tentativa de checkout com priceId inválido:", priceId);
       throw new HttpsError(
         "invalid-argument",
-        "Faltam parâmetros (priceId, successUrl, cancelUrl)."
+        "O ID do plano fornecido é inválido ou não existe."
       );
     }
 
     const uid = request.auth.uid;
+    const userDocRef = db.collection("users").doc(uid);
 
     try {
       const stripe = getStripe(); // Pega a instância que usa process.env
+      const userDoc = await userDocRef.get();
+      const userData = userDoc.data();
+
+      if (!userData) {
+        throw new HttpsError("not-found", "Usuário não encontrado.");
+      }
+
+      // 3. LÓGICA PARA ENCONTRAR OU CRIAR O CLIENTE STRIPE (stripeCustomerId)
+      // Isso é essencial para o usuário gerenciar a assinatura depois
+      let stripeCustomerId = userData.stripeCustomerId;
+      if (!stripeCustomerId) {
+        logger.info(`Criando novo cliente Stripe para o usuário ${uid}`);
+        const customer = await stripe.customers.create({
+          email: userData.email,
+          name: userData.name,
+          metadata: { firebaseUID: uid },
+        });
+        stripeCustomerId = customer.id;
+        // Salva o ID no perfil do usuário no Firestore
+        await userDocRef.update({ stripeCustomerId: stripeCustomerId });
+      }
+
+      // 4. CRIA A SESSÃO DE CHECKOUT
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card", "boleto"], // Adiciona pix como método de pagamento
+        payment_method_types: ["card", "boleto"],
         mode: "subscription",
-        line_items: [{ price: priceId, quantity: 1 }],
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        client_reference_id: uid,
+        customer: stripeCustomerId, // Associa ao cliente
+        line_items: [{ price: priceId, quantity: 1 }], // Usa o priceId do frontend
+        allow_promotion_codes: true,
+        success_url: `${YOUR_APP_URL}/dashboard?checkout=success`, // Redireciona
+        cancel_url: `${YOUR_APP_URL}/dashboard`, // Volta para o dashboard
+        client_reference_id: uid, // Importante para o webhook
       });
 
       if (!session.url) {
@@ -377,13 +420,56 @@ export const createStripeCheckout = onCall(
         );
       }
 
-      return { sessionUrl: session.url };
+      // 5. Retorna a URL para o frontend (como o subscriptionService.ts espera)
+      return { url: session.url };
     } catch (error) {
       logger.error("Erro ao criar checkout do Stripe:", error);
       if (error instanceof Stripe.errors.StripeError) {
         throw new HttpsError("internal", error.message);
       }
       throw new HttpsError("internal", "Ocorreu um erro inesperado.");
+    }
+  }
+);
+
+export const createStripeCustomerPortal = onCall(
+  { region: REGION, secrets: ["STRIPE_API_SECRET"] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Você precisa estar autenticado."
+      );
+    }
+
+    const uid = request.auth.uid;
+
+    try {
+      const userDoc = await db.collection("users").doc(uid).get();
+      const stripeCustomerId = userDoc.data()?.stripeCustomerId;
+
+      if (!stripeCustomerId) {
+        logger.error(`Usuário ${uid} tentou acessar portal sem stripeCustomerId.`);
+        throw new HttpsError(
+          "not-found",
+          "ID de cliente Stripe não encontrado."
+        );
+      }
+
+      const stripe = getStripe();
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: stripeCustomerId,
+        return_url: `${YOUR_APP_URL}/dashboard`, // Para onde ele volta
+      });
+
+      // Retorna a URL para o frontend
+      return { url: portalSession.url };
+    } catch (error) {
+      logger.error("Erro ao criar portal do cliente:", error);
+      throw new HttpsError(
+        "internal",
+        "Não foi possível acessar o portal do cliente."
+      );
     }
   }
 );
@@ -459,10 +545,12 @@ export const stripeWebhook = onRequest(
           const session = event.data.object as Stripe.Checkout.Session;
           const userId = session.client_reference_id;
           const subscriptionId = session.subscription;
+          // !! MUDANÇA IMPORTANTE: Captura o customerId !!
+          const stripeCustomerId = session.customer;
 
-          if (!userId || !subscriptionId) {
+          if (!userId || !subscriptionId || !stripeCustomerId) {
             logger.error(
-              "checkout.session.completed sem userId ou subscriptionId",
+              "checkout.session.completed sem userId, subscriptionId ou customerId",
               session
             );
             break;
@@ -472,6 +560,7 @@ export const stripeWebhook = onRequest(
           await userRef.update({
             subscriptionStatus: "active",
             stripeSubscriptionId: subscriptionId,
+            stripeCustomerId: stripeCustomerId, // !! SALVA O ID DO CLIENTE !!
           });
 
           logger.info(`Usuário ${userId} iniciou assinatura ${subscriptionId}`);

@@ -12,6 +12,7 @@ import {
   Star,
   LogOut,
   X,
+  CreditCard,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore"; // 1. Importamos a store do perfil
@@ -26,15 +27,19 @@ interface NavItemProps {
   view: ProviderDashboardView;
   active: boolean;
   onClick: (view: ProviderDashboardView) => void;
+  disabled?: boolean;
 }
 
-const NavItem = ({ icon: Icon, text, view, active, onClick }: NavItemProps) => (
+const NavItem = ({ icon: Icon, text, view, active, onClick, disabled }: NavItemProps) => (
   <button
     onClick={() => onClick(view)}
+    disabled={disabled} // <-- Aplicar "disabled"
     className={`flex items-center w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${
       active
         ? "bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20"
         : "text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-md"
+    } ${
+      disabled ? "opacity-50 cursor-not-allowed" : "" // <-- Estilo de desabilitado
     }`}
   >
     <Icon className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
@@ -49,6 +54,7 @@ interface SideNavProps {
   setActiveView: (view: ProviderDashboardView) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  disableNav: boolean;
 }
 
 export const ServiceProviderSideNav = ({
@@ -56,6 +62,7 @@ export const ServiceProviderSideNav = ({
   setActiveView,
   isOpen,
   setIsOpen,
+  disableNav,
 }: SideNavProps) => {
   const { userProfile } = useProfileStore();
   const { logout } = useAuthStore();
@@ -63,7 +70,8 @@ export const ServiceProviderSideNav = ({
 
   const providerProfile = userProfile as ServiceProviderProfile;
 
-  const handleNavClick = (view: ProviderDashboardView) => {
+ const handleNavClick = (view: ProviderDashboardView) => {
+    if (disableNav && view !== "subscription") return; // Não deixa clicar se nav desabilitada
     setActiveView(view);
     setIsOpen(false); // Fecha o menu no mobile
   };
@@ -103,6 +111,7 @@ export const ServiceProviderSideNav = ({
             view="agenda"
             active={activeView === "agenda"}
             onClick={handleNavClick}
+            disabled={disableNav} // <-- Aplicar disable
           />
           <NavItem
             icon={Scissors}
@@ -110,6 +119,7 @@ export const ServiceProviderSideNav = ({
             view="services"
             active={activeView === "services"}
             onClick={handleNavClick}
+            disabled={disableNav} // <-- Aplicar disable
           />
           <NavItem
             icon={Users}
@@ -117,6 +127,7 @@ export const ServiceProviderSideNav = ({
             view="professionals"
             active={activeView === "professionals"}
             onClick={handleNavClick}
+            disabled={disableNav} // <-- Aplicar disable
           />
           <NavItem
             icon={Clock}
@@ -124,6 +135,7 @@ export const ServiceProviderSideNav = ({
             view="availability"
             active={activeView === "availability"}
             onClick={handleNavClick}
+            disabled={disableNav} // <-- Aplicar disable
           />
           <NavItem
             icon={DollarSign}
@@ -131,6 +143,7 @@ export const ServiceProviderSideNav = ({
             view="financial"
             active={activeView === "financial"}
             onClick={handleNavClick}
+            disabled={disableNav} // <-- Aplicar disable
           />
           <NavItem
             icon={Star}
@@ -138,9 +151,19 @@ export const ServiceProviderSideNav = ({
             view="reviews"
             active={activeView === "reviews"}
             onClick={handleNavClick}
+            disabled={disableNav} // <-- Aplicar disable
+          />
+          <NavItem
+            icon={CreditCard}
+            text="Assinatura"
+            view="subscription"
+            active={activeView === "subscription"}
+            onClick={handleNavClick}
+            // Este NUNCA é desabilitado
           />
           <button
             onClick={() => handleNavClick("notifications")}
+            disabled={disableNav} // <-- Aplicar disable
             className={`flex items-center justify-between w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${
               activeView === "notifications"
                 ? "bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20"
@@ -163,6 +186,7 @@ export const ServiceProviderSideNav = ({
         <div className="mt-auto border-t border-gray-800 pt-4">
           <button
             onClick={() => handleNavClick("profile")}
+            disabled={disableNav} // <-- Aplicar disable
             className={`flex items-center w-full p-2 text-left rounded-lg transition-all duration-300 ease-in-out group
                 ${
                   activeView === "profile"

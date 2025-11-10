@@ -15,14 +15,16 @@ import {
   Clock as ClockIcon,
   AlertTriangle,
 } from "lucide-react";
-import { isSameDay,
+import {
+  isSameDay,
   isToday,
   isPast,
-  addDays, 
-  subDays, 
-  isWithinInterval, 
-  startOfDay, 
-  endOfDay, } from "date-fns";
+  addDays,
+  subDays,
+  isWithinInterval,
+  startOfDay,
+  endOfDay,
+} from "date-fns";
 
 import { useToast } from "../../../hooks/useToast";
 
@@ -206,7 +208,7 @@ export const AgendaView = () => {
         filtered = filtered.filter(
           (a) => a.status === "scheduled" || a.status === "pending"
         );
-        
+
         // Na agenda, filtramos por 30 DIAS (exceto no calendário)
         if (viewMode !== "calendar") {
           filtered = filtered.filter((a) =>
@@ -222,9 +224,9 @@ export const AgendaView = () => {
         filtered = filtered.filter(
           (a) => a.status === "completed" || a.status === "cancelled"
         );
-        
+
         // No histórico, também filtramos por 30 DIAS (passados)
-        // OBS: A visão de calendário não se aplica ao histórico, 
+        // OBS: A visão de calendário não se aplica ao histórico,
         // mas se aplicasse, teria que tratar como no 'scheduled'.
         filtered = filtered.filter((a) =>
           isWithinInterval(a.startTime, {
@@ -239,13 +241,7 @@ export const AgendaView = () => {
     return filtered.sort(
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );
-  }, [
-    appointments,
-    activeTab,
-    selectedProfessionalId,
-    selectedDay,
-    viewMode,
-  ]);
+  }, [appointments, activeTab, selectedProfessionalId, selectedDay, viewMode]);
 
   const pendingCount = useMemo(
     () => appointments.filter((a) => a.status === "pending").length,

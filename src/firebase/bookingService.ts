@@ -9,10 +9,12 @@ import {
   Timestamp,
   orderBy,
   serverTimestamp,
-  FieldValue,
 } from "firebase/firestore";
 import { db } from "./config";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import type { Appointment } from "../types";
+
+const functions = getFunctions(db.app);
 
 const convertAppointmentTimestamps = (
   data: Record<string, unknown>
@@ -96,24 +98,55 @@ export const getAppointmentsByProviderId = async (
 export const updateAppointmentStatus = async (
   appointmentId: string,
   status: Appointment["status"],
-  finalPrice?: number,
+  // 'finalPrice' foi REMOVIDO dos parâmetros
   rejectionReason?: string
 ): Promise<void> => {
+  // Verificação de segurança no frontend
+  if (status === "completed") {
+    console.error(
+      "Ação 'completed' é insegura via updateDoc. Use a função 'completeAppointment'."
+    );
+    throw new Error(
+      "Operação inválida. Use a função dedicada para completar agendamentos."
+    );
+  }
+
   const appointmentRef = doc(db, "appointments", appointmentId);
   const updateData: {
     status: Appointment["status"];
     rejectionReason?: string;
-    finalPrice?: number;
-    completedAt?: FieldValue;
-  } = { status };
+  } = { status }; // Objeto de atualização simplificado
+
   if (rejectionReason) {
     updateData.rejectionReason = rejectionReason;
   }
-  if (status === "completed" && finalPrice !== undefined) {
-    updateData.finalPrice = finalPrice;
-    updateData.completedAt = serverTimestamp();
-  }
+
+  // !! LÓGICA DE 'completed' REMOVIDA !!
+  // O 'if (status === "completed" ...)' foi completamente removido
+  // para evitar a falha de segurança.
+
   await updateDoc(appointmentRef, updateData);
+};
+
+export const completeAppointment = async (
+  appointmentId: string,
+  finalPrice: number
+): Promise<void> => {
+  try {
+    const completeAppointmentCallable = httpsCallable(
+      functions,
+      "completeAppointment"
+    );
+    await completeAppointmentCallable({
+      appointmentId,
+      finalPrice,
+    });
+  } catch (error) {
+    console.error("Erro ao chamar a função 'completeAppointment':", error);
+    // Lança o erro para que o componente da UI possa tratá-lo
+    // (ex: reativar o botão, mostrar um toast)
+    throw error;
+  }
 };
 
 export const getAppointmentsForProfessionalOnDate = async (

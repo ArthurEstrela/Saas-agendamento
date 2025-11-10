@@ -148,7 +148,6 @@ export const onAppointmentUpdate = onDocumentUpdated(
     const { formattedDate, formattedTime } = formatDate(afterData.startTime);
 
     // 1. Notificação para o CLIENTE (Confirmado / Recusado pelo Prestador)
-    // Assumimos que 'requested' -> 'scheduled' ou 'requested' -> 'cancelled' é ação do PRESTADOR.
     if (
       beforeData.status === "requested" &&
       (afterData.status === "scheduled" || afterData.status === "cancelled")
@@ -173,8 +172,6 @@ export const onAppointmentUpdate = onDocumentUpdated(
     }
 
     // 2. Notificação para o PRESTADOR (Cancelado pelo Cliente)
-    // Assumimos que 'scheduled' -> 'cancelled' é ação do CLIENTE.
-    // !! ESTA É A NOVA LÓGICA !!
     if (beforeData.status === "scheduled" && afterData.status === "cancelled") {
       const { professionalId, serviceName, clientName } = afterData;
       if (professionalId) {
@@ -192,44 +189,137 @@ export const onAppointmentUpdate = onDocumentUpdated(
       }
     }
 
-    // 3. Criação de Transação Financeira (Esta parte não muda)
-    if (afterData.status === "completed") {
-      const { professionalId, finalPrice } = afterData;
-      if (!professionalId || typeof finalPrice === "undefined") {
-        logger.error(
-          `Dados ausentes (professionalId ou finalPrice) no agendamento ${appointmentId}.`,
-          afterData
-        );
-        return;
-      }
+    // 3. !! LÓGICA DE TRANSAÇÃO REMOVIDA !!
+    // A lógica 'if (afterData.status === "completed")' foi removida.
+    // Ela agora está na callable function 'completeAppointment'.
+    // Isso impede que um cliente mal-intencionado mude o status para
+    // 'completed' e crie uma transação financeira indevidamente.
+  }
+);
 
+export const completeAppointment = onCall(
+  { region: REGION },
+  async (request) => {
+    // 1. Validação de Autenticação
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Você precisa estar autenticado."
+      );
+    }
+
+    const { appointmentId, finalPrice } = request.data;
+    const uid = request.auth.uid;
+
+    // 2. Validação de Inputs
+    if (!appointmentId || typeof finalPrice === "undefined" || finalPrice < 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Dados inválidos (appointmentId ou finalPrice)."
+      );
+    }
+
+    const appointmentRef = db.collection("appointments").doc(appointmentId);
+
+    try {
+      // Usamos uma transação para garantir que a conclusão e a
+      // criação da transação financeira sejam atômicas.
       await db.runTransaction(async (transaction) => {
+        const appointmentDoc = await transaction.get(appointmentRef);
+
+        // 3. Validação de Existência
+        if (!appointmentDoc.exists) {
+          throw new HttpsError("not-found", "Agendamento não encontrado.");
+        }
+
+        const appointmentData = appointmentDoc.data()!;
+
+        // 4. Validação de Permissão (CRUCIAL)
+        // O UID do usuário autenticado DEVE ser o mesmo do professionalId
+        // associado ao agendamento.
+        if (appointmentData.professionalId !== uid) {
+          logger.error(
+            `Falha de permissão: Usuário ${uid} tentou completar agendamento ${appointmentId} que pertence a ${appointmentData.professionalId}.`
+          );
+          throw new HttpsError(
+            "permission-denied",
+            "Você não tem permissão para concluir este agendamento."
+          );
+        }
+
+        // 5. Validação de Status
+        // Só podemos completar um agendamento que está 'scheduled'.
+        if (appointmentData.status !== "scheduled") {
+          logger.warn(
+            `Tentativa de completar agendamento ${appointmentId} que não estava 'scheduled' (status atual: ${appointmentData.status}).`
+          );
+          // Pode ser que o usuário clicou duas vezes. Se já estiver 'completed', não é um erro.
+          if (appointmentData.status === "completed") {
+            return; // Já foi concluído, encerra a operação sem erro.
+          }
+          throw new HttpsError(
+            "failed-precondition",
+            "Este agendamento não pode ser concluído (status atual: " +
+              appointmentData.status +
+              ")."
+          );
+        }
+
+        // 6. Lógica de Negócio (Movida do onAppointmentUpdate)
+        // 6a. Criar a Transação Financeira
         const transRef = db
           .collection("transactions")
           .where("appointmentId", "==", appointmentId);
-        const snapshot = await transaction.get(transRef);
+        const transSnapshot = await transaction.get(transRef);
 
-        if (!snapshot.empty) {
-          logger.log(`Transação para agendamento ${appointmentId} já existe.`);
-          return;
+        if (!transSnapshot.empty) {
+          logger.log(
+            `Transação para agendamento ${appointmentId} já existe. Ignorando.`
+          );
+        } else {
+          const {
+            clientId,
+            clientName,
+            serviceName,
+            professionalName,
+            professionalId,
+          } = appointmentData;
+          const newTransRef = db.collection("transactions").doc();
+          transaction.set(newTransRef, {
+            providerId: professionalId, // professionalId é o dono do negócio
+            appointmentId,
+            clientId: clientId || "N/A",
+            clientName: clientName || "N/A",
+            serviceName: serviceName || "Serviço não informado",
+            amount: finalPrice, // Usa o preço final validado
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            professionalName: professionalName || "N/A",
+          });
         }
 
-        const { clientId, clientName, serviceName, professionalName } =
-          afterData;
-        const newTransRef = db.collection("transactions").doc();
-        transaction.set(newTransRef, {
-          providerId: professionalId,
-          appointmentId,
-          clientId: clientId || "N/A",
-          clientName: clientName || "N/A",
-          serviceName: serviceName || "Serviço não informado",
-          amount: finalPrice,
+        // 6b. Atualizar o Agendamento
+        transaction.update(appointmentRef, {
+          status: "completed",
+          finalPrice: finalPrice,
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          professionalName: professionalName || "N/A",
         });
       });
+
       logger.log(
-        `Transação de R$${finalPrice} criada para o agendamento ${appointmentId}`
+        `Agendamento ${appointmentId} concluído com sucesso por ${uid}. Preço: R$${finalPrice}`
+      );
+      return { success: true, appointmentId };
+    } catch (error) {
+      logger.error(
+        `Erro ao concluir agendamento ${appointmentId} por ${uid}:`,
+        error
+      );
+      if (error instanceof HttpsError) {
+        throw error; // Re-lança erros Https (permissão, não encontrado, etc)
+      }
+      throw new HttpsError(
+        "internal",
+        "Ocorreu um erro interno ao concluir o agendamento."
       );
     }
   }

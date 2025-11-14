@@ -2,6 +2,7 @@ import { useProfileStore } from '../store/profileStore';
 import ServiceProviderDashboard from '../components/ServiceProviderDashboard';
 import { DashboardSkeleton } from '../components/Common/LoadingSpinner';
 import { ClientDashboard } from '../components/ClientDashboard';
+import ProfessionalDashboard from '../components/Professional/ProfessionalDashboard';
 
 const DashboardPage = () => {
   const { userProfile, isLoadingProfile, error } = useProfileStore();
@@ -36,6 +37,9 @@ const DashboardPage = () => {
     }
     if (userProfile.role === 'serviceProvider') {
       return <ServiceProviderDashboard />;
+    }
+    if (userProfile.role === 'professional') {
+      return <ProfessionalDashboard />;
     }
     // Caso tenha perfil, mas um 'role' desconhecido
     return <div>Tipo de usuário desconhecido.</div>;

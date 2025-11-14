@@ -37,24 +37,33 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   isLoadingProfile: false,
   error: null,
 
-  fetchUserProfile: async (uid: string) => {
+fetchUserProfile: async (uid: string) => {
     set({ isLoadingProfile: true, error: null });
     try {
-      // 1. Busca o perfil principal (sem a lista de profissionais)
       const profileData = await getUserProfile(uid);
 
       if (profileData) {
-        // Se for um Prestador de Serviço, busca a sub-coleção ANTES de finalizar o loading
+        
         if (profileData.role === "serviceProvider") {
+          // Lógica do Dono (igual)
           const professionalsList = await getProfessionalsByProviderId(uid);
-          // 2. Atualiza o estado com AMBOS os dados de uma vez
           set({
             userProfile: profileData,
             professionals: professionalsList,
             isLoadingProfile: false,
           });
+        
+        } else if (profileData.role === "professional") {
+          const providerId = profileData.serviceProviderId;
+          const professionalsList = await getProfessionalsByProviderId(providerId);
+          set({
+            userProfile: profileData,
+            professionals: professionalsList, // <-- Carrega a lista
+            isLoadingProfile: false,
+          });
+
         } else {
-          // Para clientes, o comportamento se mantém
+          // Lógica do Cliente (igual)
           set({
             userProfile: profileData,
             professionals: null,
@@ -165,15 +174,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       }
     }
   },
+
   updateServicesInProfile: (services) => {
     const { userProfile } = get();
     if (userProfile && userProfile.role === "serviceProvider") {
-      // Cria um novo objeto de perfil com a lista de serviços atualizada
       const updatedProfile = {
         ...userProfile,
         services,
       };
-      // Atualiza o estado sem disparar o loading geral
       set({ userProfile: updatedProfile });
     }
   },

@@ -3,12 +3,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Professional, Service } from '../../types';
-import { Loader2, User, Image as ImageIcon, X } from 'lucide-react';
+import { Loader2, User, Image as ImageIcon, X, Mail, Key } from 'lucide-react';
 
-// Schema de validação
+// --- SCHEMA ATUALIZADO ---
+// Adicionamos email e senha (apenas na criação)
 const professionalSchema = z.object({
   name: z.string().min(3, 'O nome é obrigatório'),
+  email: z.string().email('E-mail inválido'), // <-- NOVO
+  password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres').optional(), // <-- NOVO
   serviceIds: z.array(z.string()).min(1, 'Selecione pelo menos um serviço'),
+});
+
+// Tornar a senha opcional se o profissional já existir (modo de edição)
+const professionalEditSchema = professionalSchema.extend({
+  password: z.string().optional(),
 });
 
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
@@ -16,15 +24,26 @@ type ProfessionalFormData = z.infer<typeof professionalSchema>;
 interface ProfessionalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: ProfessionalFormData, photoFile: File | null) => void;
-  professional?: Professional | null; // Profissional existente para edição
+  // A 'onSave' agora envia todos os dados, incluindo email/senha
+  onSave: (data: ProfessionalFormData, photoFile: File | null) => void; 
+  professional?: Professional | null;
   availableServices: Service[];
   isLoading: boolean;
 }
 
-export const ProfessionalModal = ({ isOpen, onClose, onSave, professional, availableServices, isLoading }: ProfessionalModalProps) => {
+export const ProfessionalModal = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  professional, 
+  availableServices, 
+  isLoading 
+}: ProfessionalModalProps) => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(professional?.photoURL || null);
+
+  // Determina se está em modo de edição
+  const isEditMode = !!professional;
 
   const {
     register,
@@ -32,23 +51,25 @@ export const ProfessionalModal = ({ isOpen, onClose, onSave, professional, avail
     reset,
     formState: { errors },
   } = useForm<ProfessionalFormData>({
-    resolver: zodResolver(professionalSchema),
+    // Escolhe o schema de validação correto
+    resolver: zodResolver(isEditMode ? professionalEditSchema : professionalSchema),
   });
 
-  // Popula o formulário quando o modo de edição é ativado
   useEffect(() => {
     if (professional) {
       reset({
         name: professional.name,
         serviceIds: professional.services.map(s => s.id),
+        email: (professional as any).email || '', // O seu tipo 'Professional' não tem email
+                                                  // O ideal era buscar o 'User' dele
       });
       setPreviewUrl(professional.photoURL || null);
     } else {
-      reset({ name: '', serviceIds: [] });
+      reset({ name: '', email: '', password: '', serviceIds: [] });
       setPreviewUrl(null);
     }
     setPhotoFile(null);
-  }, [professional, reset]);
+  }, [professional, reset, isOpen]); // Resetar também quando abre
   
   if (!isOpen) return null;
 
@@ -69,28 +90,52 @@ export const ProfessionalModal = ({ isOpen, onClose, onSave, professional, avail
       <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg border border-gray-700 m-4">
         <form onSubmit={handleSubmit(onSubmit)} className="p-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">{professional ? 'Editar Profissional' : 'Adicionar Profissional'}</h2>
+            <h2 className="text-2xl font-bold text-white">{isEditMode ? 'Editar Profissional' : 'Adicionar Profissional'}</h2>
             <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white"><X size={24} /></button>
           </div>
 
           <div className="space-y-6">
             {/* Foto e Nome */}
             <div className='flex items-center gap-6'>
-                <label htmlFor="photo-upload" className="cursor-pointer">
-                    <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center border-2 border-dashed border-gray-600 hover:border-amber-500">
-                    {previewUrl ? <img src={previewUrl} alt="Preview" className="w-full h-full rounded-full object-cover" /> : <ImageIcon size={32} className="text-gray-500" />}
-                    </div>
-                    <input id="photo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                </label>
-                <div className="flex-1">
-                    <label className="label-text">Nome do Profissional</label>
-                    <div className="input-container">
-                        <User className="input-icon" />
-                        <input {...register('name')} className="input-field pl-10" />
-                    </div>
-                    {errors.name && <p className="error-message">{errors.name.message}</p>}
-                </div>
+              <label htmlFor="photo-upload" className="cursor-pointer">
+                  <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center border-2 border-dashed border-gray-600 hover:border-amber-500">
+                  {previewUrl ? <img src={previewUrl} alt="Preview" className="w-full h-full rounded-full object-cover" /> : <ImageIcon size={32} className="text-gray-500" />}
+                  </div>
+                  <input id="photo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+              </label>
+              <div className="flex-1">
+                  <label className="label-text">Nome do Profissional</label>
+                  <div className="input-container">
+                      <User className="input-icon" />
+                      <input {...register('name')} className="input-field pl-10" />
+                  </div>
+                  {errors.name && <p className="error-message">{errors.name.message}</p>}
+              </div>
             </div>
+
+            {/* --- NOVOS CAMPOS DE LOGIN --- */}
+            {/* Só mostra email/senha se estiver a *criar* um novo profissional */}
+            {!isEditMode && (
+              <>
+                <div>
+                  <label className="label-text">E-mail de Acesso</label>
+                  <div className="input-container">
+                    <Mail className="input-icon" />
+                    <input {...register('email')} className="input-field pl-10" placeholder="email@profissional.com" />
+                  </div>
+                  {errors.email && <p className="error-message">{errors.email.message}</p>}
+                </div>
+                <div>
+                  <label className="label-text">Senha Provisória</label>
+                  <div className="input-container">
+                    <Key className="input-icon" />
+                    <input type="password" {...register('password')} className="input-field pl-10" placeholder="••••••••" />
+                  </div>
+                  {errors.password && <p className="error-message">{errors.password.message}</p>}
+                </div>
+              </>
+            )}
+            {/* --- FIM DOS NOVOS CAMPOS --- */}
 
             {/* Serviços Associados */}
             <div>

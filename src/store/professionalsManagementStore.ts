@@ -1,27 +1,27 @@
-// src/store/professionalsManagementStore.ts
+// Em src/store/professionalsManagementStore.ts
 
 import { create } from "zustand";
 import { useProfileStore } from "./profileStore";
 import {
-  addProfessionalToProvider,
+  // 1. Importamos as NOVAS funções de serviço
+  createProfessionalAccount,
+  updateProfessionalPhotoUrls,
+  // E mantemos as antigas
   removeProfessionalFromProvider,
   updateProfessionalInProvider,
   uploadProfessionalPhoto,
 } from "../firebase/professionalsManagementService";
-// ****** 1. IMPORTAMOS DailyAvailability ******
 import type { Professional, Service, DailyAvailability } from "../types";
-import { v4 as uuidv4 } from "uuid";
 import { toast } from "react-hot-toast";
 
-// Payload para criar/atualizar. Corresponde ao formulário.
-type ProfessionalFormData = Pick<Professional, "name"> & {
-  services: Service[]; // O formulário já deve passar os objetos de serviço completos
-  photoURL?: string; // photoURL existente (para atualização)
-  photoFile?: File | null; // Novo arquivo de foto
-  availability?: DailyAvailability[]; // <-- 1. ADICIONAMOS A DISPONIBILIDADE AQUI
+// --- 2. ATUALIZAMOS O PAYLOAD ---
+type ProfessionalFormData = Partial<Professional> & { // Tornamos mais flexível
+  email?: string;
+  password?: string;
+  serviceIds?: string[]; // Adicionado para a Cloud Function
+  photoFile?: File | null;
 };
 
-// Interface do Store
 interface ProfessionalsManagementState {
   isSubmitting: boolean;
   error: string | null;
@@ -46,42 +46,52 @@ export const useProfessionalsManagementStore =
     error: null,
 
     /**
-     * Adiciona um novo profissional
+     * --- 3. REESCREVEMOS COMPLETAMENTE O addProfessional ---
      */
     addProfessional: async (providerId, payload) => {
       set({ isSubmitting: true, error: null });
 
       const addAndRefetchPromise = async () => {
-        const { photoFile, ...professionalData } = payload;
-        const newProfessionalId = uuidv4();
+        const { photoFile, email, password, name, serviceIds } = payload;
 
-        let photoURL = "";
+        if (!email || !password || !name || !serviceIds) {
+          throw new Error("Dados do formulário incompletos.");
+        }
+        
+        // 1. Chama a Cloud Function com os dados principais
+        const { uid, professionalId } = await createProfessionalAccount({
+          name,
+          email,
+          password,
+          serviceIds,
+        });
+
+        // 2. Se a função foi bem-sucedida E houver uma foto, faz o upload
         if (photoFile) {
-          photoURL = await uploadProfessionalPhoto(
+          const photoURL = await uploadProfessionalPhoto(
             providerId,
-            newProfessionalId,
+            professionalId,
             photoFile
+          );
+          
+          // 3. Atualiza os documentos com a URL da foto
+          await updateProfessionalPhotoUrls(
+            providerId,
+            uid,
+            professionalId,
+            photoURL
           );
         }
 
-        const finalProfessional: Professional = {
-          id: newProfessionalId,
-          name: professionalData.name,
-          services: professionalData.services,
-          photoURL: photoURL,
-          // Profissionais novos começam sem disponibilidade (ou com a do payload, se houver)
-          availability: professionalData.availability || [],
-        };
-
-        await addProfessionalToProvider(providerId, finalProfessional);
+        // 4. Atualiza o estado global
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 
       try {
         await toast.promise(addAndRefetchPromise(), {
-          loading: "Adicionando profissional...",
+          loading: "Criando conta do profissional...",
           success: "Profissional adicionado com sucesso!",
-          error: "Falha ao adicionar profissional.",
+          error: (err) => err.message || "Falha ao adicionar profissional.",
         });
       } catch (err) {
         console.error("Erro em addProfessional:", err);
@@ -94,54 +104,45 @@ export const useProfessionalsManagementStore =
     },
 
     /**
-     * Atualiza um profissional existente e força a atualização do profileStore.
+     * updateProfessional (Sua lógica original está correta)
      */
     updateProfessional: async (providerId, professionalId, payload) => {
       set({ isSubmitting: true, error: null });
 
       const updateAndRefetchPromise = async () => {
         const { photoFile, ...professionalData } = payload;
-        let photoURL = professionalData.photoURL || ""; // Mantém a URL existente
+        let photoURL = professionalData.photoURL || "";
 
         if (photoFile) {
           photoURL = await uploadProfessionalPhoto(
             providerId,
-            professionalId, 
+            professionalId,
             photoFile
           );
         }
 
-        // Busca o profissional ATUAL para o caso de o payload
-        // NÃO conter a disponibilidade (ex: vindo da tela de "Meus Profissionais")
         const currentProfessional = useProfileStore
           .getState()
           .professionals?.find((p) => p.id === professionalId);
 
         const finalProfessional: Professional = {
           id: professionalId,
-          name: professionalData.name,
-          services: professionalData.services,
+          name: professionalData.name || currentProfessional?.name || "",
+          services: professionalData.services || currentProfessional?.services || [],
           photoURL: photoURL,
-          
-          // ****** 2. AQUI ESTÁ A CORREÇÃO PRINCIPAL ******
-          // Se 'professionalData' (vindo do payload) tiver a chave 'availability',
-          // use-a. Senão, mantenha a disponibilidade antiga.
           availability:
             professionalData.availability !== undefined
               ? professionalData.availability
               : currentProfessional?.availability || [],
         };
 
-        // 1. Atualiza no Firebase
         await updateProfessionalInProvider(providerId, finalProfessional);
-        
-        // 2. Atualiza o estado global
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 
       try {
         await toast.promise(updateAndRefetchPromise(), {
-          loading: "Atualizando dados...", // Mensagem mais genérica
+          loading: "Atualizando dados...",
           success: "Dados atualizados com sucesso!",
           error: "Falha ao atualizar os dados.",
         });
@@ -156,13 +157,14 @@ export const useProfessionalsManagementStore =
     },
 
     /**
-     * Remove um profissional
+     * removeProfessional (Sua lógica original está correta)
      */
     removeProfessional: async (providerId, professionalId) => {
       set({ isSubmitting: true, error: null });
 
       const removeAndRefetchPromise = async () => {
         await removeProfessionalFromProvider(providerId, professionalId);
+        // TODO: Adicionar Cloud Function para deletar o Auth user
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 
@@ -172,8 +174,7 @@ export const useProfessionalsManagementStore =
           success: "Profissional removido com sucesso!",
           error: "Falha ao remover o profissional.",
         });
-      } catch (err)
-       {
+      } catch (err) {
         console.error("Erro em removeProfessional:", err);
         const errorMessage =
           err instanceof Error ? err.message : "Erro desconhecido";

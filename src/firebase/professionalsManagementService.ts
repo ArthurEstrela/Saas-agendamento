@@ -1,42 +1,91 @@
+// Em src/firebase/professionalsManagementService.ts
+
 import {
   doc,
-  collection, // Novo: para referenciar a sub-coleção
-  setDoc, // Novo: para adicionar/atualizar
-  deleteDoc, // Novo: para remover
-  getDocs, // Novo: para buscar todos os documentos
+  collection,
+  setDoc,
+  deleteDoc,
+  getDocs,
   query,
+  updateDoc,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getFunctions, httpsCallable } from "firebase/functions"; // <-- Importado
 import { db } from "./config";
-import type { Professional } from "../types"; // ServiceProviderProfile não é mais necessário
+import type { Professional } from "../types";
+
+// Tipo para os dados enviados para a Cloud Function
+type CreateProfessionalPayload = {
+  name: string;
+  email: string;
+  password: string;
+  serviceIds: string[];
+};
+
+// Tipo para a resposta da Cloud Function
+type CreateProfessionalResponse = {
+  success: boolean;
+  professionalId: string;
+  uid: string;
+};
 
 // Helper para obter a referência da sub-coleção de profissionais
 const getProfessionalsCollectionRef = (providerId: string) =>
-  collection(db, "users", providerId, "professionals");
+  collection(db, "serviceProviders", providerId, "professionals");
 
 /**
- * Adiciona um novo profissional à sub-coleção.
- * Usa setDoc(docRef, data) em vez de updateDoc(arrayUnion).
+ * !! NOVO !!
+ * Chama a Cloud Function 'createProfessionalUser' para criar o Auth e os docs.
  */
-export const addProfessionalToProvider = async (
-  providerId: string,
-  professional: Professional
-): Promise<void> => {
-  const professionalRef = doc(
-    getProfessionalsCollectionRef(providerId),
-    professional.id
-  );
-  // Garante que o ID do documento seja o mesmo ID do objeto Professional
-  await setDoc(professionalRef, professional);
+export const createProfessionalAccount = async (
+  payload: CreateProfessionalPayload
+): Promise<CreateProfessionalResponse> => {
+  
+  // ***** AQUI ESTÁ A CORREÇÃO *****
+  const functions = getFunctions(); // 1. Obtém a instância
+  const createProfessionalUser = httpsCallable<
+    CreateProfessionalPayload,
+    CreateProfessionalResponse
+  >(functions, "createProfessionalUser"); // 2. Passa a instância E o nome
+  // ***** FIM DA CORREÇÃO *****
+
+  try {
+    const result = await createProfessionalUser(payload);
+    return result.data;
+  } catch (error) {
+    console.error("Erro ao chamar a Cloud Function createProfessionalUser:", error);
+    throw error;
+  }
 };
 
 /**
- * Remove um profissional da sub-coleção usando o ID.
- * Usa deleteDoc(docRef) em vez de updateDoc(arrayRemove).
+ * !! NOVO !!
+ * Atualiza as URLs das fotos nos dois documentos (user e professional)
+ */
+export const updateProfessionalPhotoUrls = async (
+  providerId: string,
+  uid: string,
+  professionalId: string,
+  url: string
+): Promise<void> => {
+  const userDocRef = doc(db, "users", uid);
+  const professionalDocRef = doc(
+    getProfessionalsCollectionRef(providerId),
+    professionalId
+  );
+
+  await Promise.all([
+    updateDoc(userDocRef, { profilePictureUrl: url }),
+    updateDoc(professionalDocRef, { photoURL: url }),
+  ]);
+};
+
+/**
+ * Remove um profissional
  */
 export const removeProfessionalFromProvider = async (
   providerId: string,
-  professionalId: string // Mudamos para receber apenas o ID para ser mais eficiente
+  professionalId: string
 ): Promise<void> => {
   const professionalRef = doc(
     getProfessionalsCollectionRef(providerId),
@@ -46,8 +95,7 @@ export const removeProfessionalFromProvider = async (
 };
 
 /**
- * Atualiza os dados de um profissional existente diretamente na sub-coleção.
- * Usa setDoc (substituindo o documento ou merge: true, dependendo da necessidade).
+ * Atualiza os dados de um profissional
  */
 export const updateProfessionalInProvider = async (
   providerId: string,
@@ -57,14 +105,12 @@ export const updateProfessionalInProvider = async (
     getProfessionalsCollectionRef(providerId),
     updatedProfessional.id
   );
-  // O setDoc sobrescreve o documento; se você estiver sempre passando o objeto completo, está ok.
-  // Se precisar de atualização parcial, use updateDoc(professionalRef, updatedProfessional as Record<string, any>);
-  await setDoc(professionalRef, updatedProfessional);
+  // Usando updateDoc como é mais seguro para atualizações
+  await updateDoc(professionalRef, updatedProfessional as Record<string, any>);
 };
 
 /**
- * NOVO: Busca todos os profissionais de um prestador na sub-coleção.
- * ESSENCIAL para a exibição da lista e lógica de agendamento.
+ * Busca todos os profissionais
  */
 export const getProfessionalsByProviderId = async (
   providerId: string
@@ -72,23 +118,22 @@ export const getProfessionalsByProviderId = async (
   const professionalsCollectionRef = getProfessionalsCollectionRef(providerId);
   const q = query(professionalsCollectionRef);
   const querySnapshot = await getDocs(q);
-
-  // Mapeia os dados do snapshot para o tipo Professional
   const professionals: Professional[] = querySnapshot.docs.map(
     (doc) => doc.data() as Professional
   );
-
   return professionals;
 };
 
-// uploadProfessionalPhoto (Função de Storage) permanece inalterada
+/**
+ * uploadProfessionalPhoto
+ */
 export const uploadProfessionalPhoto = async (
   providerId: string,
   professionalId: string,
   file: File
 ): Promise<string> => {
   const storage = getStorage();
-  const filePath = `providers/${providerId}/professionals/${professionalId}/${file.name}`;
+  const filePath = `serviceProviders/${providerId}/professionals/${professionalId}/${file.name}`;
   const storageRef = ref(storage, filePath);
 
   await uploadBytes(storageRef, file);

@@ -8,6 +8,10 @@ interface ProfessionalCardProps {
 }
 
 export const ProfessionalCard = ({ professional, onEdit, onDelete }: ProfessionalCardProps) => {
+  // --- A CORREÇÃO ---
+  // Garante que 'services' é sempre um array, mesmo se 'professional.services' for undefined.
+  const services = professional.services || [];
+
   return (
     <div className="bg-black/30 rounded-2xl flex flex-col transition-all duration-300 border border-transparent hover:border-amber-500/50 card-hover-effect">
       <div className="p-5 flex-grow">
@@ -23,22 +27,23 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
           </div>
         </div>
 
-        {/* Lista de Serviços */}
+        {/* Lista de Serviços (Agora usando 'services' que é seguro) */}
         <div>
           <h4 className="text-sm font-semibold text-gray-400 mb-2">Serviços:</h4>
           <div className="flex flex-wrap gap-2">
-            {professional.services.length > 0 ? (
-              professional.services.slice(0, 3).map(service => ( // Mostra até 3 serviços
+            {services.length > 0 ? (
+              services.slice(0, 3).map(service => ( // Mostra até 3 serviços
                 <span key={service.id} className="text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded-md flex items-center gap-1">
-                    <Scissors size={12}/> {service.name}
+                  <Scissors size={12}/> {service.name}
                 </span>
               ))
             ) : (
               <span className="text-xs text-gray-500">Nenhum serviço associado.</span>
             )}
-            {professional.services.length > 3 && (
+            {/* Correção aqui também */}
+            {services.length > 3 && (
                 <span className="text-xs bg-gray-800 text-amber-400 px-2 py-1 rounded-md">
-                    +{professional.services.length - 3} outros
+                  +{services.length - 3} outros
                 </span>
             )}
           </div>

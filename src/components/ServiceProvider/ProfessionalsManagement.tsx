@@ -17,6 +17,8 @@ import type {
 
 type ProfessionalFormData = {
   name: string;
+  email?: string; // <-- ADICIONADO
+  password?: string; // <-- ADICIONADO
   serviceIds: string[];
 };
 
@@ -82,36 +84,50 @@ export const ProfessionalsManagement = () => {
     setEditingProfessional(null);
   };
 
-  const handleSaveProfessional = async (
-    formData: ProfessionalFormData,
+const handleSaveProfessional = async (
+    formData: ProfessionalFormData, // <-- O tipo agora inclui email/senha
     photoFile: File | null
   ) => {
-    const providerId = providerProfile.id; // Usando o perfil tipado
+    const providerId = providerProfile.id;
 
     const selectedServices = availableServices.filter((s) =>
       formData.serviceIds.includes(s.id)
     );
 
-    const payload = {
-      name: formData.name,
-      services: selectedServices,
-      availability: editingProfessional?.availability || [],
-      photoFile,
-    };
-
     if (editingProfessional) {
-      const updatedPayload = {
-        ...payload,
+      // Lógica de ATUALIZAÇÃO (permanece a mesma)
+      const payload = {
+        name: formData.name,
+        services: selectedServices,
+        availability: editingProfessional.availability || [],
+        photoFile,
         photoURL: editingProfessional.photoURL,
       };
       await updateProfessional(
         providerId,
         editingProfessional.id,
-        updatedPayload
+        payload
       );
+
     } else {
+      // Lógica de CRIAÇÃO (atualizada para enviar todos os dados)
+      // O 'addProfessional' da sua store agora receberá os novos campos
+      const payload = {
+        name: formData.name,
+        email: formData.email!, // '!' é seguro por causa do schema do modal
+        password: formData.password!, // '!' é seguro
+        services: selectedServices,
+        serviceIds: formData.serviceIds, // Envie os IDs para a Cloud Function
+        availability: [],
+        photoFile,
+      };
+      
+      // Esta chamada para 'addProfessional' é o *próximo passo*
+      // Teremos que modificar a 'professionalsManagementStore'
+      // para que 'addProfessional' chame a Cloud Function.
       await addProfessional(providerId, payload);
     }
+    
     handleCloseModal();
   };
 

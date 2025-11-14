@@ -158,7 +158,7 @@ export interface ServiceProviderProfile extends BaseUser {
 }
 
 // Union Type para o perfil do usuário logado
-export type UserProfile = ClientProfile | ServiceProviderProfile;
+export type UserProfile = ClientProfile | ServiceProviderProfile | ProfessionalProfile;
 
 // Tipos para a área Financeira
 
@@ -181,4 +181,12 @@ export interface FinancialData {
   appointments: Appointment[];
   topServices: { name: string; revenue: number }[];
   topProfessionals: { name: string; revenue: number }[];
+}
+
+export interface ProfessionalProfile extends BaseUser {
+  role: "professional";
+  serviceProviderId: string; // ID do ServiceProvider (dono) ao qual pertence
+  professionalId: string; // ID do recurso "Professional" (que contém serviços/horários)
+  avatarUrl?: string;
+  // (Pode adicionar outros campos que SÓ o profissional vê/edita)
 }

@@ -198,7 +198,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
 );
 
 export const completeAppointment = onCall(
-  { region: REGION },
+  { region: REGION, cors: ["http://localhost:5173"] }, 
   async (request) => {
     // 1. Validação de Autenticação
     if (!request.auth) {
@@ -439,7 +439,7 @@ export const sendAppointmentReminders = onSchedule(
  */
 export const createStripeCheckout = onCall(
   // Especificando os segredos que esta função v2 precisa
-  { region: REGION, secrets: ["STRIPE_API_SECRET"] },
+  { region: REGION, cors: ["http://localhost:5173"], secrets: ["STRIPE_API_SECRET"] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -523,7 +523,7 @@ export const createStripeCheckout = onCall(
 );
 
 export const createStripeCustomerPortal = onCall(
-  { region: REGION, secrets: ["STRIPE_API_SECRET"] },
+  { region: REGION, cors: ["http://localhost:5173"], secrets: ["STRIPE_API_SECRET"] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -601,7 +601,7 @@ const createFirestoreNotification = async (
 
 
 export const stripeWebhook = onRequest(
-  { region: REGION, secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"] }, 
+  { region: REGION, cors: ["http://localhost:5173"], secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"] }, 
   async (request, response) => {
     
     const webhookSecret = process.env.STRIPE_WEBHOOK_KEY; 
@@ -714,5 +714,111 @@ export const stripeWebhook = onRequest(
     }
 
     response.status(200).send({ received: true });
+  }
+);
+
+export const createProfessionalUser = onCall(
+ { region: REGION, cors: ["http://localhost:5173"] }, 
+  async (request) => {
+    // 1. Validação de Autenticação (Quem está a chamar?)
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Você precisa estar autenticado."
+      );
+    }
+
+    const { name, email, password, serviceIds } = request.data;
+    const providerId = request.auth.uid; // O "Dono" que está a criar
+
+    // 2. Validação de Inputs
+    if (!name || !email || !password || !serviceIds) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Dados incompletos para criar profissional."
+      );
+    }
+
+    let providerDoc;
+    try {
+      providerDoc = await db.collection("users").doc(providerId).get();
+      // 3. Validação de Role (O chamador é um Dono?)
+      if (providerDoc.data()?.role !== "serviceProvider") {
+        throw new HttpsError(
+          "permission-denied",
+          "Você não tem permissão para criar profissionais."
+        );
+      }
+    } catch (error) {
+      logger.error("Erro ao validar 'Dono':", error);
+      throw new HttpsError("internal", "Erro ao validar permissões.");
+    }
+
+    // --- Lógica de Criação em 3 Passos ---
+
+    let userRecord;
+    let newProfessionalRef;
+
+    try {
+      // Passo 1: Criar o Utilizador no Firebase Auth
+      userRecord = await admin.auth().createUser({
+        email: email,
+        password: password,
+        displayName: name,
+        emailVerified: false, // Pode definir como 'true' se quiser
+      });
+
+      // Passo 2: Criar o Recurso Profissional
+      // (Buscamos os serviços completos do Dono para embutir)
+      const providerData = providerDoc.data();
+      const allServices = providerData?.services || [];
+      const selectedServices = allServices.filter((s: { id: string }) =>
+        serviceIds.includes(s.id)
+      );
+      
+      // O seu 'professionalsManagementService.ts' aponta para esta coleção
+      newProfessionalRef = db
+        .collection("serviceProviders")
+        .doc(providerId)
+        .collection("professionals")
+        .doc(); // Cria um ID automático
+
+      await newProfessionalRef.set({
+        id: newProfessionalRef.id,
+        name: name,
+        services: selectedServices,
+        availability: [], // Disponibilidade padrão (vazia)
+        // photoURL será atualizado depois pelo frontend se houver foto
+      });
+
+      // Passo 3: Criar o Perfil de Utilizador (para login)
+      await db.collection("users").doc(userRecord.uid).set({
+        id: userRecord.uid,
+        name: name,
+        email: email,
+        role: "professional", // <-- O NOVO ROLE
+        serviceProviderId: providerId, // Link para o "Dono"
+        professionalId: newProfessionalRef.id, // Link para o "Recurso"
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      logger.info(`Novo profissional ${userRecord.uid} criado por ${providerId}.`);
+      return { success: true, professionalId: newProfessionalRef.id, uid: userRecord.uid };
+
+    } catch (error: any) {
+      logger.error("Erro ao criar profissional:", error);
+      
+      // Rollback: Se a criação do utilizador no Auth funcionou mas o Firestore falhou,
+      // devemos deletar o utilizador do Auth para evitar órfãos.
+      if (userRecord) {
+        await admin.auth().deleteUser(userRecord.uid);
+        logger.warn(`Rollback: Utilizador Auth ${userRecord.uid} deletado.`);
+      }
+      
+      if (error.code === "auth/email-already-exists") {
+        throw new HttpsError("already-exists", "Este e-mail já está em uso.");
+      }
+      throw new HttpsError("internal", "Ocorreu um erro ao criar o profissional.");
+    }
   }
 );

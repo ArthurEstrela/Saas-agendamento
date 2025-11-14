@@ -130,7 +130,7 @@ const ServiceProviderDashboard = () => {
             transition={{ duration: 0.25 }}
             className="flex-grow flex flex-col"
           >
-            <ActiveComponent />
+            <ActiveComponent userProfile={profile}/>
           </motion.div>
         </AnimatePresence>
       </main>

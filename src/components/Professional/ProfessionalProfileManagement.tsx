@@ -9,6 +9,7 @@ import * as z from "zod";
 import { motion } from "framer-motion";
 import { Camera, Save, Loader2, User } from "lucide-react";
 import { Input } from "../ServiceProvider/ProfileManagement"; // Reutiliza o 'Input'
+import { uploadProfilePicture } from "../../firebase/userService";
 
 // 1. Schema Zod SIMPLES para o profissional
 const professionalSchema = z.object({
@@ -26,7 +27,7 @@ interface ProfessionalProfileProps {
 export const ProfessionalProfileManagement = ({
   userProfile,
 }: ProfessionalProfileProps) => {
-  const { updateUserProfile } = useProfileStore();
+  const { updateUserProfile, setUserProfile } = useProfileStore();
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -53,9 +54,9 @@ export const ProfessionalProfileManagement = ({
   const onSubmit: SubmitHandler<ProfessionalFormData> = async (data) => {
     if (!userProfile || !isDirty) return;
     setIsSaving(true);
-    
+
     await updateUserProfile(userProfile.id, data);
-    
+
     setIsSaving(false);
     reset(data); // Reseta o 'isDirty'
   };
@@ -67,18 +68,20 @@ export const ProfessionalProfileManagement = ({
 
     setIsUploading(true);
     const tempUrl = URL.createObjectURL(file);
-    setAvatarPreview(tempUrl);
+    setAvatarPreview(tempUrl); // Mostra o preview
 
     try {
-      // TODO: Você precisará de uma função de upload para o avatar do profissional
-      // Ex: const avatarUrl = await uploadProfessionalAvatar(userProfile.id, file);
-      // await updateUserProfile(userProfile.id, { profilePictureUrl: avatarUrl });
-      
-      // Simulação:
-      console.log("Upload de avatar precisa ser implementado", file.name);
-      
+      // 3. TODO Resolvido: Chame a função de upload
+      const avatarUrl = await uploadProfilePicture(userProfile.id, file);
+
+      // 4. Atualize o perfil no Firestore
+      await updateUserProfile(userProfile.id, { profilePictureUrl: avatarUrl });
+
+      // 5. Atualize o estado local (Zustand) para refletir na UI sem recarregar
+      setUserProfile({ ...userProfile, profilePictureUrl: avatarUrl });
     } catch (error) {
       console.error("Erro no upload do avatar:", error);
+      // Reverte para a imagem antiga se der erro
       if (userProfile.role === "professional") {
         setAvatarPreview(userProfile.profilePictureUrl || null);
       }
@@ -100,7 +103,6 @@ export const ProfessionalProfileManagement = ({
       transition={{ duration: 0.5 }}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
-        
         {/* Cabeçalho do Perfil */}
         <header className="flex flex-col sm:flex-row items-center gap-6">
           <div className="relative w-36 h-36 rounded-full group flex-shrink-0 border-4 border-gray-800 bg-gray-900">

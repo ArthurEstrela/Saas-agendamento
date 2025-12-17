@@ -1,7 +1,18 @@
 import { useState } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { ServiceProviderProfile } from "../../types";
-import { Loader2, Sparkles, CreditCard, ShieldX, Check } from "lucide-react";
+import {
+  Loader2,
+  CreditCard,
+  ShieldCheck,
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  Zap,
+  ArrowRight,
+  History,
+  Settings,
+} from "lucide-react";
 import toast from "react-hot-toast";
 
 // Importar o serviço de assinatura
@@ -10,65 +21,105 @@ import {
   createCustomerPortalSession,
 } from "../../firebase/subscriptionService";
 
-// !! IMPORTANTE !!
-// IDs atualizados para bater com o seu backend
+// IDs dos Planos (Certifique-se que batem com seu backend/Stripe)
 const PLANOS = {
   MENSAL: "price_1SMeWT3zDQy3p6yeWl0LC4wi",
   TRIMESTRAL: "price_1SMeWT3zDQy3p6yezkMmrByP",
   ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
 };
 
-// Componente auxiliar para o Card do Plano
+// Mapeamento de informações dos planos para UI
+const PLAN_DETAILS = {
+  [PLANOS.MENSAL]: {
+    name: "Mensal",
+    price: "R$ 49,90",
+    period: "/mês",
+    label: "Flexibilidade",
+  },
+  [PLANOS.TRIMESTRAL]: {
+    name: "Trimestral",
+    price: "R$ 135,00",
+    period: "/trimestre",
+    label: "Popular",
+  },
+  [PLANOS.ANUAL]: {
+    name: "Anual",
+    price: "R$ 468,00",
+    period: "/ano",
+    label: "Melhor Valor",
+  },
+};
+
+const FeatureItem = ({ text }: { text: string }) => (
+  <li className="flex items-center text-sm text-gray-300">
+    <CheckCircle2 className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+    {text}
+  </li>
+);
+
 const PlanCard = ({
-  title,
-  price,
-  period,
-  description,
-  features,
   priceId,
+  currentPlanId,
   onCheckout,
   loadingPlan,
-  isPopular = false,
-}: any) => (
-  <div
-    className={`bg-gray-800 p-6 rounded-lg border-2 ${
-      isPopular ? "border-amber-500" : "border-gray-700"
-    } ${loadingPlan === priceId ? "opacity-70" : ""}`}
-  >
-    {isPopular && (
-      <span className="inline-block bg-amber-500 text-black text-xs font-bold px-3 py-1 rounded-full -mt-2 mb-3">
-        MAIS POPULAR
-      </span>
-    )}
-    <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
-    <div className="flex items-baseline mb-4">
-      <span className="text-4xl font-bold text-white">{price}</span>
-      <span className="text-gray-400 ml-1">/ {period}</span>
-    </div>
-    <p className="text-gray-400 mb-5">{description}</p>
-    <ul className="space-y-2 mb-6">
-      {features.map((feature: string) => (
-        <li key={feature} className="flex items-center text-gray-300">
-          <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
-          {feature}
-        </li>
-      ))}
-    </ul>
-    <button
-      onClick={() => onCheckout(priceId)}
-      disabled={loadingPlan}
-      className={`w-full primary-button ${
-        isPopular ? "" : "bg-gray-700 hover:bg-gray-600"
-      } flex items-center justify-center`}
+}: {
+  priceId: string;
+  currentPlanId?: string; // Se soubermos qual é o atual (opcional)
+  onCheckout: (id: string) => void;
+  loadingPlan: string | null;
+}) => {
+  const details = PLAN_DETAILS[priceId as keyof typeof PLANOS];
+  const isPopular = priceId === PLANOS.TRIMESTRAL;
+
+  return (
+    <div
+      className={`relative flex flex-col p-6 rounded-2xl border transition-all duration-300 hover:shadow-xl ${
+        isPopular
+          ? "bg-gray-800/80 border-amber-500/50 shadow-amber-900/20"
+          : "bg-gray-800/40 border-gray-700 hover:border-gray-600"
+      }`}
     >
-      {loadingPlan === priceId ? (
-        <Loader2 className="animate-spin" />
-      ) : (
-        "Assinar Agora"
+      {isPopular && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-gray-900 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+          Mais Escolhido
+        </span>
       )}
-    </button>
-  </div>
-);
+
+      <div className="mb-4">
+        <h3 className="text-lg font-medium text-gray-200">{details.name}</h3>
+        <div className="flex items-baseline mt-1">
+          <span className="text-3xl font-bold text-white">{details.price}</span>
+          <span className="text-gray-500 text-sm ml-1">{details.period}</span>
+        </div>
+      </div>
+
+      <ul className="space-y-3 mb-6 flex-grow">
+        <FeatureItem text="Agendamentos Ilimitados" />
+        <FeatureItem text="Gestão Financeira Completa" />
+        {priceId !== PLANOS.MENSAL && (
+          <FeatureItem text="Relatórios Avançados" />
+        )}
+        {priceId === PLANOS.ANUAL && <FeatureItem text="2 Meses Grátis" />}
+      </ul>
+
+      <button
+        onClick={() => onCheckout(priceId)}
+        disabled={!!loadingPlan}
+        className={`w-full py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center justify-center ${
+          isPopular
+            ? "bg-amber-500 hover:bg-amber-400 text-gray-900"
+            : "bg-gray-700 hover:bg-gray-600 text-white"
+        }`}
+      >
+        {loadingPlan === priceId ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          "Escolher Plano"
+        )}
+      </button>
+    </div>
+  );
+};
 
 export const SubscriptionManagement = () => {
   const { userProfile } = useProfileStore();
@@ -76,187 +127,276 @@ export const SubscriptionManagement = () => {
   const [isPortalLoading, setIsPortalLoading] = useState(false);
 
   if (!userProfile) {
-    return <Loader2 className="animate-spin text-amber-500" size={32} />;
+    return (
+      <div className="flex justify-center p-12">
+        <Loader2 className="animate-spin text-amber-500" size={32} />
+      </div>
+    );
   }
 
   const profile = userProfile as ServiceProviderProfile;
-  const status = profile.subscriptionStatus;
+  const status = profile.subscriptionStatus || "free"; // Fallback para free
 
-  // Função que chama o backend e redireciona (agora com priceId)
   const handleCheckout = async (priceId: string) => {
     setLoadingPlan(priceId);
     try {
       const { url } = await createCheckoutSession(priceId);
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error("Não foi possível obter a URL de checkout.");
-      }
+      if (url) window.location.href = url;
+      else throw new Error("URL de checkout inválida");
     } catch (error) {
-      console.error("Erro ao criar sessão de checkout:", error);
-      toast.error(
-        `Erro ao iniciar assinatura: ${
-          error instanceof Error ? error.message : "Tente novamente."
-        }`
-      );
+      console.error(error);
+      toast.error("Erro ao iniciar pagamento. Tente novamente.");
       setLoadingPlan(null);
     }
   };
 
-  // Função para o Portal do Cliente
   const handleCustomerPortal = async () => {
     setIsPortalLoading(true);
     try {
       const { url } = await createCustomerPortalSession();
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error("Não foi possível obter a URL do portal.");
-      }
+      if (url) window.location.href = url;
+      else throw new Error("URL do portal inválida");
     } catch (error) {
-      console.error("Erro ao acessar portal do cliente:", error);
-      toast.error(
-        "Erro ao acessar seu portal. Tente novamente mais tarde."
-      );
+      console.error(error);
+      toast.error("Erro ao acessar portal. Tente novamente.");
       setIsPortalLoading(false);
     }
   };
 
-  const renderContent = () => {
-    switch (status) {
-      case "active":
-        return (
-          <div className="text-center">
-            <h3 className="text-xl font-semibold text-green-400 mb-2">
-              Plano Ativo
+  const isSubscriptionActive = status === "active" || status === "trialing";
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 p-4">
+      {/* Cabeçalho */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-6">
+        <div>
+          <h2 className="text-3xl font-bold text-white tracking-tight">
+            Assinatura e Cobrança
+          </h2>
+          <p className="text-gray-400 mt-1">
+            Gerencie seu plano, métodos de pagamento e faturas.
+          </p>
+        </div>
+
+        {/* Botão de Portal (Só aparece se já for assinante ou já teve assinatura) */}
+        {status !== "free" && (
+          <button
+            onClick={handleCustomerPortal}
+            disabled={isPortalLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-colors border border-gray-700 text-sm font-medium"
+          >
+            {isPortalLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Settings className="h-4 w-4" />
+            )}
+            Gerenciar no Stripe
+          </button>
+        )}
+      </div>
+
+      {/* Grid Principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Coluna da Esquerda: Status Atual */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Card de Status */}
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl border border-gray-700 overflow-hidden shadow-lg">
+            <div className="p-6 md:p-8">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`p-3 rounded-lg ${
+                      isSubscriptionActive
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-red-500/10 text-red-400"
+                    }`}
+                  >
+                    {isSubscriptionActive ? (
+                      <ShieldCheck size={32} />
+                    ) : (
+                      <AlertTriangle size={32} />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      Status da Assinatura
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                          isSubscriptionActive
+                            ? "bg-green-500/10 text-green-400 border-green-500/20"
+                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isSubscriptionActive ? "bg-green-400" : "bg-red-400"
+                          }`}
+                        />
+                        {status === "active"
+                          ? "ATIVA"
+                          : status === "past_due"
+                          ? "PAGAMENTO PENDENTE"
+                          : "INATIVA"}
+                      </span>
+                      {status === "active" && (
+                        <span className="text-gray-500 text-sm">
+                          • Renovação Automática
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {isSubscriptionActive ? (
+                <div className="space-y-4">
+                  <p className="text-gray-300">
+                    Você tem acesso total aos recursos <strong>Premium</strong>.
+                    Sua próxima fatura será processada automaticamente.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                    <button
+                      onClick={handleCustomerPortal}
+                      className="flex items-center justify-center gap-2 p-4 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-lg transition-all group"
+                    >
+                      <CreditCard className="text-amber-500 group-hover:scale-110 transition-transform" />
+                      <span className="text-sm font-medium text-gray-200">
+                        Alterar Cartão
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleCustomerPortal}
+                      className="flex items-center justify-center gap-2 p-4 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-lg transition-all group"
+                    >
+                      <History className="text-blue-500 group-hover:scale-110 transition-transform" />
+                      <span className="text-sm font-medium text-gray-200">
+                        Ver Faturas
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-red-900/20 border border-red-900/30 rounded-lg p-4">
+                  <p className="text-red-200 text-sm">
+                    Sua assinatura não está ativa. Para reativar seu acesso e
+                    evitar bloqueio da agenda, selecione um plano abaixo.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Barra de progresso visual (Decorativa para dar sensação de dashboard) */}
+            {isSubscriptionActive && (
+              <div className="h-1.5 w-full bg-gray-800">
+                <div
+                  className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[75%]"
+                  title="Ciclo de cobrança atual"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Seção de Planos Disponíveis */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="text-amber-500" size={20} />
+              <h3 className="text-lg font-semibold text-white">
+                {isSubscriptionActive
+                  ? "Alterar seu Plano"
+                  : "Escolha seu Plano Ideal"}
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Object.values(PLANOS).map((planId) => (
+                <PlanCard
+                  key={planId}
+                  priceId={planId}
+                  onCheckout={handleCheckout}
+                  loadingPlan={loadingPlan}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Coluna da Direita: Benefícios e Ajuda */}
+        <div className="space-y-6">
+          {/* Card de Benefícios Ativos */}
+          <div className="bg-gray-800/40 rounded-xl border border-gray-700 p-6">
+            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <Sparkles className="text-amber-400 h-5 w-5" />
+              Recursos Inclusos
             </h3>
-            <p className="text-gray-300 mb-6">
-              Sua assinatura está em dia. Obrigado por fazer parte!
+            <ul className="space-y-4">
+              {[
+                "Agenda Online 24/7",
+                "Lembretes Automáticos",
+                "Gestão de Profissionais",
+                "Controle Financeiro",
+                "Link Personalizado",
+                "Suporte Prioritário",
+              ].map((item, idx) => (
+                <li
+                  key={idx}
+                  className={`flex items-start gap-3 text-sm ${
+                    isSubscriptionActive ? "text-gray-300" : "text-gray-500"
+                  }`}
+                >
+                  <CheckCircle2
+                    className={`h-5 w-5 flex-shrink-0 ${
+                      isSubscriptionActive ? "text-green-500" : "text-gray-600"
+                    }`}
+                  />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            {!isSubscriptionActive && (
+              <div className="mt-6 p-3 bg-gray-800 rounded text-xs text-center text-gray-400">
+                Assine agora para desbloquear todos os recursos.
+              </div>
+            )}
+          </div>
+
+          {/* Dúvidas Frequentes / Ajuda Rápida */}
+          <div className="bg-gray-800/20 rounded-xl border border-gray-800 p-6">
+            <h3 className="text-gray-200 font-medium mb-4 flex items-center gap-2">
+              <Calendar className="text-blue-400 h-4 w-4" />
+              Ciclo de Cobrança
+            </h3>
+            <p className="text-sm text-gray-400 mb-4">
+              A cobrança é feita automaticamente no cartão cadastrado. Você pode
+              cancelar a qualquer momento sem multa.
             </p>
             <button
               onClick={handleCustomerPortal}
-              disabled={isPortalLoading}
-              className="primary-button flex items-center justify-center mx-auto"
+              className="text-amber-500 hover:text-amber-400 text-sm font-medium flex items-center gap-1 transition-colors"
             >
-              {isPortalLoading ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  <CreditCard className="mr-2" size={20} />
-                  Gerenciar Assinatura
-                </>
-              )}
+              Precisa de nota fiscal? <ArrowRight size={14} />
             </button>
-            <p className="text-xs text-gray-500 mt-2">
-              (Cancelar, atualizar método de pagamento, etc.)
-            </p>
           </div>
-        );
-
-      case "past_due":
-      case "cancelled":
-        return (
-          <div className="text-center bg-red-900/50 border border-red-700 p-6 rounded-lg">
-            <ShieldX className="mx-auto text-red-400 mb-4" size={48} />
-            <h3 className="text-2xl font-bold text-red-300 mb-2">
-              {status === "past_due"
-                ? "Pagamento Pendente"
-                : "Assinatura Cancelada"}
-            </h3>
-            <p className="text-gray-300 mb-6">
-              Sua assinatura não está ativa. Para continuar usando a plataforma,
-              por favor, escolha um plano.
-            </p>
-            <button
-              onClick={() => handleCheckout(PLANOS.MENSAL)} // Regulariza com o mensal
-              disabled={!!loadingPlan}
-              className="primary-button bg-red-600 hover:bg-red-700 w-full flex items-center justify-center"
-            >
-              {loadingPlan === PLANOS.MENSAL ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                "Regularizar com Plano Mensal"
-              )}
-            </button>
-            <p className="text-sm text-gray-400 my-4">Ou escolha outro plano abaixo:</p>
-            {renderPlanSelection()}
-          </div>
-        );
-
-      case "trial":
-      case "free":
-      default:
-        return (
-          <div className="text-center">
-            <Sparkles className="mx-auto text-amber-400 mb-4" size={48} />
-            <h3 className="text-2xl font-bold text-amber-300 mb-2">
-              {status === "trial"
-                ? "Seu período de Teste está Ativo!"
-                : "Mude para o Plano Pro!"}
-            </h3>
-            <p className="text-gray-300 mb-8 max-w-lg mx-auto">
-              Libere todo o potencial da plataforma com o plano Pro.
-              Agendamentos ilimitados, gestão financeira e muito mais.
-            </p>
-            {renderPlanSelection()}
-          </div>
-        );
-    }
-  };
-
-  // Nova função para renderizar os 3 cards de plano
-  const renderPlanSelection = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <PlanCard
-        title="Plano Mensal"
-        price="R$ 49" // Você pode ajustar esses valores
-        period="mês"
-        description="Ideal para começar com flexibilidade."
-        features={["Agenda Online", "Gestão de Clientes", "Lembretes via App"]}
-        priceId={PLANOS.MENSAL}
-        onCheckout={handleCheckout}
-        loadingPlan={loadingPlan}
-      />
-      <PlanCard
-        title="Plano Trimestral"
-        price="R$ 135"
-        period="trimestre"
-        description="Economize 10% com o plano trimestral."
-        features={[
-          "Tudo do Mensal",
-          "Relatórios Financeiros",
-          "Suporte Prioritário",
-        ]}
-        priceId={PLANOS.TRIMESTRAL}
-        onCheckout={handleCheckout}
-        loadingPlan={loadingPlan}
-        isPopular={true}
-      />
-      <PlanCard
-        title="Plano Anual"
-        price="R$ 468"
-        period="ano"
-        description="O melhor custo-benefício, 2 meses grátis."
-        features={[
-          "Tudo do Trimestral",
-          "Gestão de Profissionais",
-          "Página Pública Otimizada",
-        ]}
-        priceId={PLANOS.ANUAL}
-        onCheckout={handleCheckout}
-        loadingPlan={loadingPlan}
-      />
-    </div>
-  );
-
-  return (
-    <div className="max-w-5xl mx-auto">
-      <h2 className="text-3xl font-bold text-white mb-8 text-center">
-        Minha Assinatura
-      </h2>
-      <div className="bg-gray-800/60 p-8 rounded-xl shadow-lg">
-        {renderContent()}
+        </div>
       </div>
     </div>
   );
 };
+
+// Componente auxiliar simples para ícone
+function Sparkles({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+    </svg>
+  );
+}

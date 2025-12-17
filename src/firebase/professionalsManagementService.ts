@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFunctions, httpsCallable } from "firebase/functions"; // <-- Importado
-import { db } from "./config";
+import { db, functions } from "./config";
 import type { Professional } from "../types";
 
 // Tipo para os dados enviados para a Cloud Function
@@ -40,20 +40,19 @@ const getProfessionalsCollectionRef = (providerId: string) =>
 export const createProfessionalAccount = async (
   payload: CreateProfessionalPayload
 ): Promise<CreateProfessionalResponse> => {
-  
-  // ***** AQUI ESTÁ A CORREÇÃO *****
-  const functions = getFunctions(); // 1. Obtém a instância
   const createProfessionalUser = httpsCallable<
     CreateProfessionalPayload,
     CreateProfessionalResponse
-  >(functions, "createProfessionalUser"); // 2. Passa a instância E o nome
-  // ***** FIM DA CORREÇÃO *****
+  >(functions, "createProfessionalUser");
 
   try {
     const result = await createProfessionalUser(payload);
     return result.data;
   } catch (error) {
-    console.error("Erro ao chamar a Cloud Function createProfessionalUser:", error);
+    console.error(
+      "Erro ao chamar a Cloud Function createProfessionalUser:",
+      error
+    );
     throw error;
   }
 };

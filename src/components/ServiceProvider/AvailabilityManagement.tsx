@@ -26,7 +26,13 @@ import { cn } from "../../lib/utils/cn";
 
 // Constantes
 const weekDays: DailyAvailability["dayOfWeek"][] = [
-  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
 ];
 const weekDaysPt: { [key in DailyAvailability["dayOfWeek"]]: string } = {
   Sunday: "Domingo",
@@ -81,7 +87,7 @@ export const AvailabilityManagement = ({
       </div>
     );
   }
-  
+
   const isOwner = userProfile.role === "serviceProvider";
 
   // --- 3. EFEITO DE CARREGAMENTO DE DADOS (LIMPO E CORRIGIDO) ---
@@ -96,64 +102,72 @@ export const AvailabilityManagement = ({
         setAvailability([]); // Limpa a disponibilidade
         return;
       }
-      
+
       const profId = selectedProfId || allProfessionals[0].id;
       if (selectedProfId !== profId) {
         setSelectedProfId(profId);
       }
 
       const selected = allProfessionals.find((p) => p.id === profId);
-      
+
       if (selected) {
         setCurrentProfessional(selected);
         setAvailability(getFullWeekAvailability(selected.availability));
       } else {
         // Fallback se o ID selecionado for inválido
         setCurrentProfessional(allProfessionals[0]);
-        setAvailability(getFullWeekAvailability(allProfessionals[0].availability));
+        setAvailability(
+          getFullWeekAvailability(allProfessionals[0].availability)
+        );
         setSelectedProfId(allProfessionals[0].id);
       }
       setIsLoading(false);
-
     } else {
       // --- Lógica do Profissional ---
       // (Depende da 'profileStore' carregar 'allProfessionals' para o profissional)
-      
+
       if (!allProfessionals) {
         // A 'profileStore' ainda não carregou a lista.
-        return; 
+        return;
       }
 
       // Obter o 'professionalId' (do recurso) a partir do perfil do utilizador
       const { professionalId } = userProfile as ProfessionalProfile;
-      
+
       const myProfessionalData = allProfessionals.find(
         (p) => p.id === professionalId
       );
-      
+
       if (myProfessionalData) {
         setCurrentProfessional(myProfessionalData);
-        setAvailability(getFullWeekAvailability(myProfessionalData.availability));
+        setAvailability(
+          getFullWeekAvailability(myProfessionalData.availability)
+        );
       } else {
-        console.error("Erro de dados: Não foi possível encontrar os dados do profissional logado.");
+        console.error(
+          "Erro de dados: Não foi possível encontrar os dados do profissional logado."
+        );
         setCurrentProfessional(null);
         setAvailability([]);
       }
       setIsLoading(false);
     }
-    
   }, [isOwner, userProfile, allProfessionals, selectedProfId]);
 
   // --- 4. HANDLERS (Com a correção) ---
 
-  const handleIsAvailableChange = (day: DailyAvailability["dayOfWeek"], isAvailable: boolean) => {
+  const handleIsAvailableChange = (
+    day: DailyAvailability["dayOfWeek"],
+    isAvailable: boolean
+  ) => {
     setAvailability((prev) =>
       prev.map((d) =>
         d.dayOfWeek === day
           ? {
               ...d,
               isAvailable,
-              slots: isAvailable && d.slots.length === 0
+              slots:
+                isAvailable && d.slots.length === 0
                   ? [{ start: "09:00", end: "18:00" }]
                   : d.slots,
             }
@@ -191,7 +205,10 @@ export const AvailabilityManagement = ({
     );
   };
 
-  const handleRemoveSlot = (day: DailyAvailability["dayOfWeek"], slotIndex: number) => {
+  const handleRemoveSlot = (
+    day: DailyAvailability["dayOfWeek"],
+    slotIndex: number
+  ) => {
     setAvailability((prev) =>
       prev.map((d) =>
         d.dayOfWeek === day
@@ -209,9 +226,9 @@ export const AvailabilityManagement = ({
     const providerId = isOwner
       ? (userProfile as ServiceProviderProfile).id
       : (userProfile as ProfessionalProfile).serviceProviderId;
-      
+
     const professionalIdToSave = isOwner
-      ? selectedProfId 
+      ? selectedProfId
       : (userProfile as ProfessionalProfile).professionalId;
 
     const updatedProfessional = {
@@ -255,20 +272,20 @@ export const AvailabilityManagement = ({
           Nenhum profissional cadastrado
         </h3>
         <p className="text-center mt-2">
-          Cadastre um profissional na seção "Profissionais" para gerenciar
-          a disponibilidade.
+          Cadastre um profissional na seção "Profissionais" para gerenciar a
+          disponibilidade.
         </p>
       </div>
     );
   }
-  
+
   if (!currentProfessional) {
-     return (
-       <div className="flex justify-center items-center h-64 text-gray-500">
+    return (
+      <div className="flex justify-center items-center h-64 text-gray-500">
         <AlertTriangle size={32} className="mr-3" />
         Não foi possível carregar os dados do profissional.
-       </div>
-     );
+      </div>
+    );
   }
 
   // --- 7. RENDERIZAÇÃO (COMPONENTE PRINCIPAL) ---
@@ -305,7 +322,7 @@ export const AvailabilityManagement = ({
           <h2 className="text-2xl font-bold text-white mb-3">
             {currentProfessional?.name || "Selecione..."}
           </h2>
-          
+
           {isOwner && allProfessionals && (
             <select
               id="professional-select"
@@ -385,7 +402,10 @@ export const AvailabilityManagement = ({
                           value={slot.start}
                           onChange={(e) =>
                             handleSlotChange(
-                              day.dayOfWeek, i, "start", e.target.value
+                              day.dayOfWeek,
+                              i,
+                              "start",
+                              e.target.value
                             )
                           }
                           className="w-full bg-gray-900 p-2 rounded-md border border-gray-600 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition text-sm"
@@ -402,7 +422,10 @@ export const AvailabilityManagement = ({
                           value={slot.end}
                           onChange={(e) =>
                             handleSlotChange(
-                              day.dayOfWeek, i, "end", e.target.value
+                              day.dayOfWeek,
+                              i,
+                              "end",
+                              e.target.value
                             )
                           }
                           className="w-full bg-gray-900 p-2 rounded-md border border-gray-600 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition text-sm"

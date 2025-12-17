@@ -4,29 +4,31 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Menu } from "lucide-react";
 import { useProfileStore } from "../../store/profileStore";
-import type { ProfessionalProfile } from "../../types"; // <-- Importa o tipo correto
+import type { ProfessionalProfile } from "../../types";
 
-// 1. Importar a nova SideNav que vamos criar
-
-// 2. Importar apenas os componentes de vista que o profissional usará
-//    (Podemos reutilizar os do ServiceProvider, mas vamos filtrá-los por dentro na Fase 4)
+// Importações dos componentes
 import { AgendaView } from "../ServiceProvider/Agenda/AgendaView";
 import { AvailabilityManagement } from "../ServiceProvider/AvailabilityManagement";
 import { ReviewsManagement } from "../ServiceProvider/ReviewsManagement";
 import { Notifications } from "../Common/Notifications";
 import { ProfessionalSideNav } from "./ProfessionalSideNav";
 import { ProfessionalProfileManagement } from "./ProfessionalProfileManagement";
+import { ProfessionalHome } from "./ProfessionalHome"; // <--- NOVO IMPORT
 
-// 3. Definir as vistas *limitadas* do profissional
+// 1. Adicionar "home" aos tipos
 export type ProfessionalDashboardView =
+  | "home" // <--- Adicionado
   | "agenda"
   | "availability"
   | "reviews"
   | "notifications"
   | "profile";
 
-// 4. Mapear as vistas
-const viewComponents: Record<ProfessionalDashboardView, React.ComponentType> = {
+const viewComponents: Record<
+  ProfessionalDashboardView,
+  React.ComponentType<any>
+> = {
+  home: ProfessionalHome, // <--- Mapeado
   agenda: AgendaView,
   availability: AvailabilityManagement,
   reviews: ReviewsManagement,
@@ -36,15 +38,16 @@ const viewComponents: Record<ProfessionalDashboardView, React.ComponentType> = {
 
 const ProfessionalDashboard = () => {
   const { userProfile } = useProfileStore();
-  const [activeView, setActiveView] = useState<ProfessionalDashboardView>("agenda");
+
+  // Define "home" como padrão
+  const [activeView, setActiveView] =
+    useState<ProfessionalDashboardView>("home");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  // 5. Usar o tipo de perfil correto
   const profile = userProfile as ProfessionalProfile | null;
 
   const ActiveComponent = viewComponents[activeView];
 
-  // 6. Manter um loading simples para o caso de o perfil não estar pronto
   if (!profile) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900">
@@ -53,21 +56,17 @@ const ProfessionalDashboard = () => {
     );
   }
 
-  // 7. LÓGICA DE SUBSCRIÇÃO REMOVIDA (useEffect, status, banners...)
-
   return (
     <div className="flex min-h-screen bg-black text-gray-200 font-sans">
-      
-      {/* 8. Usar a nova SideNav */}
       <ProfessionalSideNav
         activeView={activeView}
         setActiveView={setActiveView}
         isOpen={isMobileNavOpen}
         setIsOpen={setIsMobileNavOpen}
       />
-      
+
       <main className="bg-gray-900/65 flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300 flex flex-col">
-        {/* Botão de menu para mobile */}
+        {/* Mobile Header */}
         <div className="md:hidden flex justify-between items-center mb-6">
           <button
             onClick={() => setIsMobileNavOpen(true)}
@@ -78,8 +77,6 @@ const ProfessionalDashboard = () => {
           <span className="text-xl font-bold text-white">Stylo</span>
         </div>
 
-        {/* 9. BANNERS DE SUBSCRIÇÃO REMOVIDOS */}
-
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -89,7 +86,7 @@ const ProfessionalDashboard = () => {
             transition={{ duration: 0.25 }}
             className="flex-grow flex flex-col"
           >
-            {/* 10. Passar o perfil para o componente filho (IMPORTANTE para Fase 4) */}
+            {/* Passamos o userProfile para TODOS os componentes filhos */}
             <ActiveComponent userProfile={profile} />
           </motion.div>
         </AnimatePresence>

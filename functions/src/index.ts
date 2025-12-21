@@ -28,19 +28,20 @@ const PLANOS_PERMITIDOS = {
 
 const YOUR_APP_URL = "http://localhost:5173"; // Altere para a URL do seu app
 
-
 let stripeInstance: Stripe;
 
 const getStripe = (): Stripe => {
   if (!stripeInstance) {
     // !! ESTA É A VERSÃO CORRETA !!
     // Ela usa process.env, que é o correto para v2
-    const stripeSecret = process.env.STRIPE_API_SECRET; 
-    
+    const stripeSecret = process.env.STRIPE_API_SECRET;
+
     if (!stripeSecret) {
-      throw new Error("Stripe secret key is not configured in .env file (STRIPE_API_SECRET).");
+      throw new Error(
+        "Stripe secret key is not configured in .env file (STRIPE_API_SECRET)."
+      );
     }
-    
+
     stripeInstance = new Stripe(stripeSecret, {
       apiVersion: "2025-08-27.basil", // A versão que seu TS pediu
     });
@@ -176,9 +177,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
       const { professionalId, serviceName, clientName } = afterData;
       if (professionalId) {
         const title = "Agendamento Cancelado";
-        const body = `${
-          clientName || "Cliente"
-        } cancelou o agendamento de "${
+        const body = `${clientName || "Cliente"} cancelou o agendamento de "${
           serviceName || "serviço"
         }" de ${formattedDate} às ${formattedTime}.`;
         await sendPushNotification(professionalId, title, body);
@@ -198,7 +197,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
 );
 
 export const completeAppointment = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] }, 
+  { region: REGION, cors: ["http://localhost:5173"] },
   async (request) => {
     // 1. Validação de Autenticação
     if (!request.auth) {
@@ -439,7 +438,11 @@ export const sendAppointmentReminders = onSchedule(
  */
 export const createStripeCheckout = onCall(
   // Especificando os segredos que esta função v2 precisa
-  { region: REGION, cors: ["http://localhost:5173"], secrets: ["STRIPE_API_SECRET"] },
+  {
+    region: REGION,
+    cors: ["http://localhost:5173"],
+    secrets: ["STRIPE_API_SECRET"],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -523,7 +526,11 @@ export const createStripeCheckout = onCall(
 );
 
 export const createStripeCustomerPortal = onCall(
-  { region: REGION, cors: ["http://localhost:5173"], secrets: ["STRIPE_API_SECRET"] },
+  {
+    region: REGION,
+    cors: ["http://localhost:5173"],
+    secrets: ["STRIPE_API_SECRET"],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -539,7 +546,9 @@ export const createStripeCustomerPortal = onCall(
       const stripeCustomerId = userDoc.data()?.stripeCustomerId;
 
       if (!stripeCustomerId) {
-        logger.error(`Usuário ${uid} tentou acessar portal sem stripeCustomerId.`);
+        logger.error(
+          `Usuário ${uid} tentou acessar portal sem stripeCustomerId.`
+        );
         throw new HttpsError(
           "not-found",
           "ID de cliente Stripe não encontrado."
@@ -599,15 +608,19 @@ const createFirestoreNotification = async (
   }
 };
 
-
 export const stripeWebhook = onRequest(
-  { region: REGION, cors: ["http://localhost:5173"], secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"] }, 
+  {
+    region: REGION,
+    cors: ["http://localhost:5173"],
+    secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"],
+  },
   async (request, response) => {
-    
-    const webhookSecret = process.env.STRIPE_WEBHOOK_KEY; 
-    
+    const webhookSecret = process.env.STRIPE_WEBHOOK_KEY;
+
     if (!webhookSecret) {
-      logger.error("Stripe webhook secret is not configured in .env file (STRIPE_WEBHOOK_KEY).");
+      logger.error(
+        "Stripe webhook secret is not configured in .env file (STRIPE_WEBHOOK_KEY)."
+      );
       response.status(400).send("Webhook Error: Missing secret");
       return;
     }
@@ -656,19 +669,26 @@ export const stripeWebhook = onRequest(
           logger.info(`Usuário ${userId} iniciou assinatura ${subscriptionId}`);
           break;
         }
-        
+
         case "invoice.payment_succeeded": {
           const invoice = event.data.object as Stripe.Invoice;
-          
-          if (!invoice.lines || !invoice.lines.data || invoice.lines.data.length === 0) {
+
+          if (
+            !invoice.lines ||
+            !invoice.lines.data ||
+            invoice.lines.data.length === 0
+          ) {
             logger.info("Fatura sem 'line items', ignorando.", invoice);
             break;
           }
-          
+
           const subscriptionId = invoice.lines.data[0].subscription;
 
           if (!subscriptionId) {
-            logger.info("invoice.payment_succeeded sem ID de assinatura (pagamento avulso).", invoice);
+            logger.info(
+              "invoice.payment_succeeded sem ID de assinatura (pagamento avulso).",
+              invoice
+            );
             break;
           }
 
@@ -718,7 +738,7 @@ export const stripeWebhook = onRequest(
 );
 
 export const createProfessionalUser = onCall(
- { region: REGION, cors: ["http://localhost:5173"] }, 
+  { region: REGION, cors: ["http://localhost:5173"] },
   async (request) => {
     // 1. Validação de Autenticação (Quem está a chamar?)
     if (!request.auth) {
@@ -775,7 +795,7 @@ export const createProfessionalUser = onCall(
       const selectedServices = allServices.filter((s: { id: string }) =>
         serviceIds.includes(s.id)
       );
-      
+
       // O seu 'professionalsManagementService.ts' aponta para esta coleção
       newProfessionalRef = db
         .collection("serviceProviders")
@@ -802,23 +822,178 @@ export const createProfessionalUser = onCall(
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      logger.info(`Novo profissional ${userRecord.uid} criado por ${providerId}.`);
-      return { success: true, professionalId: newProfessionalRef.id, uid: userRecord.uid };
-
+      logger.info(
+        `Novo profissional ${userRecord.uid} criado por ${providerId}.`
+      );
+      return {
+        success: true,
+        professionalId: newProfessionalRef.id,
+        uid: userRecord.uid,
+      };
     } catch (error: any) {
       logger.error("Erro ao criar profissional:", error);
-      
+
       // Rollback: Se a criação do utilizador no Auth funcionou mas o Firestore falhou,
       // devemos deletar o utilizador do Auth para evitar órfãos.
       if (userRecord) {
         await admin.auth().deleteUser(userRecord.uid);
         logger.warn(`Rollback: Utilizador Auth ${userRecord.uid} deletado.`);
       }
-      
+
       if (error.code === "auth/email-already-exists") {
         throw new HttpsError("already-exists", "Este e-mail já está em uso.");
       }
-      throw new HttpsError("internal", "Ocorreu um erro ao criar o profissional.");
+      throw new HttpsError(
+        "internal",
+        "Ocorreu um erro ao criar o profissional."
+      );
+    }
+  }
+);
+
+export const createAppointment = onCall(
+  { region: "southamerica-east1", cors: ["http://localhost:5173"] }, // Ajuste a região/cors conforme necessário
+  async (request) => {
+    // 1. Autenticação
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Você precisa estar autenticado para realizar um agendamento."
+      );
+    }
+
+    const {
+      clientId,
+      professionalId,
+      providerId,
+      startTime,
+      endTime,
+      serviceName,
+      clientName,
+      professionalName,
+      services,
+      totalPrice,
+      totalDuration,
+      notes,
+    } = request.data;
+
+    // 2. Validação Básica
+    if (!clientId || !professionalId || !startTime || !endTime) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Dados incompletos para o agendamento."
+      );
+    }
+
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const now = new Date();
+
+    if (start < now) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Não é possível agendar em uma data passada."
+      );
+    }
+
+    // Referências
+    const appointmentsRef = db.collection("appointments");
+    // Usamos um documento de "Lock" para o profissional.
+    // Isso garante que transações concorrentes para o MESMO profissional sejam serializadas.
+    const lockRef = db.collection("availability_locks").doc(professionalId);
+
+    try {
+      // 3. Executar Transação
+      const appointmentId = await db.runTransaction(async (transaction) => {
+        // A. Leitura do Lock (Obrigatório para prevenir leituras fantasmas em consultas)
+        // Ao ler este documento, a transação "trava" o estado atual para este profissional.
+        // Se outra transação alterar este doc enquanto esta roda, esta será reiniciada.
+        await transaction.get(lockRef);
+
+        // Se não existir, não tem problema, o Firebase trata a "inexistência" como estado também.
+
+        // B. Buscar agendamentos existentes no intervalo relevante (Dia do agendamento)
+        // Otimização: Buscamos apenas os do mesmo dia para evitar ler a coleção inteira.
+        const startOfDay = new Date(start);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(start);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const querySnapshot = await transaction.get(
+          appointmentsRef
+            .where("professionalId", "==", professionalId)
+            .where("startTime", ">=", startOfDay)
+            .where("startTime", "<=", endOfDay)
+            .where("status", "in", ["scheduled", "pending"]) // Ignora cancelados
+        );
+
+        // C. Verificação de Conflito em Memória (Rigorosa)
+        let hasConflict = false;
+        querySnapshot.forEach((doc) => {
+          const appt = doc.data();
+          const apptStart = appt.startTime.toDate(); // Converte Timestamp para Date
+          const apptEnd = appt.endTime.toDate();
+
+          // Lógica de intersecção de horários:
+          // (NovoInicio < FimExistente) E (NovoFim > InicioExistente)
+          if (start < apptEnd && end > apptStart) {
+            hasConflict = true;
+          }
+        });
+
+        if (hasConflict) {
+          throw new HttpsError(
+            "already-exists",
+            "Este horário já foi reservado por outra pessoa. Por favor, escolha outro horário."
+          );
+        }
+
+        // D. Criação do Agendamento
+        const newAppointmentRef = appointmentsRef.doc();
+        const newAppointmentData = {
+          clientId,
+          clientName,
+          professionalId,
+          professionalName,
+          providerId, // Dono do negócio
+          serviceName,
+          services,
+          startTime: admin.firestore.Timestamp.fromDate(start),
+          endTime: admin.firestore.Timestamp.fromDate(end),
+          totalPrice,
+          totalDuration,
+          notes: notes || "",
+          status: "pending", // Ou 'scheduled' dependendo da sua regra de negócio
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        transaction.set(newAppointmentRef, newAppointmentData);
+
+        // E. Atualização do Lock (Passo CRUCIAL)
+        // Escrevemos no doc de lock para forçar o reinício de qualquer outra transação concorrente
+        // que tenha lido este mesmo lock no passo A.
+        transaction.set(
+          lockRef,
+          {
+            lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        return newAppointmentRef.id;
+      });
+
+      logger.info(`Agendamento criado com sucesso: ${appointmentId}`);
+      return { success: true, appointmentId };
+    } catch (error) {
+      logger.error("Erro ao criar agendamento:", error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError(
+        "internal",
+        "Erro interno ao processar agendamento. Tente novamente."
+      );
     }
   }
 );

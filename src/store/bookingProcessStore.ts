@@ -9,10 +9,10 @@ import type {
   Appointment,
   ClientProfile,
 } from "../types";
+// A importação abaixo agora chama sua função segura (Cloud Function)
 import { createAppointment } from "../firebase/bookingService";
 import { getUserProfile } from "../firebase/userService";
 import { getProfessionalsByProviderId } from "../firebase/professionalsManagementService";
-import { serverTimestamp } from "firebase/firestore";
 
 // Representa o estado do processo de agendamento
 interface BookingFlowState {
@@ -54,7 +54,7 @@ interface BookingFlowActions {
   /** Seleciona data e hora e avança a etapa. */
   selectDateAndTime: (date: Date, timeSlot: string) => void;
 
-  /** Confirma e cria o agendamento no banco de dados. */
+  /** Confirma e cria o agendamento no banco de dados via Cloud Functions. */
   confirmBooking: (client: ClientProfile) => Promise<void>;
 
   /** Funções de navegação e controle. */
@@ -156,7 +156,7 @@ export const useBookingProcessStore = create<BookingStore>()(
       selectDateAndTime: (date, timeSlot) => {
         set({ selectedDate: date, selectedTimeSlot: timeSlot, currentStep: 4 });
       },
-      
+
       confirmBooking: async (client) => {
         const {
           provider,
@@ -166,6 +166,7 @@ export const useBookingProcessStore = create<BookingStore>()(
           selectedTimeSlot,
         } = get();
 
+        // Validação dos dados
         if (
           !provider ||
           selectedServices.length === 0 ||
@@ -179,16 +180,22 @@ export const useBookingProcessStore = create<BookingStore>()(
 
         set({ status: { ...get().status, isConfirming: true } });
 
+        // Cálculos de Tempo
         const totalDuration = selectedServices.reduce(
           (acc, s) => acc + s.duration,
           0
         );
+
+        // Configuração segura das datas
         const startTime = new Date(selectedDate);
         const [hours, minutes] = selectedTimeSlot.split(":").map(Number);
-        startTime.setHours(hours, minutes);
+        startTime.setHours(hours, minutes, 0, 0);
 
         const endTime = new Date(startTime.getTime() + totalDuration * 60000);
 
+        // Montagem do objeto para a Cloud Function
+        // OBS: Não usamos serverTimestamp() aqui pois ele não é serializável para a API.
+        // A Cloud Function irá gerar o timestamp oficial do servidor.
         const appointmentData: Omit<Appointment, "id"> = {
           clientId: client.id,
           clientName: client.name,
@@ -202,23 +209,32 @@ export const useBookingProcessStore = create<BookingStore>()(
           status: "pending",
           totalPrice: selectedServices.reduce((acc, s) => acc + s.price, 0),
           totalDuration,
-          createdAt: serverTimestamp(),
+          createdAt: new Date(), // Envia data local apenas para validar tipo, backend sobrescreve.
+          notes: "", // Campo opcional preparado para expansão futura
         };
 
         const promise = createAppointment(appointmentData);
 
         toast.promise(promise, {
-          loading: "Enviando sua solicitação...",
-          success: "Agendamento solicitado com sucesso! Aguarde a confirmação.",
-          error: "Não foi possível agendar. Por favor, tente novamente.",
+          loading: "Processando agendamento seguro...",
+          success: "Agendamento confirmado com sucesso!",
+          error: (err) => {
+            // Se o erro for de conflito (Race Condition), mostramos a mensagem clara
+            if (err.message && err.message.includes("já foi reservado")) {
+              return "Ops! Este horário acabou de ser ocupado. Tente outro.";
+            }
+            return "Erro ao agendar. Tente novamente.";
+          },
         });
 
         try {
           await promise;
           set({ status: { ...initialState.status, isSuccess: true } });
         } catch (error) {
+          console.error("Erro no confirmBooking:", error);
           const errorMessage =
             error instanceof Error ? error.message : "Erro desconhecido.";
+
           set({
             status: {
               ...initialState.status,

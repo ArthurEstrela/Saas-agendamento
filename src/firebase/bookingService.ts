@@ -1,14 +1,13 @@
 import {
   collection,
   doc,
-  addDoc,
   getDocs,
   query,
   where,
   updateDoc,
   Timestamp,
   orderBy,
-  serverTimestamp,
+  // addDoc e serverTimestamp foram removidos pois agora usamos a Cloud Function para criar
 } from "firebase/firestore";
 import { db } from "./config";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -35,18 +34,37 @@ const convertAppointmentTimestamps = (
 };
 
 /**
- * Cria um novo agendamento no Firestore.
- * O status inicial será 'pending'.
+ * Cria um novo agendamento de forma SEGURA via Cloud Functions.
+ * Isso evita duplicidade de horários (Race Condition).
  */
 export const createAppointment = async (
   appointmentData: Omit<Appointment, "id">
 ): Promise<string> => {
-  const appointmentsCollection = collection(db, "appointments");
-  const docRef = await addDoc(appointmentsCollection, {
-    ...appointmentData,
-    createdAt: serverTimestamp(), // Adiciona um timestamp de quando foi criado
-  });
-  return docRef.id;
+  try {
+    const createAppointmentCallable = httpsCallable(
+      functions,
+      "createAppointment"
+    );
+
+    // Prepara os dados para envio (serialização segura de datas)
+    const payload = {
+      ...appointmentData,
+      // Convertemos Date para milissegundos para garantir integridade no envio
+      startTime: appointmentData.startTime.getTime(),
+      endTime: appointmentData.endTime.getTime(),
+      // Removemos campos que podem causar erro de serialização se estiverem undefined
+      // O backend irá gerar o 'createdAt' oficial
+    };
+
+    const result = await createAppointmentCallable(payload);
+    const data = result.data as { success: boolean; appointmentId: string };
+
+    return data.appointmentId;
+  } catch (error) {
+    console.error("Erro ao criar agendamento via Function:", error);
+    // Repassa o erro para o store/componente tratar (ex: mostrar mensagem de horário ocupado)
+    throw error;
+  }
 };
 
 /**
@@ -98,7 +116,6 @@ export const getAppointmentsByProviderId = async (
 export const updateAppointmentStatus = async (
   appointmentId: string,
   status: Appointment["status"],
-  // 'finalPrice' foi REMOVIDO dos parâmetros
   rejectionReason?: string
 ): Promise<void> => {
   // Verificação de segurança no frontend
@@ -121,10 +138,6 @@ export const updateAppointmentStatus = async (
     updateData.rejectionReason = rejectionReason;
   }
 
-  // !! LÓGICA DE 'completed' REMOVIDA !!
-  // O 'if (status === "completed" ...)' foi completamente removido
-  // para evitar a falha de segurança.
-
   await updateDoc(appointmentRef, updateData);
 };
 
@@ -143,8 +156,6 @@ export const completeAppointment = async (
     });
   } catch (error) {
     console.error("Erro ao chamar a função 'completeAppointment':", error);
-    // Lança o erro para que o componente da UI possa tratá-lo
-    // (ex: reativar o botão, mostrar um toast)
     throw error;
   }
 };

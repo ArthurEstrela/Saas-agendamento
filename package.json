@@ -26,6 +26,7 @@
     "framer-motion": "^12.23.12",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.536.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.1.0",
     "react-big-calendar": "^1.19.4",
     "react-calendar": "^5.0.0",

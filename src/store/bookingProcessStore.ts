@@ -8,8 +8,8 @@ import type {
   ServiceProviderProfile,
   Appointment,
   ClientProfile,
+  PaymentMethod, // <-- Importar
 } from "../types";
-// A importação abaixo agora chama sua função segura (Cloud Function)
 import { createAppointment } from "../firebase/bookingService";
 import { getUserProfile } from "../firebase/userService";
 import { getProfessionalsByProviderId } from "../firebase/professionalsManagementService";
@@ -42,22 +42,14 @@ interface BookingFlowState {
 
 // Ações que podem ser executadas no store
 interface BookingFlowActions {
-  /** Inicia o fluxo ou carrega os dados de um prestador. */
   fetchProviderData: (providerId: string) => Promise<void>;
-
-  /** Adiciona ou remove um serviço da seleção. */
   toggleService: (service: Service) => void;
-
-  /** Seleciona um profissional e avança a etapa. */
   selectProfessional: (professional: Professional) => void;
-
-  /** Seleciona data e hora e avança a etapa. */
   selectDateAndTime: (date: Date, timeSlot: string) => void;
+  
+  // Atualizado para receber paymentMethod
+  confirmBooking: (client: ClientProfile, paymentMethod: PaymentMethod) => Promise<void>;
 
-  /** Confirma e cria o agendamento no banco de dados via Cloud Functions. */
-  confirmBooking: (client: ClientProfile) => Promise<void>;
-
-  /** Funções de navegação e controle. */
   goToNextStep: () => void;
   goToPreviousStep: () => void;
   setRedirectUrlAfterLogin: (url: string | null) => void;
@@ -74,7 +66,7 @@ const initialState: BookingFlowState = {
   selectedProfessional: null,
   selectedDate: null,
   selectedTimeSlot: null,
-  currentStep: 1, // 1: Serviço, 2: Profissional, 3: Data/Hora, 4: Confirmação
+  currentStep: 1, 
   status: {
     isLoading: false,
     isConfirming: false,
@@ -136,7 +128,6 @@ export const useBookingProcessStore = create<BookingStore>()(
           ? selectedServices.filter((s) => s.id !== service.id)
           : [...selectedServices, service];
 
-        // Reseta as seleções futuras para garantir consistência
         set({
           selectedServices: newSelectedServices,
           selectedProfessional: null,
@@ -157,7 +148,7 @@ export const useBookingProcessStore = create<BookingStore>()(
         set({ selectedDate: date, selectedTimeSlot: timeSlot, currentStep: 4 });
       },
 
-      confirmBooking: async (client) => {
+      confirmBooking: async (client, paymentMethod) => {
         const {
           provider,
           selectedServices,
@@ -166,7 +157,6 @@ export const useBookingProcessStore = create<BookingStore>()(
           selectedTimeSlot,
         } = get();
 
-        // Validação dos dados
         if (
           !provider ||
           selectedServices.length === 0 ||
@@ -180,22 +170,17 @@ export const useBookingProcessStore = create<BookingStore>()(
 
         set({ status: { ...get().status, isConfirming: true } });
 
-        // Cálculos de Tempo
         const totalDuration = selectedServices.reduce(
           (acc, s) => acc + s.duration,
           0
         );
 
-        // Configuração segura das datas
         const startTime = new Date(selectedDate);
         const [hours, minutes] = selectedTimeSlot.split(":").map(Number);
         startTime.setHours(hours, minutes, 0, 0);
 
         const endTime = new Date(startTime.getTime() + totalDuration * 60000);
 
-        // Montagem do objeto para a Cloud Function
-        // OBS: Não usamos serverTimestamp() aqui pois ele não é serializável para a API.
-        // A Cloud Function irá gerar o timestamp oficial do servidor.
         const appointmentData: Omit<Appointment, "id"> = {
           clientId: client.id,
           clientName: client.name,
@@ -209,17 +194,22 @@ export const useBookingProcessStore = create<BookingStore>()(
           status: "pending",
           totalPrice: selectedServices.reduce((acc, s) => acc + s.price, 0),
           totalDuration,
-          createdAt: new Date(), // Envia data local apenas para validar tipo, backend sobrescreve.
-          notes: "", // Campo opcional preparado para expansão futura
+          createdAt: new Date(),
+          notes: "",
+          paymentMethod, // <-- Incluindo o método de pagamento
         };
 
         const promise = createAppointment(appointmentData);
 
+        // Se for Pix, a mensagem muda sutilmente
+        const successMsg = paymentMethod === 'pix' 
+          ? "Pré-agendamento realizado! Efetue o pagamento." 
+          : "Agendamento confirmado com sucesso!";
+
         toast.promise(promise, {
           loading: "Processando agendamento seguro...",
-          success: "Agendamento confirmado com sucesso!",
+          success: successMsg,
           error: (err) => {
-            // Se o erro for de conflito (Race Condition), mostramos a mensagem clara
             if (err.message && err.message.includes("já foi reservado")) {
               return "Ops! Este horário acabou de ser ocupado. Tente outro.";
             }
@@ -258,7 +248,7 @@ export const useBookingProcessStore = create<BookingStore>()(
           provider: keepProvider ? provider : null,
           professionals: keepProvider ? professionals : [],
           providerId: keepProvider ? providerId : null,
-          redirectUrlAfterLogin, // Sempre manter o redirect até ser usado
+          redirectUrlAfterLogin,
         });
       },
     }),
@@ -266,7 +256,6 @@ export const useBookingProcessStore = create<BookingStore>()(
       name: "booking-flow-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Apenas salve o que for essencial para o usuário continuar de onde parou
         providerId: state.providerId,
         selectedServices: state.selectedServices,
         selectedProfessional: state.selectedProfessional,

@@ -18,13 +18,14 @@ import {
   Mail,
   Phone,
   MapPin,
-  Link as LinkIcon, // Renomeado para evitar conflito com o Link do react-router-dom
+  Link as LinkIcon,
   User,
   UserCheck,
   Instagram,
   Facebook,
   Image as ImageIcon,
   Crop,
+  QrCode, // <-- Importado
   type LucideProps,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -77,11 +78,11 @@ interface MaskedInputFieldProps<T extends FieldValues> {
   control: Control<T>;
   name: Path<T>;
   label: string;
-  mask: string; // A máscara é geralmente uma string
+  mask: string;
   icon: ElementType<LucideProps>;
   error?: FieldError;
   placeholder?: string;
-  onBlur?: () => void; // Função opcional de onBlur
+  onBlur?: () => void;
 }
 
 interface MapEventsProps {
@@ -115,7 +116,7 @@ const MapEvents = ({ onLocationSelect }: MapEventsProps) => {
   return position === null ? null : <Marker position={position}></Marker>;
 };
 
-// ATUALIZAÇÃO DO SCHEMA COM O NOVO CAMPO
+// ATUALIZAÇÃO DO SCHEMA COM OS CAMPOS PIX
 const profileSchema = z.object({
   businessName: z.string().min(3, "O nome do negócio é obrigatório"),
   publicProfileSlug: z
@@ -132,6 +133,8 @@ const profileSchema = z.object({
   cnpj: z.string(),
   logoUrl: z.string().optional(),
   bannerUrl: z.string().optional(),
+  pixKey: z.string().optional(), // <-- Novo
+  pixKeyType: z.enum(["cpf", "cnpj", "email", "phone", "random"]).optional(), // <-- Novo
   businessAddress: z.object({
     zipCode: z.string().min(9, "CEP é obrigatório"),
     street: z.string().min(1, "Rua é obrigatória"),
@@ -233,7 +236,7 @@ export const MaskedInputField = <T extends FieldValues>({
               mask={mask}
               id={name}
               value={field.value || ""}
-              onAccept={(value: unknown) => field.onChange(value)} // 3. Usar onAccept para compatibilidade
+              onAccept={(value: unknown) => field.onChange(value)}
               onBlur={() => {
                 field.onBlur();
                 if (onBlur) {
@@ -285,6 +288,7 @@ export const ProfileManagement = () => {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       socialLinks: { instagram: "", facebook: "", website: "" },
+      pixKeyType: "cpf", // Default value
     },
   });
 
@@ -507,6 +511,7 @@ export const ProfileManagement = () => {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
         <header className="relative mb-24">
+           {/* Banner e Logo (Código existente mantido) */}
           <div className="group relative h-48 md:h-64 rounded-2xl bg-gray-900/50 border-2 border-dashed border-gray-700 flex items-center justify-center">
             {isUploadingBanner && (
               <Loader2 className="animate-spin text-white" size={32} />
@@ -583,6 +588,7 @@ export const ProfileManagement = () => {
           </div>
         </header>
 
+        {/* --- DADOS GERAIS --- */}
         <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
           <h2 className="text-2xl font-semibold text-amber-400 mb-6">
             Informações do Negócio
@@ -595,7 +601,6 @@ export const ProfileManagement = () => {
               error={errors.businessName}
               {...register("businessName")}
             />
-            {/* NOVO CAMPO ADICIONADO AQUI */}
             <div className="md:col-span-1">
               <Input
                 label="Link Público (ex: stylo.com/agendar/SEU-LINK)"
@@ -638,6 +643,50 @@ export const ProfileManagement = () => {
             />
           </div>
         </section>
+
+        {/* --- NOVO: CONFIGURAÇÃO DE PIX --- */}
+        <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
+          <div className="flex items-center gap-3 mb-6">
+            <h2 className="text-2xl font-semibold text-amber-400">
+              Pagamento via Pix
+            </h2>
+            <span className="bg-green-500/10 text-green-500 text-xs px-2 py-1 rounded-full border border-green-500/20">
+              Recomendado
+            </span>
+          </div>
+          <p className="text-gray-400 mb-6 text-sm">
+            Cadastre sua chave Pix para receber pagamentos diretamente dos clientes.
+            Ao agendar, mostraremos sua chave para que eles façam a transferência.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="mb-2 text-sm font-medium text-gray-300 block">Tipo de Chave</label>
+              <select
+                {...register("pixKeyType")}
+                className="block w-full rounded-md border-0 bg-white/5 py-3 pl-3 pr-10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-amber-500 sm:text-sm sm:leading-6"
+              >
+                <option value="cpf">CPF</option>
+                <option value="cnpj">CNPJ</option>
+                <option value="email">E-mail</option>
+                <option value="phone">Celular</option>
+                <option value="random">Chave Aleatória</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <Input
+                label="Chave Pix"
+                id="pixKey"
+                icon={QrCode}
+                error={errors.pixKey}
+                {...register("pixKey")}
+                placeholder="Insira sua chave Pix aqui"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* --- ENDEREÇO --- */}
         <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
           <h2 className="text-2xl font-semibold text-amber-400 mb-6">
             Endereço
@@ -701,10 +750,6 @@ export const ProfileManagement = () => {
             </div>
             <div className="md:col-span-6 mt-4">
               <label className="label-text">Localização no Mapa</label>
-              <p className="text-xs text-gray-400 mb-2">
-                A posição será atualizada automaticamente. Clique no mapa para
-                ajustar.
-              </p>
               <div className="h-80 w-full rounded-lg overflow-hidden border-2 border-gray-700">
                 <MapContainer
                   center={mapCenter}
@@ -723,6 +768,8 @@ export const ProfileManagement = () => {
             </div>
           </div>
         </section>
+        
+        {/* --- REDES SOCIAIS --- */}
         <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
           <h2 className="text-2xl font-semibold text-amber-400 mb-6">
             Redes Sociais & Website

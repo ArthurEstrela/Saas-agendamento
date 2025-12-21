@@ -81,6 +81,8 @@ export interface Review {
   createdAt: Date;
 }
 
+export type PaymentMethod = "pix" | "credit_card" | "cash"; // <-- Usado no agendamento
+
 export interface Appointment {
   id: string;
   clientId: string;
@@ -93,6 +95,7 @@ export interface Appointment {
   startTime: Date;
   endTime: Date;
   status: "pending" | "scheduled" | "completed" | "cancelled";
+  paymentMethod?: PaymentMethod; // <-- ADICIONADO: Método escolhido pelo cliente
   totalPrice: number;
   finalPrice?: number;
   totalDuration: number; // in minutes
@@ -106,11 +109,11 @@ export interface Appointment {
 export interface Notification {
   id: string;
   userId: string;
-  title: string; // <-- ADICIONADO
+  title: string;
   message: string;
   isRead: boolean;
   createdAt: Date | FieldValue;
-  link?: string; // Opcional, para redirecionar o usuário
+  link?: string;
 }
 
 // Perfis de Usuário
@@ -132,8 +135,6 @@ export interface Address {
   lng?: number;
 }
 
-export type PaymentMethod = "pix" | "credit_card" | "cash";
-
 export interface ServiceProviderProfile extends BaseUser {
   role: "serviceProvider";
   businessName: string;
@@ -143,18 +144,24 @@ export interface ServiceProviderProfile extends BaseUser {
   businessPhone?: string;
   services: Service[];
   reviews: Review[];
-  areaOfWork?: string; // Área de atuação
-  logoUrl?: string; // URL da foto ou logo
-  bannerUrl?: string; // <-- ADICIONADO AQUI
+  areaOfWork?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  
+  // --- NOVOS CAMPOS PIX ---
+  pixKey?: string; 
+  pixKeyType?: "cpf" | "cnpj" | "email" | "phone" | "random";
+  // ------------------------
+
   socialLinks?: {
     instagram?: string;
     facebook?: string;
     website?: string;
     whatsapp?: string;
   };
-  paymentMethods?: PaymentMethod[];
+  paymentMethods?: PaymentMethod[]; // Quais métodos o provider aceita
   subscriptionStatus?: "active" | "cancelled" | "past_due" | "trial" | "free" | string;
-  stripeSubscriptionId?: string; // O ID da assinatura no Stripe
+  stripeSubscriptionId?: string;
 }
 
 // Union Type para o perfil do usuário logado
@@ -188,5 +195,4 @@ export interface ProfessionalProfile extends BaseUser {
   serviceProviderId: string; // ID do ServiceProvider (dono) ao qual pertence
   professionalId: string; // ID do recurso "Professional" (que contém serviços/horários)
   avatarUrl?: string;
-  // (Pode adicionar outros campos que SÓ o profissional vê/edita)
 }

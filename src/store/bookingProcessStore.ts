@@ -184,6 +184,7 @@ export const useBookingProcessStore = create<BookingStore>()(
         const appointmentData: Omit<Appointment, "id"> = {
           clientId: client.id,
           clientName: client.name,
+          clientPhone: client.phoneNumber,
           providerId: provider.id,
           professionalId: selectedProfessional.id,
           professionalName: selectedProfessional.name,

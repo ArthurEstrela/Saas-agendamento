@@ -1,81 +1,110 @@
 // src/components/ServiceProvider/Agenda/ScheduledAppointmentCard.tsx
-
-import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
-import type { Appointment } from "../../../types";
-import { format, isPast } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Clock, Scissors, CheckCircle } from "lucide-react";
-import { motion } from "framer-motion";
-import { cn } from "../../../lib/utils/cn"; // ****** ADICIONADO ******
+import { 
+  Clock, 
+  User, 
+  MoreVertical, 
+  Calendar as CalendarIcon,
+  CheckCircle2
+} from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
+import type { Appointment } from "../../../types";
+import { cn } from "../../../lib/utils/cn";
 
-interface CardProps {
-  appointment: EnrichedProviderAppointment;
-  onAppointmentSelect: (appointment: Appointment) => void;
+interface ScheduledAppointmentCardProps {
+  appointment: Appointment;
+  onClick: () => void;
 }
 
-export const ScheduledAppointmentCard = ({
-  appointment,
-  onAppointmentSelect,
-}: CardProps) => {
-  // Lógica de UI
-  const isServiceTimePast = isPast(appointment.endTime); // ****** ADICIONADO: Verifica se está pendente ******
-  const isPending = appointment.status === "pending"; // **************************************************
+export const ScheduledAppointmentCard = ({ 
+  appointment, 
+  onClick 
+}: ScheduledAppointmentCardProps) => {
+  
+  // --- Lógica do WhatsApp ---
+  const handleWhatsAppClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Impede que abra o modal de detalhes ao clicar no Zap
+
+    const phone = appointment.clientPhone || "";
+    const cleanPhone = phone.replace(/\D/g, "");
+
+    if (!cleanPhone) return;
+
+    const time = format(new Date(appointment.startTime), "HH:mm");
+    const date = format(new Date(appointment.startTime), "dd/MM");
+    
+    // Mensagem inteligente: "Olá [Nome], confirmando seu horário dia [Data] às [Hora]..."
+    const message = `Olá ${appointment.clientName}, passando para confirmar seu horário dia ${date} às ${time}. Tudo certo?`;
+    
+    const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+  };
+
+  const hasPhone = !!appointment.clientPhone;
+
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      onClick={() => onAppointmentSelect(appointment)} // ****** CLASSES CONDICIONAIS (cn) ADICIONADAS ******
-      className={cn(
-        `bg-gray-800/50 border border-gray-700 rounded-xl p-4 transition-all duration-300 cursor-pointer hover:border-amber-500/50`,
-        isPending &&
-          "border-l-4 border-l-amber-500 bg-amber-900/10 hover:border-amber-500/70",
-        !isPending && isServiceTimePast && "opacity-70"
-      )} // ******************************************************
+    <div 
+      onClick={onClick}
+      className="group bg-gray-900/50 hover:bg-gray-800/80 border border-gray-800 hover:border-gray-700 rounded-xl p-4 transition-all cursor-pointer relative overflow-hidden"
     >
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="font-bold text-white">{appointment.client?.name}</p>
-          <p className="text-sm text-gray-400">
-            com {appointment.professionalName}
+      {/* Indicador lateral de status */}
+      <div className={cn(
+        "absolute left-0 top-0 bottom-0 w-1",
+        appointment.status === 'scheduled' ? "bg-blue-500" : "bg-gray-500"
+      )} />
+
+      <div className="flex justify-between items-start pl-3">
+        {/* Informações Principais */}
+        <div className="flex flex-col gap-1">
+          <h3 className="text-white font-bold text-lg leading-tight group-hover:text-blue-400 transition-colors">
+            {appointment.clientName}
+          </h3>
+          <p className="text-gray-400 text-sm flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span>
+            {appointment.serviceName}
           </p>
         </div>
-        <div className="text-right">
-          <p className="font-semibold text-white">
-            {format(appointment.startTime, "HH:mm")}
-          </p>
-          <p className="text-xs text-gray-500">
-            {format(appointment.startTime, "dd/MM/yyyy", { locale: ptBR })}
-          </p>
+
+        {/* Horário (Destaque) */}
+        <div className="bg-gray-800 p-2 rounded-lg text-center min-w-[60px] border border-gray-700">
+          <span className="block text-xl font-bold text-white">
+            {format(new Date(appointment.startTime), "HH:mm")}
+          </span>
+          <span className="block text-[10px] text-gray-400 uppercase font-bold">
+            {format(new Date(appointment.startTime), "EEE", { locale: ptBR })}
+          </span>
         </div>
       </div>
-      <div className="border-t border-gray-700 my-3"></div>
-      <div className="space-y-2 text-sm text-gray-300">
-        <p className="flex items-start gap-2">
-          <Scissors size={16} className="text-amber-400 mt-0.5" />
-          <span>{appointment.services.map((s) => s.name).join(", ")}</span>
-        </p>
-        <p className="flex items-center gap-2">
-          <Clock size={16} className="text-amber-400" />
-          <span>Duração: {appointment.totalDuration} min</span>
-        </p>
-      </div>
-      {/* ****** INDICADOR VISUAL DINÂMICO ****** */}
-      {(isServiceTimePast || isPending) && (
-        <div className="mt-4 pt-3 border-t border-gray-700/50">
-          {isPending ? (
-            <p className="text-xs text-amber-400/80 flex items-center justify-center gap-1.5">
-              <Clock size={14} /> Aguardando sua confirmação.
-            </p>
-          ) : (
-            <p className="text-xs text-green-400/80 flex items-center justify-center gap-1.5">
-              <CheckCircle size={14} /> Horário finalizado. Clique para
-              concluir.
-            </p>
-          )}
+
+      <div className="mt-4 pt-3 border-t border-gray-800/50 flex items-center justify-between pl-3">
+        {/* Info do Profissional (se houver múltiplos) */}
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+           <User size={14} />
+           <span className="truncate max-w-[120px]">
+             {appointment.professionalName}
+           </span>
         </div>
-      )}
-      {/* ***************************************** */}
-    </motion.div>
+
+        {/* Ações Rápidas */}
+        <div className="flex items-center gap-2">
+            {/* Botão WhatsApp */}
+            <button
+                onClick={handleWhatsAppClick}
+                disabled={!hasPhone}
+                className={cn(
+                    "p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold",
+                    hasPhone 
+                        ? "bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white border border-[#25D366]/20" 
+                        : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                )}
+                title={hasPhone ? "Confirmar no WhatsApp" : "Telefone não cadastrado"}
+            >
+                <FaWhatsapp size={16} />
+                <span className="hidden sm:inline">Confirmar</span>
+            </button>
+        </div>
+      </div>
+    </div>
   );
 };

@@ -1,6 +1,5 @@
-// Em src/components/ServiceProvider/Agenda/AgendaView.tsx
+// src/components/ServiceProvider/Agenda/AgendaView.tsx
 
-// 1. Exporte estes tipos para os hooks poderem usá-los
 export type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
 export type ViewMode = "card" | "list" | "calendar";
 
@@ -11,7 +10,7 @@ import type {
   UserProfile,
   ProfessionalProfile,
   ServiceProviderProfile,
-  Appointment, // <-- Importe o tipo Appointment
+  Appointment,
 } from "../../../types";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -21,14 +20,12 @@ import {
   LayoutGrid,
   Clock as ClockIcon,
 } from "lucide-react";
-import { startOfDay, isPast } from "date-fns"; // <-- Importe isPast
+import { startOfDay, isPast } from "date-fns";
 
-// 2. Nossas novas importações
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useFilteredAppointments } from "../../../hooks/useFilteredAppointments";
 import { AgendaModalsWrapper } from "./AgendaModalsWrapper";
 
-// 3. Seus componentes de UI (sem alteração)
 import { RequestsTab } from "../RequestsTab";
 import { HistoryTab } from "../HistoryTab";
 import { ProfessionalFilter } from "./ProfessionalFilter";
@@ -39,15 +36,11 @@ import { TimeGridCalendar } from "./TimeGridCalendar";
 import { DateSelector } from "../DateSelector";
 import { PendingIssuesTab } from "./PendingIssuesTab";
 
-// 4. O componente agora recebe o userProfile como prop
 interface AgendaViewProps {
-  userProfile: UserProfile | null; // <-- Aceite 'null' para segurança
+  userProfile: UserProfile | null;
 }
 
 export const AgendaView = ({ userProfile }: AgendaViewProps) => {
-  // --- A CORREÇÃO DE SEGURANÇA (LINHA 49) ---
-  // Se o perfil for null ou undefined (ex: durante o carregamento do pai),
-  // mostre um loader em vez de falhar.
   if (!userProfile) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -55,27 +48,43 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       </div>
     );
   }
-  // --- Daqui para baixo, 'userProfile' é garantidamente um objeto ---
 
-  // --- 5. Lógica de Role ---
-  const isOwner = userProfile.role === "serviceProvider"; // <-- Esta linha agora é segura
+  const isOwner = userProfile.role === "serviceProvider";
 
-  // --- 6. Stores ---
   const { appointments, isLoading, fetchAppointments } =
     useProviderAppointmentsStore();
-  const { openModal } = useAgendaModalStore(); // Store dos Modals
+  const { openModal } = useAgendaModalStore();
 
-  // --- 7. Estado Local (MUITO reduzido) ---
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
+  
+  // Persistência do modo de visualização
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
     "calendar"
   );
+  
   const [selectedProfessionalId, setSelectedProfessionalId] =
     usePersistentState<string>("agenda_professional_filter", "all");
 
-  // --- 8. Fetch de Dados (Agora ciente do Role) ---
+  // --- CORREÇÃO DE RESPONSIVIDADE INICIAL ---
+  // Ao carregar, verifica se é mobile e força a visualização para "list"
+  // para garantir a melhor experiência inicial, conforme solicitado.
+  useEffect(() => {
+    const handleInitialResize = () => {
+      if (window.innerWidth < 768) {
+        // Se estiver no mobile, sugerimos "list" ou "card" inicialmente
+        // Mas respeitamos se o usuário mudar depois (pois o hook usePersistentState cuida do resto)
+        // Aqui forçamos apenas se o estado atual for 'calendar', que pode ser pesado no mobile
+        setViewMode((prev) => (prev === "calendar" ? "list" : prev));
+      }
+    };
+
+    // Executa apenas na montagem
+    handleInitialResize();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Array vazio para rodar apenas uma vez na montagem
+
   useEffect(() => {
     const providerId = isOwner
       ? (userProfile as ServiceProviderProfile).id
@@ -84,20 +93,17 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     if (providerId) {
       fetchAppointments(providerId);
     }
-    // A dependência [userProfile] é segura porque o 'if' no topo já o validou
   }, [isOwner, userProfile, fetchAppointments]);
 
-  // --- 9. Lógica de Filtragem (agora no Hook) ---
   const filteredAppointments = useFilteredAppointments(
     appointments,
-    userProfile, // Passamos o perfil (que sabemos não ser nulo)
+    userProfile,
     selectedProfessionalId,
     activeTab,
     selectedDay,
     viewMode
   );
 
-  // --- 10. Contagens (Lógica original mantida) ---
   const pendingCount = useMemo(
     () => appointments.filter((a) => a.status === "pending").length,
     [appointments]
@@ -112,12 +118,10 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     ).length;
   }, [appointments]);
 
-  // --- 11. Handlers (MUITO reduzidos) ---
   const handleOpenDetails = (appointment: Appointment) => {
     openModal("details", appointment);
   };
 
-  // --- 12. Renderização ---
   const renderScheduledContent = () => {
     if (isLoading) {
       return (
@@ -172,6 +176,10 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     }
   };
 
+  // Detecta se é mobile para ajustar o rótulo do DateSelector
+  // (Poderia usar o hook useMediaQuery aqui também, mas window.innerWidth resolve rápido)
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
+
   return (
     <div className="min-h-0 flex-1 flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-gray-800 shrink-0">
@@ -195,8 +203,11 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
             <DateSelector
               selectedDate={selectedDay}
               setSelectedDate={setSelectedDay}
+              // Ajuste Dinâmico do Rótulo: 
+              // Se for Calendar E Desktop: Mostra "Semana". 
+              // Se for Mobile ou outros modos: Mostra "Dia".
               label={
-                activeTab === "scheduled" && viewMode === "calendar"
+                activeTab === "scheduled" && viewMode === "calendar" && !isMobileView
                   ? "Semana:"
                   : "Dia:"
               }
@@ -216,10 +227,10 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
         </div>
       </header>
 
-      <nav className="flex items-center bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800 shrink-0">
+      <nav className="flex items-center overflow-x-auto bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800 shrink-0 scrollbar-hide">
         <button
           onClick={() => setActiveTab("requests")}
-          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
             activeTab === "requests"
               ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
               : "text-gray-400 hover:bg-gray-800"
@@ -238,7 +249,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
         </button>
         <button
           onClick={() => setActiveTab("scheduled")}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
             activeTab === "scheduled"
               ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
               : "text-gray-400 hover:bg-gray-800"
@@ -248,7 +259,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
         </button>
         <button
           onClick={() => setActiveTab("pendingIssues")}
-          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
             activeTab === "pendingIssues"
               ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/10"
               : "text-gray-400 hover:bg-gray-800"
@@ -267,7 +278,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
             activeTab === "history"
               ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
               : "text-gray-400 hover:bg-gray-800"
@@ -277,7 +288,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
         </button>
       </nav>
 
-      <main className="flex-1 mt-6">
+      <main className="flex-1 mt-6 min-h-0 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={

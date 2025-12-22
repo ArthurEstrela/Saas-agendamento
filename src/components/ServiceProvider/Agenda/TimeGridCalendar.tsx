@@ -6,17 +6,30 @@ import { ptBR } from "date-fns/locale";
 import { Clock, User, CheckCircle, MoreHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../../lib/utils/cn";
-// ****** 1. IMPORTAMOS O TIPO 'Appointment' ******
 import type { Appointment } from "../../../types";
-import {
-  // ****** 2. REMOVEMOS 'useProviderAppointmentsStore' DAQUI ******
-  type EnrichedProviderAppointment,
-} from "../../../store/providerAppointmentsStore";
+import { type EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 
 // --- Configurações de Layout ---
 const START_HOUR = 7;
 const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
+
+// --- Hook Personalizado para Media Query (Interno para garantir portabilidade) ---
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) {
+      setMatches(media.matches);
+    }
+    const listener = () => setMatches(media.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [matches, query]);
+
+  return matches;
+}
 
 // --- Funções Utilitárias ---
 const getMinutesFromStart = (date: Date) =>
@@ -25,14 +38,11 @@ const getMinutesFromStart = (date: Date) =>
 // --- Componente do Card de Agendamento ---
 const AppointmentCard = ({
   appointment,
-  onSelect, // <-- 3. ADICIONAMOS A NOVA PROP 'onSelect'
+  onSelect,
 }: {
   appointment: EnrichedProviderAppointment;
-  onSelect: (appointment: Appointment) => void; // <-- 3. TIPAMOS A PROP
+  onSelect: (appointment: Appointment) => void;
 }) => {
-  // ****** 4. REMOVEMOS O 'useProviderAppointmentsStore' ******
-  // const { setSelectedAppointment } = useProviderAppointmentsStore();
-
   const top = getMinutesFromStart(appointment.startTime);
   const duration =
     (appointment.endTime.getTime() - appointment.startTime.getTime()) /
@@ -60,8 +70,7 @@ const AppointmentCard = ({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       whileHover={{ scale: 1.02, y: -2 }}
-      // ****** 5. ATUALIZAMOS O ONCLICK ******
-      onClick={() => onSelect(appointment)} // <-- MUDADO DE 'setSelectedAppointment'
+      onClick={() => onSelect(appointment)}
       style={{
         top: `${top}px`,
         height: `${height}px`,
@@ -73,7 +82,6 @@ const AppointmentCard = ({
         statusClasses
       )}
     >
-      {/* ... (O JSX interno do card permanece o mesmo) ... */}
       <p className="font-bold truncate text-sm flex items-center gap-1">
         <Icon size={14} className="shrink-0" />
         <span className="truncate">
@@ -101,9 +109,8 @@ const AppointmentCard = ({
   );
 };
 
-// --- Componente da Linha de Hora Atual (INTACTO) ---
+// --- Componente da Linha de Hora Atual ---
 const CurrentTimeIndicator = () => {
-  // ... (código do CurrentTimeIndicator permanece o mesmo)
   const [top, setTop] = useState(0);
 
   useEffect(() => {
@@ -124,7 +131,7 @@ const CurrentTimeIndicator = () => {
   if (top === 0) return null;
 
   return (
-    <div className="absolute w-full z-20" style={{ top: `${top}px` }}>
+    <div className="absolute w-full z-20 pointer-events-none" style={{ top: `${top}px` }}>
       <div className="relative h-px bg-red-500">
         <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-red-500 rounded-full border-2 border-gray-900"></div>
       </div>
@@ -136,20 +143,21 @@ const CurrentTimeIndicator = () => {
 interface TimeGridCalendarProps {
   appointments: EnrichedProviderAppointment[];
   currentDate: Date;
-  // ****** 6. ADICIONAMOS A PROP 'onAppointmentSelect' ******
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
 export const TimeGridCalendar = ({
   appointments,
   currentDate,
-  onAppointmentSelect, // <-- 7. RECEBEMOS A PROP
+  onAppointmentSelect,
 }: TimeGridCalendarProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const timeColumnRef = useRef<HTMLDivElement>(null);
 
+  // Detecta se é desktop (maior que 768px)
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+
   useEffect(() => {
-    // ... (lógica de scroll intacta)
     const scrollContainer = containerRef.current;
     const timeColumn = timeColumnRef.current;
     if (scrollContainer && timeColumn) {
@@ -161,18 +169,22 @@ export const TimeGridCalendar = ({
     }
   }, []);
 
-  // ... (lógica de 'weekDays' e 'timeLabels' intacta)
+  // Define os dias a serem exibidos com base na responsividade
   const weekDays = useMemo(() => {
+    if (!isDesktop) {
+      // No Mobile, mostra apenas o dia selecionado
+      return [currentDate];
+    }
+    // No Desktop, mostra a semana inteira começando na Segunda-feira
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, [currentDate]);
+  }, [currentDate, isDesktop]);
 
   const timeLabels = useMemo(() => {
     return Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
   }, []);
 
   const appointmentsByDay = useMemo(() => {
-    // ... (lógica de 'appointmentsByDay' intacta)
     const map = new Map<string, EnrichedProviderAppointment[]>();
     weekDays.forEach((day) => map.set(format(day, "yyyy-MM-dd"), []));
     appointments.forEach((appt) => {
@@ -184,12 +196,19 @@ export const TimeGridCalendar = ({
     return map;
   }, [appointments, weekDays]);
 
+  // Define quantas colunas o grid terá
+  const gridColsClass = isDesktop ? "grid-cols-7" : "grid-cols-1";
+  const colSpanClass = isDesktop ? "col-span-7" : "col-span-1";
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-900 rounded-xl border border-gray-800">
-      {/* ... (JSX do Cabeçalho intacto) ... */}
+      {/* Cabeçalho dos Dias */}
       <div className="flex sticky top-0 z-40 bg-gray-900 border-b border-gray-800 shadow-md">
-        <div className="w-20 flex-shrink-0 border-r border-gray-800"></div>
-        <div className="flex-1 grid grid-cols-7">
+        {/* Espaço da coluna de horas */}
+        <div className="w-14 sm:w-20 flex-shrink-0 border-r border-gray-800"></div>
+        
+        {/* Cabeçalho dinâmico */}
+        <div className={cn("flex-1 grid", gridColsClass)}>
           {weekDays.map((day) => (
             <div
               key={day.toISOString()}
@@ -203,7 +222,7 @@ export const TimeGridCalendar = ({
               </p>
               <p
                 className={cn(
-                  "text-2xl font-bold",
+                  "text-xl sm:text-2xl font-bold",
                   isToday(day) ? "text-amber-400" : "text-white"
                 )}
               >
@@ -214,9 +233,9 @@ export const TimeGridCalendar = ({
         </div>
       </div>
 
-      {/* ... (JSX do Corpo / Coluna de Horários intacto) ... */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-20 flex-shrink-0 bg-gray-900 border-r border-gray-800 overflow-hidden relative z-30">
+        {/* Coluna de Horários */}
+        <div className="w-14 sm:w-20 flex-shrink-0 bg-gray-900 border-r border-gray-800 overflow-hidden relative z-30">
           <div ref={timeColumnRef}>
             {timeLabels.map((hour) => (
               <div
@@ -232,12 +251,10 @@ export const TimeGridCalendar = ({
         {/* Grid de Agendamentos */}
         <div
           ref={containerRef}
-          // AQUI ESTÁ A CORREÇÃO:
-          // ADICIONE a classe 'relative'
-          className="flex-1 relative grid grid-cols-7 overflow-y-auto"
+          className={cn("flex-1 relative grid overflow-y-auto", gridColsClass)}
         >
-          {/* Linhas de fundo */}
-          <div className="absolute inset-0 col-span-7 z-0">
+          {/* Linhas de fundo (Horários) */}
+          <div className={cn("absolute inset-0 z-0", colSpanClass)}>
             {timeLabels.map((hour) => (
               <div
                 key={`line-${hour}`}
@@ -253,16 +270,17 @@ export const TimeGridCalendar = ({
             return (
               <div
                 key={dayKey}
-                className="relative border-r border-gray-800 last:border-r-0"
+                className="relative border-r border-gray-800 last:border-r-0 h-full"
+                // Garante que a coluna tenha altura total baseada nas linhas de horário
+                style={{ height: `${timeLabels.length * 60}px` }} 
               >
                 {isToday(day) && <CurrentTimeIndicator />}
                 <AnimatePresence>
                   {dailyAppointments.map((appt) => (
-                    // ****** 8. PASSAMOS O HANDLER PARA O CARD INTERNO ******
                     <AppointmentCard
                       key={appt.id}
                       appointment={appt}
-                      onSelect={onAppointmentSelect} // <-- ADICIONADO
+                      onSelect={onAppointmentSelect}
                     />
                   ))}
                 </AnimatePresence>

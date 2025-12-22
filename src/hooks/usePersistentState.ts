@@ -23,8 +23,11 @@ export function usePersistentState<T>(key: string, initialValue: T): [T, React.D
   });
 
   useEffect(() => {
+      setStoredValue(getStoredValue(key, initialValue));
+  }, [key]);
+
+  useEffect(() => {
     try {
-      // Salva o estado no localStorage sempre que ele mudar
       window.localStorage.setItem(key, JSON.stringify(storedValue));
     } catch (error) {
       console.error(`Error setting localStorage key “${key}”:`, error);

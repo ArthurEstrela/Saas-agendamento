@@ -1,3 +1,4 @@
+// src/firebase/bookingService.ts
 import {
   collection,
   doc,
@@ -7,7 +8,6 @@ import {
   updateDoc,
   Timestamp,
   orderBy,
-  // addDoc e serverTimestamp foram removidos pois agora usamos a Cloud Function para criar
 } from "firebase/firestore";
 import { db } from "./config";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -15,27 +15,45 @@ import type { Appointment } from "../types";
 
 const functions = getFunctions(db.app);
 
-const convertAppointmentTimestamps = (
-  data: Record<string, unknown>
-): Record<string, unknown> => {
-  type ReviewWithTimestamp = { createdAt?: unknown };
+// ✅ HELPER: Converte qualquer formato de data de forma segura e padronizada
+const convertToDate = (value: unknown): Date | undefined => {
+  if (!value) return undefined;
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === "number" || typeof value === "string") return new Date(value);
+  return undefined;
+};
 
-  if (data["startTime"] instanceof Timestamp) {
-    data["startTime"] = (data["startTime"] as Timestamp).toDate();
+// ✅ HELPER: Conversão robusta de Timestamps para Dates (Previne Crash na UI)
+export const convertAppointmentTimestamps = (
+  docId: string,
+  data: Record<string, unknown>
+): Appointment => {
+  // Tratamento recursivo para sub-objetos (ex: review)
+  let review = data["review"] as any;
+  if (review && review.createdAt) {
+    review = { ...review, createdAt: convertToDate(review.createdAt) };
   }
-  if (data["endTime"] instanceof Timestamp) {
-    data["endTime"] = (data["endTime"] as Timestamp).toDate();
-  }
-  const review = data["review"] as ReviewWithTimestamp;
-  if (review && review.createdAt instanceof Timestamp) {
-    review.createdAt = review.createdAt.toDate();
-  }
-  return data;
+
+  return {
+    ...data,
+    id: docId,
+    // Garante que campos vitais sejam Date, com fallback para o momento atual se falhar
+    startTime: convertToDate(data.startTime) || new Date(),
+    endTime: convertToDate(data.endTime) || new Date(),
+    createdAt: convertToDate(data.createdAt) || new Date(),
+    
+    // Campos opcionais
+    completedAt: convertToDate(data.completedAt),
+    updatedAt: convertToDate(data.updatedAt),
+    cancelledAt: convertToDate(data.cancelledAt),
+    
+    review: review,
+  } as unknown as Appointment; // Double cast para garantir a tipagem estrita
 };
 
 /**
- * Cria um novo agendamento de forma SEGURA via Cloud Functions.
- * Isso evita duplicidade de horários (Race Condition).
+ * Cria um novo agendamento via Cloud Functions para segurança (atomicidade).
  */
 export const createAppointment = async (
   appointmentData: Omit<Appointment, "id">
@@ -46,14 +64,11 @@ export const createAppointment = async (
       "createAppointment"
     );
 
-    // Prepara os dados para envio (serialização segura de datas)
     const payload = {
       ...appointmentData,
-      // Convertemos Date para milissegundos para garantir integridade no envio
+      // Serializa datas para milissegundos (UTC-safe) antes do envio
       startTime: appointmentData.startTime.getTime(),
       endTime: appointmentData.endTime.getTime(),
-      // Removemos campos que podem causar erro de serialização se estiverem undefined
-      // O backend irá gerar o 'createdAt' oficial
     };
 
     const result = await createAppointmentCallable(payload);
@@ -62,13 +77,12 @@ export const createAppointment = async (
     return data.appointmentId;
   } catch (error) {
     console.error("Erro ao criar agendamento via Function:", error);
-    // Repassa o erro para o store/componente tratar (ex: mostrar mensagem de horário ocupado)
     throw error;
   }
 };
 
 /**
- * Busca todos os agendamentos de um cliente específico.
+ * Busca agendamentos de um cliente.
  */
 export const getAppointmentsByClientId = async (
   clientId: string
@@ -77,19 +91,17 @@ export const getAppointmentsByClientId = async (
   const q = query(
     appointmentsCollection,
     where("clientId", "==", clientId),
-    orderBy("startTime", "desc") // Ordena pelos mais recentes primeiro
+    orderBy("startTime", "desc")
   );
   const querySnapshot = await getDocs(q);
 
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data();
-    const convertedData = convertAppointmentTimestamps(data);
-    return { id: doc.id, ...convertedData } as unknown as Appointment;
-  });
+  return querySnapshot.docs.map((doc) => 
+    convertAppointmentTimestamps(doc.id, doc.data())
+  );
 };
 
 /**
- * Busca todos os agendamentos de um prestador de serviço (ou profissional específico).
+ * Busca agendamentos de um profissional.
  */
 export const getAppointmentsByProviderId = async (
   providerId: string
@@ -102,95 +114,92 @@ export const getAppointmentsByProviderId = async (
   );
   const querySnapshot = await getDocs(q);
 
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data();
-    const convertedData = convertAppointmentTimestamps(data);
-    return { id: doc.id, ...convertedData } as unknown as Appointment;
-  });
+  return querySnapshot.docs.map((doc) => 
+    convertAppointmentTimestamps(doc.id, doc.data())
+  );
 };
 
 /**
- * Atualiza o status de um agendamento.
- * Ex: 'pending' -> 'scheduled' ou 'scheduled' -> 'completed'
+ * Atualiza status do agendamento.
  */
 export const updateAppointmentStatus = async (
   appointmentId: string,
   status: Appointment["status"],
   rejectionReason?: string
 ): Promise<void> => {
-  // Verificação de segurança no frontend
   if (status === "completed") {
-    console.error(
-      "Ação 'completed' é insegura via updateDoc. Use a função 'completeAppointment'."
-    );
     throw new Error(
-      "Operação inválida. Use a função dedicada para completar agendamentos."
+      "Use 'completeAppointment' para finalizar agendamentos."
     );
   }
 
   const appointmentRef = doc(db, "appointments", appointmentId);
-  const updateData: {
-    status: Appointment["status"];
-    rejectionReason?: string;
-  } = { status }; // Objeto de atualização simplificado
+  const updateData: any = { 
+    status, 
+    updatedAt: new Date() // Marca timestamp da alteração
+  };
 
-  if (rejectionReason) {
-    updateData.rejectionReason = rejectionReason;
-  }
+  if (rejectionReason) updateData.rejectionReason = rejectionReason;
 
   await updateDoc(appointmentRef, updateData);
 };
 
+/**
+ * Finaliza agendamento (financeiro).
+ */
 export const completeAppointment = async (
   appointmentId: string,
   finalPrice: number
 ): Promise<void> => {
-  try {
-    const completeAppointmentCallable = httpsCallable(
-      functions,
-      "completeAppointment"
-    );
-    await completeAppointmentCallable({
-      appointmentId,
-      finalPrice,
-    });
-  } catch (error) {
-    console.error("Erro ao chamar a função 'completeAppointment':", error);
-    throw error;
-  }
+  const completeAppointmentCallable = httpsCallable(
+    functions,
+    "completeAppointment"
+  );
+  await completeAppointmentCallable({ appointmentId, finalPrice });
 };
 
+/**
+ * Busca agendamentos para verificação de disponibilidade.
+ * ✅ CORREÇÃO DE TIMEZONE APLICADA
+ */
 export const getAppointmentsForProfessionalOnDate = async (
   professionalId: string,
   date: Date
 ): Promise<Appointment[]> => {
-  const startOfDay = new Date(date);
+  // 1. Clonamos a data base para não mutar o objeto original
+  const baseDate = new Date(date);
+  
+  // 2. Definimos o início e fim do dia no horário local
+  const startOfDay = new Date(baseDate);
   startOfDay.setHours(0, 0, 0, 0);
 
-  const endOfDay = new Date(date);
+  const endOfDay = new Date(baseDate);
   endOfDay.setHours(23, 59, 59, 999);
 
+  // 3. 🛡️ TIMEZONE SAFETY BUFFER (A Correção Real)
+  // Ampliamos a janela de busca em +/- 12 horas.
+  // Motivo: Se o cliente está no Brasil (UTC-3) e o profissional na Europa (UTC+1),
+  // ou se houver confusão entre UTC/Local no banco, um agendamento às 23:00 pode
+  // cair no "dia seguinte" em UTC. 
+  // Buscar com margem garante que PEGADAREMOS o agendamento conflitante.
+  // A filtragem exata de horário acontece na memória (DateTimeSelection.tsx).
+  
+  const queryStart = new Date(startOfDay.getTime() - (12 * 60 * 60 * 1000));
+  const queryEnd = new Date(endOfDay.getTime() + (12 * 60 * 60 * 1000));
+
   const appointmentsRef = collection(db, "appointments");
-  // A consulta filtra pelo ID do profissional e pelo intervalo de tempo do dia selecionado
+  
+  // A query agora usa a janela expandida
   const q = query(
     appointmentsRef,
     where("professionalId", "==", professionalId),
-    where("startTime", ">=", Timestamp.fromDate(startOfDay)),
-    where("startTime", "<=", Timestamp.fromDate(endOfDay))
+    where("startTime", ">=", Timestamp.fromDate(queryStart)),
+    where("startTime", "<=", Timestamp.fromDate(queryEnd))
   );
 
   const querySnapshot = await getDocs(q);
-  const appointments: Appointment[] = [];
-  querySnapshot.forEach((doc) => {
-    const data = doc.data();
-    appointments.push({
-      id: doc.id,
-      ...data,
-      // Converte Timestamps do Firestore para objetos Date do JS
-      startTime: (data.startTime as Timestamp).toDate(),
-      endTime: (data.endTime as Timestamp).toDate(),
-    } as Appointment);
-  });
-
-  return appointments;
+  
+  return querySnapshot.docs.map((doc) => 
+    convertAppointmentTimestamps(doc.id, doc.data())
+  );
 };

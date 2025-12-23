@@ -59,7 +59,6 @@ const FeatureItem = ({ text }: { text: string }) => (
 
 const PlanCard = ({
   priceId,
-  currentPlanId,
   onCheckout,
   loadingPlan,
 }: {

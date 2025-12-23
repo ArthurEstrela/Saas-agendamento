@@ -1,10 +1,9 @@
 // src/components/ServiceProvider/Agenda/ProfessionalFilter.tsx
 import { useState } from "react";
 import type { Professional } from "../../../types";
-import { ChevronDown, User, Users } from "lucide-react";
+import { ChevronDown, Users } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useProfileStore } from "../../../store/profileStore";
-import type { ServiceProviderProfile } from "../../../types"; // Mantido por conta do tipo do userProfile, mas o dado vem de 'professionals'
 
 interface ProfessionalFilterProps {
   selectedProfessionalId: string | null;

@@ -2,7 +2,6 @@
 
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import { format, isPast } from "date-fns"; // isPast ajuda a decidir a mensagem
-import { ptBR } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { Clock, User, Scissors, DollarSign, MessageCircle } from "lucide-react";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
@@ -24,9 +23,9 @@ export const AppointmentCard = ({
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // CRUCIAL: Impede que o modal abra ao clicar no Zap
 
-    if (!client?.phone) return;
+    if (!client?.phoneNumber) return;
 
-    const cleanPhone = client.phone.replace(/\D/g, '');
+    const cleanPhone = client.phoneNumber.replace(/\D/g, '');
     const serviceName = services[0]?.name || "serviço";
     
     // Lógica Inteligente de Mensagem:
@@ -86,7 +85,7 @@ export const AppointmentCard = ({
       <div className="flex justify-between items-center pt-3 border-t border-gray-800 mt-1">
         
         {/* Botão WhatsApp (Esquerda) */}
-        {client?.phone ? (
+        {client?.phoneNumber ? (
           <button
             onClick={handleWhatsAppClick}
             className="p-1.5 rounded-full text-gray-500 hover:text-green-500 hover:bg-green-500/10 transition-colors z-20"

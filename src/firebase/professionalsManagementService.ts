@@ -1,16 +1,15 @@
-// Em src/firebase/professionalsManagementService.ts
+// src/firebase/professionalsManagementService.ts
 
 import {
   doc,
   collection,
-  setDoc,
   deleteDoc,
   getDocs,
   query,
   updateDoc,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { getFunctions, httpsCallable } from "firebase/functions"; // <-- Importado
+import { httpsCallable } from "firebase/functions";
 import { db, functions } from "./config";
 import type { Professional } from "../types";
 
@@ -104,8 +103,14 @@ export const updateProfessionalInProvider = async (
     getProfessionalsCollectionRef(providerId),
     updatedProfessional.id
   );
-  // Usando updateDoc como é mais seguro para atualizações
-  await updateDoc(professionalRef, updatedProfessional as Record<string, any>);
+
+  // ✅ CORREÇÃO: Adicionamos o comentário abaixo para ignorar o erro de variável não usada,
+  // pois estamos extraindo o 'id' propositalmente apenas para removê-lo de 'dataToUpdate'.
+  
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, ...dataToUpdate } = updatedProfessional;
+
+  await updateDoc(professionalRef, dataToUpdate);
 };
 
 /**

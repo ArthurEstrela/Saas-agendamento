@@ -11,10 +11,13 @@ import {
 import { db } from "../firebase/config";
 import type { Appointment, ClientProfile } from "../types";
 import { getUserProfile } from "../firebase/userService";
-import { updateAppointmentStatus } from "../firebase/bookingService";
+import { 
+  updateAppointmentStatus, 
+  completeAppointment as completeAppointmentService // <-- Importado e renomeado
+} from "../firebase/bookingService";
 import { useFinanceStore } from "./financeStore";
 import { startOfDay, endOfDay } from "date-fns";
-import { toast } from "react-hot-toast"; // Importe o toast
+import { toast } from "react-hot-toast";
 
 export interface EnrichedProviderAppointment extends Appointment {
   client?: ClientProfile;
@@ -90,18 +93,11 @@ export const useProviderAppointmentsStore = create<
       async (snapshot) => {
         const appointmentsPromises = snapshot.docs.map(
           async (doc): Promise<EnrichedProviderAppointment> => {
-            // 1. Pega os dados crus
             const rawData = doc.data();
-
-            // 2. *** A CORREÇÃO ESTÁ AQUI ***
-            // Primeiro, dizemos ao TS que 'rawData' bate com a 'Appointment'.
-            // Isso "ensina" ao TS que 'clientId', 'status', etc., existem.
             const typedData = rawData as Appointment;
 
-            // 3. Agora, montamos o objeto final,
-            // substituindo os Timestamps pelas Datas corretas.
             const apptData: Appointment = {
-              ...typedData, // Agora o TS sabe que 'clientId' está neste spread
+              ...typedData,
               id: doc.id,
               startTime: (rawData.startTime as Timestamp).toDate(),
               endTime: (rawData.endTime as Timestamp).toDate(),
@@ -112,12 +108,10 @@ export const useProviderAppointmentsStore = create<
                   : rawData.completedAt,
             };
 
-            // 4. Agora esta linha funciona, pois apptData é do tipo Appointment
             const clientProfile = (await getUserProfile(
               apptData.clientId
             )) as ClientProfile | null;
 
-            // 5. Retorna o objeto enriquecido
             return {
               ...apptData,
               client: clientProfile || undefined,
@@ -138,11 +132,8 @@ export const useProviderAppointmentsStore = create<
   },
 
   completeAppointment: async (appointmentId, finalPrice) => {
-    const promise = updateAppointmentStatus(
-      appointmentId,
-      "completed",
-      finalPrice
-    );
+    // ✅ CORREÇÃO: Usamos o service específico para completar, que aceita o preço
+    const promise = completeAppointmentService(appointmentId, finalPrice);
 
     toast.promise(promise, {
       loading: "Finalizando agendamento...",
@@ -152,6 +143,7 @@ export const useProviderAppointmentsStore = create<
 
     try {
       await promise;
+      // Atualiza finanças após completar
       const providerId = get().appointments.find(
         (a) => a.id === appointmentId
       )?.providerId;
@@ -178,12 +170,24 @@ export const useProviderAppointmentsStore = create<
   setStatusFilter: (status) => set({ statusFilter: status }),
 
   updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
-    const promise = updateAppointmentStatus(
-      appointmentId,
-      status,
-      finalPrice,
-      rejectionReason
-    );
+    let promise: Promise<void>;
+
+    // ✅ CORREÇÃO: Lógica condicional para usar a função correta do service
+    if (status === 'completed') {
+      if (finalPrice === undefined) {
+        toast.error("Preço final é obrigatório para concluir.");
+        return;
+      }
+      // Se for completar, chama o service de completar
+      promise = completeAppointmentService(appointmentId, finalPrice);
+    } else {
+      // Se for outro status (ex: cancelled), chama o update normal (sem o preço)
+      promise = updateAppointmentStatus(
+        appointmentId, 
+        status, 
+        rejectionReason // 3º argumento correto
+      );
+    }
 
     toast.promise(promise, {
       loading: "Atualizando status...",

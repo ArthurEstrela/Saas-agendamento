@@ -6,7 +6,7 @@ import type { Appointment } from '../../../types'
 import { ScheduledAppointmentCard } from './ScheduledAppointmentCard'
 import { Button } from '../../ui/button' // 2. IMPORTAMOS O BOTÃO
 import { CalendarCheck, ChevronLeft, ChevronRight } from 'lucide-react' // 3. IMPORTAMOS ÍCONES
-import { isToday, isFuture, startOfDay } from 'date-fns'
+import { isToday, isFuture } from 'date-fns'
 
 // 4. DEFINIMOS QUANTOS CARDS POR PÁGINA (ex: 9 para uma grade de 3 colunas)
 const ITEMS_PER_PAGE = 9
@@ -21,8 +21,6 @@ export const ScheduledAppointmentsTab = ({
   onAppointmentSelect,
 }: ScheduledAppointmentsTabProps) => {
   // --- Lógica de separação (HOJE vs FUTURO) ---
-  const todayStart = startOfDay(new Date())
-
   const todayAppointments = useMemo(() => {
     return appointments
       .filter((a) => isToday(a.startTime))

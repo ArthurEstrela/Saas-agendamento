@@ -151,7 +151,7 @@ export const useUserAppointmentsStore = create<
     set(initialState);
   },
    cancelAppointment: async (appointmentId, reason) => {
-    const promise = updateAppointmentStatus(appointmentId, 'cancelled', undefined, reason);
+    const promise = updateAppointmentStatus(appointmentId, 'cancelled', reason);
 
     toast.promise(promise, {
       loading: 'Cancelando agendamento...',

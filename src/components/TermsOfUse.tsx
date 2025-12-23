@@ -1,6 +1,3 @@
-// src/components/TermsOfUse.tsx
-import React from 'react';
-
 const TermsOfUse = () => {
   return (
     <div className="bg-gray-900 text-gray-300 py-12 px-4 sm:px-6 lg:px-8">

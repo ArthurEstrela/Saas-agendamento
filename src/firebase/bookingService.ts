@@ -30,7 +30,9 @@ export const convertAppointmentTimestamps = (
   data: Record<string, unknown>
 ): Appointment => {
   // Tratamento recursivo para sub-objetos (ex: review)
-  let review = data["review"] as any;
+  // FIX: Removido 'any', tipado como objeto genérico ou undefined
+  let review = data["review"] as Record<string, unknown> | undefined;
+  
   if (review && review.createdAt) {
     review = { ...review, createdAt: convertToDate(review.createdAt) };
   }
@@ -134,7 +136,10 @@ export const updateAppointmentStatus = async (
   }
 
   const appointmentRef = doc(db, "appointments", appointmentId);
-  const updateData: any = { 
+  
+  // FIX: Removido 'any', tipado explicitamente como Record genérico
+  // Isso permite adicionar propriedades dinamicamente de forma segura para o Firestore
+  const updateData: Record<string, unknown> = { 
     status, 
     updatedAt: new Date() // Marca timestamp da alteração
   };

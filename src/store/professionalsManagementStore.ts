@@ -11,7 +11,7 @@ import {
   updateProfessionalInProvider,
   uploadProfessionalPhoto,
 } from "../firebase/professionalsManagementService";
-import type { Professional, Service, DailyAvailability } from "../types";
+import type { Professional } from "../types";
 import { toast } from "react-hot-toast";
 
 // --- 2. ATUALIZAMOS O PAYLOAD ---

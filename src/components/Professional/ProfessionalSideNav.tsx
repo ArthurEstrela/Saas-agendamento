@@ -1,16 +1,14 @@
-// Em src/components/Professional/ProfessionalSideNav.tsx
+// src/components/Professional/ProfessionalSideNav.tsx
 
-import React from "react";
 import {
   LayoutDashboard,
-  CalendarDays, // Mudamos o ícone da agenda para diferenciar
   User,
   Clock,
   Bell,
   Star,
   LogOut,
   X,
-  Home, // Ícone para a Home
+  Home,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
@@ -18,7 +16,7 @@ import type { ProfessionalProfile } from "../../types";
 import type { ProfessionalDashboardView } from "./ProfessionalDashboard";
 import { useNotificationStore } from "../../store/notificationsStore";
 
-// Interface Props (Igual ao anterior)
+// 1. Definição da interface SideNavProps (que estava faltando)
 interface SideNavProps {
   activeView: ProfessionalDashboardView;
   setActiveView: (view: ProfessionalDashboardView) => void;
@@ -26,8 +24,17 @@ interface SideNavProps {
   setIsOpen: (isOpen: boolean) => void;
 }
 
-// NavItem Helper (Igual ao anterior)
-const NavItem = ({ icon: Icon, text, view, active, onClick }: any) => (
+// 2. Definição da interface NavItemProps (para corrigir o 'any')
+interface NavItemProps {
+  icon: React.ElementType;
+  text: string;
+  view: ProfessionalDashboardView;
+  active: boolean;
+  onClick: (view: ProfessionalDashboardView) => void;
+}
+
+// 3. Componente NavItem com a tipagem correta
+const NavItem = ({ icon: Icon, text, view, active, onClick }: NavItemProps) => (
   <button
     onClick={() => onClick(view)}
     className={`flex items-center w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${
@@ -43,6 +50,7 @@ const NavItem = ({ icon: Icon, text, view, active, onClick }: any) => (
   </button>
 );
 
+// 4. Componente Principal
 export const ProfessionalSideNav = ({
   activeView,
   setActiveView,
@@ -75,7 +83,7 @@ export const ProfessionalSideNav = ({
         }`}
       >
         <div className="flex items-center justify-between mb-8 px-2">
-          {/* Logo ou Nome do App */}
+          {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-tr from-amber-400 to-amber-600 rounded-lg flex items-center justify-center font-bold text-black">
               S

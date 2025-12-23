@@ -1,7 +1,6 @@
 // src/components/ServiceProvider/Agenda/AppointmentDetailsModal.tsx
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../ui/dialog";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { 
   Calendar, 
   Clock, 
@@ -10,7 +9,6 @@ import {
   DollarSign, 
   CheckCircle2, 
   XCircle, 
-  AlertCircle,
   Phone,
   Copy
 } from "lucide-react";

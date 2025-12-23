@@ -1,4 +1,4 @@
-// Em src/components/ServiceProvider/Agenda/AgendaModalsWrapper.tsx
+// src/components/ServiceProvider/Agenda/AgendaModalsWrapper.tsx
 
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
@@ -8,6 +8,7 @@ import { useToast } from "../../../hooks/useToast";
 import { AppointmentDetailsModal } from "./AppointmentDetailsModal";
 import { ServiceCompletionModal } from "../ServiceCompletionModal";
 import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
+import type { Appointment } from "../../../types";
 
 /**
  * Este componente gere a lógica e a renderização de todos os modals
@@ -15,26 +16,28 @@ import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
  */
 export const AgendaModalsWrapper = () => {
   const { modalView, selectedAppointment, closeModal, setModalView } = useAgendaModalStore();
+  
   const { 
     isLoading, 
     completeAppointment, 
     updateStatus 
   } = useProviderAppointmentsStore();
   
-  const { showToast } = useToast();
+  // ✅ 1. CORREÇÃO: Usar showSuccess e showError em vez de showToast (que não existe)
+  const { showSuccess, showError } = useToast();
 
-  // --- Handlers de Confirmação (movidos do AgendaView) ---
+  // --- Handlers de Confirmação ---
 
   const handleConfirmCompletion = async (finalPrice: number) => {
     if (!selectedAppointment) return;
     try {
       await completeAppointment(selectedAppointment.id, finalPrice);
-      showToast("Sucesso", "Agendamento concluído com sucesso!", "success");
+      showSuccess("Agendamento concluído com sucesso!");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro ao concluir.";
-      showToast("Erro", msg, "error");
+      showError(msg);
     } finally {
-      closeModal(); // Fecha o modal em qualquer caso
+      closeModal();
     }
   };
 
@@ -42,15 +45,14 @@ export const AgendaModalsWrapper = () => {
     if (!selectedAppointment) return;
     const isDeclining = modalView === "decline";
     try {
-      await updateStatus(selectedAppointment.id, "cancelled", reason);
-      showToast(
-        "Sucesso",
-        `Agendamento ${isDeclining ? "recusado" : "cancelado"} com sucesso!`,
-        "success"
-      );
+      // ✅ 2. CORREÇÃO: Passar 'undefined' no 3º argumento (finalPrice)
+      // A assinatura é: (id, status, finalPrice?, rejectionReason?)
+      await updateStatus(selectedAppointment.id, "cancelled", undefined, reason);
+      
+      showSuccess(`Agendamento ${isDeclining ? "recusado" : "cancelado"} com sucesso!`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro ao processar.";
-      showToast("Erro", msg, "error");
+      showError(msg);
     } finally {
       closeModal();
     }
@@ -60,12 +62,28 @@ export const AgendaModalsWrapper = () => {
     if (!selectedAppointment) return;
     try {
       await updateStatus(selectedAppointment.id, "scheduled");
-      showToast("Sucesso", "Agendamento confirmado!", "success");
+      showSuccess("Agendamento confirmado!");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro ao confirmar.";
-      showToast("Erro", msg, "error");
+      showError(msg);
     } finally {
       closeModal();
+    }
+  };
+
+  // ✅ 3. Lógica de Mapeamento para o Modal de Detalhes
+  // O modal emite 'onStatusChange', nós decidimos o que fazer com base no status.
+  const handleStatusChange = (id: string, newStatus: Appointment['status']) => {
+    if (newStatus === 'scheduled') {
+      // Confirmar agendamento
+      handleConfirmAccept();
+    } else if (newStatus === 'cancelled') {
+      // Se era pendente e foi cancelado = Recusar. Se era agendado = Cancelar.
+      if (selectedAppointment?.status === 'pending') {
+        setModalView("decline");
+      } else {
+        setModalView("cancel");
+      }
     }
   };
 
@@ -76,11 +94,10 @@ export const AgendaModalsWrapper = () => {
         isOpen={modalView === "details"}
         onClose={closeModal}
         appointment={selectedAppointment}
-        // As ações dentro do 'details' agora apenas mudam o 'view' da store
-        onAccept={handleConfirmAccept}
-        onOpenCompletion={() => setModalView("complete")}
-        onOpenCancel={() => setModalView("cancel")}
-        onDecline={() => setModalView("decline")}
+        
+        // ✅ 4. CORREÇÃO: Passar as props que o componente realmente espera
+        onStatusChange={handleStatusChange}
+        onComplete={() => setModalView("complete")}
       />
       
       {/* Modal de Conclusão */}
@@ -99,7 +116,6 @@ export const AgendaModalsWrapper = () => {
         appointmentId={selectedAppointment?.id || ""}
         onConfirm={handleConfirmCancelOrDecline}
         userType="serviceProvider"
-        // O 'intent' muda o texto do modal
         intent={modalView === "decline" ? "decline" : "cancel"}
         isLoading={isLoading}
       />

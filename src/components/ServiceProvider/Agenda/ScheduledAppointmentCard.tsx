@@ -1,32 +1,35 @@
 // src/components/ServiceProvider/Agenda/ScheduledAppointmentCard.tsx
+
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { 
-  Clock, 
-  User, 
-  MoreVertical, 
-  Calendar as CalendarIcon,
-  CheckCircle2
-} from "lucide-react";
+import { User } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
+// 1. Importar o tipo enriquecido para ter acesso aos dados do cliente (foto, etc)
+import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
 import { cn } from "../../../lib/utils/cn";
 
 interface ScheduledAppointmentCardProps {
-  appointment: Appointment;
-  onClick: () => void;
+  // 2. Usar EnrichedProviderAppointment
+  appointment: EnrichedProviderAppointment;
+  // 3. Renomear para casar com o ScheduledAppointmentsTab
+  onAppointmentSelect: (appointment: Appointment) => void;
 }
 
 export const ScheduledAppointmentCard = ({ 
   appointment, 
-  onClick 
+  onAppointmentSelect 
 }: ScheduledAppointmentCardProps) => {
   
+  // Extrair client para facilitar acesso à foto e telefone
+  const { client } = appointment;
+
   // --- Lógica do WhatsApp ---
   const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Impede que abra o modal de detalhes ao clicar no Zap
+    e.stopPropagation(); 
 
-    const phone = appointment.clientPhone || "";
+    // Tenta pegar do perfil do cliente, senão pega do agendamento
+    const phone = client?.phoneNumber || appointment.clientPhone || "";
     const cleanPhone = phone.replace(/\D/g, "");
 
     if (!cleanPhone) return;
@@ -34,18 +37,19 @@ export const ScheduledAppointmentCard = ({
     const time = format(new Date(appointment.startTime), "HH:mm");
     const date = format(new Date(appointment.startTime), "dd/MM");
     
-    // Mensagem inteligente: "Olá [Nome], confirmando seu horário dia [Data] às [Hora]..."
+    // Mensagem inteligente
     const message = `Olá ${appointment.clientName}, passando para confirmar seu horário dia ${date} às ${time}. Tudo certo?`;
     
     const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
   };
 
-  const hasPhone = !!appointment.clientPhone;
+  const hasPhone = !!(client?.phoneNumber || appointment.clientPhone);
 
   return (
     <div 
-      onClick={onClick}
+      // Chama a função correta passando o appointment
+      onClick={() => onAppointmentSelect(appointment)}
       className="group bg-gray-900/50 hover:bg-gray-800/80 border border-gray-800 hover:border-gray-700 rounded-xl p-4 transition-all cursor-pointer relative overflow-hidden"
     >
       {/* Indicador lateral de status */}
@@ -55,20 +59,36 @@ export const ScheduledAppointmentCard = ({
       )} />
 
       <div className="flex justify-between items-start pl-3">
-        {/* Informações Principais */}
-        <div className="flex flex-col gap-1">
-          <h3 className="text-white font-bold text-lg leading-tight group-hover:text-blue-400 transition-colors">
-            {appointment.clientName}
-          </h3>
-          <p className="text-gray-400 text-sm flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span>
-            {appointment.serviceName}
-          </p>
+        
+        {/* Informações Principais com FOTO */}
+        <div className="flex items-center gap-3">
+            {/* Avatar do Cliente */}
+            <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 overflow-hidden flex items-center justify-center border border-gray-600">
+                {client?.profilePictureUrl ? (
+                    <img 
+                    src={client.profilePictureUrl} 
+                    alt={appointment.clientName} 
+                    className="w-full h-full object-cover" 
+                    />
+                ) : (
+                    <User size={18} className="text-gray-400" />
+                )}
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+                <h3 className="text-white font-bold text-base leading-tight group-hover:text-blue-400 transition-colors">
+                    {appointment.clientName}
+                </h3>
+                <p className="text-gray-400 text-xs flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span>
+                    {appointment.serviceName}
+                </p>
+            </div>
         </div>
 
         {/* Horário (Destaque) */}
-        <div className="bg-gray-800 p-2 rounded-lg text-center min-w-[60px] border border-gray-700">
-          <span className="block text-xl font-bold text-white">
+        <div className="bg-gray-800 p-2 rounded-lg text-center min-w-[55px] border border-gray-700 ml-2">
+          <span className="block text-lg font-bold text-white">
             {format(new Date(appointment.startTime), "HH:mm")}
           </span>
           <span className="block text-[10px] text-gray-400 uppercase font-bold">
@@ -78,7 +98,7 @@ export const ScheduledAppointmentCard = ({
       </div>
 
       <div className="mt-4 pt-3 border-t border-gray-800/50 flex items-center justify-between pl-3">
-        {/* Info do Profissional (se houver múltiplos) */}
+        {/* Info do Profissional */}
         <div className="flex items-center gap-2 text-xs text-gray-500">
            <User size={14} />
            <span className="truncate max-w-[120px]">
@@ -88,7 +108,6 @@ export const ScheduledAppointmentCard = ({
 
         {/* Ações Rápidas */}
         <div className="flex items-center gap-2">
-            {/* Botão WhatsApp */}
             <button
                 onClick={handleWhatsAppClick}
                 disabled={!hasPhone}

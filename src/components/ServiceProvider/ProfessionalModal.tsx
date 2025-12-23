@@ -60,8 +60,7 @@ export const ProfessionalModal = ({
       reset({
         name: professional.name,
         serviceIds: professional.services.map(s => s.id),
-        email: (professional as any).email || '', // O seu tipo 'Professional' não tem email
-                                                  // O ideal era buscar o 'User' dele
+        email: professional.email || '',
       });
       setPreviewUrl(professional.photoURL || null);
     } else {

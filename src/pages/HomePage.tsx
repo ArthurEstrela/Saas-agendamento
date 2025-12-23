@@ -1,23 +1,36 @@
 // src/pages/HomePage.tsx
+
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { TrendingUp } from "lucide-react";
-
-// --- IMPORTS ATUALIZADOS ---
 import { httpsCallable } from "@firebase/functions";
-import { useAuthStore } from "../store/authStore"; // Pega o usuário E o perfil
+import { useAuthStore } from "../store/authStore";
+// ✅ 1. IMPORTAR USEPROFILESTORE
+import { useProfileStore } from "../store/profileStore";
 import { toast } from "react-hot-toast";
 import { functions } from "../firebase/config";
-import type { ServiceProviderProfile } from "../types"; // Importa o tipo
-// --------------------------------
+import type { ServiceProviderProfile } from "../types";
 
-// Componente Wrapper para Animação de Scroll
-const AnimateOnScroll = ({ children, delay = 0, className = "" }) => {
+// ✅ 2. INTERFACE PARA ANIMATEONSCROLL
+interface AnimateOnScrollProps {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}
+
+const AnimateOnScroll = ({
+  children,
+  delay = 0,
+  className = "",
+}: AnimateOnScrollProps) => {
   const [isVisible, setIsVisible] = useState(false);
-  const ref = useRef(null);
+  // ✅ 3. TIPAR O REF
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const element = ref.current;
+    if (!element) return; // ✅ Proteção contra null
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -27,8 +40,11 @@ const AnimateOnScroll = ({ children, delay = 0, className = "" }) => {
       },
       { threshold: 0.1 }
     );
-    if (element) observer.observe(element);
+
+    observer.observe(element);
+
     return () => {
+      // ✅ Proteção na limpeza também
       if (element) observer.unobserve(element);
     };
   }, []);
@@ -48,7 +64,6 @@ const AnimateOnScroll = ({ children, delay = 0, className = "" }) => {
   );
 };
 
-// --- Ícones (Seu código original - sem alterações) ---
 const CalendarIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -98,10 +113,15 @@ const CheckIcon = () => (
     />
   </svg>
 );
-// -----------------------------------
 
-// Componente de Card com efeito 3D (Seu código original - sem alterações)
-const FeatureCard = ({ icon, title, description }) => (
+// ✅ 4. INTERFACE PARA FEATURECARD
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}
+
+const FeatureCard = ({ icon, title, description }: FeatureCardProps) => (
   <div className="group [perspective:1000px]">
     <div className="relative bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl shadow-lg h-full p-8 transition-all duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(15deg)_rotateX(5deg)]">
       <div className="absolute inset-0 bg-gradient-to-br from-[#daa520]/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
@@ -114,47 +134,42 @@ const FeatureCard = ({ icon, title, description }) => (
   </div>
 );
 
-// --- COMPONENTE HOME ATUALIZADO ---
 const Home = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const location = useLocation(); // <-- 2. INICIE O HOOK
+  const location = useLocation();
 
-  // !! MUDANÇA AQUI: Pegamos o userProfile também !!
-  const { user, userProfile } = useAuthStore();
+  const { user } = useAuthStore();
+  // ✅ 5. USAR USEPROFILESTORE PARA PEGAR O PERFIL
+  const { userProfile } = useProfileStore();
+
   const navigate = useNavigate();
 
-  // Variáveis de estado para lógica dos botões
   const isProvider = userProfile?.role === "serviceProvider";
-  const subscriptionStatus = (userProfile as ServiceProviderProfile)
-    ?.subscriptionStatus;
+  // ✅ 6. CAST SEGURO
+  const subscriptionStatus = isProvider
+    ? (userProfile as ServiceProviderProfile)?.subscriptionStatus
+    : undefined;
+
   const isSubscribed = isProvider && subscriptionStatus === "active";
 
-  // --- FUNÇÃO HANDLECHECKOUT ATUALIZADA ---
   const handleCheckout = async (priceId: string) => {
-    // 1. Verifica se está logado (userProfile também)
     if (!user || !userProfile) {
       toast.error("Você precisa estar logado para assinar.");
-      // Manda para o registro, sugerindo ser um prestador
       navigate("/login?type=register", { state: { from: location } });
       return;
     }
 
-    // 2. !! NOVA VERIFICAÇÃO DE PAPEL !!
-    // Se for um cliente, não pode assinar
     if (userProfile.role === "client") {
       toast.error("Nossos planos são exclusivos para Prestadores de Serviço.");
       return;
     }
 
-    // 3. !! NOVA VERIFICAÇÃO DE STATUS !!
-    // Se já for um prestador assinante, não paga de novo
     if (isSubscribed) {
       toast.success("Você já é um assinante!");
-      navigate("/dashboard"); // Manda ele pro dashboard
+      navigate("/dashboard");
       return;
     }
 
-    // 4. Se for um prestador e NÃO for assinante, continua...
     setIsLoading(true);
     toast.loading("Redirecionando para o pagamento...");
 
@@ -187,13 +202,11 @@ const Home = () => {
     }
   };
 
-  // !! NOVA FUNÇÃO PARA RENDERIZAR O BOTÃO CORRETO !!
   const renderPlanButton = (
     priceId: string,
     text: string,
     popular: boolean = false
   ) => {
-    // Caso 1: Usuário é um CLIENTE
     if (userProfile && userProfile.role === "client") {
       return (
         <button
@@ -209,7 +222,6 @@ const Home = () => {
       );
     }
 
-    // Caso 2: Usuário é um PRESTADOR e JÁ É ASSINANTE
     if (isSubscribed) {
       return (
         <button
@@ -225,7 +237,6 @@ const Home = () => {
       );
     }
 
-    // Caso 3: Usuário é VISITANTE ou PRESTADOR NÃO-ASSINANTE
     return (
       <button
         onClick={() => handleCheckout(priceId)}
@@ -243,7 +254,7 @@ const Home = () => {
 
   return (
     <div className="bg-black text-white overflow-x-hidden">
-      {/* --- SEÇÃO HERO (Seu código original - sem alterações) --- */}
+      {/* SEÇÃO HERO */}
       <section className="relative min-h-screen flex items-center justify-center">
         <div className="absolute inset-0 bg-gradient-to-b from-black via-black to-gray-950"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#daa520]/10 rounded-full blur-3xl animate-pulse"></div>
@@ -279,7 +290,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* --- SEÇÃO FEATURES (Seu código original - sem alterações) --- */}
+      {/* SEÇÃO FEATURES */}
       <section className="py-20 sm:py-32 bg-black/50">
         <div className="container mx-auto px-4">
           <AnimateOnScroll className="text-center mb-16">
@@ -316,7 +327,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* --- SEÇÃO PLANOS (COM BOTÕES ATUALIZADOS) --- */}
+      {/* SEÇÃO PLANOS */}
       <section className="py-20 sm:py-32 bg-black">
         <div className="container mx-auto px-4">
           <AnimateOnScroll className="text-center mb-16">
@@ -328,7 +339,7 @@ const Home = () => {
             </p>
           </AnimateOnScroll>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* --- PLANO MENSAL --- */}
+            {/* PLANO MENSAL */}
             <AnimateOnScroll>
               <div className="group relative bg-black border border-white/10 rounded-2xl p-8 flex flex-col h-full transition-all duration-300 hover:border-[#daa520]/50 hover:shadow-2xl hover:shadow-[#daa520]/10">
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -357,7 +368,6 @@ const Home = () => {
                     </li>
                   </ul>
 
-                  {/* !! BOTÃO COM LÓGICA !! */}
                   {renderPlanButton(
                     "price_1SMeWT3zDQy3p6yeWl0LC4wi",
                     "Começar",
@@ -367,7 +377,7 @@ const Home = () => {
               </div>
             </AnimateOnScroll>
 
-            {/* --- PLANO ANUAL (POPULAR) --- */}
+            {/* PLANO ANUAL */}
             <AnimateOnScroll delay={200}>
               <div className="group relative bg-[#daa520] border-2 border-[#c8961e] rounded-2xl p-8 flex flex-col h-full scale-105 shadow-2xl shadow-[#daa520]/20 transition-all duration-300 hover:scale-110">
                 <div className="absolute -top-4 -right-4 bg-black text-[#daa520] text-xs font-bold px-3 py-1 rounded-full transform rotate-12">
@@ -397,7 +407,6 @@ const Home = () => {
                     </li>
                   </ul>
 
-                  {/* !! BOTÃO COM LÓGICA !! */}
                   {renderPlanButton(
                     "price_1SO7sB3zDQy3p6yevNXLXO8v",
                     "Economize 30%",
@@ -407,7 +416,7 @@ const Home = () => {
               </div>
             </AnimateOnScroll>
 
-            {/* --- PLANO TRIMESTRAL --- */}
+            {/* PLANO TRIMESTRAL */}
             <AnimateOnScroll delay={400}>
               <div className="group relative bg-black border border-white/10 rounded-2xl p-8 flex flex-col h-full transition-all duration-300 hover:border-[#daa520]/50 hover:shadow-2xl hover:shadow-[#daa520]/10">
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -436,7 +445,6 @@ const Home = () => {
                     </li>
                   </ul>
 
-                  {/* !! BOTÃO COM LÓGICA !! */}
                   {renderPlanButton(
                     "price_1SMeWT3zDQy3p6yezkMmrByP",
                     "Começar",

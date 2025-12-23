@@ -6,7 +6,6 @@ import type { Appointment } from '../../../types'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
 import {
-  Users,
   Clock,
   User,
   Scissors,

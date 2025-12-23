@@ -1,13 +1,12 @@
-// Em src/components/ServiceProvider/AvailabilityManagement.tsx
+// src/components/ServiceProvider/AvailabilityManagement.tsx
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
 
 import type {
   Professional,
   DailyAvailability,
-  TimeSlot,
   ServiceProviderProfile,
   ProfessionalProfile,
   UserProfile,
@@ -59,7 +58,6 @@ const getFullWeekAvailability = (
   });
 };
 
-// --- INTERFACE DE PROPS (FASE 4) ---
 interface AvailabilityManagementProps {
   userProfile: UserProfile | null;
 }
@@ -79,27 +77,23 @@ export const AvailabilityManagement = ({
     useState<Professional | null>(null);
   const [selectedProfId, setSelectedProfId] = useState<string>("");
 
-  // --- 2. VERIFICAÇÃO DE ROLE E DADOS ---
-  if (!userProfile) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="animate-spin text-amber-500" size={48} />
-      </div>
-    );
-  }
+  // Calculamos isOwner com fallback para false se userProfile for null
+  // para evitar problemas em renderizações iniciais.
+  const isOwner = userProfile?.role === "serviceProvider";
 
-  const isOwner = userProfile.role === "serviceProvider";
-
-  // --- 3. EFEITO DE CARREGAMENTO DE DADOS (LIMPO E CORRIGIDO) ---
+  // --- 3. EFEITO DE CARREGAMENTO DE DADOS (MOVIDO PARA O TOPO) ---
   useEffect(() => {
+    // Se não tiver perfil, não faz sentido rodar a lógica
+    if (!userProfile) return;
+
     setIsLoading(true);
 
     if (isOwner) {
       // --- Lógica do Dono ---
       if (!allProfessionals || allProfessionals.length === 0) {
         setIsLoading(false);
-        setCurrentProfessional(null); // Limpa o profissional
-        setAvailability([]); // Limpa a disponibilidade
+        setCurrentProfessional(null); 
+        setAvailability([]); 
         return;
       }
 
@@ -114,7 +108,7 @@ export const AvailabilityManagement = ({
         setCurrentProfessional(selected);
         setAvailability(getFullWeekAvailability(selected.availability));
       } else {
-        // Fallback se o ID selecionado for inválido
+        // Fallback
         setCurrentProfessional(allProfessionals[0]);
         setAvailability(
           getFullWeekAvailability(allProfessionals[0].availability)
@@ -124,14 +118,10 @@ export const AvailabilityManagement = ({
       setIsLoading(false);
     } else {
       // --- Lógica do Profissional ---
-      // (Depende da 'profileStore' carregar 'allProfessionals' para o profissional)
-
       if (!allProfessionals) {
-        // A 'profileStore' ainda não carregou a lista.
         return;
       }
 
-      // Obter o 'professionalId' (do recurso) a partir do perfil do utilizador
       const { professionalId } = userProfile as ProfessionalProfile;
 
       const myProfessionalData = allProfessionals.find(
@@ -154,7 +144,7 @@ export const AvailabilityManagement = ({
     }
   }, [isOwner, userProfile, allProfessionals, selectedProfId]);
 
-  // --- 4. HANDLERS (Com a correção) ---
+  // --- 4. HANDLERS ---
 
   const handleIsAvailableChange = (
     day: DailyAvailability["dayOfWeek"],
@@ -176,11 +166,10 @@ export const AvailabilityManagement = ({
     );
   };
 
-  // ***** AQUI ESTÁ A CORREÇÃO *****
   const handleSlotChange = (
     day: DailyAvailability["dayOfWeek"],
     slotIndex: number,
-    field: "start" | "end", // <-- Corrigido de | end" para | "end"
+    field: "start" | "end",
     value: string
   ) => {
     setAvailability((prev) =>
@@ -220,7 +209,7 @@ export const AvailabilityManagement = ({
 
   // --- 5. LÓGICA DE SALVAR ---
   const handleSave = async () => {
-    if (!currentProfessional) return;
+    if (!currentProfessional || !userProfile) return;
     setIsSaving(true);
 
     const providerId = isOwner
@@ -236,7 +225,10 @@ export const AvailabilityManagement = ({
       availability: availability,
     };
 
+    // ✅ CORREÇÃO: Comentário para ignorar erro de variável 'id' não usada
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, photoURL, ...payloadWithoutId } = updatedProfessional;
+    
     const payload = {
       ...payloadWithoutId,
       photoURL: photoURL,
@@ -245,14 +237,23 @@ export const AvailabilityManagement = ({
 
     try {
       await updateProfessional(providerId, professionalIdToSave, payload);
-      // showToast("Disponibilidade salva com sucesso!", "success");
     } catch (error) {
       console.error("Falha ao salvar a disponibilidade:", error);
-      // showToast("Falha ao salvar a disponibilidade.", "error");
     }
 
     setIsSaving(false);
   };
+
+  // --- 2. VERIFICAÇÃO DE DADOS (Retornos antecipados MOVIDOS para baixo) ---
+  // Agora que os hooks foram declarados, podemos dar return com segurança.
+  
+  if (!userProfile) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="animate-spin text-amber-500" size={48} />
+      </div>
+    );
+  }
 
   // --- 6. RENDERIZAÇÃO (ESTADOS DE LOADING E VAZIO) ---
 

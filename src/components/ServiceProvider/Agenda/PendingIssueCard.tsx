@@ -36,9 +36,9 @@ export const PendingIssueCard = ({
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!client?.phone) return;
+    if (!client?.phoneNumber) return;
 
-    const cleanPhone = client.phone.replace(/\D/g, '');
+    const cleanPhone = client.phoneNumber.replace(/\D/g, '');
     const dateString = format(startTime, "dd/MM", { locale: ptBR });
     const timeString = format(startTime, "HH:mm");
     
@@ -78,7 +78,7 @@ export const PendingIssueCard = ({
         {/* Grupo de Botões de Ação */}
         <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
           {/* Botão WhatsApp (Só aparece se tiver telefone) */}
-          {client?.phone && (
+          {client?.phoneNumber && (
             <Button
               size="sm"
               variant="outline"

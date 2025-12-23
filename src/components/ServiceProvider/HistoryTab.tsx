@@ -1,34 +1,44 @@
 // src/components/ServiceProvider/HistoryTab.tsx
 
-import { useState, useMemo, useEffect } from 'react' // 1. ADICIONADO useEffect
+import { useState, useMemo, useEffect } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   Search,
   CheckCircle,
   XCircle,
-  ChevronLeft, // 2. IMPORTADO
-  ChevronRight, // 2. IMPORTADO
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
-import { Button } from '../ui/button' // 3. IMPORTADO
+import { Button } from '../ui/button'
 import type { EnrichedProviderAppointment } from '../../store/providerAppointmentsStore'
+// IMPORTAR O TIPO APPOINTMENT
+import type { Appointment } from '../../types' 
 
 type HistoryFilterStatus = 'all' | 'completed' | 'cancelled'
 
-// 4. ITENS POR PÁGINA
 const ITEMS_PER_PAGE = 10
 
-const HistoryCard = ({ appt }: { appt: EnrichedProviderAppointment }) => (
-  <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-    {/* ... (O conteúdo do Card permanece o mesmo) ... */}
+// 1. Atualizar o Card para aceitar onClick
+const HistoryCard = ({ 
+  appt, 
+  onClick 
+}: { 
+  appt: EnrichedProviderAppointment;
+  onClick: () => void;
+}) => (
+  <div 
+    onClick={onClick} // Adicionar evento de clique
+    className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-800/80 transition-colors"
+  >
     <div>
-      <p className="font-bold text-white">{appt.client?.name}</p>
+      <p className="font-bold text-white">{appt.client?.name || 'Cliente desconhecido'}</p>
       <p className="text-sm text-gray-400">
         {appt.services.map((s) => s.name).join(', ')}
       </p>
       <p className="text-xs text-gray-500">com {appt.professionalName}</p>
     </div>
-    <div className="text-right">
+    <div className="text-right w-full sm:w-auto">
       <p className="text-sm font-semibold text-gray-300">
         {format(appt.startTime, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
       </p>
@@ -45,21 +55,24 @@ const HistoryCard = ({ appt }: { appt: EnrichedProviderAppointment }) => (
   </div>
 )
 
+interface HistoryTabProps {
+  appointments: EnrichedProviderAppointment[];
+  // 2. Adicionar a prop que faltava
+  onAppointmentSelect: (appointment: Appointment) => void;
+}
+
 export const HistoryTab = ({
   appointments,
-}: {
-  appointments: EnrichedProviderAppointment[]
-}) => {
+  onAppointmentSelect // Receber a prop
+}: HistoryTabProps) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<HistoryFilterStatus>('all')
-  const [currentPage, setCurrentPage] = useState(1) // 5. ESTADO DE PÁGINA
+  const [currentPage, setCurrentPage] = useState(1)
 
-  // 6. Resetar página ao mudar filtros
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, statusFilter])
 
-  // 7. useMemo para APENAS filtrar e ordenar
   const filteredAppointments = useMemo(() => {
     return appointments
       .filter((appt) => {
@@ -73,10 +86,8 @@ export const HistoryTab = ({
       .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
   }, [appointments, searchTerm, statusFilter])
 
-  // 8. Cálculo de paginação
   const totalPages = Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE)
 
-  // 9. useMemo para PAGINAR os resultados já filtrados
   const paginatedAppointments = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
@@ -94,12 +105,10 @@ export const HistoryTab = ({
   return (
     <div>
       <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
-        {/* ... (O header com filtros permanece o mesmo) ... */}
         <h2 className="text-xl font-bold text-white">
           Histórico (Últimos 30 dias)
         </h2>
         <div className="flex items-center gap-4 w-full sm:w-auto">
-          {/* Filtro por status */}
           <select
             value={statusFilter}
             onChange={(e) =>
@@ -112,7 +121,6 @@ export const HistoryTab = ({
             <option value="cancelled">Cancelados</option>
           </select>
 
-          {/* Barra de Busca */}
           <div className="relative flex-grow">
             <Search
               size={18}
@@ -129,11 +137,15 @@ export const HistoryTab = ({
         </div>
       </header>
 
-      {/* 10. Renderização dos itens PAGINADOS */}
       <div className="space-y-4">
         {paginatedAppointments.length > 0 ? (
           paginatedAppointments.map((appt) => (
-            <HistoryCard key={appt.id} appt={appt} />
+            <HistoryCard 
+              key={appt.id} 
+              appt={appt} 
+              // 3. Passar a função para o clique do card
+              onClick={() => onAppointmentSelect(appt)}
+            />
           ))
         ) : (
           <p className="text-center text-gray-500 mt-16">
@@ -144,7 +156,6 @@ export const HistoryTab = ({
         )}
       </div>
 
-      {/* 11. CONTROLES DE PAGINAÇÃO */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center space-x-4 pt-6">
           <Button

@@ -1,6 +1,6 @@
 // Em src/components/Professional/ProfessionalProfileManagement.tsx
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { UserProfile, ProfessionalProfile } from "../../types";
 import { useForm, type SubmitHandler } from "react-hook-form";
@@ -12,7 +12,6 @@ import { Input } from "../ServiceProvider/ProfileManagement";
 import { uploadProfilePicture } from "../../firebase/userService";
 import toast from "react-hot-toast";
 
-// Schema atualizado com Bio
 const professionalSchema = z.object({
   name: z.string().min(3, "O nome é obrigatório"),
   bio: z.string().max(300, "Máximo de 300 caracteres").optional(),
@@ -30,6 +29,7 @@ export const ProfessionalProfileManagement = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Certifique-se de ter atualizado src/types.ts com o campo 'bio'
   const profile = userProfile as ProfessionalProfile;
 
   const {
@@ -42,7 +42,6 @@ export const ProfessionalProfileManagement = ({
     resolver: zodResolver(professionalSchema),
     defaultValues: {
       name: profile?.name || "",
-      // @ts-ignore - Se 'bio' ainda não estiver no type, o ignore resolve por enquanto
       bio: profile?.bio || "",
     },
   });
@@ -60,7 +59,8 @@ export const ProfessionalProfileManagement = ({
         setUserProfile({ ...userProfile, profilePictureUrl: avatarUrl });
         toast.success("Foto atualizada!");
       }
-    } catch (error) {
+    } catch {
+      // ✅ CORREÇÃO: Removemos '(error)' pois não estava sendo usado
       toast.error("Erro ao enviar foto.");
     } finally {
       setIsUploading(false);
@@ -73,8 +73,9 @@ export const ProfessionalProfileManagement = ({
     try {
       await updateUserProfile(userProfile.id, data);
       toast.success("Perfil atualizado!");
-      reset(data); // Reseta estado dirty
-    } catch (e) {
+      reset(data);
+    } catch {
+      // ✅ CORREÇÃO: Removemos '(e)' pois não estava sendo usado
       toast.error("Erro ao salvar.");
     } finally {
       setIsSaving(false);
@@ -107,6 +108,7 @@ export const ProfessionalProfileManagement = ({
                   <img
                     src={profile.profilePictureUrl}
                     className="w-full h-full object-cover"
+                    alt={profile.name}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">

@@ -1,12 +1,11 @@
-// (Provavelmente em src/pages/DashboardPage.tsx ou src/components/ServiceProviderDashboard.tsx)
+// src/components/ServiceProviderDashboard.tsx
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Menu, ShieldAlert, Sparkles } from "lucide-react"; // 1. Importar Loader2
+import { Loader2, Menu, ShieldAlert, Sparkles } from "lucide-react";
 
-// 2. Importar o store para verificar o loading
 import { useProfileStore } from "../store/profileStore";
-import type { ServiceProviderProfile } from "../types"; // Importar o tipo
+import type { ServiceProviderProfile } from "../types";
 
 import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
 import { AgendaView } from "./ServiceProvider/Agenda/AgendaView";
@@ -17,9 +16,12 @@ import { ProfileManagement } from "./ServiceProvider/ProfileManagement";
 import { ServicesManagement } from "./ServiceProvider/ServicesManagement";
 import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 import { Notifications } from "./Common/Notifications";
-import { SubscriptionManagement } from "./ServiceProvider/SubscriptionManagement"; // Importar a nova tela
-// 3. Remover o import do Modal que não é mais usado aqui
-// import { AppointmentDetailsModal } from "./ServiceProvider/Agenda/AppointmentDetailsModal";
+import { SubscriptionManagement } from "./ServiceProvider/SubscriptionManagement";
+
+// 1. Defina uma interface para as props que as views recebem
+interface DashboardViewProps {
+  userProfile: ServiceProviderProfile | null;
+}
 
 export type ProviderDashboardView =
   | "agenda"
@@ -32,20 +34,22 @@ export type ProviderDashboardView =
   | "notifications"
   | "subscription";
 
-const viewComponents: Record<ProviderDashboardView, React.ComponentType> = {
-  agenda: AgendaView,
-  financial: FinancialManagement,
-  profile: ProfileManagement,
-  professionals: ProfessionalsManagement,
-  availability: AvailabilityManagement,
-  services: ServicesManagement,
-  reviews: ReviewsManagement,
-  notifications: Notifications,
-  subscription: SubscriptionManagement,
+// 2. Tipe o Record para aceitar componentes com DashboardViewProps
+// Usamos 'any' no cast dos componentes individuais se necessário, ou garantimos que eles aceitem a prop.
+// A forma mais segura e flexível aqui é garantir que o Record espere componentes que aceitam userProfile.
+const viewComponents: Record<ProviderDashboardView, React.ComponentType<DashboardViewProps>> = {
+  agenda: AgendaView as React.ComponentType<DashboardViewProps>,
+  financial: FinancialManagement as React.ComponentType<DashboardViewProps>,
+  profile: ProfileManagement as React.ComponentType<DashboardViewProps>,
+  professionals: ProfessionalsManagement as React.ComponentType<DashboardViewProps>,
+  availability: AvailabilityManagement as React.ComponentType<DashboardViewProps>,
+  services: ServicesManagement as React.ComponentType<DashboardViewProps>,
+  reviews: ReviewsManagement as React.ComponentType<DashboardViewProps>,
+  notifications: Notifications as React.ComponentType<DashboardViewProps>,
+  subscription: SubscriptionManagement as React.ComponentType<DashboardViewProps>,
 };
 
 const ServiceProviderDashboard = () => {
-  // 4. Pegar o perfil do store
   const { userProfile } = useProfileStore();
 
   const [activeView, setActiveView] = useState<ProviderDashboardView>("agenda");
@@ -65,7 +69,7 @@ const ServiceProviderDashboard = () => {
 
   const ActiveComponent = viewComponents[activeView];
 
-  // 5. Adicionar a verificação de loading (crucial!)
+  // Adicionar a verificação de loading
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900">
@@ -96,6 +100,7 @@ const ServiceProviderDashboard = () => {
           </button>
           <span className="text-xl font-bold text-white">Stylo</span>
         </div>
+        
         {needsSubscription && activeView !== "subscription" && (
           <div className="bg-amber-600 text-black p-3 rounded-lg mb-4 text-center font-semibold flex items-center justify-center gap-2">
             <Sparkles size={20} />
@@ -109,6 +114,7 @@ const ServiceProviderDashboard = () => {
             para liberar todos os recursos.
           </div>
         )}
+        
         {subscriptionProblem && activeView !== "subscription" && (
           <div className="bg-red-600 text-white p-3 rounded-lg mb-4 text-center font-semibold flex items-center justify-center gap-2">
             <ShieldAlert size={20} />
@@ -121,6 +127,7 @@ const ServiceProviderDashboard = () => {
             </button>
           </div>
         )}
+
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -130,13 +137,11 @@ const ServiceProviderDashboard = () => {
             transition={{ duration: 0.25 }}
             className="flex-grow flex flex-col"
           >
-            <ActiveComponent userProfile={profile}/>
+            {/* Agora ActiveComponent aceita userProfile sem erro */}
+            <ActiveComponent userProfile={profile} />
           </motion.div>
         </AnimatePresence>
       </main>
-
-      {/* 6. Remover o Modal solto. Ele agora vive 100% dentro da AgendaView. */}
-      {/* <AppointmentDetailsModal /> */}
     </div>
   );
 };

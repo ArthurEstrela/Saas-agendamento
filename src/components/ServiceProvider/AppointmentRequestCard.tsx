@@ -19,9 +19,9 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
     e.stopPropagation(); // Evita cliques acidentais em outros elementos
     
     // Garante que temos um telefone antes de tentar abrir
-    if (!client?.phone) return;
+    if (!client?.phoneNumber) return;
 
-    const cleanPhone = client.phone.replace(/\D/g, '');
+    const cleanPhone = client.phoneNumber.replace(/\D/g, '');
     
     // Formatação amigável para a mensagem
     const dateString = format(startTime, "dd/MM", { locale: ptBR });
@@ -62,7 +62,7 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
         </div>
 
         {/* Botão WhatsApp (NOVO) */}
-        {client?.phone && (
+        {client?.phoneNumber && (
           <button 
             onClick={handleWhatsAppClick}
             className="p-2 bg-green-500/10 text-green-500 rounded-full hover:bg-green-500/20 transition-colors"

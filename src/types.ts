@@ -65,6 +65,7 @@ export interface Service {
 export interface Professional {
   id: string;
   name: string;
+  email?: string;
   photoURL?: string;
   services: Service[]; // Array of Service objects
   availability: DailyAvailability[];
@@ -196,4 +197,5 @@ export interface ProfessionalProfile extends BaseUser {
   serviceProviderId: string; // ID do ServiceProvider (dono) ao qual pertence
   professionalId: string; // ID do recurso "Professional" (que contém serviços/horários)
   avatarUrl?: string;
+  bio?: string;
 }

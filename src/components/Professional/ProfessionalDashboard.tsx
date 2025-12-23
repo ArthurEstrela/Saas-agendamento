@@ -13,33 +13,37 @@ import { ReviewsManagement } from "../ServiceProvider/ReviewsManagement";
 import { Notifications } from "../Common/Notifications";
 import { ProfessionalSideNav } from "./ProfessionalSideNav";
 import { ProfessionalProfileManagement } from "./ProfessionalProfileManagement";
-import { ProfessionalHome } from "./ProfessionalHome"; // <--- NOVO IMPORT
+import { ProfessionalHome } from "./ProfessionalHome";
 
-// 1. Adicionar "home" aos tipos
 export type ProfessionalDashboardView =
-  | "home" // <--- Adicionado
+  | "home"
   | "agenda"
   | "availability"
   | "reviews"
   | "notifications"
   | "profile";
 
+// 1. ✅ DEFINIMOS A INTERFACE COMUM DAS PROPS
+interface DashboardViewProps {
+  userProfile: ProfessionalProfile;
+}
+
+// 2. ✅ USAMOS A INTERFACE NO LUGAR DE 'any'
 const viewComponents: Record<
   ProfessionalDashboardView,
-  React.ComponentType<any>
+  React.ComponentType<DashboardViewProps> // Define que todos componentes aceitam essas props
 > = {
-  home: ProfessionalHome, // <--- Mapeado
-  agenda: AgendaView,
-  availability: AvailabilityManagement,
-  reviews: ReviewsManagement,
-  notifications: Notifications,
+  home: ProfessionalHome,
+  agenda: AgendaView as React.ComponentType<DashboardViewProps>, // Cast se necessário (Agenda aceita UserProfile, que é compatível)
+  availability: AvailabilityManagement as React.ComponentType<DashboardViewProps>,
+  reviews: ReviewsManagement as React.ComponentType<DashboardViewProps>,
+  notifications: Notifications as React.ComponentType<DashboardViewProps>,
   profile: ProfessionalProfileManagement,
 };
 
 const ProfessionalDashboard = () => {
   const { userProfile } = useProfileStore();
 
-  // Define "home" como padrão
   const [activeView, setActiveView] =
     useState<ProfessionalDashboardView>("home");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -86,7 +90,7 @@ const ProfessionalDashboard = () => {
             transition={{ duration: 0.25 }}
             className="flex-grow flex flex-col"
           >
-            {/* Passamos o userProfile para TODOS os componentes filhos */}
+            {/* O TypeScript agora sabe que ActiveComponent espera userProfile */}
             <ActiveComponent userProfile={profile} />
           </motion.div>
         </AnimatePresence>

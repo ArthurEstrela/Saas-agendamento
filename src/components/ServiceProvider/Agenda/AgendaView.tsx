@@ -4,7 +4,10 @@ export type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
 export type ViewMode = "card" | "list" | "calendar";
 
 import { useState, useMemo, useEffect } from "react";
-import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
+import { 
+  useProviderAppointmentsStore, 
+  type EnrichedProviderAppointment
+} from "../../../store/providerAppointmentsStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
 import type {
   UserProfile,
@@ -41,51 +44,42 @@ interface AgendaViewProps {
 }
 
 export const AgendaView = ({ userProfile }: AgendaViewProps) => {
-  if (!userProfile) {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <Loader2 className="animate-spin text-amber-500" size={48} />
-      </div>
-    );
-  }
+  // 1. MOVER TODOS OS HOOKS PARA O TOPO
+  const { 
+    appointments, 
+    isLoading, 
+    fetchAppointments, 
+    updateStatus // ✅ Adicionado para passar ao RequestsTab
+  } = useProviderAppointmentsStore();
 
-  const isOwner = userProfile.role === "serviceProvider";
-
-  const { appointments, isLoading, fetchAppointments } =
-    useProviderAppointmentsStore();
   const { openModal } = useAgendaModalStore();
 
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
-  
-  // Persistência do modo de visualização
+
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
     "calendar"
   );
-  
+
   const [selectedProfessionalId, setSelectedProfessionalId] =
     usePersistentState<string>("agenda_professional_filter", "all");
 
-  // --- CORREÇÃO DE RESPONSIVIDADE INICIAL ---
-  // Ao carregar, verifica se é mobile e força a visualização para "list"
-  // para garantir a melhor experiência inicial, conforme solicitado.
+  const isOwner = userProfile?.role === "serviceProvider";
+
   useEffect(() => {
     const handleInitialResize = () => {
       if (window.innerWidth < 768) {
-        // Se estiver no mobile, sugerimos "list" ou "card" inicialmente
-        // Mas respeitamos se o usuário mudar depois (pois o hook usePersistentState cuida do resto)
-        // Aqui forçamos apenas se o estado atual for 'calendar', que pode ser pesado no mobile
         setViewMode((prev) => (prev === "calendar" ? "list" : prev));
       }
     };
-
-    // Executa apenas na montagem
     handleInitialResize();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Array vazio para rodar apenas uma vez na montagem
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
+    if (!userProfile) return;
+
     const providerId = isOwner
       ? (userProfile as ServiceProviderProfile).id
       : (userProfile as ProfessionalProfile).serviceProviderId;
@@ -97,7 +91,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
 
   const filteredAppointments = useFilteredAppointments(
     appointments,
-    userProfile,
+    userProfile as UserProfile,
     selectedProfessionalId,
     activeTab,
     selectedDay,
@@ -108,6 +102,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     () => appointments.filter((a) => a.status === "pending").length,
     [appointments]
   );
+
   const pendingPastCount = useMemo(() => {
     const beginningOfToday = startOfDay(new Date());
     return appointments.filter(
@@ -121,6 +116,18 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
   const handleOpenDetails = (appointment: Appointment) => {
     openModal("details", appointment);
   };
+
+  // 2. VERIFICAÇÃO DE LOADING
+  if (!userProfile) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="animate-spin text-amber-500" size={48} />
+      </div>
+    );
+  }
+
+  // Cast seguro pois os appointments do store já são enriched
+  const enrichedFiltered = filteredAppointments as EnrichedProviderAppointment[];
 
   const renderScheduledContent = () => {
     if (isLoading) {
@@ -155,7 +162,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       case "card":
         return (
           <ScheduledAppointmentsTab
-            appointments={filteredAppointments}
+            appointments={enrichedFiltered}
             onAppointmentSelect={handleOpenDetails}
           />
         );
@@ -169,16 +176,14 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       default:
         return (
           <ScheduledAppointmentsTab
-            appointments={filteredAppointments}
+            appointments={enrichedFiltered}
             onAppointmentSelect={handleOpenDetails}
           />
         );
     }
   };
 
-  // Detecta se é mobile para ajustar o rótulo do DateSelector
-  // (Poderia usar o hook useMediaQuery aqui também, mas window.innerWidth resolve rápido)
-  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
+  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (
     <div className="min-h-0 flex-1 flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
@@ -195,7 +200,8 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
           {isOwner && (
             <ProfessionalFilter
               selectedProfessionalId={selectedProfessionalId}
-              onSelectProfessional={setSelectedProfessionalId}
+              // ✅ CORREÇÃO: Tratar null (id || 'all')
+              onSelectProfessional={(id) => setSelectedProfessionalId(id || "all")}
             />
           )}
 
@@ -203,11 +209,10 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
             <DateSelector
               selectedDate={selectedDay}
               setSelectedDate={setSelectedDay}
-              // Ajuste Dinâmico do Rótulo: 
-              // Se for Calendar E Desktop: Mostra "Semana". 
-              // Se for Mobile ou outros modos: Mostra "Dia".
               label={
-                activeTab === "scheduled" && viewMode === "calendar" && !isMobileView
+                activeTab === "scheduled" &&
+                viewMode === "calendar" &&
+                !isMobileView
                   ? "Semana:"
                   : "Dia:"
               }
@@ -305,20 +310,25 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
           >
             {activeTab === "requests" && (
               <RequestsTab
-                appointments={filteredAppointments}
+                appointments={enrichedFiltered}
                 onAppointmentSelect={handleOpenDetails}
+                // ✅ CORREÇÃO: Passando onUpdateStatus corretamente
+                onUpdateStatus={(id, status) => updateStatus(id, status)}
               />
             )}
             {activeTab === "scheduled" && renderScheduledContent()}
             {activeTab === "pendingIssues" && (
               <PendingIssuesTab
-                appointments={filteredAppointments}
+                appointments={enrichedFiltered}
+                // ✅ IMPORTANTE: Certifique-se que PendingIssuesTab aceita esta prop
+                // Se der erro, remova esta linha ou atualize o PendingIssuesTab
                 onAppointmentSelect={handleOpenDetails}
               />
             )}
             {activeTab === "history" && (
               <HistoryTab
-                appointments={filteredAppointments}
+                appointments={enrichedFiltered}
+                // ✅ IMPORTANTE: Certifique-se que HistoryTab aceita esta prop
                 onAppointmentSelect={handleOpenDetails}
               />
             )}

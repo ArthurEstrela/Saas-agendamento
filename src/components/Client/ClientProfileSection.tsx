@@ -265,7 +265,7 @@ export const ClientProfileSection = () => {
                 <Controller
                   name="phoneNumber"
                   control={control}
-                  render={({ field }) => (
+                  render={({ field: { onChange, ref, ...fieldProps } }) => (
                     <div
                       className={`input-container transition-colors ${
                         isEditing
@@ -279,13 +279,17 @@ export const ClientProfileSection = () => {
                         }`}
                       />
                       <IMaskInput
-                        {...field}
+                        {...fieldProps} // Passa value, onBlur, name, etc. (MENOS onChange e ref)
                         mask="(00) 00000-0000"
+                        inputRef={ref} // IMaskInput usa inputRef em vez de ref
                         className={`input-field pl-10 ${
                           !isEditing && "text-gray-300"
                         }`}
                         disabled={!isEditing}
                         placeholder="(00) 00000-0000"
+                        onAccept={(value: string) => {
+                          onChange(value);
+                        }}
                       />
                     </div>
                   )}

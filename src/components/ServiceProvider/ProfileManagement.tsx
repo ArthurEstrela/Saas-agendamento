@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef, // <--- 1. Importado useRef
   forwardRef,
   type InputHTMLAttributes,
   type ElementType,
@@ -25,7 +26,7 @@ import {
   Facebook,
   Image as ImageIcon,
   Crop,
-  QrCode, // <-- Importado
+  QrCode,
   type LucideProps,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -133,8 +134,8 @@ const profileSchema = z.object({
   cnpj: z.string(),
   logoUrl: z.string().optional(),
   bannerUrl: z.string().optional(),
-  pixKey: z.string().optional(), // <-- Novo
-  pixKeyType: z.enum(["cpf", "cnpj", "email", "phone", "random"]).optional(), // <-- Novo
+  pixKey: z.string().optional(),
+  pixKeyType: z.enum(["cpf", "cnpj", "email", "phone", "random"]).optional(),
   businessAddress: z.object({
     zipCode: z.string().min(9, "CEP é obrigatório"),
     street: z.string().min(1, "Rua é obrigatória"),
@@ -288,7 +289,7 @@ export const ProfileManagement = () => {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       socialLinks: { instagram: "", facebook: "", website: "" },
-      pixKeyType: "cpf", // Default value
+      pixKeyType: "cpf",
     },
   });
 
@@ -297,6 +298,9 @@ export const ProfileManagement = () => {
     -15.79, -47.88,
   ]);
   const [mapZoom, setMapZoom] = useState(4);
+
+  // --- 2. Ref para evitar sobrescrita automática do mapa ---
+  const lastSearchedAddressRef = useRef(""); 
 
   const cepValue = watch("businessAddress.zipCode");
   const streetValue = watch("businessAddress.street");
@@ -322,16 +326,29 @@ export const ProfileManagement = () => {
         setPosition(initialPos);
         setMapCenter([lat, lng]);
         setMapZoom(17);
+        
+        // --- 3. Inicializa o ref com o endereço que veio do banco ---
+        // Isso impede que o fetchCoordinates sobrescreva a posição salva na primeira carga
+        const addressQuery = `${profile.businessAddress.street}, ${profile.businessAddress.number}, ${profile.businessAddress.city}`;
+        lastSearchedAddressRef.current = addressQuery;
       }
     }
   }, [userProfile, reset]);
 
   const fetchCoordinates = useCallback(async () => {
     if (streetValue && numberValue && cityValue) {
+      // Cria a string única do endereço atual
+      const currentQuery = `${streetValue}, ${numberValue}, ${cityValue}`;
+
+      // --- 4. Bloqueio de Segurança ---
+      // Se o endereço não mudou desde a última vez (ou é o inicial carregado do DB),
+      // NÃO busca na API e NÃO move o pino.
+      if (currentQuery === lastSearchedAddressRef.current) {
+        return;
+      }
+
       try {
-        const query = encodeURIComponent(
-          `${streetValue}, ${numberValue}, ${cityValue}`
-        );
+        const query = encodeURIComponent(currentQuery);
         const response = await fetch(
           `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`
         );
@@ -342,6 +359,9 @@ export const ProfileManagement = () => {
           setPosition(newPos);
           setMapCenter([newPos.lat, newPos.lng]);
           setMapZoom(17);
+          
+          // Atualiza a ref indicando que este endereço gerou este ponto
+          lastSearchedAddressRef.current = currentQuery;
         }
       } catch (error) {
         console.error("Erro ao buscar geolocalização:", error);
@@ -511,7 +531,7 @@ export const ProfileManagement = () => {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
         <header className="relative mb-24">
-           {/* Banner e Logo (Código existente mantido) */}
+           {/* Banner e Logo (Mantidos) */}
           <div className="group relative h-48 md:h-64 rounded-2xl bg-gray-900/50 border-2 border-dashed border-gray-700 flex items-center justify-center">
             {isUploadingBanner && (
               <Loader2 className="animate-spin text-white" size={32} />
@@ -644,7 +664,7 @@ export const ProfileManagement = () => {
           </div>
         </section>
 
-        {/* --- NOVO: CONFIGURAÇÃO DE PIX --- */}
+        {/* --- CONFIGURAÇÃO DE PIX --- */}
         <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
           <div className="flex items-center gap-3 mb-6">
             <h2 className="text-2xl font-semibold text-amber-400">

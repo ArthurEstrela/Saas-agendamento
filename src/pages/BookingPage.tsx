@@ -23,7 +23,11 @@ const BookingStepper = ({ currentStep }: { currentStep: number }) => {
             <div
               className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300
                 ${isCompleted ? "bg-[#daa520] text-gray-900" : ""}
-                ${isActive ? "bg-amber-500/20 border-2 border-[#daa520] text-[#daa520]" : ""}
+                ${
+                  isActive
+                    ? "bg-amber-500/20 border-2 border-[#daa520] text-[#daa520]"
+                    : ""
+                }
                 ${!isActive && !isCompleted ? "bg-gray-800 text-gray-500" : ""}
               `}
             >
@@ -52,7 +56,8 @@ const BookingSuccess = () => {
         Agendamento Solicitado!
       </h2>
       <p className="text-gray-300 mb-6">
-        Sua solicitação foi enviada com sucesso e processada pelo sistema. Você pode acompanhar o status na sua área de agendamentos.
+        Sua solicitação foi enviada com sucesso e processada pelo sistema. Você
+        pode acompanhar o status na sua área de agendamentos.
       </p>
       <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
         <Link to="/dashboard" className="primary-button">
@@ -121,8 +126,8 @@ export const BookingPage = () => {
         <AlertTriangle size={64} className="text-red-500 mb-6" />
         <h1 className="text-3xl font-bold mb-2">Ocorreu um Erro</h1>
         <p className="text-gray-400 mb-8 max-w-md">{status.error}</p>
-        <Link 
-          to="/dashboard" 
+        <Link
+          to="/dashboard"
           className="primary-button"
           onClick={() => resetBookingState(false)} // Garante limpeza ao voltar
         >
@@ -157,8 +162,7 @@ export const BookingPage = () => {
 
       <div className="container mx-auto p-4 md:p-8">
         {/* 3. Lógica de Exibição: Sucesso vs Fluxo de Agendamento */}
-        {status.isSuccess ? (
-          // Animação simples de entrada para o sucesso
+        {status.isSuccess && currentStep !== 4 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

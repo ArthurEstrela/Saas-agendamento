@@ -13,14 +13,15 @@ import { db } from "./config";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import type { Appointment } from "../types";
 
-const functions = getFunctions(db.app);
+const functions = getFunctions(db.app, "southamerica-east1");
 
 // ✅ HELPER: Converte qualquer formato de data de forma segura e padronizada
 const convertToDate = (value: unknown): Date | undefined => {
   if (!value) return undefined;
   if (value instanceof Timestamp) return value.toDate();
   if (value instanceof Date) return value;
-  if (typeof value === "number" || typeof value === "string") return new Date(value);
+  if (typeof value === "number" || typeof value === "string")
+    return new Date(value);
   return undefined;
 };
 
@@ -32,7 +33,7 @@ export const convertAppointmentTimestamps = (
   // Tratamento recursivo para sub-objetos (ex: review)
   // FIX: Removido 'any', tipado como objeto genérico ou undefined
   let review = data["review"] as Record<string, unknown> | undefined;
-  
+
   if (review && review.createdAt) {
     review = { ...review, createdAt: convertToDate(review.createdAt) };
   }
@@ -44,12 +45,12 @@ export const convertAppointmentTimestamps = (
     startTime: convertToDate(data.startTime) || new Date(),
     endTime: convertToDate(data.endTime) || new Date(),
     createdAt: convertToDate(data.createdAt) || new Date(),
-    
+
     // Campos opcionais
     completedAt: convertToDate(data.completedAt),
     updatedAt: convertToDate(data.updatedAt),
     cancelledAt: convertToDate(data.cancelledAt),
-    
+
     review: review,
   } as unknown as Appointment; // Double cast para garantir a tipagem estrita
 };
@@ -97,7 +98,7 @@ export const getAppointmentsByClientId = async (
   );
   const querySnapshot = await getDocs(q);
 
-  return querySnapshot.docs.map((doc) => 
+  return querySnapshot.docs.map((doc) =>
     convertAppointmentTimestamps(doc.id, doc.data())
   );
 };
@@ -116,7 +117,7 @@ export const getAppointmentsByProviderId = async (
   );
   const querySnapshot = await getDocs(q);
 
-  return querySnapshot.docs.map((doc) => 
+  return querySnapshot.docs.map((doc) =>
     convertAppointmentTimestamps(doc.id, doc.data())
   );
 };
@@ -130,18 +131,16 @@ export const updateAppointmentStatus = async (
   rejectionReason?: string
 ): Promise<void> => {
   if (status === "completed") {
-    throw new Error(
-      "Use 'completeAppointment' para finalizar agendamentos."
-    );
+    throw new Error("Use 'completeAppointment' para finalizar agendamentos.");
   }
 
   const appointmentRef = doc(db, "appointments", appointmentId);
-  
+
   // FIX: Removido 'any', tipado explicitamente como Record genérico
   // Isso permite adicionar propriedades dinamicamente de forma segura para o Firestore
-  const updateData: Record<string, unknown> = { 
-    status, 
-    updatedAt: new Date() // Marca timestamp da alteração
+  const updateData: Record<string, unknown> = {
+    status,
+    updatedAt: new Date(), // Marca timestamp da alteração
   };
 
   if (rejectionReason) updateData.rejectionReason = rejectionReason;
@@ -173,7 +172,7 @@ export const getAppointmentsForProfessionalOnDate = async (
 ): Promise<Appointment[]> => {
   // 1. Clonamos a data base para não mutar o objeto original
   const baseDate = new Date(date);
-  
+
   // 2. Definimos o início e fim do dia no horário local
   const startOfDay = new Date(baseDate);
   startOfDay.setHours(0, 0, 0, 0);
@@ -185,15 +184,15 @@ export const getAppointmentsForProfessionalOnDate = async (
   // Ampliamos a janela de busca em +/- 12 horas.
   // Motivo: Se o cliente está no Brasil (UTC-3) e o profissional na Europa (UTC+1),
   // ou se houver confusão entre UTC/Local no banco, um agendamento às 23:00 pode
-  // cair no "dia seguinte" em UTC. 
+  // cair no "dia seguinte" em UTC.
   // Buscar com margem garante que PEGADAREMOS o agendamento conflitante.
   // A filtragem exata de horário acontece na memória (DateTimeSelection.tsx).
-  
-  const queryStart = new Date(startOfDay.getTime() - (12 * 60 * 60 * 1000));
-  const queryEnd = new Date(endOfDay.getTime() + (12 * 60 * 60 * 1000));
+
+  const queryStart = new Date(startOfDay.getTime() - 12 * 60 * 60 * 1000);
+  const queryEnd = new Date(endOfDay.getTime() + 12 * 60 * 60 * 1000);
 
   const appointmentsRef = collection(db, "appointments");
-  
+
   // A query agora usa a janela expandida
   const q = query(
     appointmentsRef,
@@ -203,8 +202,8 @@ export const getAppointmentsForProfessionalOnDate = async (
   );
 
   const querySnapshot = await getDocs(q);
-  
-  return querySnapshot.docs.map((doc) => 
+
+  return querySnapshot.docs.map((doc) =>
     convertAppointmentTimestamps(doc.id, doc.data())
   );
 };

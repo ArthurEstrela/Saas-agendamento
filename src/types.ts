@@ -92,6 +92,8 @@ export interface Appointment {
   providerId: string;
   professionalId: string;
   professionalName: string;
+  professionalAvatarUrl?: string;
+  providerAvatarUrl?: string;
   services: Service[];
   serviceName: string;
   startTime: Date;

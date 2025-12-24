@@ -1,11 +1,16 @@
 import { Link } from "react-router-dom";
 import type { ClientProfile, ServiceProviderProfile } from "../../types";
 import { MapPin, Sparkles, Heart, Star } from "lucide-react";
-import { useProfileStore } from "../../store/profileStore"; // 1. Importe a profileStore
+import { useProfileStore } from "../../store/profileStore";
 import { useMemo } from "react";
 
+// 1. CORREÇÃO: Estender a interface para incluir a propriedade opcional 'distance'
+interface EnrichedProviderProfile extends ServiceProviderProfile {
+  distance?: number;
+}
+
 interface Props {
-  provider: ServiceProviderProfile;
+  provider: EnrichedProviderProfile; // Usar a interface estendida aqui
 }
 
 const StarRating = ({ rating, count }: { rating: number; count: number }) => {
@@ -50,7 +55,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
       return { average: 0, count: 0 };
     }
     const average =
-      reviews.reduce((acc, review) => acc + review.rating, 0) / totalReviews;
+      reviews!.reduce((acc, review) => acc + review.rating, 0) / totalReviews; // Use o '!' se necessário ou verifique se reviews existe antes
     return { average, count: totalReviews };
   }, [reviews]);
 
@@ -72,7 +77,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
 
   return (
     <div className="relative bg-black/30 rounded-2xl overflow-hidden group border border-transparent transition-all duration-300 hover:shadow-2xl hover:shadow-amber-500/10 hover:border-amber-500">
-      {/* 3. Botão de Favoritar */}
+      {/* Botão de Favoritar */}
       <button
         onClick={handleFavoriteClick}
         className="absolute top-4 right-4 z-10 p-2 bg-gray-900/50 rounded-full transition-all duration-300 hover:bg-red-500/20"
@@ -114,7 +119,8 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
             <MapPin size={14} className="mr-2 flex-shrink-0" />
             <span>
               {`${provider.businessAddress.city}, ${provider.businessAddress.state}`}
-              {provider.distance && ` - ${provider.distance.toFixed(1)} km`}
+              {/* 2. Agora o TS aceita provider.distance porque estendemos a interface */}
+              {provider.distance !== undefined && ` - ${provider.distance.toFixed(1)} km`}
             </span>
           </div>
         </div>

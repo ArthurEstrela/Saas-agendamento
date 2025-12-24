@@ -1,5 +1,5 @@
 // src/components/Common/ReviewModal.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { EnrichedAppointment } from '../../store/userAppointmentsStore'; // Usando um tipo mais consistente
 import { Star, X } from 'lucide-react';
 import { toast } from 'react-hot-toast'; // Import direto para a validação

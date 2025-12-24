@@ -1,9 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, type ElementType } from "react"; // <--- 1. Importar ElementType
 import {
   Search,
   Calendar,
   Heart,
-  User,
   LogOut,
   ImageIcon,
   Bell,
@@ -14,7 +13,6 @@ import { useNotificationStore } from "../../store/notificationsStore";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../../assets/stylo-logo.png";
 
-// 1. Definindo um tipo para as seções, o que remove a necessidade do "as any"
 type NavSection =
   | "search"
   | "appointments"
@@ -27,8 +25,17 @@ interface ClientSideNavProps {
   setActiveSection: (section: NavSection) => void;
 }
 
-// 2. Criando um componente reutilizável para cada item da navegação
-const NavItem = ({ icon: Icon, label, isActive, count = 0, onClick }) => (
+// 2. Criar a interface para tipar as props do NavItem
+interface NavItemProps {
+  icon: ElementType; // Tipo correto para componentes de ícone (React Components)
+  label: string;
+  isActive: boolean;
+  count?: number; // Opcional
+  onClick: () => void;
+}
+
+// 3. Aplicar a tipagem no componente NavItem
+const NavItem = ({ icon: Icon, label, isActive, count = 0, onClick }: NavItemProps) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 text-base font-medium ${
@@ -41,7 +48,6 @@ const NavItem = ({ icon: Icon, label, isActive, count = 0, onClick }) => (
       <Icon className="mr-3 flex-shrink-0" size={22} />
       <span>{label}</span>
     </div>
-    {/* 3. Lógica do contador com a cor correta (âmbar) e sempre visível */}
     {count > 0 && (
       <span className="flex items-center justify-center w-6 h-6 bg-amber-500 text-black text-xs font-bold rounded-full">
         {count}
@@ -60,13 +66,12 @@ export const ClientSideNav = ({
   const { unreadCount, fetchNotifications, clearNotifications } =
     useNotificationStore();
 
-  // 4. Adicionando o useEffect para buscar as notificações em tempo real
   useEffect(() => {
     if (user?.uid) {
       fetchNotifications(user.uid);
     }
     return () => {
-      clearNotifications(); // Limpa ao desmontar para evitar memory leaks
+      clearNotifications();
     };
   }, [user, fetchNotifications, clearNotifications]);
 

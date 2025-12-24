@@ -1,15 +1,15 @@
 // src/components/Client/ClientSearchSection.tsx
-import { useState, useEffect, useMemo, useCallback } from "react"; // Adicionei useCallback
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchStore } from "../../store/searchStore";
 import { ClientProfessionalCard } from "./ClientProfessionalCard";
 import { Loader2, Search, Frown } from "lucide-react";
 import { useProfileStore } from "../../store/profileStore";
-import { ProviderFilter } from './ProviderFilter'; // <<<--- 1. Importar o filtro
-import type { ServiceProviderProfile } from "../../types"; // Importar o tipo
+import { ProviderFilter } from './ProviderFilter';
+import type { PaymentMethod, ServiceProviderProfile } from "../../types";
 
-// ... (função getDistance permanece a mesma) ...
-const getDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; // Raio da Terra em km
+// Função de distância (mantida)
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -19,26 +19,31 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distância em km
+  return R * c;
 };
 
-
-// Tipagem para os filtros aplicados
+// Interface para os filtros
 interface AppliedFilters {
   distance: number;
   areaOfWork: string;
   minRating: number;
-  paymentMethods: string[]; // Usando string[] para simplificar, pode usar PaymentMethod[] também
+  paymentMethods: PaymentMethod[];
+}
+
+// Interface estendida para incluir propriedades calculadas
+interface EnrichedProvider extends ServiceProviderProfile {
+  distance?: number;
+  averageRating?: number;
 }
 
 export const ClientSearchSection = () => {
   const { userProfile } = useProfileStore();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  const { results: rawResults, isLoading, search } = useSearchStore(); // Renomeado para rawResults
+  const { results: rawResults, isLoading, search } = useSearchStore();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({ // <<<--- 2. Estado para os filtros
+  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
       distance: 50,
       areaOfWork: 'all',
       minRating: 0,
@@ -55,82 +60,79 @@ export const ClientSearchSection = () => {
       },
       (error) => {
         console.error("Erro ao obter localização", error);
-        // Considerar mostrar um feedback ao usuário aqui
       }
     );
-    search(''); // Busca inicial sem termo
+    search('');
   }, [search]);
 
-  // <<<--- 3. Memoizar as áreas de atuação disponíveis
   const availableAreas = useMemo(() => {
       const areas = new Set(rawResults.map(p => p.areaOfWork).filter(Boolean));
       return Array.from(areas) as string[];
   }, [rawResults]);
 
-  // <<<--- 4. Aplicar filtros + cálculo de distância + ordenação
   const filteredAndSortedProviders = useMemo(() => {
-    let filtered = rawResults;
+    // Tipamos explicitamente como EnrichedProvider[] para aceitar distance e averageRating
+    let filtered: EnrichedProvider[] = rawResults.map(p => ({...p})); 
 
-    // Aplica filtro de Área de Atuação
+    // Filtro de Área
     if (appliedFilters.areaOfWork !== 'all') {
       filtered = filtered.filter(p => p.areaOfWork === appliedFilters.areaOfWork);
     }
 
-    // Aplica filtro de Pagamento
+    // 1. CORREÇÃO: Verificação segura de PaymentMethods
     if (appliedFilters.paymentMethods.length > 0) {
-      filtered = filtered.filter(p =>
-        appliedFilters.paymentMethods.every(pm => p.paymentMethods?.includes(pm as any)) // Cast 'as any' ou importe PaymentMethod
-      );
+      filtered = filtered.filter(p => {
+        // Só retorna true se p.paymentMethods existir E contiver todos os filtros selecionados
+        return p.paymentMethods && appliedFilters.paymentMethods.every(pm => 
+          p.paymentMethods!.includes(pm) // O '!' aqui diz ao TS: "já verifiquei que existe antes"
+        );
+      });
     }
 
-     // Calcula a média das avaliações ANTES de filtrar por ela
-     const providersWithAvgRating = filtered.map(provider => {
+    // Cálculo de Média
+    filtered = filtered.map(provider => {
         const totalReviews = provider.reviews?.length || 0;
         const average = totalReviews > 0
-            ? provider.reviews.reduce((acc, review) => acc + review.rating, 0) / totalReviews
+            ? provider.reviews!.reduce((acc, review) => acc + review.rating, 0) / totalReviews
             : 0;
         return { ...provider, averageRating: average };
-     });
+    });
 
-    // Aplica filtro de Avaliação Mínima
+    // Filtro de Avaliação Mínima
     if (appliedFilters.minRating > 0) {
-        filtered = providersWithAvgRating.filter(p => p.averageRating >= appliedFilters.minRating);
-    } else {
-        filtered = providersWithAvgRating; // Mantém todos se minRating for 0
+        filtered = filtered.filter(p => (p.averageRating || 0) >= appliedFilters.minRating);
     }
 
-
-    // Calcula distância e aplica filtro de distância
+    // Cálculo de Distância
     if (userLocation) {
         filtered = filtered
             .map(provider => ({
                 ...provider,
-                distance: provider.businessAddress.lat ? getDistance(
+                distance: (provider.businessAddress && provider.businessAddress.lat && provider.businessAddress.lng) 
+                ? getDistance(
                     userLocation.lat,
                     userLocation.lng,
                     provider.businessAddress.lat,
                     provider.businessAddress.lng
                 ) : Infinity,
             }))
-            .filter(provider => provider.distance <= appliedFilters.distance); // Filtra pela distância máxima
+            .filter(provider => (provider.distance || Infinity) <= appliedFilters.distance);
     } else {
-        // Se não houver localização, adiciona 'distance: Infinity' para manter a estrutura
          filtered = filtered.map(provider => ({ ...provider, distance: Infinity }));
     }
 
+    // Ordenação
+    return filtered.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
 
-    // Ordena por distância (pode adicionar mais opções de ordenação depois)
-    return filtered.sort((a, b) => a.distance - b.distance);
-
-  }, [rawResults, userLocation, appliedFilters]); // Depende dos resultados brutos, localização e filtros
+  }, [rawResults, userLocation, appliedFilters]);
 
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    search(searchTerm); // A busca principal ainda usa o termo
+    search(searchTerm);
   };
 
-   // <<<--- 5. Callback para receber os filtros do componente filho
+  // 2. CORREÇÃO: Substituído 'any' por 'AppliedFilters'
   const handleApplyFilters = useCallback((filters: AppliedFilters) => {
     setAppliedFilters(filters);
   }, []);
@@ -146,14 +148,12 @@ export const ClientSearchSection = () => {
 
   return (
     <div>
-      {/* Cabeçalho */}
       <div className="mb-10">
         <WelcomeMessage />
         <p className="text-md sm:text-lg text-gray-400">
           Encontre os melhores profissionais para o seu estilo.
         </p>
 
-        {/* Barra de Busca e Botão de Filtro */}
         <div className="mt-8 max-w-3xl flex items-center gap-4">
           <form onSubmit={handleSearch} className="flex-grow">
             <div className="relative">
@@ -162,31 +162,34 @@ export const ClientSearchSection = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar por nome, serviço (ex: barbearia)..."
-                className="w-full bg-black/30 text-white placeholder-gray-500 rounded-lg py-3 pl-12 pr-16 border-2 border-transparent focus:border-amber-500 focus:ring-0 transition-all duration-300 text-base" // Ajustado padding e borda
+                className="w-full bg-black/30 text-white placeholder-gray-500 rounded-lg py-3 pl-12 pr-16 border-2 border-transparent focus:border-amber-500 focus:ring-0 transition-all duration-300 text-base"
               />
-               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
               <button
                 type="submit"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors" // Ajustado padding e borda
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors"
               >
                 <Search className="text-gray-900" size={20} />
               </button>
             </div>
           </form>
-          {/* <<<--- 6. Renderizar o componente de filtro */}
-          <ProviderFilter onApplyFilters={handleApplyFilters} availableAreas={availableAreas} initialFilters={appliedFilters}/>
+          
+          <ProviderFilter 
+            onApplyFilters={handleApplyFilters} 
+            availableAreas={availableAreas} 
+            initialFilters={appliedFilters}
+          />
         </div>
       </div>
 
-      {/* Grid de Resultados */}
       <div>
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="animate-spin text-amber-500" size={48} />
           </div>
-        ) : filteredAndSortedProviders.length > 0 ? ( // <<<--- 7. Usar a lista filtrada
+        ) : filteredAndSortedProviders.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredAndSortedProviders.map((provider) => ( // <<<--- 7. Usar a lista filtrada
+            {filteredAndSortedProviders.map((provider) => (
               <ClientProfessionalCard key={provider.id} provider={provider} />
             ))}
           </div>

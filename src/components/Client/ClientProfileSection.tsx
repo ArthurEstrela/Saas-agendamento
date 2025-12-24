@@ -7,7 +7,7 @@ import {
   updateUserProfile,
   uploadProfilePicture,
 } from "../../firebase/userService";
-import { useToast } from '../../hooks/useToast';
+import { useToast } from "../../hooks/useToast";
 import {
   Loader2,
   User,
@@ -15,14 +15,17 @@ import {
   Phone,
   UserCheck,
   Calendar,
-  Edit,
-  Image as ImageIcon,
-  CheckCircle,
+  Edit2,
+  Camera,
+  Save,
+  X,
+  UserCircle,
 } from "lucide-react";
 import { IMaskInput } from "react-imask";
+import { motion } from "framer-motion"; // Adicionei animações suaves
 import type { ClientProfile } from "../../types";
 
-// Schema de validação para a edição do perfil
+// Schema de validação
 const profileSchema = z.object({
   name: z.string().min(3, "Nome completo é obrigatório"),
   phoneNumber: z.string().min(14, "O telefone é obrigatório"),
@@ -39,8 +42,8 @@ export const ClientProfileSection = () => {
   const { userProfile, setUserProfile } = useProfileStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-   const { showSuccess, showError } = useToast();
-  // Estados para o upload da foto
+  const { showSuccess, showError } = useToast();
+
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -54,15 +57,14 @@ export const ClientProfileSection = () => {
     resolver: zodResolver(profileSchema),
   });
 
-  // Popula o formulário com os dados do perfil quando o componente carrega ou o perfil muda
   useEffect(() => {
-    if (userProfile && userProfile.role === 'client') {
+    if (userProfile && userProfile.role === "client") {
       reset({
         name: userProfile.name,
-        phoneNumber: userProfile.phoneNumber,
-        cpf: userProfile.cpf,
-        dateOfBirth: userProfile.dateOfBirth,
-        gender: userProfile.gender,
+        phoneNumber: userProfile.phoneNumber || "",
+        cpf: userProfile.cpf || "",
+        dateOfBirth: userProfile.dateOfBirth || "",
+        gender: userProfile.gender || "Prefiro não dizer",
       });
       setPreviewUrl(userProfile.profilePictureUrl || null);
     }
@@ -78,13 +80,11 @@ export const ClientProfileSection = () => {
 
   const onSubmit = async (data: ProfileFormData) => {
     if (!userProfile) return;
-
     setIsSubmitting(true);
 
     try {
       let newProfilePictureUrl = userProfile.profilePictureUrl;
 
-      // 1. Faz o upload da nova foto, se houver
       if (profileImageFile) {
         newProfilePictureUrl = await uploadProfilePicture(
           userProfile.id,
@@ -92,22 +92,17 @@ export const ClientProfileSection = () => {
         );
       }
 
-      // 2. Prepara os dados para atualização
       const updatedProfileData: Partial<ClientProfile> = {
-        // ... outras propriedades
-      name: data.name,
-      phoneNumber: data.phoneNumber,
-      cpf: data.cpf,
-      dateOfBirth: data.dateOfBirth,
-      // 1. Faça a correção aqui
-      gender: data.gender as ClientProfile['gender'],
+        name: data.name,
+        phoneNumber: data.phoneNumber,
+        cpf: data.cpf,
+        dateOfBirth: data.dateOfBirth,
+        // Correção de tipagem segura
+        gender: data.gender as ClientProfile["gender"],
         profilePictureUrl: newProfilePictureUrl,
       };
 
-      // 3. Atualiza o perfil no Firestore
       await updateUserProfile(userProfile.id, updatedProfileData);
-
-      // 4. Atualiza o estado local na store
       setUserProfile({ ...userProfile, ...updatedProfileData });
 
       showSuccess("Perfil atualizado com sucesso!");
@@ -117,15 +112,13 @@ export const ClientProfileSection = () => {
       showError("Falha ao atualizar o perfil. Tente novamente.");
     } finally {
       setIsSubmitting(false);
-      setProfileImageFile(null); // Limpa o arquivo após o envio
+      setProfileImageFile(null);
     }
   };
 
-  // Função para cancelar a edição
   const cancelEdit = () => {
     setIsEditing(false);
-    // Reseta o formulário para os valores originais
-    if (userProfile && userProfile.role === 'client') {
+    if (userProfile && userProfile.role === "client") {
       reset({
         name: userProfile.name,
         phoneNumber: userProfile.phoneNumber,
@@ -139,64 +132,109 @@ export const ClientProfileSection = () => {
   };
 
   if (!userProfile) {
-    return <Loader2 className="animate-spin text-amber-500" size={48} />;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="animate-spin text-[#daa520]" size={48} />
+      </div>
+    );
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold text-white">Meu Perfil</h1>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Cabeçalho da Página */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-white">Meu Perfil</h1>
+        {!isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="primary-button flex items-center gap-2 text-sm px-4 py-2"
+          >
+            <Edit2 size={16} />
+            Editar Dados
+          </button>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <div className="bg-black/30 p-8 rounded-2xl">
-          <h2 className="text-2xl font-semibold text-amber-400 mb-6">
-            Informações Pessoais
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
-            {/* Coluna da Foto */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="relative">
-                <div className="w-40 h-40 rounded-full bg-gray-700 flex items-center justify-center border-4 border-amber-500/50">
+      <div className="bg-gray-800/40 border border-gray-700 rounded-2xl overflow-hidden shadow-xl">
+        {/* Banner Decorativo */}
+        <div className="h-32 bg-gradient-to-r from-[#daa520]/20 to-gray-900 w-full relative">
+          <div className="absolute inset-0 bg-grid-white/5" />
+        </div>
+
+        <div className="px-8 pb-8 relative">
+          <form onSubmit={handleSubmit(onSubmit)}>
+            {/* Seção de Foto (Avatar sobrepondo o banner) */}
+            <div className="flex flex-col md:flex-row items-end md:items-center gap-6 -mt-12 mb-8 relative z-10">
+              <div className="relative group">
+                <div className="w-32 h-32 rounded-full bg-gray-900 border-4 border-gray-800 shadow-2xl overflow-hidden flex items-center justify-center">
                   {previewUrl ? (
                     <img
                       src={previewUrl}
-                      alt="Preview"
-                      className="w-full h-full rounded-full object-cover"
+                      alt="Foto de perfil"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    <ImageIcon className="text-gray-400" size={64} />
+                    <UserCircle className="text-gray-600 w-20 h-20" />
+                  )}
+
+                  {/* Overlay de Edição da Foto */}
+                  {isEditing && (
+                    <label
+                      htmlFor="profile-picture-upload"
+                      className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200"
+                    >
+                      <Camera size={24} className="text-white mb-1" />
+                      <span className="text-[10px] text-white font-medium uppercase tracking-wide">
+                        Alterar
+                      </span>
+                      <input
+                        id="profile-picture-upload"
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                      />
+                    </label>
                   )}
                 </div>
-                {isEditing && (
-                  <label
-                    htmlFor="profile-picture-upload"
-                    className="absolute -bottom-2 -right-2 bg-amber-500 p-3 rounded-full cursor-pointer hover:bg-amber-600 transition-colors"
-                  >
-                    <Edit size={20} className="text-gray-900" />
-                    <input
-                      id="profile-picture-upload"
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                    />
-                  </label>
-                )}
+                {/* Badge de status (opcional) */}
+                <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-4 border-gray-800 rounded-full"></div>
+              </div>
+
+              <div className="mb-2">
+                <h2 className="text-2xl font-bold text-white">
+                  {userProfile.name}
+                </h2>
+                <p className="text-gray-400 text-sm">Cliente</p>
               </div>
             </div>
 
-            {/* Coluna de Dados */}
-            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* Inputs do Formulário */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Nome */}
-              <div>
-                <label className="label-text">Nome Completo</label>
-                <div className="input-container">
-                  <User className="input-icon" />
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
+                  Nome Completo
+                </label>
+                <div
+                  className={`input-container transition-colors ${
+                    isEditing
+                      ? "bg-gray-900"
+                      : "bg-transparent border-transparent"
+                  }`}
+                >
+                  <User
+                    className={`input-icon ${
+                      isEditing ? "text-[#daa520]" : "text-gray-600"
+                    }`}
+                  />
                   <input
                     {...register("name")}
-                    className="input-field pl-10"
+                    className={`input-field pl-10 ${
+                      !isEditing && "text-gray-300"
+                    }`}
                     disabled={!isEditing}
+                    placeholder="Seu nome"
                   />
                 </div>
                 {errors.name && (
@@ -204,33 +242,50 @@ export const ClientProfileSection = () => {
                 )}
               </div>
 
-              {/* Email (não editável) */}
-              <div>
-                <label className="label-text">Email</label>
-                <div className="input-container">
-                  <Mail className="input-icon" />
+              {/* Email (Fixo) */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
+                  E-mail
+                </label>
+                <div className="input-container bg-transparent border-gray-700/50 opacity-70">
+                  <Mail className="input-icon text-gray-600" />
                   <input
                     value={userProfile.email}
-                    className="input-field pl-10 bg-gray-800 cursor-not-allowed"
+                    className="input-field pl-10 text-gray-400 cursor-not-allowed"
                     disabled
                   />
                 </div>
               </div>
 
               {/* Telefone */}
-              <div>
-                <label className="label-text">Telefone</label>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
+                  Celular / WhatsApp
+                </label>
                 <Controller
                   name="phoneNumber"
                   control={control}
                   render={({ field }) => (
-                    <div className="input-container">
-                      <Phone className="input-icon" />
+                    <div
+                      className={`input-container transition-colors ${
+                        isEditing
+                          ? "bg-gray-900"
+                          : "bg-transparent border-transparent"
+                      }`}
+                    >
+                      <Phone
+                        className={`input-icon ${
+                          isEditing ? "text-[#daa520]" : "text-gray-600"
+                        }`}
+                      />
                       <IMaskInput
                         {...field}
                         mask="(00) 00000-0000"
-                        className="input-field pl-10"
+                        className={`input-field pl-10 ${
+                          !isEditing && "text-gray-300"
+                        }`}
                         disabled={!isEditing}
+                        placeholder="(00) 00000-0000"
                       />
                     </div>
                   )}
@@ -241,19 +296,34 @@ export const ClientProfileSection = () => {
               </div>
 
               {/* CPF */}
-              <div>
-                <label className="label-text">CPF</label>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
+                  CPF
+                </label>
                 <Controller
                   name="cpf"
                   control={control}
                   render={({ field }) => (
-                    <div className="input-container">
-                      <UserCheck className="input-icon" />
+                    <div
+                      className={`input-container transition-colors ${
+                        isEditing
+                          ? "bg-gray-900"
+                          : "bg-transparent border-transparent"
+                      }`}
+                    >
+                      <UserCheck
+                        className={`input-icon ${
+                          isEditing ? "text-[#daa520]" : "text-gray-600"
+                        }`}
+                      />
                       <IMaskInput
                         {...field}
                         mask="000.000.000-00"
-                        className="input-field pl-10"
+                        className={`input-field pl-10 ${
+                          !isEditing && "text-gray-300"
+                        }`}
                         disabled={!isEditing}
+                        placeholder="000.000.000-00"
                       />
                     </div>
                   )}
@@ -263,20 +333,35 @@ export const ClientProfileSection = () => {
                 )}
               </div>
 
-              {/* Data de Nascimento */}
-              <div>
-                <label className="label-text">Data de Nascimento</label>
+              {/* Nascimento */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
+                  Data de Nascimento
+                </label>
                 <Controller
                   name="dateOfBirth"
                   control={control}
                   render={({ field }) => (
-                    <div className="input-container">
-                      <Calendar className="input-icon" />
+                    <div
+                      className={`input-container transition-colors ${
+                        isEditing
+                          ? "bg-gray-900"
+                          : "bg-transparent border-transparent"
+                      }`}
+                    >
+                      <Calendar
+                        className={`input-icon ${
+                          isEditing ? "text-[#daa520]" : "text-gray-600"
+                        }`}
+                      />
                       <IMaskInput
                         {...field}
                         mask="00/00/0000"
-                        className="input-field pl-10"
+                        className={`input-field pl-10 ${
+                          !isEditing && "text-gray-300"
+                        }`}
                         disabled={!isEditing}
+                        placeholder="DD/MM/AAAA"
                       />
                     </div>
                   )}
@@ -287,12 +372,28 @@ export const ClientProfileSection = () => {
               </div>
 
               {/* Gênero */}
-              <div>
-                <label className="label-text">Gênero</label>
-                <div className="input-container">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
+                  Gênero
+                </label>
+                <div
+                  className={`input-container transition-colors ${
+                    isEditing
+                      ? "bg-gray-900"
+                      : "bg-transparent border-transparent"
+                  }`}
+                >
+                  {/* Truque visual para manter ícone alinhado no select */}
+                  <User
+                    className={`input-icon ${
+                      isEditing ? "text-[#daa520]" : "text-gray-600"
+                    }`}
+                  />
                   <select
                     {...register("gender")}
-                    className="input-field"
+                    className={`input-field pl-10 appearance-none ${
+                      !isEditing && "text-gray-300"
+                    }`}
                     disabled={!isEditing}
                   >
                     <option value="Masculino">Masculino</option>
@@ -306,42 +407,41 @@ export const ClientProfileSection = () => {
                 )}
               </div>
             </div>
-          </div>
-        </div>
 
-        {isEditing && (
-          <div className="flex justify-end gap-4">
-            <button
-              type="button"
-              onClick={cancelEdit}
-              className="secondary-button"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="primary-button flex items-center justify-center w-40"
-            >
-              {isSubmitting ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                "Salvar Alterações"
-              )}
-            </button>
-          </div>
-        )}
-      </form>
-      <div className="mt-5">
-        {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 primary-button"
-          >
-            <Edit size={18} />
-            Editar Perfil
-          </button>
-        )}
+            {/* Rodapé com Ações (Só aparece se estiver editando) */}
+            {isEditing && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-8 pt-6 border-t border-gray-700 flex justify-end gap-3"
+              >
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="secondary-button flex items-center gap-2"
+                  disabled={isSubmitting}
+                >
+                  <X size={18} />
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="primary-button flex items-center gap-2 w-40 justify-center"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      Salvar
+                    </>
+                  )}
+                </button>
+              </motion.div>
+            )}
+          </form>
+        </div>
       </div>
     </div>
   );

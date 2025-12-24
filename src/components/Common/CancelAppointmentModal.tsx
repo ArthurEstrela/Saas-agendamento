@@ -1,8 +1,7 @@
 // src/components/Common/CancelAppointmentModal.tsx
 
 import { useState, useEffect } from "react"; // ****** useEffect ADICIONADO ******
-import { motion } from "framer-motion";
-import { X, AlertTriangle, Send, Loader2 } from "lucide-react";
+import { AlertTriangle, Send, Loader2 } from "lucide-react";
 // ****** Importações de UI (opcional, mas recomendado) ******
 import { Button } from "../ui/button";
 import {

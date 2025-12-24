@@ -90,7 +90,7 @@ export const Confirmation = () => {
         toast.success("Redirecionando...");
         setTimeout(() => {
             resetBookingState(true);
-            navigate("/client/appointments");
+            navigate("/dashboard");
         }, 2000);
       }
     }
@@ -195,7 +195,7 @@ export const Confirmation = () => {
             <button
               onClick={() => {
                 resetBookingState(true);
-                navigate("/client/appointments");
+                navigate("/dashboard");
               }}
               className="w-full py-2 text-gray-400 hover:text-white text-xs transition-colors"
             >

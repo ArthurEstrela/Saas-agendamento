@@ -23,7 +23,6 @@ import { useReviewStore } from "../../store/reviewStore";
 
 // StatusBadge (código inalterado)
 const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
-  // ... (lógica StatusBadge)
   const statusInfo = {
     scheduled: {
       text: "Confirmado",
@@ -72,9 +71,12 @@ export const ClientAppointmentCard = ({
     startTime,
     services,
     provider,
-    professionalPhotoUrl,
+    // professionalPhotoUrl, // <-- REMOVIDO (Nome antigo)
+    professionalAvatarUrl, // <-- ADICIONADO: Foto salva no snapshot
+    providerAvatarUrl, // <-- ADICIONADO: Logo salvo no snapshot
     status,
   } = appointment;
+
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [isCancelModalOpen, setCancelModalOpen] = useState(false);
   const { submitReview, isSubmitting } = useReviewStore();
@@ -84,13 +86,18 @@ export const ClientAppointmentCard = ({
   const formattedDate = format(startTime, "EEEE, dd 'de' MMMM", {
     locale: ptBR,
   });
-  const formattedTime = format(startTime, "HH:mm"); // FUNÇÃO DE NAVEGAÇÃO CORRIGIDA PARA USAR O FORMATO MODERNO DO GOOGLE MAPS
+  const formattedTime = format(startTime, "HH:mm");
 
+  // ✅ CORREÇÃO BÔNUS: Link do Google Maps corrigido
   const handleNavigation = () => {
     if (provider?.businessAddress) {
-      const { street, city, state } = provider.businessAddress; // Criando a query de endereço para o Google Maps
-      const address = encodeURIComponent(`${street}, ${city}, ${state}`); // Usando a API de navegação do Google Maps para abrir o aplicativo/site
-      window.open(`https://www.google.com/maps/search/?api=1&query=${address}`);
+      const { street, city, state } = provider.businessAddress;
+      const address = encodeURIComponent(`${street}, ${city}, ${state}`);
+      // Abre a busca do Google Maps corretamente
+      window.open(
+        `https://www.google.com/maps/search/?api=1&query=${address}`,
+        "_blank"
+      );
     }
   };
 
@@ -119,16 +126,17 @@ export const ClientAppointmentCard = ({
   const now = new Date();
 
   const canCancel =
-    // O status for 'agendado' ou 'pendente'
     (appointment.status === "scheduled" || appointment.status === "pending") &&
-    // E a data/hora atual for ANTES do horário limite para cancelamento
     isBefore(now, cancellationDeadline);
 
-  // 3. Verificamos se o tempo para cancelar já expirou (para mostrar uma mensagem)
   const hasCancellationTimeExpired =
     (appointment.status === "scheduled" || appointment.status === "pending") &&
     !isBefore(now, cancellationDeadline) &&
     isBefore(now, appointment.startTime);
+
+  // ✅ LÓGICA DA IMAGEM: Prioridade = Profissional > Logo do Prestador Salvo > Logo Atual > Ícone
+  const displayImage =
+    professionalAvatarUrl || providerAvatarUrl || provider?.logoUrl;
 
   return (
     <>
@@ -140,17 +148,15 @@ export const ClientAppointmentCard = ({
       >
         {/* Cabeçalho do Card */}
         <div className="p-5 flex items-start gap-4 bg-gray-800/60">
-          <div className="w-16 h-16 rounded-full bg-gray-700 flex-shrink-0 overflow-hidden">
-            {professionalPhotoUrl ? (
+          <div className="w-16 h-16 rounded-full bg-gray-700 flex-shrink-0 overflow-hidden border border-gray-600 flex items-center justify-center">
+            {displayImage ? (
               <img
-                src={professionalPhotoUrl}
+                src={displayImage}
                 alt={professionalName}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <User size={32} className="text-gray-500" />
-              </div>
+              <User size={32} className="text-gray-500" />
             )}
           </div>
 
@@ -158,7 +164,7 @@ export const ClientAppointmentCard = ({
             <h3 className="text-lg font-bold text-white">{professionalName}</h3>
 
             <p className="text-sm text-gray-400">
-              em
+              em{" "}
               <span className="font-semibold text-gray-300">
                 {provider?.businessName || "Local não informado"}
               </span>
@@ -168,40 +174,35 @@ export const ClientAppointmentCard = ({
             </div>
           </div>
         </div>
+
         {/* Corpo do Card com Detalhes */}
         <div className="p-5 space-y-4">
           <div className="flex items-center gap-3 text-gray-300">
-            {/* CORREÇÃO: #daa520 para text-amber-500 */}
             <Calendar size={18} className="text-amber-500" />
             <span className="capitalize">{formattedDate}</span>
           </div>
 
           <div className="flex items-center gap-3 text-gray-300">
-            {/* CORREÇÃO: #daa520 para text-amber-500 */}
             <Clock size={18} className="text-amber-500" />
             <span>{formattedTime}</span>
           </div>
 
           {provider?.businessAddress && (
             <div className="flex items-start gap-3 text-gray-300">
-              {/* CORREÇÃO: #daa520 para text-amber-500 */}
-
               <MapPin size={18} className="text-amber-500 mt-0.5" />
-
               <span>{`${provider.businessAddress.street}, ${provider.businessAddress.city}`}</span>
-
               <button
                 onClick={handleNavigation}
-                className="ml-auto text-amber-400 hover:text-amber-300 text-sm font-semibold"
+                className="ml-auto text-amber-400 hover:text-amber-300 text-sm font-semibold hover:underline"
               >
                 Ver no mapa
               </button>
             </div>
           )}
+
           {/* Lista de Serviços */}
           <div className="pt-4 border-t border-gray-700">
             <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
-              {/* CORREÇÃO: #daa520 para text-amber-500 */}
               <Scissors size={18} className="text-amber-500" />
               Serviços
             </h4>
@@ -218,17 +219,18 @@ export const ClientAppointmentCard = ({
             </div>
           </div>
         </div>
-        {/* Rodapé (inalterado) */}
+
+        {/* Rodapé */}
         <div className="bg-gray-900/50 px-5 py-3 flex justify-between items-center">
           <span className="text-sm font-semibold text-gray-400">
             Valor Total
           </span>
-
           <span className="text-lg font-bold text-white">
             R$ {appointment.totalPrice.toFixed(2)}
           </span>
         </div>
-        {/* Botão de Avaliação (inalterado) */}
+
+        {/* Botões de Ação */}
         {(status === "completed" && !appointment.review) || canCancel ? (
           <div className="p-4 bg-gray-900/80 flex gap-2">
             {status === "completed" && !appointment.review && (
@@ -248,9 +250,8 @@ export const ClientAppointmentCard = ({
               </button>
             )}
 
-            {/* Mensagem informativa quando o prazo de cancelamento expirou */}
             {hasCancellationTimeExpired && (
-              <div className="flex items-center justify-center gap-2 text-sm text-yellow-400 p-2 bg-yellow-900/50 rounded-lg">
+              <div className="flex items-center justify-center gap-2 text-sm text-yellow-400 p-2 bg-yellow-900/50 rounded-lg w-full">
                 <Clock size={16} />
                 <span>Prazo para cancelamento online expirado.</span>
               </div>
@@ -272,6 +273,7 @@ export const ClientAppointmentCard = ({
         onConfirm={handleCancelConfirm}
         isLoading={isCancelling}
         userType="client"
+        appointmentId={appointment.id}
       />
     </>
   );

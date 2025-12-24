@@ -188,6 +188,8 @@ export const useBookingProcessStore = create<BookingStore>()(
           providerId: provider.id,
           professionalId: selectedProfessional.id,
           professionalName: selectedProfessional.name,
+          professionalAvatarUrl: selectedProfessional.photoURL || undefined, 
+          providerAvatarUrl: provider.logoUrl || undefined,
           services: selectedServices,
           serviceName: selectedServices.map((s) => s.name).join(", "),
           startTime,

@@ -6,14 +6,14 @@ import {
 } from "../../store/userAppointmentsStore";
 import { ClientAppointmentCard } from "./ClientAppointmentCard";
 import { AppointmentCardSkeleton } from "./AppointmentCardSkeleton";
-import { CalendarX, Clock, History } from "lucide-react";
+import { Clock, History } from "lucide-react"; // CalendarX removido pois não será mais usado
 import { AnimatePresence, motion } from "framer-motion";
 
 // Define os tipos de aba para o estado
 type Tab = "upcoming" | "past";
 
 export const ClientMyAppointmentsSection = () => {
-  const { user } = useAuthStore(); // Usamos seletores individuais para extração robusta do estado
+  const { user } = useAuthStore();
   const appointments = useUserAppointmentsStore((state) => state.appointments);
   const isLoading = useUserAppointmentsStore((state) => state.isLoading);
   const fetchAppointments = useUserAppointmentsStore(
@@ -21,7 +21,7 @@ export const ClientMyAppointmentsSection = () => {
   );
   const clearAppointments = useUserAppointmentsStore(
     (state) => state.clearAppointments
-  ); // Estado para controlar a aba ativa (padrão: próximos)
+  );
 
   const [activeTab, setActiveTab] = useState<Tab>("upcoming");
 
@@ -30,10 +30,9 @@ export const ClientMyAppointmentsSection = () => {
       fetchAppointments(user.uid);
     }
     return () => {
-      // Limpa o estado quando o componente é desmontado ou o usuário muda
       clearAppointments();
     };
-  }, [user?.uid, fetchAppointments, clearAppointments]); // Lógica de filtragem memoizada para evitar recálculos desnecessários
+  }, [user?.uid, fetchAppointments, clearAppointments]);
 
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
     const now = new Date();
@@ -43,7 +42,7 @@ export const ClientMyAppointmentsSection = () => {
           a.startTime >= now &&
           (a.status === "pending" || a.status === "scheduled")
       )
-      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime()); // Ordena do mais próximo para o mais distante
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
     const past = appointments
       .filter(
@@ -52,10 +51,10 @@ export const ClientMyAppointmentsSection = () => {
           a.status === "completed" ||
           a.status === "cancelled"
       )
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime()); // Ordena do mais recente para o mais antigo
+      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
-  }, [appointments]); // Mapeia a lista baseada na aba ativa
+  }, [appointments]);
 
   const currentList =
     activeTab === "upcoming" ? upcomingAppointments : pastAppointments;
@@ -63,11 +62,13 @@ export const ClientMyAppointmentsSection = () => {
     activeTab === "upcoming"
       ? "Próximos Agendamentos"
       : "Histórico de Agendamentos";
+  
+  // Ícone dinâmico baseado na aba ativa
   const EmptyIcon = activeTab === "upcoming" ? Clock : History;
 
   const renderAppointmentList = (list: EnrichedAppointment[]) => (
     <motion.div
-      key={activeTab} // Chave para forçar a animação de transição ao trocar de aba
+      key={activeTab}
       initial={{ opacity: 0, x: activeTab === "upcoming" ? 20 : -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: activeTab === "upcoming" ? -20 : 20 }}
@@ -85,7 +86,8 @@ export const ClientMyAppointmentsSection = () => {
         </div>
       ) : (
         <div className="text-center py-12 bg-gray-800/50 rounded-xl mt-4">
-          <CalendarX size={48} className="mx-auto text-gray-600" />
+          {/* CORREÇÃO: Usando o EmptyIcon dinâmico ao invés do CalendarX fixo */}
+          <EmptyIcon size={48} className="mx-auto text-gray-600" />
 
           <p className="mt-4 text-gray-400">
             Nenhum agendamento encontrado nesta categoria.

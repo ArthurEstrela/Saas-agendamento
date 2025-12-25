@@ -13,7 +13,7 @@ import type { Appointment, ClientProfile } from "../types";
 import { getUserProfile } from "../firebase/userService";
 import { 
   updateAppointmentStatus, 
-  completeAppointment as completeAppointmentService // <-- Importado e renomeado
+  completeAppointment as completeAppointmentService 
 } from "../firebase/bookingService";
 import { useFinanceStore } from "./financeStore";
 import { startOfDay, endOfDay } from "date-fns";
@@ -132,7 +132,19 @@ export const useProviderAppointmentsStore = create<
   },
 
   completeAppointment: async (appointmentId, finalPrice) => {
-    // ✅ CORREÇÃO: Usamos o service específico para completar, que aceita o preço
+    // 🔒 CAMADA DE SEGURANÇA 1: Verifica horário antes de completar
+    const currentAppointment = get().appointments.find(a => a.id === appointmentId);
+
+    if (currentAppointment) {
+        const now = new Date();
+        const endTime = new Date(currentAppointment.endTime);
+
+        if (now < endTime) {
+            toast.error("Aguarde o término do horário para concluir.");
+            return; // 🛑 Cancela a operação
+        }
+    }
+
     const promise = completeAppointmentService(appointmentId, finalPrice);
 
     toast.promise(promise, {
@@ -170,22 +182,31 @@ export const useProviderAppointmentsStore = create<
   setStatusFilter: (status) => set({ statusFilter: status }),
 
   updateStatus: async (appointmentId, status, finalPrice, rejectionReason) => {
+    const currentAppointment = get().appointments.find(a => a.id === appointmentId);
+    
+    if (status === 'completed' && currentAppointment) {
+        const now = new Date();
+        const endTime = new Date(currentAppointment.endTime);
+
+        if (now < endTime) {
+            toast.error("Você só pode concluir o agendamento após o horário de término.");
+            return;
+        }
+    }
+
     let promise: Promise<void>;
 
-    // ✅ CORREÇÃO: Lógica condicional para usar a função correta do service
     if (status === 'completed') {
       if (finalPrice === undefined) {
         toast.error("Preço final é obrigatório para concluir.");
         return;
       }
-      // Se for completar, chama o service de completar
       promise = completeAppointmentService(appointmentId, finalPrice);
     } else {
-      // Se for outro status (ex: cancelled), chama o update normal (sem o preço)
       promise = updateAppointmentStatus(
         appointmentId, 
         status, 
-        rejectionReason // 3º argumento correto
+        rejectionReason
       );
     }
 

@@ -4,13 +4,13 @@ import { useMemo } from "react";
 import type { Appointment, UserProfile, ProfessionalProfile } from "../types";
 // Importe este tipo do seu AgendaView (terá de o exportar de lá)
 import type { AgendaTab } from "../components/ServiceProvider/Agenda/AgendaView";
-import { 
-  isPast, 
-  addDays, 
-  subDays, 
-  isWithinInterval, 
-  startOfDay, 
-  endOfDay 
+import {
+  isPast,
+  addDays,
+  subDays,
+  isWithinInterval,
+  startOfDay,
+  endOfDay,
 } from "date-fns";
 
 /**
@@ -25,11 +25,10 @@ export const useFilteredAppointments = (
   selectedDay: Date,
   viewMode: string
 ) => {
-
   // --- PASSO 1: FILTRO DE SEGURANÇA POR ROLE (FASE 4) ---
   const professionalFiltered = useMemo(() => {
     const isOwner = userProfile.role === "serviceProvider";
-    
+
     if (isOwner) {
       if (selectedProfessionalId === "all") {
         return allAppointments; // Dono a ver "Todos"
@@ -39,20 +38,19 @@ export const useFilteredAppointments = (
         (appt) => appt.professionalId === selectedProfessionalId
       );
     }
-    
+
     // Se não é dono, é um profissional. Filtra FORÇADAMENTE pelo seu próprio ID (uid).
-    const professionalId = (userProfile as ProfessionalProfile).id;
+    const professionalId = (userProfile as ProfessionalProfile).professionalId;
     return allAppointments.filter(
       (appt) => appt.professionalId === professionalId
     );
-    
   }, [allAppointments, userProfile, selectedProfessionalId]);
 
   // --- PASSO 2: FILTRO POR TAB E DATA (A SUA LÓGICA ORIGINAL) ---
   // Este 'useMemo' depende da lista JÁ FILTRADA POR ROLE
   return useMemo(() => {
     let filtered = professionalFiltered;
-    
+
     const beginningOfToday = startOfDay(new Date());
     const startOfSelectedDay = startOfDay(selectedDay);
     const endOfSelectedDay = endOfDay(selectedDay);

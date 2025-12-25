@@ -1,27 +1,39 @@
 // src/components/ServiceProvider/Agenda/AppointmentDetailsModal.tsx
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../../ui/dialog";
 import { format } from "date-fns";
-import { 
-  Calendar, 
-  Clock, 
-  User, 
-  Scissors, 
-  DollarSign, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Calendar,
+  Clock,
+  User,
+  Scissors,
+  DollarSign,
+  CheckCircle2,
+  XCircle,
   Phone,
-  Copy
+  Copy,
+  Lock, // ✅ 1. Import do ícone de cadeado
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { toast } from "react-hot-toast";
-import type { Appointment } from "../../../types";
+import type { Appointment, ClientProfile } from "../../../types";
 import { cn } from "../../../lib/utils/cn";
 
+// ✅ 2. Definimos uma interface estendida para incluir os dados do cliente que vêm da Store
+interface EnrichedAppointment extends Appointment {
+  client?: ClientProfile;
+}
+
 interface AppointmentDetailsModalProps {
-  appointment: Appointment | null;
+  appointment: EnrichedAppointment | null; // ✅ Usamos a interface enriquecida
   isOpen: boolean;
   onClose: () => void;
-  onStatusChange: (id: string, newStatus: Appointment['status']) => void;
+  onStatusChange: (id: string, newStatus: Appointment["status"]) => void;
   onComplete: (appointment: Appointment) => void;
 }
 
@@ -30,7 +42,7 @@ export const AppointmentDetailsModal = ({
   isOpen,
   onClose,
   onStatusChange,
-  onComplete
+  onComplete,
 }: AppointmentDetailsModalProps) => {
   if (!appointment) return null;
 
@@ -48,33 +60,43 @@ export const AppointmentDetailsModal = ({
     cancelled: "Cancelado",
   };
 
-  // --- Lógica do WhatsApp e Telefone ---
-  const phone = appointment.clientPhone || "";
-  const cleanPhone = phone.replace(/\D/g, "");
+  // ✅ 3. Lógica Melhorada para Telefone e Foto
+  // Tenta pegar do agendamento, se falhar, pega do perfil do cliente vinculado
+  const rawPhone =
+    appointment.clientPhone || appointment.client?.phoneNumber || "";
+  const cleanPhone = rawPhone.replace(/\D/g, "");
   const hasPhone = !!cleanPhone;
+
+  const clientPhotoUrl = appointment.client?.profilePictureUrl; // Pega a foto do perfil
+
+  // ✅ 4. Lógica de Verificação de Horário (Segurança)
+  const now = new Date();
+  const endTime = new Date(appointment.endTime);
+  const isTooEarlyToComplete = now < endTime;
 
   const handleWhatsApp = () => {
     if (!hasPhone) {
-        toast.error("Telefone do cliente não disponível");
-        return;
+      toast.error("Telefone do cliente não disponível");
+      return;
     }
 
     const time = format(new Date(appointment.startTime), "HH:mm");
     const date = format(new Date(appointment.startTime), "dd/MM");
-    
+
     const message = `Olá ${appointment.clientName}, tudo bem? Gostaria de confirmar nosso agendamento para ${date} às ${time}.`;
-    
-    const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
+
+    const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(
+      message
+    )}`;
     window.open(url, "_blank");
   };
 
   const handleCopyPhone = () => {
     if (hasPhone) {
-        navigator.clipboard.writeText(phone);
-        toast.success("Telefone copiado!");
+      navigator.clipboard.writeText(rawPhone);
+      toast.success("Telefone copiado!");
     }
   };
-  // -------------------------------------
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -84,54 +106,75 @@ export const AppointmentDetailsModal = ({
             <DialogTitle className="text-xl font-bold text-white">
               Detalhes do Agendamento
             </DialogTitle>
-            <span className={cn(
-              "px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wide",
-              statusColors[appointment.status]
-            )}>
+            <span
+              className={cn(
+                "px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wide",
+                statusColors[appointment.status]
+              )}
+            >
               {statusLabels[appointment.status]}
             </span>
           </div>
-          <p className="text-gray-400 text-sm mt-1">ID: #{appointment.id.slice(-6)}</p>
+          <p className="text-gray-400 text-sm mt-1">
+            ID: #{appointment.id.slice(-6)}
+          </p>
         </DialogHeader>
 
         <div className="p-6 space-y-6">
-          
-          {/* Cliente & Contato (NOVO) */}
+          {/* Cliente & Contato */}
           <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700/50">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Cliente</h3>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+              Cliente
+            </h3>
             <div className="flex items-center gap-4">
+              {/* ✅ Lógica de Exibição da Foto ou Inicial */}
+              {clientPhotoUrl ? (
+                <img
+                  src={clientPhotoUrl}
+                  alt={appointment.clientName}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-purple-500/30"
+                />
+              ) : (
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                    {appointment.clientName.charAt(0)}
+                  {appointment.clientName.charAt(0)}
                 </div>
-                <div>
-                    <p className="font-bold text-white text-lg">{appointment.clientName}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                        {hasPhone ? (
-                            <button 
-                                onClick={handleCopyPhone}
-                                className="text-sm text-gray-400 hover:text-white flex items-center gap-1.5 transition-colors group"
-                                title="Copiar telefone"
-                            >
-                                <Phone size={14} />
-                                {phone}
-                                <Copy size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </button>
-                        ) : (
-                            <span className="text-sm text-gray-500 italic">Sem telefone cadastrado</span>
-                        )}
-                    </div>
+              )}
+
+              <div>
+                <p className="font-bold text-white text-lg">
+                  {appointment.clientName}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {hasPhone ? (
+                    <button
+                      onClick={handleCopyPhone}
+                      className="text-sm text-gray-400 hover:text-white flex items-center gap-1.5 transition-colors group"
+                      title="Copiar telefone"
+                    >
+                      <Phone size={14} />
+                      {rawPhone}
+                      <Copy
+                        size={12}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+                    </button>
+                  ) : (
+                    <span className="text-sm text-gray-500 italic">
+                      Sem telefone cadastrado
+                    </span>
+                  )}
                 </div>
+              </div>
             </div>
-            
-            {/* Botão de Ação WhatsApp (Grande) */}
+
             {hasPhone && (
-                <button
-                    onClick={handleWhatsApp}
-                    className="w-full mt-4 bg-[#25D366] hover:bg-[#128C7E] text-white py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-900/20 active:scale-95"
-                >
-                    <FaWhatsapp size={20} />
-                    Chamar no WhatsApp
-                </button>
+              <button
+                onClick={handleWhatsApp}
+                className="w-full mt-4 bg-[#25D366] hover:bg-[#128C7E] text-white py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-900/20 active:scale-95"
+              >
+                <FaWhatsapp size={20} />
+                Chamar no WhatsApp
+              </button>
             )}
           </div>
 
@@ -177,59 +220,82 @@ export const AppointmentDetailsModal = ({
                 <div>
                   <p className="text-xs text-gray-500 uppercase">Horário</p>
                   <p className="font-medium">
-                    {format(new Date(appointment.startTime), "HH:mm")} - {format(new Date(appointment.endTime), "HH:mm")}
+                    {format(new Date(appointment.startTime), "HH:mm")} -{" "}
+                    {format(new Date(appointment.endTime), "HH:mm")}
                   </p>
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-black/20 p-4 rounded-xl flex justify-between items-center border border-gray-800">
-                <span className="text-gray-400 font-medium flex items-center gap-2">
-                    <DollarSign size={18} /> Valor Total
-                </span>
-                <span className="text-xl font-bold text-[#daa520]">
-                    R$ {appointment.totalPrice.toFixed(2)}
-                </span>
+              <span className="text-gray-400 font-medium flex items-center gap-2">
+                <DollarSign size={18} /> Valor Total
+              </span>
+              <span className="text-xl font-bold text-[#daa520]">
+                R$ {appointment.totalPrice.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
 
         <DialogFooter className="p-6 bg-gray-800/50 border-t border-gray-800 flex flex-col sm:flex-row gap-3">
-          {appointment.status === 'scheduled' && (
+          {appointment.status === "scheduled" && (
             <>
               <button
-                onClick={() => onStatusChange(appointment.id, 'cancelled')}
+                onClick={() => onStatusChange(appointment.id, "cancelled")}
                 className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
               >
                 <XCircle size={18} />
                 Cancelar
               </button>
-              
+
+              {/* ✅ 5. Botão de Concluir com Lógica de Bloqueio */}
               <button
                 onClick={() => onComplete(appointment)}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl font-bold transition-colors shadow-lg shadow-green-900/20 flex items-center justify-center gap-2"
+                disabled={isTooEarlyToComplete}
+                className={cn(
+                  "flex-1 py-2.5 rounded-xl font-bold transition-colors shadow-lg flex items-center justify-center gap-2",
+                  isTooEarlyToComplete
+                    ? "bg-gray-700 text-gray-400 cursor-not-allowed border border-gray-600 shadow-none"
+                    : "bg-green-600 hover:bg-green-700 text-white shadow-green-900/20"
+                )}
+                title={
+                  isTooEarlyToComplete
+                    ? "Aguarde o horário de término para concluir"
+                    : "Finalizar serviço"
+                }
               >
-                <CheckCircle2 size={18} />
-                Concluir Atendimento
+                {isTooEarlyToComplete ? (
+                  <>
+                    <Lock size={18} />
+                    Em Andamento
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    Concluir
+                  </>
+                )}
               </button>
             </>
           )}
 
-          {appointment.status === 'pending' && (
-             <button
-                onClick={() => onStatusChange(appointment.id, 'scheduled')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-bold transition-colors"
-             >
-                Confirmar Agendamento
-             </button>
-          )}
-          
-          {(appointment.status === 'completed' || appointment.status === 'cancelled') && (
+          {appointment.status === "pending" && (
             <button
-                onClick={onClose}
-                className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2.5 rounded-xl font-medium"
+              onClick={() => onStatusChange(appointment.id, "scheduled")}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-bold transition-colors"
             >
-                Fechar
+              Confirmar Agendamento
+            </button>
+          )}
+
+          {(appointment.status === "completed" ||
+            appointment.status === "cancelled") && (
+            <button
+              onClick={onClose}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2.5 rounded-xl font-medium"
+            >
+              Fechar
             </button>
           )}
         </DialogFooter>

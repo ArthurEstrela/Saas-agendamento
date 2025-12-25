@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm, type SubmitHandler, Controller } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,8 +11,8 @@ import {
   Facebook,
   Globe,
   CreditCard,
-  Landmark, // Ícone para Pix
-  Banknote, // Ícone para Dinheiro
+  Landmark,
+  Banknote,
   User,
   Briefcase,
   Mail,
@@ -34,6 +34,14 @@ import {
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+
+// Novos Componentes UI
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Typography } from "../ui/typography";
+import { cn } from "../../lib/utils/cn";
+import { Checkbox } from "../ui/checkbox";
+import { Label } from "../ui/label";
 
 // --- Correção do Ícone Padrão do Leaflet ---
 // @ts-ignore
@@ -60,7 +68,12 @@ const ChangeView = ({
   return null;
 };
 
-const MapEvents = ({ onLocationSelect }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MapEvents = ({
+  onLocationSelect,
+}: {
+  onLocationSelect: (latlng: L.LatLng) => void;
+}) => {
   useMapEvents({
     click(e) {
       onLocationSelect(e.latlng);
@@ -68,6 +81,10 @@ const MapEvents = ({ onLocationSelect }) => {
   });
   return null;
 };
+
+// --- Estilos Base do Input (para replicar no IMaskInput) ---
+const inputBaseClasses =
+  "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 // --- VALIDAÇÃO COM ZOD ---
 const schema = z.object({
@@ -108,26 +125,6 @@ const paymentOptions: {
   { id: "cash", label: "Dinheiro", icon: Banknote },
 ];
 
-const InputField = forwardRef(({ icon: Icon, error, ...props }: any, ref) => (
-  <div className="relative">
-    {Icon && (
-      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <Icon className="text-gray-400" size={20} />
-      </div>
-    )}
-    <input
-      {...props}
-      ref={ref}
-      className={`input-field ${Icon ? "pl-10" : "pl-4"} ${
-        error ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""
-      }`}
-    />
-    {error && <p className="error-message mt-1">{error.message}</p>}
-  </div>
-));
-InputField.displayName = "InputField";
-
-// --- COMPONENTE PRINCIPAL ---
 export const ServiceProviderRegisterForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const { signup, isSubmitting, error: authError } = useAuthStore();
@@ -276,98 +273,121 @@ export const ServiceProviderRegisterForm = () => {
         totalSteps={4}
         stepLabels={["Acesso", "Seu Negócio", "Divulgação", "Endereço"]}
       />
+
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="space-y-6 mt-8 animate-fade-in"
       >
+        {/* STEP 1: Acesso */}
         {currentStep === 1 && (
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white text-center">
+            <Typography variant="h3" className="text-center">
               Informações de Acesso
-            </h2>
-            <InputField
-              icon={User}
-              error={errors.name}
+            </Typography>
+
+            <Input
+              icon={<User className="h-5 w-5" />}
+              error={errors.name?.message}
               {...register("name")}
               placeholder="Seu nome completo"
             />
-            <InputField
-              icon={Mail}
-              error={errors.email}
+
+            <Input
+              icon={<Mail className="h-5 w-5" />}
+              error={errors.email?.message}
               {...register("email")}
               placeholder="Seu melhor email"
               type="email"
             />
-            <InputField
-              icon={Lock}
-              error={errors.password}
+
+            <Input
+              icon={<Lock className="h-5 w-5" />}
+              error={errors.password?.message}
               {...register("password")}
               placeholder="Crie uma senha forte"
               type="password"
             />
           </section>
         )}
+
+        {/* STEP 2: Negócio */}
         {currentStep === 2 && (
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white text-center">
+            <Typography variant="h3" className="text-center">
               Sobre o seu Negócio
-            </h2>
-            <InputField
-              icon={Building2}
-              error={errors.businessName}
+            </Typography>
+
+            <Input
+              icon={<Building2 className="h-5 w-5" />}
+              error={errors.businessName?.message}
               {...register("businessName")}
               placeholder="Nome do estabelecimento"
             />
-            <InputField
-              icon={Briefcase}
-              error={errors.areaOfWork}
+
+            <Input
+              icon={<Briefcase className="h-5 w-5" />}
+              error={errors.areaOfWork?.message}
               {...register("areaOfWork")}
               placeholder="Área de atuação (Ex: Barbearia)"
             />
+
+            {/* CNPJ Mask Input styled to look like ui/input */}
             <Controller
               name="cnpj"
               control={control}
               render={({ field }) => (
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Home className="text-gray-400" size={20} />
+                <div className="w-full">
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <Home className="h-5 w-5" />
+                    </div>
+                    <IMaskInput
+                      {...field}
+                      mask="00.000.000/0000-00"
+                      placeholder="CNPJ"
+                      className={cn(
+                        inputBaseClasses,
+                        "pl-10",
+                        errors.cnpj
+                          ? "border-destructive focus-visible:ring-destructive"
+                          : ""
+                      )}
+                    />
                   </div>
-                  <IMaskInput
-                    {...field}
-                    mask="00.000.000/0000-00"
-                    placeholder="CNPJ"
-                    className={`input-field pl-10 ${
-                      errors.cnpj
-                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : ""
-                    }`}
-                  />
                   {errors.cnpj && (
-                    <p className="error-message mt-1">{errors.cnpj.message}</p>
+                    <p className="mt-1 text-sm text-destructive animate-fade-in-down">
+                      {errors.cnpj.message}
+                    </p>
                   )}
                 </div>
               )}
             />
+
+            {/* Phone Mask Input */}
             <Controller
               name="businessPhone"
               control={control}
               render={({ field }) => (
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Phone className="text-gray-400" size={20} />
+                <div className="w-full">
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <Phone className="h-5 w-5" />
+                    </div>
+                    <IMaskInput
+                      {...field}
+                      mask="(00) 00000-0000"
+                      placeholder="Telefone / WhatsApp"
+                      className={cn(
+                        inputBaseClasses,
+                        "pl-10",
+                        errors.businessPhone
+                          ? "border-destructive focus-visible:ring-destructive"
+                          : ""
+                      )}
+                    />
                   </div>
-                  <IMaskInput
-                    {...field}
-                    mask="(00) 00000-0000"
-                    placeholder="Telefone / WhatsApp"
-                    className={`input-field pl-10 ${
-                      errors.businessPhone
-                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : ""
-                    }`}
-                  />
                   {errors.businessPhone && (
-                    <p className="error-message mt-1">
+                    <p className="mt-1 text-sm text-destructive animate-fade-in-down">
                       {errors.businessPhone.message}
                     </p>
                   )}
@@ -376,149 +396,198 @@ export const ServiceProviderRegisterForm = () => {
             />
           </section>
         )}
+
+        {/* STEP 3: Divulgação */}
         {currentStep === 3 && (
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white text-center">
-              Sua Presença Online
-            </h2>
-            <p className="text-center text-gray-400 text-sm">
-              Links opcionais para seus clientes te encontrarem.
-            </p>
-            <InputField
-              icon={Instagram}
-              error={errors.instagram}
+            <div className="text-center space-y-2">
+              <Typography variant="h3">Sua Presença Online</Typography>
+              <Typography variant="small" className="text-gray-400">
+                Links opcionais para seus clientes te encontrarem.
+              </Typography>
+            </div>
+
+            <Input
+              icon={<Instagram className="h-5 w-5" />}
+              error={errors.instagram?.message}
               {...register("instagram")}
               placeholder="https://instagram.com/seu_negocio"
             />
-            <InputField
-              icon={Facebook}
-              error={errors.facebook}
+
+            <Input
+              icon={<Facebook className="h-5 w-5" />}
+              error={errors.facebook?.message}
               {...register("facebook")}
               placeholder="https://facebook.com/seu_negocio"
             />
-            <InputField
-              icon={Globe}
-              error={errors.website}
+
+            <Input
+              icon={<Globe className="h-5 w-5" />}
+              error={errors.website?.message}
               {...register("website")}
               placeholder="https://seunegocio.com.br"
             />
+
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2 text-center">
+              <Label className="block mb-3 text-center">
                 Formas de Pagamento Aceitas
-              </label>
+              </Label>
               <div className="grid grid-cols-3 gap-3">
                 {paymentOptions.map((option) => (
-                  <label
+                  <Controller
                     key={option.id}
-                    className="flex flex-col items-center justify-center gap-2 bg-gray-800 p-4 rounded-lg border-2 border-gray-700 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/10 transition-all"
-                  >
-                    <input
-                      type="checkbox"
-                      {...register("paymentMethods")}
-                      value={option.id}
-                      className="sr-only"
-                    />
-                    <option.icon className="text-gray-300" size={24} />
-                    <span className="text-white text-sm font-medium">
-                      {option.label}
-                    </span>
-                  </label>
+                    name="paymentMethods"
+                    control={control}
+                    defaultValue={[]}
+                    render={({ field }) => {
+                      const isChecked = field.value?.includes(option.id);
+                      return (
+                        <label
+                          className={cn(
+                            "flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 cursor-pointer transition-all",
+                            isChecked
+                              ? "border-primary bg-primary/10"
+                              : "border-gray-700 bg-gray-800 hover:border-gray-600"
+                          )}
+                        >
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                field.onChange([
+                                  ...(field.value || []),
+                                  option.id,
+                                ]);
+                              } else {
+                                field.onChange(
+                                  field.value?.filter(
+                                    (val) => val !== option.id
+                                  )
+                                );
+                              }
+                            }}
+                            className="sr-only" // Esconde o checkbox real, usamos o card como trigger
+                          />
+                          <option.icon
+                            className={cn(
+                              "h-6 w-6",
+                              isChecked ? "text-primary" : "text-gray-300"
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              "text-sm font-medium",
+                              isChecked ? "text-primary" : "text-white"
+                            )}
+                          >
+                            {option.label}
+                          </span>
+                        </label>
+                      );
+                    }}
+                  />
                 ))}
               </div>
             </div>
           </section>
         )}
+
+        {/* STEP 4: Endereço */}
         {currentStep === 4 && (
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white text-center">
+            <Typography variant="h3" className="text-center">
               Endereço do Estabelecimento
-            </h2>
+            </Typography>
+
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-3 sm:col-span-1">
                 <Controller
                   name="zipCode"
                   control={control}
                   render={({ field }) => (
-                    <IMaskInput
-                      {...field}
-                      mask="00000-000"
-                      placeholder="CEP"
-                      className={`input-field ${
-                        errors.zipCode ? "border-red-500" : ""
-                      }`}
-                      onBlur={(e) => {
-                        field.onBlur(e);
-                        handleCepBlur();
-                      }}
-                    />
+                    <div className="w-full">
+                      <IMaskInput
+                        {...field}
+                        mask="00000-000"
+                        placeholder="CEP"
+                        className={cn(
+                          inputBaseClasses,
+                          errors.zipCode
+                            ? "border-destructive focus-visible:ring-destructive"
+                            : ""
+                        )}
+                        onBlur={(e) => {
+                          field.onBlur(e);
+                          handleCepBlur();
+                        }}
+                      />
+                      {errors.zipCode && (
+                        <p className="mt-1 text-sm text-destructive">
+                          {errors.zipCode.message}
+                        </p>
+                      )}
+                    </div>
                   )}
                 />
-                {errors.zipCode && (
-                  <p className="error-message mt-1">{errors.zipCode.message}</p>
-                )}
               </div>
               <div className="col-span-3 sm:col-span-2">
-                <InputField
-                  icon={MapPin}
-                  error={errors.street}
+                <Input
+                  icon={<MapPin className="h-5 w-5" />}
+                  error={errors.street?.message}
                   {...register("street")}
                   placeholder="Endereço"
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-1">
-                <input
+                <Input
+                  error={errors.number?.message}
                   {...register("number")}
                   placeholder="Nº"
-                  className={`input-field ${
-                    errors.number ? "border-red-500" : ""
-                  }`}
                 />
               </div>
               <div className="col-span-2">
-                <input
+                <Input
+                  error={errors.neighborhood?.message}
                   {...register("neighborhood")}
                   placeholder="Bairro"
-                  className={`input-field ${
-                    errors.neighborhood ? "border-red-500" : ""
-                  }`}
                   disabled={cepLoading}
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-5 gap-4">
               <div className="col-span-3">
-                <input
+                <Input
+                  error={errors.city?.message}
                   {...register("city")}
                   placeholder="Cidade"
-                  className={`input-field ${
-                    errors.city ? "border-red-500" : ""
-                  }`}
                   disabled={cepLoading}
                 />
               </div>
               <div className="col-span-2">
-                <input
+                <Input
+                  error={errors.state?.message}
                   {...register("state")}
                   placeholder="UF"
-                  className={`input-field ${
-                    errors.state ? "border-red-500" : ""
-                  }`}
                   disabled={cepLoading}
                 />
               </div>
             </div>
+
             {cepError && (
-              <p className="error-message text-center">{cepError}</p>
+              <p className="text-sm text-destructive text-center">{cepError}</p>
             )}
+
             <div className="mt-4">
-              <label className="label-text">Localização no Mapa</label>
-              <p className="text-xs text-gray-400 mb-2">
+              <Label>Localização no Mapa</Label>
+              <Typography variant="small" className="text-gray-400 mb-2 block">
                 A posição será encontrada automaticamente. Clique no mapa para
                 ajustar.
-              </p>
-              <div className="h-80 w-full rounded-lg overflow-hidden border-2 border-gray-700">
+              </Typography>
+              <div className="h-80 w-full rounded-lg overflow-hidden border border-gray-700 shadow-sm">
                 <MapContainer
                   center={mapCenter}
                   zoom={mapZoom}
@@ -533,40 +602,39 @@ export const ServiceProviderRegisterForm = () => {
             </div>
           </section>
         )}
-        {authError && <p className="error-message text-center">{authError}</p>}
+
+        {authError && (
+          <p className="text-sm text-destructive text-center">{authError}</p>
+        )}
+
+        {/* Action Buttons */}
         <div className="flex items-center pt-4 gap-4">
           {currentStep > 1 ? (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={prevStep}
-              className="secondary-button w-1/3"
+              className="w-1/3"
             >
               Voltar
-            </button>
+            </Button>
           ) : (
             <div className="w-1/3"></div>
           )}
+
           {currentStep < 4 && (
-            <button
-              type="button"
-              onClick={nextStep}
-              className="primary-button w-2/3"
-            >
+            <Button type="button" onClick={nextStep} className="w-2/3">
               Avançar
-            </button>
+            </Button>
           )}
+
           {currentStep === 4 && (
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="primary-button w-2/3 flex items-center justify-center"
-            >
+            <Button type="submit" disabled={isSubmitting} className="w-2/3">
               {isSubmitting ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                "Finalizar Cadastro"
-              )}
-            </button>
+                <Loader2 className="animate-spin h-5 w-5 mr-2" />
+              ) : null}
+              Finalizar Cadastro
+            </Button>
           )}
         </div>
       </form>

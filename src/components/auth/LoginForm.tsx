@@ -5,6 +5,10 @@ import { Loader2, Mail, Lock } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import type { UserProfile } from "../../types";
 
+// Componentes UI Padronizados
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+
 const schema = z.object({
   email: z.string().email("Por favor, insira um e-mail válido"),
   password: z.string().min(1, "A senha é obrigatória"),
@@ -30,59 +34,44 @@ export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
 
   const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
     try {
-      // 3. Assumindo que a função 'login' da sua store retorna o UserProfile
       const user = await login(data.email, data.password);
-      
-      // Se o login deu certo e retornou os dados do usuário...
       if (user) {
-        // ...executa a função que veio da LoginPage, passando os dados do usuário.
         onLoginSuccess(user);
       }
     } catch (error) {
-      // A LoginPage vai cuidar de exibir o erro para o usuário
       console.error("Falha no login:", error);
     }
   };
 
-  // AGORA O RETURN É APENAS O FORMULÁRIO
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Campo de E-mail */}
-      <div className="relative">
-        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-        <input
-          {...register("email")}
-          type="email"
-          placeholder="Seu e-mail"
-          className={`input-field pl-10 ${errors.email ? "border-red-500" : ""}`}
-        />
-        {errors.email && (
-          <p className="error-message mt-1">{errors.email.message}</p>
-        )}
-      </div>
+      
+      {/* Input de E-mail */}
+      <Input
+        icon={<Mail className="h-5 w-5" />}
+        placeholder="Seu e-mail"
+        type="email"
+        error={errors.email?.message}
+        {...register("email")}
+      />
 
-      {/* Campo de Senha */}
-      <div className="relative">
-        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-        <input
-          {...register("password")}
-          type="password"
-          placeholder="Sua senha"
-          className={`input-field pl-10 ${errors.password ? "border-red-500" : ""}`}
-        />
-        {errors.password && (
-          <p className="error-message mt-1">{errors.password.message}</p>
-        )}
-      </div>
+      {/* Input de Senha */}
+      <Input
+        icon={<Lock className="h-5 w-5" />}
+        placeholder="Sua senha"
+        type="password"
+        error={errors.password?.message}
+        {...register("password")}
+      />
 
       {/* Botão de Login */}
-      <button
+      <Button
         type="submit"
         disabled={isSubmitting}
-        className="primary-button w-full flex items-center justify-center"
+        className="w-full"
       >
-        {isSubmitting ? <Loader2 className="animate-spin" /> : "Entrar"}
-      </button>
+        {isSubmitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Entrar"}
+      </Button>
     </form>
   );
 };

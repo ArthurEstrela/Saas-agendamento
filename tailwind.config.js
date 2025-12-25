@@ -10,6 +10,7 @@ export default {
         ring: "#daa520", // Cor do anel de foco
 
         background: "#0a0a0a", // Seu 'dark-bg' antigo
+        foreground: "#ffffff", // <--- ADICIONE ISSO
         surface: "#1a1a1a", // Seu 'card-bg' antigo, bom para modais/cards
 
         // A cor principal da sua marca

@@ -3,43 +3,56 @@
 @tailwind utilities;
 
 @keyframes fade-in-down {
-  0% {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.label-text {
-  @apply block text-sm font-medium text-gray-300 mb-2;
-}
-
-.input-container {
-  @apply relative;
-}
-
-.input-icon {
-  @apply absolute left-3 top-1/2 -translate-y-1/2 text-gray-400;
+  0% { opacity: 0; transform: translateY(-20px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @layer components {
+  /* Mantivemos a estrutura, mas trocamos as cores fixas por variáveis do tema */
+  
+  .label-text {
+    @apply block text-sm font-medium text-gray-300 mb-2;
+  }
+
+  .input-container {
+    @apply relative;
+  }
+
+  .input-icon {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 text-gray-400;
+  }
+
   .input-field {
-    @apply w-full bg-gray-800 p-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#daa520] focus:border-[#daa520] transition-colors;
+    /* CORREÇÃO: Usa 'ring-primary' em vez de '#daa520' */
+    @apply w-full bg-gray-800 p-3 rounded-lg border border-gray-700 
+    focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary 
+    transition-colors;
   }
+
+  /* LEGADO: Essas classes de botão devem sumir com o tempo em favor do componente <Button />
+     Mas enquanto existem, elas devem obedecer o tema.
+  */
   .primary-button {
-    @apply w-full bg-[#daa520] text-black font-bold p-3 rounded-lg hover:bg-yellow-400 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed;
+    /* CORREÇÃO: Usa 'bg-primary' e 'bg-primary-hover' */
+    @apply w-full bg-primary text-primary-foreground font-bold p-3 rounded-lg 
+    hover:bg-primary-hover transition-colors 
+    disabled:bg-gray-600 disabled:cursor-not-allowed;
   }
+
   .secondary-button {
-    @apply bg-transparent border border-gray-600 text-gray-300 font-bold p-3 rounded-lg hover:bg-gray-800 hover:text-white transition-colors;
+    @apply bg-transparent border border-gray-600 text-gray-300 font-bold p-3 rounded-lg 
+    hover:bg-gray-800 hover:text-white transition-colors;
   }
+
   .error-message {
-    @apply text-red-400 text-sm mt-1;
+    /* CORREÇÃO: Usa a cor semântica de erro */
+    @apply text-destructive text-sm mt-1;
   }
+
   .danger-button {
-    @apply w-full bg-red-600/90 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed;
+    @apply w-full bg-destructive text-destructive-foreground font-bold py-2 px-4 rounded-lg 
+    hover:bg-red-700 transition-colors flex items-center justify-center gap-2 
+    disabled:bg-gray-600 disabled:cursor-not-allowed;
   }
 }
 
@@ -50,22 +63,22 @@
 @layer utilities {
   .gradient-border {
     border-image-slice: 1;
-    border-image-source: linear-gradient(to right, #fbbf24, #f59e0b);
+    /* CORREÇÃO: Pega as cores direto do config */
+    border-image-source: linear-gradient(to right, theme('colors.primary.DEFAULT'), theme('colors.primary.hover'));
   }
+  
   .card-hover-effect {
-    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-amber-500/10;
+    /* CORREÇÃO: Sombra baseada na cor primária */
+    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/10;
   }
 }
 
-/* Esconde as setas no Chrome, Safari, Edge, Opera */
+/* Esconde setas input number */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-
-/* Esconde as setas no Firefox */
 input[type="number"] {
   -moz-appearance: textfield;
 }
-

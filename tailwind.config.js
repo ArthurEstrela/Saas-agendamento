@@ -3,24 +3,53 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
-       colors: {
-        'primary-gold': '#facc15', // Novo amarelo de destaque
-        'dark-bg': '#0a0a0a', // Fundo principal da dashboard
-        'card-bg': '#1a1a1a', // Fundo dos cards
-        'border-dark': '#2a2a2a', // Cor das bordas
+      colors: {
+        // Cores Semânticas (Baseado na função)
+        border: "hsl(var(--border))", // Opcional: Preparo para modo dark/light futuro se usar variaveis CSS
+        input: "#1f2937", // gray-800 do seu input atual
+        ring: "#daa520", // Cor do anel de foco
+
+        background: "#0a0a0a", // Seu 'dark-bg' antigo
+        surface: "#1a1a1a", // Seu 'card-bg' antigo, bom para modais/cards
+
+        // A cor principal da sua marca
+        primary: {
+          DEFAULT: "#daa520", // O Dourado que você usa na Home e CSS
+          hover: "#c8961e", // O tom mais escuro para hover (que estava hardcoded na Home)
+          foreground: "#000000", // Cor do texto quando está em cima do dourado (botões)
+        },
+
+        // Cores secundárias (geralmente cinzas ou tons de apoio)
+        secondary: {
+          DEFAULT: "#2a2a2a", // Seu 'border-dark' antigo pode virar uma cor de fundo secundária
+          foreground: "#ffffff",
+        },
+
+        // Para mensagens de erro (usado no login)
+        destructive: {
+          DEFAULT: "#ef4444", // red-500
+          foreground: "#ffffff",
+        },
+
+        // Para textos mais apagados (labels, subtextos)
+        muted: {
+          DEFAULT: "#1a1a1a",
+          foreground: "#9ca3af", // gray-400
+        },
       },
+      // Mantive suas animações que já estavam legais
       animation: {
-        'fade-in-down': 'fadeInDown 0.5s ease-out',
-        'scale-in': 'scaleIn 0.3s ease-out',
+        "fade-in-down": "fadeInDown 0.5s ease-out",
+        "scale-in": "scaleIn 0.3s ease-out",
       },
       keyframes: {
         fadeInDown: {
-          '0%': { opacity: '0', transform: 'translateY(-10px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
+          "0%": { opacity: "0", transform: "translateY(-10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
         scaleIn: {
-          '0%': { transform: 'scale(0.95)', opacity: '0' },
-          '100%': { transform: 'scale(1)', opacity: '1' },
+          "0%": { transform: "scale(0.95)", opacity: "0" },
+          "100%": { transform: "scale(1)", opacity: "1" },
         },
       },
     },

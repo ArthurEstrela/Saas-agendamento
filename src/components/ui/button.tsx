@@ -1,19 +1,31 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "../../lib/utils/cn";
+import { cn } from "../../lib/utils/cn"; // Certifique-se que o caminho está correto
 
 const buttonVariants = cva(
+  // Base: adicionei focus-visible:ring-ring para usar a cor do anel definida no config
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-amber-500 text-gray-900 hover:bg-amber-500/90",
-        destructive: "bg-red-500 text-red-50 hover:bg-red-500/90",
+        // PADRONIZADO: Usa primary e primary-hover definidos no tailwind.config.js
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
+        
+        // PADRONIZADO: Usa destructive (vermelho de erro)
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        
+        // PADRONIZADO: Usa input (borda) e secondary (hover)
         outline:
-          "border border-input bg-transparent hover:bg-gray-700 hover:text-gray-50",
-        secondary: "bg-gray-700 text-gray-50 hover:bg-gray-700/80",
-        ghost: "hover:bg-gray-700 hover:text-gray-50",
+          "border border-input bg-background hover:bg-secondary hover:text-secondary-foreground",
+        
+        // PADRONIZADO: Usa secondary (cinza escuro)
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        
+        // PADRONIZADO: Ghost usa o mesmo hover do secondary
+        ghost: "hover:bg-secondary hover:text-secondary-foreground",
+        
+        // Já estava correto
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
@@ -50,6 +62,5 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-// CORREÇÃO: Adicionamos o comentário abaixo para o ESLint ignorar o aviso do Fast Refresh
 // eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants };

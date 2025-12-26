@@ -4,14 +4,22 @@ import { getAppointmentsForProfessionalOnDate } from "../../firebase/bookingServ
 import { ptBR } from "date-fns/locale";
 import { format, isToday, set, startOfDay } from "date-fns";
 import { motion } from "framer-motion";
-import { Clock, Loader2, CalendarX } from "lucide-react";
+import {
+  Clock,
+  Loader2,
+  CalendarX,
+  ChevronRight,
+  ChevronLeft,
+} from "lucide-react";
 import type { DailyAvailability } from "../../types";
 import { cn } from "../../lib/utils/cn";
 
 // Primitivos
-import { Calendar } from "../ui/calendar"; // Usando seu primitivo de Calendário!
+import { Calendar } from "../ui/calendar";
 import { Button } from "../ui/button";
 import { Typography } from "../ui/typography";
+import { Card, CardContent } from "../ui/card";
+import { Badge } from "../ui/badge";
 
 const weekDayMap: { [key: number]: DailyAvailability["dayOfWeek"] } = {
   0: "Sunday",
@@ -101,7 +109,7 @@ export const DateTimeSelection = () => {
           if (!isPast && fitsInWorkSlot && !isOverlapping) {
             slots.push(format(currentTime, "HH:mm"));
           }
-          currentTime = new Date(currentTime.getTime() + 15 * 60000);
+          currentTime = new Date(currentTime.getTime() + 15 * 60000); // Intervalo de 15 min
         }
       }
       return slots;
@@ -115,6 +123,7 @@ export const DateTimeSelection = () => {
       if (date instanceof Date) {
         setIsLoadingTimes(true);
         setAvailableTimes([]);
+        setTimeSlot(null); // Resetar seleção ao mudar data
         try {
           const slots = await calculateAvailableSlots(date);
           if (isActive) setAvailableTimes(slots);
@@ -139,7 +148,6 @@ export const DateTimeSelection = () => {
   const handleDateSelect = (newDate: Date | undefined) => {
     if (newDate) setDate(startOfDay(newDate));
     else setDate(undefined);
-    setTimeSlot(null);
   };
 
   const handleConfirm = () => {
@@ -149,82 +157,119 @@ export const DateTimeSelection = () => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-      <Typography variant="h2" className="text-center mb-8">
-        Escolha a Data e Hora
-      </Typography>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="pb-24"
+    >
+      <div className="text-center mb-8">
+        <Typography variant="h2">Data e Horário</Typography>
+        <Typography variant="muted">
+          Quando você gostaria de ser atendido?
+        </Typography>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto bg-black/30 p-8 rounded-2xl">
-        <div className="flex justify-center items-start">
-          {/* Componente Calendar do Shadcn/UI */}
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={handleDateSelect}
-            locale={ptBR}
-            disabled={{ before: new Date() }}
-            className="rounded-md border border-gray-700 bg-gray-800"
-          />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-5xl mx-auto px-2">
+        {/* Coluna do Calendário */}
+        <div className="lg:col-span-5 flex justify-center lg:justify-end">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-lg w-full max-w-[350px]">
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={handleDateSelect}
+              locale={ptBR}
+              disabled={{ before: new Date() }}
+              className="w-full"
+            />
+          </div>
         </div>
 
-        <div className="flex flex-col min-h-[350px]">
-          <h3 className="text-xl font-semibold text-primary mb-4 flex items-center gap-2">
-            <Clock size={20} /> Horários para{" "}
-            {date ? format(date, "dd 'de' MMMM", { locale: ptBR }) : "..."}
-          </h3>
-
-          {isLoadingTimes ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="animate-spin text-primary" size={40} />
-            </div>
-          ) : availableTimes.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto max-h-72 pr-2 scrollbar-thin">
-              {availableTimes.map((slot) => (
-                <Button
-                  key={slot}
-                  variant={timeSlot === slot ? "default" : "secondary"}
-                  onClick={() => setTimeSlot(slot)}
-                  className={cn(
-                    "w-full transition-all",
-                    timeSlot === slot &&
-                      "ring-2 ring-primary ring-offset-2 ring-offset-gray-900 scale-105"
-                  )}
+        {/* Coluna dos Horários */}
+        <div className="lg:col-span-7">
+          <Card className="h-full bg-gray-900/50 border-gray-800">
+            <CardContent className="p-6 h-full flex flex-col">
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-800">
+                <Badge
+                  variant="secondary"
+                  className="h-10 w-10 rounded-full flex items-center justify-center p-0"
                 >
-                  {slot}
-                </Button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center bg-gray-800/50 rounded-lg p-4">
-              <CalendarX size={32} className="text-gray-500 mb-2" />
-              <Typography className="font-semibold">
-                Nenhum horário disponível
-              </Typography>
-              <Typography variant="muted">
-                {date
-                  ? "Tente selecionar outra data."
-                  : "Selecione uma data para ver os horários."}
-              </Typography>
-            </div>
-          )}
+                  <Clock size={20} className="text-primary" />
+                </Badge>
+                <div>
+                  <h3 className="font-bold text-gray-100">
+                    {date
+                      ? format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })
+                      : "Selecione uma data"}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {date
+                      ? `${availableTimes.length} horários disponíveis`
+                      : "Aguardando seleção"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-[300px]">
+                {isLoadingTimes ? (
+                  <div className="h-full flex flex-col items-center justify-center text-primary">
+                    <Loader2 className="animate-spin mb-2" size={32} />
+                    <span className="text-sm">Buscando disponibilidade...</span>
+                  </div>
+                ) : !date ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-50">
+                    <ChevronLeft size={48} className="mb-2" />
+                    <span className="text-sm">
+                      Selecione uma data no calendário
+                    </span>
+                  </div>
+                ) : availableTimes.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 content-start">
+                    {availableTimes.map((slot) => (
+                      <Button
+                        key={slot}
+                        variant={timeSlot === slot ? "default" : "outline"}
+                        onClick={() => setTimeSlot(slot)}
+                        className={cn(
+                          "h-11 border-gray-700 hover:border-gray-500 hover:bg-gray-800 text-gray-300 font-medium transition-all",
+                          timeSlot === slot &&
+                            "border-primary bg-primary text-black hover:bg-primary hover:text-black shadow-[0_0_10px_rgba(218,165,32,0.4)] scale-105"
+                        )}
+                      >
+                        {slot}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                    <CalendarX size={48} className="mb-4 text-gray-700" />
+                    <p className="text-center font-medium">
+                      Sem horários livres
+                    </p>
+                    <p className="text-center text-xs mt-1">
+                      Tente selecionar outro dia.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <div className="flex justify-center items-center gap-4 mt-8">
-        <Button variant="secondary" onClick={goToPreviousStep}>
-          Voltar
-        </Button>
-        <Button
-          onClick={handleConfirm}
-          disabled={!date || !timeSlot || isLoadingTimes}
-          className="w-48"
-        >
-          {isLoadingTimes ? (
-            <Loader2 className="animate-spin h-5 w-5" />
-          ) : (
-            "Avançar"
-          )}
-        </Button>
+      {/* Footer Fixo */}
+      <div className="fixed bottom-0 left-0 w-full z-40 p-4">
+        <div className="max-w-4xl mx-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl shadow-2xl p-4 flex justify-between items-center gap-4">
+          <Button variant="ghost" onClick={goToPreviousStep}>
+            <ChevronLeft size={16} className="mr-2" /> Voltar
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!date || !timeSlot || isLoadingTimes}
+            className="w-full sm:w-auto px-8 font-bold"
+          >
+            Confirmar e Avançar <ChevronRight size={16} className="ml-2" />
+          </Button>
+        </div>
       </div>
     </motion.div>
   );

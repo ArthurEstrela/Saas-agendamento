@@ -1,8 +1,8 @@
-import { useProfileStore } from '../store/profileStore';
-import ServiceProviderDashboard from '../components/ServiceProviderDashboard';
-import { DashboardSkeleton } from '../components/Common/LoadingSpinner';
-import { ClientDashboard } from '../components/ClientDashboard';
-import ProfessionalDashboard from '../components/Professional/ProfessionalDashboard';
+import { useProfileStore } from "../store/profileStore";
+import  ServiceProviderDashboard  from "../components/ServiceProviderDashboard";
+import { DashboardSkeleton } from "../components/Common/LoadingSpinner";
+import { ClientDashboard } from "../components/ClientDashboard";
+import ProfessionalDashboard from "../components/Professional/ProfessionalDashboard";
 
 const DashboardPage = () => {
   const { userProfile, isLoadingProfile, error } = useProfileStore();
@@ -32,13 +32,13 @@ const DashboardPage = () => {
   // Mesmo que isLoadingProfile seja true (indicando um refresh), o dashboard
   // não será desmontado, preservando o estado da aba ativa.
   if (userProfile) {
-    if (userProfile.role === 'client') {
+    if (userProfile.role === "client") {
       return <ClientDashboard />;
     }
-    if (userProfile.role === 'serviceProvider') {
+    if (userProfile.role === "serviceProvider") {
       return <ServiceProviderDashboard />;
     }
-    if (userProfile.role === 'professional') {
+    if (userProfile.role === "professional") {
       return <ProfessionalDashboard />;
     }
     // Caso tenha perfil, mas um 'role' desconhecido

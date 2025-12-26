@@ -1,14 +1,4 @@
-// src/components/ServiceProvider/ProfileManagement.tsx
-
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useRef, // <--- 1. Importado useRef
-  forwardRef,
-  type InputHTMLAttributes,
-  type ElementType,
-} from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { ServiceProviderProfile } from "../../types";
 import {
@@ -27,22 +17,13 @@ import {
   Image as ImageIcon,
   Crop,
   QrCode,
-  type LucideProps,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   uploadProviderLogo,
   uploadProviderBanner,
 } from "../../firebase/userService";
-import {
-  useForm,
-  type SubmitHandler,
-  Controller,
-  type FieldError,
-  type FieldValues,
-  type Control,
-  type Path,
-} from "react-hook-form";
+import { useForm, type SubmitHandler, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useViaCep } from "../../hooks/useViaCep";
@@ -60,7 +41,22 @@ import "leaflet/dist/leaflet.css";
 import L, { LatLng } from "leaflet";
 import { FaWhatsapp } from "react-icons/fa";
 
-// @ts-expect-error - O Vite pode ter problemas com o carregamento de assets do Leaflet
+// UI Components
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { cn } from "../../lib/utils/cn";
+
+// Leaflet Fix
+// @ts-ignore
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -68,27 +64,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
-
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  icon?: ElementType<LucideProps>;
-  error?: FieldError;
-}
-
-interface MaskedInputFieldProps<T extends FieldValues> {
-  control: Control<T>;
-  name: Path<T>;
-  label: string;
-  mask: string;
-  icon: ElementType<LucideProps>;
-  error?: FieldError;
-  placeholder?: string;
-  onBlur?: () => void;
-}
-
-interface MapEventsProps {
-  onLocationSelect: (latlng: LatLng) => void;
-}
 
 const ChangeView = ({
   center,
@@ -104,31 +79,29 @@ const ChangeView = ({
   return null;
 };
 
-const MapEvents = ({ onLocationSelect }: MapEventsProps) => {
+const MapEvents = ({
+  onLocationSelect,
+}: {
+  onLocationSelect: (latlng: LatLng) => void;
+}) => {
   const [position, setPosition] = useState<LatLng | null>(null);
-
   useMapEvents({
     click(e) {
       setPosition(e.latlng);
       onLocationSelect(e.latlng);
     },
   });
-
   return position === null ? null : <Marker position={position}></Marker>;
 };
 
-// ATUALIZAÇÃO DO SCHEMA COM OS CAMPOS PIX
 const profileSchema = z.object({
   businessName: z.string().min(3, "O nome do negócio é obrigatório"),
   publicProfileSlug: z
     .string()
-    .min(3, "O link deve ter pelo menos 3 caracteres")
-    .regex(
-      /^[a-z0-9-]+$/,
-      "O link deve conter apenas letras minúsculas, números e hifens."
-    )
+    .min(3, "Mínimo 3 caracteres")
+    .regex(/^[a-z0-9-]+$/, "Apenas letras minúsculas, números e hifens.")
     .optional(),
-  name: z.string().min(3, "O nome do responsável é obrigatório"),
+  name: z.string().min(3, "Nome do responsável é obrigatório"),
   businessPhone: z.string().optional(),
   email: z.string().email("Email inválido"),
   cnpj: z.string(),
@@ -137,12 +110,12 @@ const profileSchema = z.object({
   pixKey: z.string().optional(),
   pixKeyType: z.enum(["cpf", "cnpj", "email", "phone", "random"]).optional(),
   businessAddress: z.object({
-    zipCode: z.string().min(9, "CEP é obrigatório"),
-    street: z.string().min(1, "Rua é obrigatória"),
-    number: z.string().min(1, "Número é obrigatório"),
-    neighborhood: z.string().min(1, "Bairro é obrigatório"),
-    city: z.string().min(1, "Cidade é obrigatória"),
-    state: z.string().min(2, "UF é obrigatório"),
+    zipCode: z.string().min(9, "CEP obrigatório"),
+    street: z.string().min(1, "Rua obrigatória"),
+    number: z.string().min(1, "Número obrigatório"),
+    neighborhood: z.string().min(1, "Bairro obrigatório"),
+    city: z.string().min(1, "Cidade obrigatória"),
+    state: z.string().min(2, "UF obrigatório"),
   }),
   socialLinks: z
     .object({
@@ -155,123 +128,13 @@ const profileSchema = z.object({
 });
 type ProfileFormData = z.infer<typeof profileSchema>;
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, id, icon: Icon, error, ...props }, ref) => {
-    const hasError = !!error;
-
-    return (
-      <div className="relative flex flex-col">
-        <label htmlFor={id} className="mb-2 text-sm font-medium text-gray-300">
-          {label}
-        </label>
-        <div className="relative">
-          {Icon && (
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Icon
-                className={`h-5 w-5 ${
-                  hasError ? "text-red-400" : "text-gray-400"
-                }`}
-                aria-hidden="true"
-              />
-            </span>
-          )}
-          <input
-            id={id}
-            ref={ref}
-            className={`block w-full rounded-md border-0 bg-white/5 py-3 ${
-              Icon ? "pl-10" : "pl-3"
-            } pr-3 text-white shadow-sm ring-1 ring-inset ${
-              hasError
-                ? "ring-red-500 focus:ring-red-500"
-                : "ring-gray-600 focus:ring-amber-500"
-            } placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6 transition-all duration-200`}
-            {...props}
-          />
-        </div>
-        {error && (
-          <p className="mt-2 text-sm text-red-400" id={`${id}-error`}>
-            {error.message}
-          </p>
-        )}
-      </div>
-    );
-  }
-);
-
-Input.displayName = "Input";
-
-export const MaskedInputField = <T extends FieldValues>({
-  control,
-  name,
-  label,
-  mask,
-  icon: Icon,
-  error,
-  placeholder,
-  onBlur,
-}: MaskedInputFieldProps<T>) => {
-  const hasError = !!error;
-
-  return (
-    <Controller
-      name={name}
-      control={control}
-      render={({ field }) => (
-        <div className="relative flex flex-col">
-          <label
-            htmlFor={name}
-            className="mb-2 text-sm font-medium text-gray-300"
-          >
-            {label}
-          </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-              <Icon
-                className={`h-5 w-5 ${
-                  hasError ? "text-red-400" : "text-gray-400"
-                }`}
-                aria-hidden="true"
-              />
-            </span>
-            <IMaskInput
-              mask={mask}
-              id={name}
-              value={field.value || ""}
-              onAccept={(value: unknown) => field.onChange(value)}
-              onBlur={() => {
-                field.onBlur();
-                if (onBlur) {
-                  onBlur();
-                }
-              }}
-              placeholder={placeholder}
-              className={`block w-full rounded-md border-0 bg-white/5 py-3 pl-10 pr-3 text-white shadow-sm ring-1 ring-inset ${
-                hasError
-                  ? "ring-red-500 focus:ring-red-500"
-                  : "ring-gray-600 focus:ring-amber-500"
-              } placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6 transition-all duration-200`}
-            />
-          </div>
-          {error && (
-            <p className="mt-2 text-sm text-red-400" id={`${name}-error`}>
-              {error.message}
-            </p>
-          )}
-        </div>
-      )}
-    />
-  );
-};
-
 export const ProfileManagement = () => {
   const { userProfile, updateUserProfile } = useProfileStore();
-
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
-
   const [bannerToCrop, setBannerToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -298,9 +161,7 @@ export const ProfileManagement = () => {
     -15.79, -47.88,
   ]);
   const [mapZoom, setMapZoom] = useState(4);
-
-  // --- 2. Ref para evitar sobrescrita automática do mapa ---
-  const lastSearchedAddressRef = useRef(""); 
+  const lastSearchedAddressRef = useRef("");
 
   const cepValue = watch("businessAddress.zipCode");
   const streetValue = watch("businessAddress.street");
@@ -319,33 +180,21 @@ export const ProfileManagement = () => {
       reset(profile);
       setLogoPreview(profile.logoUrl || null);
       setBannerPreview(profile.bannerUrl || null);
-
       const { lat, lng } = profile.businessAddress;
       if (lat && lng) {
         const initialPos = new L.LatLng(lat, lng);
         setPosition(initialPos);
         setMapCenter([lat, lng]);
         setMapZoom(17);
-        
-        // --- 3. Inicializa o ref com o endereço que veio do banco ---
-        // Isso impede que o fetchCoordinates sobrescreva a posição salva na primeira carga
-        const addressQuery = `${profile.businessAddress.street}, ${profile.businessAddress.number}, ${profile.businessAddress.city}`;
-        lastSearchedAddressRef.current = addressQuery;
+        lastSearchedAddressRef.current = `${profile.businessAddress.street}, ${profile.businessAddress.number}, ${profile.businessAddress.city}`;
       }
     }
   }, [userProfile, reset]);
 
   const fetchCoordinates = useCallback(async () => {
     if (streetValue && numberValue && cityValue) {
-      // Cria a string única do endereço atual
       const currentQuery = `${streetValue}, ${numberValue}, ${cityValue}`;
-
-      // --- 4. Bloqueio de Segurança ---
-      // Se o endereço não mudou desde a última vez (ou é o inicial carregado do DB),
-      // NÃO busca na API e NÃO move o pino.
-      if (currentQuery === lastSearchedAddressRef.current) {
-        return;
-      }
+      if (currentQuery === lastSearchedAddressRef.current) return;
 
       try {
         const query = encodeURIComponent(currentQuery);
@@ -359,8 +208,6 @@ export const ProfileManagement = () => {
           setPosition(newPos);
           setMapCenter([newPos.lat, newPos.lng]);
           setMapZoom(17);
-          
-          // Atualiza a ref indicando que este endereço gerou este ponto
           lastSearchedAddressRef.current = currentQuery;
         }
       } catch (error) {
@@ -376,15 +223,10 @@ export const ProfileManagement = () => {
     return () => clearTimeout(handler);
   }, [streetValue, numberValue, cityValue, fetchCoordinates]);
 
-  const handleMapClick = (latlng: L.LatLng) => {
-    setPosition(latlng);
-  };
-
+  const handleMapClick = (latlng: L.LatLng) => setPosition(latlng);
   const handleCepSearch = useCallback(() => {
     const cleanedCep = cepValue?.replace(/\D/g, "");
-    if (cleanedCep && cleanedCep.length === 8) {
-      fetchAddress(cleanedCep);
-    }
+    if (cleanedCep && cleanedCep.length === 8) fetchAddress(cleanedCep);
   }, [cepValue, fetchAddress]);
 
   useEffect(() => {
@@ -404,20 +246,16 @@ export const ProfileManagement = () => {
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-
     if (file && userProfile && userProfile.role === "serviceProvider") {
       setIsUploadingLogo(true);
       const tempUrl = URL.createObjectURL(file);
       setLogoPreview(tempUrl);
-
       try {
         const photoURL = await uploadProviderLogo(userProfile.id, file);
         await updateUserProfile(userProfile.id, { logoUrl: photoURL });
       } catch (error) {
-        console.error("Erro no upload do logo:", error);
-        if (userProfile.role === "serviceProvider") {
-          setLogoPreview(userProfile.logoUrl || null);
-        }
+        console.error(error);
+        setLogoPreview(userProfile.logoUrl || null);
       } finally {
         setIsUploadingLogo(false);
       }
@@ -425,44 +263,27 @@ export const ProfileManagement = () => {
   };
 
   const onBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setBannerToCrop(URL.createObjectURL(file));
-    }
+    if (e.target.files && e.target.files.length > 0)
+      setBannerToCrop(URL.createObjectURL(e.target.files[0]));
   };
-
-  const onCropComplete = useCallback(
-    (croppedArea: Area, croppedAreaPixels: Area) => {
-      setCroppedAreaPixels(croppedAreaPixels);
-    },
-    []
-  );
 
   const showCroppedImage = useCallback(async () => {
     if (!bannerToCrop || !croppedAreaPixels || !userProfile) return;
-
     setIsUploadingBanner(true);
     setBannerToCrop(null);
-
     try {
       const croppedImageFile = await getCroppedImg(
         bannerToCrop,
         croppedAreaPixels
       );
-      const tempUrl = URL.createObjectURL(croppedImageFile);
-      setBannerPreview(tempUrl);
-
       const bannerUrl = await uploadProviderBanner(
         userProfile.id,
         croppedImageFile
       );
-
-      await updateUserProfile(userProfile.id, { bannerUrl: bannerUrl });
+      setBannerPreview(URL.createObjectURL(croppedImageFile));
+      await updateUserProfile(userProfile.id, { bannerUrl });
     } catch (e) {
       console.error(e);
-      if (userProfile.role === "serviceProvider") {
-        setBannerPreview(userProfile.bannerUrl || null);
-      }
     } finally {
       setIsUploadingBanner(false);
     }
@@ -471,7 +292,6 @@ export const ProfileManagement = () => {
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
     if (!userProfile || !isDirty) return;
     setIsSaving(true);
-
     const updatedData = {
       ...data,
       businessAddress: {
@@ -480,25 +300,28 @@ export const ProfileManagement = () => {
         lng: position?.lng,
       },
     };
-
     await updateUserProfile(userProfile.id, updatedData);
     setIsSaving(false);
     reset(updatedData);
   };
 
+  // Styles wrapper for IMask
+  const inputBaseClasses = cn(
+    "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors",
+    "placeholder:text-gray-500",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
+    "disabled:cursor-not-allowed disabled:opacity-50 pl-10"
+  );
+
   if (!userProfile)
     return (
-      <div className="flex justify-center items-center h-full">
-        <Loader2 className="animate-spin text-[#daa520]" size={48} />
+      <div className="flex justify-center p-12">
+        <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {bannerToCrop && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col p-4">
           <div className="relative flex-1">
@@ -509,64 +332,53 @@ export const ProfileManagement = () => {
               aspect={16 / 9}
               onCropChange={setCrop}
               onZoomChange={setZoom}
-              onCropComplete={onCropComplete}
+              onCropComplete={setCroppedAreaPixels}
             />
           </div>
           <div className="h-24 flex items-center justify-center gap-4">
-            <button
-              onClick={() => setBannerToCrop(null)}
-              className="secondary-button"
-            >
+            <Button variant="ghost" onClick={() => setBannerToCrop(null)}>
               Cancelar
-            </button>
-            <button
-              onClick={showCroppedImage}
-              className="primary-button flex items-center gap-2"
-            >
-              <Crop size={18} /> Definir Banner
-            </button>
+            </Button>
+            <Button onClick={showCroppedImage}>
+              <Crop size={18} className="mr-2" /> Definir Banner
+            </Button>
           </div>
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pb-10">
+        {/* Banner e Logo */}
         <header className="relative mb-24">
-           {/* Banner e Logo (Mantidos) */}
-          <div className="group relative h-48 md:h-64 rounded-2xl bg-gray-900/50 border-2 border-dashed border-gray-700 flex items-center justify-center">
+          <div className="group relative h-48 md:h-64 rounded-2xl bg-gray-900/50 border-2 border-dashed border-gray-700 flex items-center justify-center overflow-hidden">
             {isUploadingBanner && (
               <Loader2 className="animate-spin text-white" size={32} />
             )}
             {!isUploadingBanner && bannerPreview && (
               <img
                 src={bannerPreview}
-                alt="Banner do negócio"
-                className="w-full h-full object-cover rounded-2xl"
+                alt="Banner"
+                className="w-full h-full object-cover"
               />
             )}
             {!isUploadingBanner && !bannerPreview && (
               <div className="text-gray-600 text-center">
-                <ImageIcon size={48} />
+                <ImageIcon size={48} className="mx-auto" />
                 <p className="mt-2 text-sm">Adicione um banner</p>
               </div>
             )}
-
-            <label
-              htmlFor="banner-upload"
-              className="absolute inset-0 bg-black/70 rounded-2xl flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-            >
+            <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
               <Camera size={32} />
+              <input
+                type="file"
+                className="hidden"
+                onChange={onBannerFileChange}
+                accept="image/*"
+              />
             </label>
-            <input
-              id="banner-upload"
-              type="file"
-              className="hidden"
-              onChange={onBannerFileChange}
-              accept="image/*"
-            />
           </div>
 
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -translate-y-1/2 w-full px-4 md:px-8 flex flex-col md:flex-row items-center gap-4 md:gap-6">
-            <div className="relative w-36 h-36 md:w-40 md:h-40 rounded-full group flex-shrink-0 border-4 border-gray-800 bg-gray-900">
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -translate-y-1/2 w-full px-4 md:px-8 flex flex-col md:flex-row items-center gap-6">
+            <div className="relative w-36 h-36 md:w-40 md:h-40 rounded-full group flex-shrink-0 border-4 border-gray-900 bg-gray-900 shadow-xl">
               {logoPreview ? (
                 <img
                   src={logoPreview}
@@ -575,271 +387,278 @@ export const ProfileManagement = () => {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <Building size={64} className="text-gray-600" />
+                  <Building size={64} className="text-gray-700" />
                 </div>
               )}
-              <label
-                htmlFor="logo-upload"
-                className="absolute inset-0 bg-black/70 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-              >
+              <label className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                 {isUploadingLogo ? (
                   <Loader2 className="animate-spin" />
                 ) : (
-                  <Camera size={32} />
+                  <Camera size={24} />
                 )}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                  accept="image/*"
+                  disabled={isUploadingLogo}
+                />
               </label>
-              <input
-                id="logo-upload"
-                type="file"
-                className="hidden"
-                onChange={handleLogoUpload}
-                accept="image/*"
-                disabled={isUploadingLogo}
-              />
             </div>
             <div className="text-center md:text-left pt-2">
-              <h1 className="text-3xl md:text-4xl font-bold text-white">
+              <h1 className="text-3xl font-bold text-white">
                 {watch("businessName") || "Nome do seu Negócio"}
               </h1>
-              <p className="text-gray-400 mt-1">
-                Gerencie as informações do seu perfil público.
-              </p>
+              <p className="text-gray-400">Gerencie seu perfil público.</p>
             </div>
           </div>
         </header>
 
-        {/* --- DADOS GERAIS --- */}
-        <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
-          <h2 className="text-2xl font-semibold text-amber-400 mb-6">
-            Informações do Negócio
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Input
-              label="Nome do Negócio"
-              id="businessName"
-              icon={Building}
-              error={errors.businessName}
-              {...register("businessName")}
-            />
-            <div className="md:col-span-1">
+        {/* Dados Gerais */}
+        <Card className="bg-gray-900/40 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-amber-500 flex items-center gap-2">
+              <Building size={20} /> Dados do Negócio
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="relative">
+              <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
               <Input
-                label="Link Público (ex: stylo.com/agendar/SEU-LINK)"
-                id="publicProfileSlug"
-                icon={LinkIcon}
-                error={errors.publicProfileSlug}
+                className="pl-10"
+                {...register("businessName")}
+                placeholder="Nome Fantasia"
+                error={errors.businessName?.message}
+              />
+            </div>
+            <div className="relative">
+              <LinkIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input
+                className="pl-10"
                 {...register("publicProfileSlug")}
-                placeholder="nome-do-seu-negocio"
+                placeholder="Link (slug)"
+                error={errors.publicProfileSlug?.message}
               />
             </div>
-            <Input
-              label="CNPJ"
-              id="cnpj"
-              icon={UserCheck}
-              {...register("cnpj")}
-              disabled
-            />
-            <Input
-              label="Nome do Responsável"
-              id="name"
-              icon={User}
-              error={errors.name}
-              {...register("name")}
-            />
-            <Input
-              label="E-mail de Contato"
-              id="email"
-              icon={Mail}
-              {...register("email")}
-              disabled
-            />
-            <MaskedInputField
-              control={control}
-              name="businessPhone"
-              label="Telefone"
-              mask="(00) 00000-0000"
-              icon={Phone}
-              error={errors.businessPhone}
-              placeholder="(XX) XXXXX-XXXX"
-            />
-          </div>
-        </section>
-
-        {/* --- CONFIGURAÇÃO DE PIX --- */}
-        <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-2xl font-semibold text-amber-400">
-              Pagamento via Pix
-            </h2>
-            <span className="bg-green-500/10 text-green-500 text-xs px-2 py-1 rounded-full border border-green-500/20">
-              Recomendado
-            </span>
-          </div>
-          <p className="text-gray-400 mb-6 text-sm">
-            Cadastre sua chave Pix para receber pagamentos diretamente dos clientes.
-            Ao agendar, mostraremos sua chave para que eles façam a transferência.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <label className="mb-2 text-sm font-medium text-gray-300 block">Tipo de Chave</label>
-              <select
-                {...register("pixKeyType")}
-                className="block w-full rounded-md border-0 bg-white/5 py-3 pl-3 pr-10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-amber-500 sm:text-sm sm:leading-6"
-              >
-                <option value="cpf">CPF</option>
-                <option value="cnpj">CNPJ</option>
-                <option value="email">E-mail</option>
-                <option value="phone">Celular</option>
-                <option value="random">Chave Aleatória</option>
-              </select>
+            <div className="relative">
+              <UserCheck className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input className="pl-10" {...register("cnpj")} disabled />
             </div>
-            <div className="md:col-span-2">
+            <div className="relative">
+              <User className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
               <Input
-                label="Chave Pix"
-                id="pixKey"
-                icon={QrCode}
-                error={errors.pixKey}
-                {...register("pixKey")}
-                placeholder="Insira sua chave Pix aqui"
+                className="pl-10"
+                {...register("name")}
+                placeholder="Responsável"
+                error={errors.name?.message}
               />
             </div>
-          </div>
-        </section>
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input className="pl-10" {...register("email")} disabled />
+            </div>
+            <Controller
+              name="businessPhone"
+              control={control}
+              render={({ field }) => (
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
+                  <IMaskInput
+                    {...field}
+                    mask="(00) 00000-0000"
+                    className={inputBaseClasses}
+                    placeholder="Telefone"
+                  />
+                </div>
+              )}
+            />
+          </CardContent>
+        </Card>
 
-        {/* --- ENDEREÇO --- */}
-        <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
-          <h2 className="text-2xl font-semibold text-amber-400 mb-6">
-            Endereço
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
-            <div className="md:col-span-2">
-              <MaskedInputField
+        {/* Pix */}
+        <Card className="bg-gray-900/40 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-amber-500 flex items-center gap-2">
+              <QrCode size={20} /> Chave Pix
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="col-span-1">
+              <Controller
+                name="pixKeyType"
                 control={control}
+                render={({ field }) => (
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    value={field.value}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cpf">CPF</SelectItem>
+                      <SelectItem value="cnpj">CNPJ</SelectItem>
+                      <SelectItem value="email">E-mail</SelectItem>
+                      <SelectItem value="phone">Celular</SelectItem>
+                      <SelectItem value="random">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="md:col-span-2 relative">
+              <QrCode className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input
+                className="pl-10"
+                {...register("pixKey")}
+                placeholder="Chave Pix"
+                error={errors.pixKey?.message}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Endereço */}
+        <Card className="bg-gray-900/40 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-amber-500 flex items-center gap-2">
+              <MapPin size={20} /> Localização
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="md:col-span-2 relative">
+              <Controller
                 name="businessAddress.zipCode"
-                label="CEP"
-                mask="00000-000"
-                icon={MapPin}
-                error={errors.businessAddress?.zipCode}
-                placeholder="00000-000"
-                onBlur={handleCepSearch}
+                control={control}
+                render={({ field }) => (
+                  <IMaskInput
+                    {...field}
+                    mask="00000-000"
+                    className={inputBaseClasses}
+                    placeholder="CEP"
+                    onBlur={handleCepSearch}
+                  />
+                )}
               />
               {cepLoading && (
-                <p className="text-sm text-amber-400 mt-1">Buscando CEP...</p>
+                <span className="text-xs text-primary ml-1">Buscando...</span>
               )}
-              {cepError && <p className="error-message mt-1">{cepError}</p>}
             </div>
             <div className="md:col-span-4">
               <Input
-                label="Rua / Logradouro"
-                id="street"
-                error={errors.businessAddress?.street}
                 {...register("businessAddress.street")}
+                placeholder="Rua"
+                error={errors.businessAddress?.street?.message}
               />
             </div>
             <div className="md:col-span-2">
               <Input
-                label="Número"
-                id="number"
-                error={errors.businessAddress?.number}
                 {...register("businessAddress.number")}
-              />
-            </div>
-            <div className="md:col-span-4">
-              <Input
-                label="Bairro"
-                id="neighborhood"
-                error={errors.businessAddress?.neighborhood}
-                {...register("businessAddress.neighborhood")}
-              />
-            </div>
-            <div className="md:col-span-4">
-              <Input
-                label="Cidade"
-                id="city"
-                error={errors.businessAddress?.city}
-                {...register("businessAddress.city")}
+                placeholder="Número"
+                error={errors.businessAddress?.number?.message}
               />
             </div>
             <div className="md:col-span-2">
               <Input
-                label="Estado (UF)"
-                id="state"
-                error={errors.businessAddress?.state}
-                {...register("businessAddress.state")}
+                {...register("businessAddress.neighborhood")}
+                placeholder="Bairro"
+                error={errors.businessAddress?.neighborhood?.message}
               />
             </div>
-            <div className="md:col-span-6 mt-4">
-              <label className="label-text">Localização no Mapa</label>
-              <div className="h-80 w-full rounded-lg overflow-hidden border-2 border-gray-700">
-                <MapContainer
-                  center={mapCenter}
-                  zoom={mapZoom}
-                  style={{ height: "100%", width: "100%" }}
-                >
-                  <ChangeView center={mapCenter} zoom={mapZoom} />
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  />
-                  <MapEvents onLocationSelect={handleMapClick} />
-                  {position && <Marker position={position}></Marker>}
-                </MapContainer>
-              </div>
+            <div className="md:col-span-1">
+              <Input
+                {...register("businessAddress.city")}
+                placeholder="Cidade"
+                error={errors.businessAddress?.city?.message}
+              />
             </div>
-          </div>
-        </section>
-        
-        {/* --- REDES SOCIAIS --- */}
-        <section className="bg-black/30 p-8 rounded-2xl border border-gray-800">
-          <h2 className="text-2xl font-semibold text-amber-400 mb-6">
-            Redes Sociais & Website
-          </h2>
-          <div className="space-y-4">
-            <Input
-              label="Instagram"
-              id="instagram"
-              icon={Instagram}
-              error={errors.socialLinks?.instagram}
-              {...register("socialLinks.instagram")}
-              placeholder="https://instagram.com/seu_negocio"
-            />
-            <MaskedInputField
-              control={control}
-              name="socialLinks.whatsapp"
-              label="WhatsApp"
-              mask="(00) 00000-0000"
-              icon={FaWhatsapp}
-              error={errors.socialLinks?.whatsapp}
-              placeholder="(XX) XXXXX-XXXX"
-            />
-            <Input
-              label="Facebook"
-              id="facebook"
-              icon={Facebook}
-              error={errors.socialLinks?.facebook}
-              {...register("socialLinks.facebook")}
-              placeholder="https://facebook.com/seu_negocio"
-            />
-            <Input
-              label="Website"
-              id="website"
-              icon={LinkIcon}
-              error={errors.socialLinks?.website}
-              {...register("socialLinks.website")}
-              placeholder="https://seunegocio.com.br"
-            />
-          </div>
-        </section>
+            <div className="md:col-span-1">
+              <Input
+                {...register("businessAddress.state")}
+                placeholder="UF"
+                error={errors.businessAddress?.state?.message}
+              />
+            </div>
 
-        <div className="flex justify-end pt-6 border-t border-gray-800">
-          <button
+            <div className="md:col-span-6 h-80 rounded-lg overflow-hidden border border-gray-700 mt-4 relative z-0">
+              <MapContainer
+                center={mapCenter}
+                zoom={mapZoom}
+                style={{ height: "100%", width: "100%" }}
+              >
+                <ChangeView center={mapCenter} zoom={mapZoom} />
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <MapEvents onLocationSelect={handleMapClick} />
+                {position && <Marker position={position}></Marker>}
+              </MapContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Redes Sociais */}
+        <Card className="bg-gray-900/40 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-amber-500 flex items-center gap-2">
+              <Instagram size={20} /> Redes Sociais
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Instagram className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input
+                className="pl-10"
+                {...register("socialLinks.instagram")}
+                placeholder="Instagram URL"
+              />
+            </div>
+            <div className="relative">
+              <Facebook className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input
+                className="pl-10"
+                {...register("socialLinks.facebook")}
+                placeholder="Facebook URL"
+              />
+            </div>
+            <Controller
+              name="socialLinks.whatsapp"
+              control={control}
+              render={({ field }) => (
+                <div className="relative">
+                  <FaWhatsapp className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
+                  <IMaskInput
+                    {...field}
+                    mask="(00) 00000-0000"
+                    className={inputBaseClasses}
+                    placeholder="WhatsApp"
+                  />
+                </div>
+              )}
+            />
+            <div className="relative">
+              <LinkIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+              <Input
+                className="pl-10"
+                {...register("socialLinks.website")}
+                placeholder="Website"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="sticky bottom-4 z-20 flex justify-end">
+          <Button
             type="submit"
             disabled={isSaving || !isDirty}
-            className="primary-button w-full md:w-auto md:px-8 flex items-center justify-center gap-2"
+            className="shadow-lg shadow-black/50 font-bold px-8"
           >
-            {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+            {isSaving ? (
+              <Loader2 className="animate-spin mr-2" />
+            ) : (
+              <Save className="mr-2" />
+            )}{" "}
             Salvar Alterações
-          </button>
+          </Button>
         </div>
       </form>
     </motion.div>

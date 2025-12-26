@@ -1,5 +1,3 @@
-// src/components/ServiceProvider/FinancialManagement.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { useFinanceStore } from "../../store/financeStore";
 import { useAuthStore } from "../../store/authStore";
@@ -36,21 +34,25 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ExpenseModal from "./ExpenseModal";
 import type { Appointment, Expense } from "../../types";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { Button } from "../ui/button";
-import { Calendar } from "../ui/calendar";
 import { Timestamp } from "firebase/firestore";
-import { ConfirmationModal } from "../Common/ConfirmationModal";
 import { exportTransactionsToCsv } from "../../lib/utils/exportToCsv";
 import { PerformanceRanking } from "./PerformanceRanking";
 
-// --- Funções Utilitárias e Componentes Internos ---
+// UI Components
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { ConfirmationModal } from "../Common/ConfirmationModal";
+import { cn } from "../../lib/utils/cn";
+import { Badge } from "../ui/badge";
+
+// --- Funções Utilitárias ---
 
 const normalizeTimestamp = (dateValue: unknown): Date => {
   if (dateValue instanceof Timestamp) {
     return dateValue.toDate();
   }
-  // Garante que é um valor válido antes de criar a data
   if (!dateValue) return new Date();
   return new Date(dateValue as string | number | Date);
 };
@@ -62,31 +64,49 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Cartão de Estatística (RE-ADICIONADO)
+// --- Sub-componentes ---
+
 const StatCard = ({
   title,
   value,
   icon: Icon,
+  variant = "default",
 }: {
   title: string;
   value: string;
   icon: React.ElementType;
-}) => (
-  <motion.div
-    whileHover={{ scale: 1.05 }}
-    className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 flex flex-col justify-between"
-  >
-    <div className="flex items-center justify-between text-gray-400">
-      <span className="text-sm font-medium">{title}</span>
-      <Icon className="w-6 h-6" />
-    </div>
-    <div className="mt-4">
-      <h3 className="text-3xl font-bold text-white">{value}</h3>
-    </div>
-  </motion.div>
-);
+  variant?: "default" | "success" | "danger";
+}) => {
+  const variantStyles = {
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-green-500 bg-green-500/10 border-green-500/20",
+    danger: "text-red-500 bg-red-500/10 border-red-500/20",
+  };
 
-// Tabela de Transações (RE-ADICIONADA e CORRIGIDA)
+  return (
+    <motion.div
+      whileHover={{ y: -5 }}
+      transition={{ type: "spring", stiffness: 300 }}
+    >
+      <Card className="border-gray-800 bg-gray-900/50 backdrop-blur-sm overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-400 mb-1">{title}</p>
+              <h3 className="text-2xl font-bold text-white">{value}</h3>
+            </div>
+            <div
+              className={cn("p-3 rounded-xl border", variantStyles[variant])}
+            >
+              <Icon className="w-6 h-6" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
 const FinancialTransactionsTable = ({
   transactions,
   onEditExpense,
@@ -97,119 +117,109 @@ const FinancialTransactionsTable = ({
   onDeleteExpense: (expenseId: string) => void;
 }) => {
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-700">
-        <thead className="bg-gray-800/60">
+    <div className="overflow-x-auto rounded-lg border border-gray-800">
+      <table className="w-full text-sm text-left">
+        <thead className="bg-gray-900 text-gray-400 font-medium border-b border-gray-800">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-              Data
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-              Descrição
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-              Tipo
-            </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-              Valor
-            </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-              Ações
-            </th>
+            <th className="px-6 py-4">Data</th>
+            <th className="px-6 py-4">Descrição</th>
+            <th className="px-6 py-4">Tipo</th>
+            <th className="px-6 py-4 text-right">Valor</th>
+            <th className="px-6 py-4 text-right">Ações</th>
           </tr>
         </thead>
-        <tbody className="bg-gray-800/30 divide-y divide-gray-700/50">
-          {transactions.map((item) => (
-            <tr key={item.id}>
-              <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">
-                {format(
-                  normalizeTimestamp(
-                    "date" in item ? item.date : item.startTime
-                  ),
-                  "dd/MM/yyyy"
-                )}
-              </td>
-              <td className="px-6 py-4 text-sm text-white">
-                {"serviceName" in item
-                  ? `Serviço: ${item.serviceName} (${item.clientName})`
-                  : item.description}
-              </td>
-              <td className="px-6 py-4 text-sm">
-                {"totalPrice" in item ? (
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-900 text-emerald-300">
-                    Receita
-                  </span>
-                ) : (
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900 text-red-300">
-                    Despesa
-                  </span>
-                )}
-              </td>
-              <td
-                className={`px-6 py-4 text-sm text-right font-medium ${
-                  "totalPrice" in item ? "text-emerald-400" : "text-red-400"
-                }`}
+        <tbody className="divide-y divide-gray-800 bg-gray-900/30">
+          {transactions.map((item) => {
+            const isIncome = "totalPrice" in item;
+            const date = normalizeTimestamp(
+              "date" in item ? item.date : item.startTime
+            );
+
+            return (
+              <tr
+                key={item.id}
+                className="hover:bg-gray-800/50 transition-colors group"
               >
-                {/* --- CORREÇÃO DO BUG DE PREÇO --- */}
-                {"totalPrice" in item
-                  ? `+ ${formatCurrency(item.finalPrice ?? item.totalPrice)}`
-                  : `- ${formatCurrency(item.amount)}`}
-              </td>
-              <td className="px-6 py-4 text-right">
-                {"amount" in item && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEditExpense(item as Expense)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onDeleteExpense(item.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
+                <td className="px-6 py-4 text-gray-400 whitespace-nowrap">
+                  {format(date, "dd/MM/yyyy")}
+                </td>
+                <td className="px-6 py-4 text-gray-200">
+                  {"serviceName" in item ? (
+                    <div className="flex flex-col">
+                      <span className="font-medium">{item.serviceName}</span>
+                      <span className="text-xs text-gray-500">
+                        {item.clientName}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-medium">{item.description}</span>
+                  )}
+                </td>
+                <td className="px-6 py-4">
+                  <Badge
+                    variant={isIncome ? "success" : "destructive"}
+                    className="font-normal"
+                  >
+                    {isIncome ? "Receita" : "Despesa"}
+                  </Badge>
+                </td>
+                <td
+                  className={cn(
+                    "px-6 py-4 text-right font-bold",
+                    isIncome ? "text-green-500" : "text-red-500"
+                  )}
+                >
+                  {isIncome ? "+" : "-"}{" "}
+                  {formatCurrency(
+                    isIncome ? item.finalPrice ?? item.totalPrice : item.amount
+                  )}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  {!isIncome && (
+                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-400 hover:text-primary hover:bg-primary/10"
+                        onClick={() => onEditExpense(item as Expense)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-400 hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => onDeleteExpense(item.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  {isIncome && <div className="h-8" />}{" "}
+                  {/* Espaçador para manter altura */}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 };
 
-// Container de Gráfico (RE-ADICIONADO)
-const ChartContainer = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => (
-  <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50">
-    <h2 className="text-xl font-semibold text-white mb-4">{title}</h2>
-    <div className="h-80">{children}</div>
-  </div>
-);
-
 // --- Componente Principal ---
 
 export const FinancialManagement = () => {
-  const user = useAuthStore((state) => state.user);
-  const financialData = useFinanceStore((state) => state.financialData);
-  const loading = useFinanceStore((state) => state.isLoading);
-  const error = useFinanceStore((state) => state.error);
-  const fetchFinancialData = useFinanceStore(
-    (state) => state.fetchFinancialData
-  );
-  const currentDate = useFinanceStore((state) => state.currentDate);
-  const setCurrentDate = useFinanceStore((state) => state.setCurrentDate);
-  const { removeExpense } = useFinanceStore();
+  const { user } = useAuthStore();
+  const {
+    financialData,
+    isLoading: loading,
+    error,
+    fetchFinancialData,
+    currentDate,
+    setCurrentDate,
+    removeExpense,
+  } = useFinanceStore();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
@@ -218,9 +228,7 @@ export const FinancialManagement = () => {
   );
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchFinancialData(user.uid, currentDate);
-    }
+    if (user?.uid) fetchFinancialData(user.uid, currentDate);
   }, [user?.uid, currentDate, fetchFinancialData]);
 
   const handleOpenEditModal = (expense: Expense) => {
@@ -265,16 +273,13 @@ export const FinancialManagement = () => {
 
     financialData.appointments.forEach((appt) => {
       const dateSource = appt.completedAt || appt.startTime;
-      const date = normalizeTimestamp(dateSource);
-      const day = format(date, "yyyy-MM-dd");
+      const day = format(normalizeTimestamp(dateSource), "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
-      // --- CORREÇÃO DO BUG DE PREÇO ---
       dailyData[day].revenue += appt.finalPrice ?? appt.totalPrice;
     });
 
     financialData.expenses.forEach((exp) => {
-      const date = normalizeTimestamp(exp.date);
-      const day = format(date, "yyyy-MM-dd");
+      const day = format(normalizeTimestamp(exp.date), "yyyy-MM-dd");
       if (!dailyData[day]) dailyData[day] = { revenue: 0, expenses: 0 };
       dailyData[day].expenses += exp.amount;
     });
@@ -286,7 +291,6 @@ export const FinancialManagement = () => {
         Despesa: values.expenses,
       }))
       .sort((a, b) => {
-        // Ordena pela data corretamente (convertendo dd/MM para MM/dd)
         const [dayA, monthA] = a.date.split("/");
         const [dayB, monthB] = b.date.split("/");
         return `${monthA}-${dayA}`.localeCompare(`${monthB}-${dayB}`);
@@ -310,212 +314,258 @@ export const FinancialManagement = () => {
   }, [financialData?.expenses]);
 
   const PIE_CHART_COLORS = [
-    "#FFC107",
-    "#FF8F00",
-    "#FF6F00",
-    "#F57C00",
-    "#EF6C00",
-    "#E65100",
+    "#DAA520",
+    "#B8860B",
+    "#F59E0B",
+    "#D97706",
+    "#92400E",
+    "#78350F",
   ];
 
   if (loading)
     return (
-      <div className="flex justify-center items-center h-full">
-        <Loader2 className="animate-spin text-amber-500" size={48} />
-        <p className="ml-4 text-gray-400">Carregando dados financeiros...</p>
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="animate-spin text-primary" size={48} />
       </div>
     );
 
-  if (error)
+  if (error) {
     return (
-      <div className="bg-red-900/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg flex items-center">
-        <AlertCircle className="mr-3" />
+      <div className="bg-destructive/10 border border-destructive/20 text-destructive px-6 py-4 rounded-xl flex items-center justify-center gap-3">
+        <AlertCircle size={24} />
         <p>Erro ao carregar dados: {error}</p>
       </div>
     );
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8"
-    >
-      <header className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+    <div className="space-y-8 pb-10">
+      {/* Header e Filtro de Data */}
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Painel Financeiro</h1>
           <p className="text-gray-400 mt-1">
-            Acompanhe a saúde financeira do seu negócio.
+            Visão geral do desempenho do seu negócio.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className="w-full sm:w-[200px] justify-start text-left font-normal"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={currentDate}
-                onSelect={(date) => {
-                  if (date) {
-                    setCurrentDate(date);
-                  }
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-      </header>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full md:w-[240px] justify-start text-left font-normal bg-gray-900 border-gray-700 hover:bg-gray-800"
+            >
+              <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+              {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0 bg-gray-900 border-gray-800">
+            <Calendar
+              mode="single"
+              selected={currentDate}
+              onSelect={(date) => date && setCurrentDate(date)}
+              initialFocus
+              locale={ptBR}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Cards de KPI */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           title="Receita Bruta"
           value={formatCurrency(financialData?.totalRevenue || 0)}
           icon={TrendingUp}
+          variant="success"
         />
         <StatCard
           title="Despesas"
           value={formatCurrency(financialData?.totalExpenses || 0)}
           icon={ArrowDown}
+          variant="danger"
         />
         <StatCard
           title="Lucro Líquido"
           value={formatCurrency(financialData?.netIncome || 0)}
           icon={DollarSign}
+          variant="default"
         />
-      </section>
+      </div>
 
-      <section>
-        <h2 className="text-2xl font-bold text-white mb-4">
-          Análise de Performance
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <PerformanceRanking
-            title="Serviços Mais Rentáveis"
-            icon={ClipboardList}
-            data={financialData?.topServices || []}
-          />
-          <PerformanceRanking
-            title="Profissionais com Maior Rendimento"
-            icon={Users}
-            data={financialData?.topProfessionals || []}
-          />
-        </div>
-      </section>
+      {/* Gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="bg-gray-900/50 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-white">
+              Fluxo de Caixa
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-80">
+            {barChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barChartData}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#374151"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#9CA3AF"
+                    tickLine={false}
+                    axisLine={false}
+                    dy={10}
+                  />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    tickFormatter={(v) => `R$${v}`}
+                    tickLine={false}
+                    axisLine={false}
+                    dx={-10}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#111827",
+                      borderColor: "#374151",
+                      borderRadius: "8px",
+                      color: "#F3F4F6",
+                    }}
+                    formatter={(value: number) => formatCurrency(value)}
+                    cursor={{ fill: "#1F2937" }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: "20px" }} />
+                  <Bar
+                    dataKey="Receita"
+                    fill="#22C55E"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={50}
+                  />
+                  <Bar
+                    dataKey="Despesa"
+                    fill="#EF4444"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={50}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                Sem dados para exibir.
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartContainer title="Receitas vs. Despesas">
-          {barChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
-                <XAxis dataKey="date" stroke="#A0AEC0" />
-                <YAxis
-                  stroke="#A0AEC0"
-                  tickFormatter={(value) => formatCurrency(Number(value))}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1A202C",
-                    borderColor: "#4A5568",
-                  }}
-                  formatter={(value: number) => formatCurrency(value)}
-                />
-                <Legend />
-                <Bar
-                  dataKey="Receita"
-                  fill="#48BB78"
-                  name="Receita"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="Despesa"
-                  fill="#F56565"
-                  name="Despesa"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Sem dados para exibir o gráfico.
-            </div>
-          )}
-        </ChartContainer>
-        <ChartContainer title="Despesas por Categoria">
-          {pieChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <RechartsPieChart>
-                <Pie
-                  data={pieChartData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                >
-                  {pieChartData.map((_entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Legend />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Nenhuma despesa registrada no período.
-            </div>
-          )}
-        </ChartContainer>
-      </section>
+        <Card className="bg-gray-900/50 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-white">
+              Despesas por Categoria
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-80">
+            {pieChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart>
+                  <Pie
+                    data={pieChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                  >
+                    {pieChartData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]}
+                        stroke="none"
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: "#111827",
+                      borderColor: "#374151",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Legend
+                    layout="vertical"
+                    verticalAlign="middle"
+                    align="right"
+                  />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                Nenhuma despesa registrada.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-      <section className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-          <h2 className="text-xl font-semibold text-white">
-            Extrato Financeiro
-          </h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleExportCSV}>
-              <Download className="mr-2 h-4 w-4" />
-              Exportar CSV
+      {/* Rankings */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <PerformanceRanking
+          title="Serviços Mais Rentáveis"
+          icon={ClipboardList}
+          data={financialData?.topServices || []}
+        />
+        <PerformanceRanking
+          title="Profissionais em Destaque"
+          icon={Users}
+          data={financialData?.topProfessionals || []}
+        />
+      </div>
+
+      {/* Extrato */}
+      <Card className="bg-gray-900/50 border-gray-800">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-xl font-bold text-white">
+            Extrato Detalhado
+          </CardTitle>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              className="border-gray-700 text-gray-300 hover:text-white"
+            >
+              <Download className="mr-2 h-4 w-4" /> Exportar
             </Button>
             <Button
+              size="sm"
               onClick={() => {
                 setExpenseToEdit(null);
                 setIsExpenseModalOpen(true);
               }}
+              className="gap-2 bg-primary text-black hover:bg-primary/90"
             >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Adicionar Despesa
+              <PlusCircle size={16} /> Nova Despesa
             </Button>
           </div>
-        </div>
-        {allTransactions.length > 0 ? (
-          <FinancialTransactionsTable
-            transactions={allTransactions}
-            onEditExpense={handleOpenEditModal}
-            onDeleteExpense={setExpenseIdToDelete}
-          />
-        ) : (
-          <div className="text-center py-12 text-gray-500">
-            Nenhuma transação encontrada para este período.
-          </div>
-        )}
-      </section>
+        </CardHeader>
+        <CardContent>
+          {allTransactions.length > 0 ? (
+            <FinancialTransactionsTable
+              transactions={allTransactions}
+              onEditExpense={handleOpenEditModal}
+              onDeleteExpense={setExpenseIdToDelete}
+            />
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              Nenhuma transação neste período.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
+      {/* Modais */}
       <ExpenseModal
         isOpen={isExpenseModalOpen}
         onClose={() => {
@@ -524,13 +574,16 @@ export const FinancialManagement = () => {
         }}
         expenseToEdit={expenseToEdit}
       />
+
       <ConfirmationModal
         isOpen={!!expenseIdToDelete}
         onClose={() => setExpenseIdToDelete(null)}
         onConfirm={executeDeleteExpense}
-        title="Confirmar Exclusão"
-        message="Você tem certeza que deseja excluir esta despesa? Esta ação não pode ser desfeita."
+        title="Excluir Despesa"
+        message="Tem certeza que deseja excluir esta despesa? O valor será removido dos cálculos."
+        confirmText="Excluir"
+        variant="danger"
       />
-    </motion.div>
+    </div>
   );
 };

@@ -1,5 +1,3 @@
-// src/components/Professional/ProfessionalSideNav.tsx
-
 import {
   LayoutDashboard,
   User,
@@ -15,8 +13,14 @@ import { useProfileStore } from "../../store/profileStore";
 import type { ProfessionalProfile } from "../../types";
 import type { ProfessionalDashboardView } from "./ProfessionalDashboard";
 import { useNotificationStore } from "../../store/notificationsStore";
+import logo from "../../assets/stylo-logo.png";
 
-// 1. Definição da interface SideNavProps (que estava faltando)
+// UI
+import { Button } from "../ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Badge } from "../ui/badge";
+import { cn } from "../../lib/utils/cn";
+
 interface SideNavProps {
   activeView: ProfessionalDashboardView;
   setActiveView: (view: ProfessionalDashboardView) => void;
@@ -24,33 +28,6 @@ interface SideNavProps {
   setIsOpen: (isOpen: boolean) => void;
 }
 
-// 2. Definição da interface NavItemProps (para corrigir o 'any')
-interface NavItemProps {
-  icon: React.ElementType;
-  text: string;
-  view: ProfessionalDashboardView;
-  active: boolean;
-  onClick: (view: ProfessionalDashboardView) => void;
-}
-
-// 3. Componente NavItem com a tipagem correta
-const NavItem = ({ icon: Icon, text, view, active, onClick }: NavItemProps) => (
-  <button
-    onClick={() => onClick(view)}
-    className={`flex items-center w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${
-      active
-        ? "bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20"
-        : "text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-md"
-    }`}
-  >
-    <Icon className="h-5 w-5 mr-4 transition-transform duration-300 group-hover:scale-110" />
-    <span className="font-semibold text-sm transition-transform duration-300 group-hover:translate-x-1">
-      {text}
-    </span>
-  </button>
-);
-
-// 4. Componente Principal
 export const ProfessionalSideNav = ({
   activeView,
   setActiveView,
@@ -67,134 +44,134 @@ export const ProfessionalSideNav = ({
     setIsOpen(false);
   };
 
+  const NavItem = ({
+    icon: Icon,
+    text,
+    view,
+  }: {
+    icon: any;
+    text: string;
+    view: ProfessionalDashboardView;
+  }) => {
+    const isActive = activeView === view;
+    return (
+      <Button
+        variant="ghost"
+        onClick={() => handleNavClick(view)}
+        className={cn(
+          "w-full justify-start gap-3 px-4 py-6 text-sm font-medium transition-all duration-200",
+          isActive
+            ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary border-r-2 border-primary rounded-none rounded-r-lg"
+            : "text-gray-400 hover:bg-gray-800 hover:text-white"
+        )}
+      >
+        <Icon
+          size={20}
+          className={cn(isActive ? "text-primary" : "text-gray-500")}
+        />
+        {text}
+      </Button>
+    );
+  };
+
   return (
     <>
       {/* Mobile Overlay */}
-      <div
-        className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        onClick={() => setIsOpen(false)}
-      />
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
 
       <aside
-        className={`fixed md:fixed inset-y-0 left-0 z-50 w-72 bg-black border-r border-gray-800 p-4 transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={cn(
+          "fixed md:fixed inset-y-0 left-0 z-50 w-72 bg-gray-900 border-r border-gray-800 transform transition-transform duration-300 ease-in-out flex flex-col",
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
+        )}
       >
-        <div className="flex items-center justify-between mb-8 px-2">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-tr from-amber-400 to-amber-600 rounded-lg flex items-center justify-center font-bold text-black">
-              S
-            </div>
-            <span className="text-xl font-bold text-white tracking-tight">
-              Stylo
-            </span>
-          </div>
-
-          <button
+        <div className="flex items-center justify-between p-6">
+          <img src={logo} alt="Stylo" className="h-8" />
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setIsOpen(false)}
             className="md:hidden text-gray-400"
           >
             <X size={24} />
-          </button>
+          </Button>
         </div>
 
-        <nav className="flex-grow flex flex-col space-y-1">
+        <nav className="flex-grow flex flex-col space-y-1 px-2">
           <p className="px-4 text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 mt-2">
             Principal
           </p>
-
-          <NavItem
-            icon={Home}
-            text="Início"
-            view="home"
-            active={activeView === "home"}
-            onClick={handleNavClick}
-          />
-          <NavItem
-            icon={LayoutDashboard}
-            text="Minha Agenda"
-            view="agenda"
-            active={activeView === "agenda"}
-            onClick={handleNavClick}
-          />
+          <NavItem icon={Home} text="Início" view="home" />
+          <NavItem icon={LayoutDashboard} text="Minha Agenda" view="agenda" />
 
           <p className="px-4 text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 mt-6">
             Gestão
           </p>
+          <NavItem icon={Clock} text="Horários" view="availability" />
+          <NavItem icon={Star} text="Avaliações" view="reviews" />
 
-          <NavItem
-            icon={Clock}
-            text="Horários"
-            view="availability"
-            active={activeView === "availability"}
-            onClick={handleNavClick}
-          />
-          <NavItem
-            icon={Star}
-            text="Avaliações"
-            view="reviews"
-            active={activeView === "reviews"}
-            onClick={handleNavClick}
-          />
-
-          <button
+          <Button
+            variant="ghost"
             onClick={() => handleNavClick("notifications")}
-            className={`flex items-center w-full h-12 px-4 mt-2 text-left rounded-md transition-colors ${
+            className={cn(
+              "w-full justify-start gap-3 px-4 py-6 text-sm font-medium mt-1",
               activeView === "notifications"
                 ? "bg-gray-800 text-white"
-                : "text-gray-400 hover:bg-gray-800/50"
-            }`}
-          >
-            <Bell className="h-5 w-5 mr-4" />
-            <span className="font-semibold text-sm flex-grow">
-              Notificações
-            </span>
-            {unreadCount > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {unreadCount}
-              </span>
+                : "text-gray-400 hover:bg-gray-800 hover:text-white"
             )}
-          </button>
+          >
+            <Bell
+              size={20}
+              className={
+                activeView === "notifications" ? "text-white" : "text-gray-500"
+              }
+            />
+            <span className="flex-grow text-left">Notificações</span>
+            {unreadCount > 0 && (
+              <Badge
+                variant="destructive"
+                className="ml-auto px-1.5 py-0.5 h-5 min-w-[20px] justify-center"
+              >
+                {unreadCount}
+              </Badge>
+            )}
+          </Button>
         </nav>
 
-        <div className="mt-auto border-t border-gray-800 pt-4">
+        <div className="p-4 border-t border-gray-800 bg-black/20">
           <button
             onClick={() => handleNavClick("profile")}
-            className={`flex items-center w-full p-2 rounded-xl transition-colors hover:bg-gray-800/50 group ${
-              activeView === "profile" ? "bg-gray-800" : ""
-            }`}
+            className={cn(
+              "flex items-center w-full p-2 rounded-xl transition-colors hover:bg-gray-800/50 group text-left",
+              activeView === "profile" && "bg-gray-800"
+            )}
           >
-            <div className="w-10 h-10 rounded-full border border-gray-700 overflow-hidden flex-shrink-0">
-              {professionalProfile?.profilePictureUrl ? (
-                <img
-                  src={professionalProfile.profilePictureUrl}
-                  alt={professionalProfile.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-                  <User size={20} className="text-gray-400" />
-                </div>
-              )}
-            </div>
-            <div className="ml-3 overflow-hidden text-left">
-              <p className="font-semibold text-white text-sm truncate group-hover:text-amber-400 transition-colors">
+            <Avatar className="h-10 w-10 border border-gray-700">
+              <AvatarImage src={professionalProfile?.profilePictureUrl} />
+              <AvatarFallback className="bg-gray-700 text-gray-400">
+                <User size={18} />
+              </AvatarFallback>
+            </Avatar>
+            <div className="ml-3 overflow-hidden">
+              <p className="font-semibold text-white text-sm truncate group-hover:text-primary transition-colors">
                 {professionalProfile?.name}
               </p>
               <p className="text-xs text-gray-500">Editar Perfil</p>
             </div>
           </button>
 
-          <button
+          <Button
+            variant="ghost"
             onClick={logout}
-            className="flex items-center w-full h-10 px-2 mt-3 text-red-400 hover:text-red-300 hover:bg-red-900/10 rounded-lg transition-colors"
+            className="w-full justify-start gap-3 mt-3 text-red-400 hover:text-red-300 hover:bg-red-900/10"
           >
-            <LogOut className="h-5 w-5 mr-4" />
-            <span className="font-semibold text-sm">Sair</span>
-          </button>
+            <LogOut size={20} /> Sair
+          </Button>
         </div>
       </aside>
     </>

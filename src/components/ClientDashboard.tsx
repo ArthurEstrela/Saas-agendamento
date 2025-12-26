@@ -1,17 +1,21 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Menu, X } from "lucide-react";
+import logo from "../assets/stylo-logo.png";
+
+// Componentes
 import { ClientSideNav } from "./Client/ClientSideNav";
 import { ClientProfileSection } from "./Client/ClientProfileSection";
 import { ClientMyAppointmentsSection } from "./Client/ClientMyAppointmentsSection";
 import { ClientFavoritesSection } from "./Client/ClientFavoritesSection";
 import { ClientSearchSection } from "./Client/ClientSearchSection";
-import { motion, AnimatePresence } from "framer-motion";
 import { Notifications } from "./Common/Notifications";
-import { Menu, X } from "lucide-react"; // Ícones para o menu mobile
-import logo from "../assets/stylo-logo.png"; // Logo para o header mobile
-import { Link } from "react-router-dom";
 
-// Define os tipos para as seções, facilitando a manutenção
-type Section =
+// UI
+import { Button } from "./ui/button";
+
+export type ClientDashboardSection =
   | "search"
   | "appointments"
   | "favorites"
@@ -19,11 +23,10 @@ type Section =
   | "notifications";
 
 export const ClientDashboard = () => {
-  // O estado agora controla qual seção está ativa, começando pela busca
-  const [activeSection, setActiveSection] = useState<Section>("search");
+  const [activeSection, setActiveSection] =
+    useState<ClientDashboardSection>("search");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  // Função para renderizar o componente da seção ativa
   const renderSection = () => {
     switch (activeSection) {
       case "search":
@@ -41,59 +44,92 @@ export const ClientDashboard = () => {
     }
   };
 
-  const handleNavClick = (section: Section) => {
+  const handleNavClick = (section: ClientDashboardSection) => {
     setActiveSection(section);
-    setIsMobileNavOpen(false); // Fecha o menu ao selecionar uma opção
+    setIsMobileNavOpen(false);
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-900 text-white font-sans">
-      {/* Overlay para fechar o menu mobile */}
-      {isMobileNavOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() => setIsMobileNavOpen(false)}
-        />
-      )}
+    <div className="flex h-screen bg-[#09090b] text-gray-100 font-sans selection:bg-primary/30 overflow-hidden relative">
+      {/* --- BACKGROUND CORRIGIDO (Mais profundidade, menos "preto chapado") --- */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.15),rgba(255,255,255,0))]" />
+      <div
+        className="absolute inset-0 bg-gradient-to-b from-transparent via-[#09090b]/50 to-[#09090b]"
+        pointerEvents="none"
+      />
 
-      {/* Barra de Navegação Lateral (Sidenav) */}
+      {/* --- MOBILE OVERLAY --- */}
+      <AnimatePresence>
+        {isMobileNavOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
+            onClick={() => setIsMobileNavOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* --- SIDEBAR --- */}
       <aside
-        className={`fixed top-0 left-0 w-64 bg-black/80 backdrop-blur-md h-full z-40 p-6 transition-transform duration-300 ease-in-out md:translate-x-0 ${
-          isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`
+        fixed inset-y-0 left-0 z-50 w-72 bg-[#0c0c0e] border-r border-white/5 
+        transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] md:translate-x-0 md:static flex flex-col shadow-2xl
+        ${isMobileNavOpen ? "translate-x-0" : "-translate-x-full"}
+      `}
       >
+        <div className="flex items-center justify-between p-6 md:hidden">
+          <img src={logo} alt="Stylo" className="h-8" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsMobileNavOpen(false)}
+          >
+            <X size={24} />
+          </Button>
+        </div>
+
         <ClientSideNav
           activeSection={activeSection}
           setActiveSection={handleNavClick}
         />
       </aside>
 
-      {/* Conteúdo Principal Dinâmico */}
-      <main className="flex-1 p-4 sm:p-6 md:p-8 md:ml-64 overflow-y-auto">
-        {/* Header para Telas Pequenas */}
-        <header className="md:hidden flex justify-between items-center mb-6">
+      {/* --- CONTEÚDO PRINCIPAL --- */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Header Mobile */}
+        <header className="md:hidden flex justify-between items-center p-4 border-b border-gray-800 bg-[#09090b]/80 backdrop-blur-md sticky top-0 z-30">
           <Link to="/dashboard">
             <img src={logo} alt="Stylo" className="h-8" />
           </Link>
-          <button
-            onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-            className="p-2"
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsMobileNavOpen(true)}
+            className="text-gray-300"
           >
-            {isMobileNavOpen ? <X size={28} /> : <Menu size={28} />}
-          </button>
+            <Menu size={24} />
+          </Button>
         </header>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeSection} // A key garante que a animação ocorra na troca
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            {renderSection()}
-          </motion.div>
-        </AnimatePresence>
+        {/* Área de Scroll */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-10 scroll-smooth">
+          {/* CORREÇÃO DO ESPAÇO: Removi 'mx-auto' e aumentei o max-width */}
+          <div className="w-full max-w-[1600px] min-h-full pb-20">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeSection}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {renderSection()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
       </main>
     </div>
   );

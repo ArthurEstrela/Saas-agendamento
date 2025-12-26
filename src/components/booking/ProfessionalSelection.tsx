@@ -8,6 +8,7 @@ import { cn } from "../../lib/utils/cn";
 import { Button } from "../ui/button";
 import { Typography } from "../ui/typography";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { Card } from "../ui/card";
 
 export const ProfessionalSelection = () => {
   const {
@@ -31,94 +32,87 @@ export const ProfessionalSelection = () => {
 
   if (availableProfessionals.length === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-center max-w-lg mx-auto bg-black/30 p-8 rounded-2xl border border-destructive/50 shadow-2xl"
-      >
-        <Users size={48} className="mx-auto text-destructive/50" />
-        <Typography variant="h3" className="mt-4 mb-2">
-          Nenhum Profissional Disponível
-        </Typography>
-        <Typography variant="p" className="mb-6">
-          Não encontramos um profissional que realize *todos* os serviços
-          selecionados.
-        </Typography>
-        <Button
-          variant="outline"
-          onClick={goToPreviousStep}
-          className="border-destructive hover:bg-destructive hover:text-white"
-        >
-          Voltar e alterar serviços
-        </Button>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center">
+        <Card className="max-w-md w-full p-8 text-center bg-gray-900/50 border-destructive/30">
+            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users size={32} className="text-destructive" />
+            </div>
+            <Typography variant="h3" className="mb-2">Indisponível</Typography>
+            <p className="text-gray-400 mb-6">
+                Nenhum profissional realiza <b>todos</b> os serviços selecionados. Tente remover alguns serviços.
+            </p>
+            <Button variant="outline" onClick={goToPreviousStep} className="w-full">
+                Voltar e alterar serviços
+            </Button>
+        </Card>
       </motion.div>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-      <Typography variant="h2" className="text-center mb-8">
-        Escolha o Profissional
-      </Typography>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="pb-24">
+      <div className="text-center mb-8">
+        <Typography variant="h2">Escolha o Profissional</Typography>
+        <Typography variant="muted">Quem você prefere que te atenda?</Typography>
+      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-4xl mx-auto px-2">
         {availableProfessionals.map((professional) => {
           const isSelected = selectedProfessional?.id === professional.id;
           return (
-            <motion.button
-              key={professional.id}
-              onClick={() => selectProfessional(professional)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.98 }}
-              className={cn(
-                "relative p-4 flex flex-col items-center gap-4 bg-black/30 rounded-2xl border-2 transition-all duration-300 w-full",
-                isSelected
-                  ? "border-primary ring-4 ring-primary/20 bg-primary/10"
-                  : "border-gray-700 hover:border-primary/50 hover:bg-gray-800/50"
-              )}
+            <motion.div
+                key={professional.id}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
             >
-              {isSelected && (
-                <CheckCircle
-                  size={24}
-                  className="absolute top-2 right-2 text-primary bg-black rounded-full p-0.5"
-                />
-              )}
-
-              <Avatar className="w-24 h-24 border-2 border-gray-600">
-                <AvatarImage
-                  src={professional.photoURL || ""}
-                  alt={professional.name}
-                  className="object-cover"
-                />
-                <AvatarFallback className="bg-gray-800">
-                  <User size={40} className="text-gray-500" />
-                </AvatarFallback>
-              </Avatar>
-
-              <h3
+                <Card
+                onClick={() => selectProfessional(professional)}
                 className={cn(
-                  "text-lg font-semibold text-center",
-                  isSelected ? "text-primary" : "text-white"
+                    "cursor-pointer flex flex-col items-center gap-4 p-6 transition-all duration-300 border-2",
+                    isSelected
+                        ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(218,165,32,0.2)]"
+                        : "border-gray-800 hover:border-gray-600 bg-gray-900/50"
                 )}
-              >
-                {professional.name}
-              </h3>
-            </motion.button>
+                >
+                <div className="relative">
+                    <Avatar className={cn("w-24 h-24 border-2 transition-colors", isSelected ? "border-primary" : "border-gray-700")}>
+                        <AvatarImage src={professional.photoURL || ""} alt={professional.name} />
+                        <AvatarFallback className="bg-gray-800 text-gray-500">
+                            <User size={40} />
+                        </AvatarFallback>
+                    </Avatar>
+                    {isSelected && (
+                        <div className="absolute -top-1 -right-1 bg-black rounded-full p-0.5 animate-scale-in">
+                            <CheckCircle size={24} className="text-primary fill-current" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="text-center">
+                    <h3 className={cn("text-lg font-bold transition-colors", isSelected ? "text-primary" : "text-white")}>
+                        {professional.name}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">Disponível</p>
+                </div>
+                </Card>
+            </motion.div>
           );
         })}
       </div>
 
-      <div className="sticky bottom-0 mt-8 py-4 px-6 bg-gray-900/80 backdrop-blur-sm rounded-t-2xl border-t border-gray-800 flex justify-between items-center gap-4 max-w-4xl mx-auto">
-        <Button variant="secondary" onClick={goToPreviousStep}>
-          Voltar
-        </Button>
-        <Button
-          onClick={goToNextStep}
-          disabled={!selectedProfessional}
-          className="w-full md:w-auto"
-        >
-          Avançar para Data e Hora
-        </Button>
+      <div className="fixed bottom-0 left-0 w-full z-40 p-4">
+        <div className="max-w-4xl mx-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl shadow-2xl p-4 flex justify-between items-center gap-4">
+            <Button variant="ghost" onClick={goToPreviousStep}>
+                Voltar
+            </Button>
+            <Button
+                onClick={goToNextStep}
+                disabled={!selectedProfessional}
+                className="w-full sm:w-auto px-8 font-bold"
+            >
+                Ver Horários
+            </Button>
+        </div>
       </div>
     </motion.div>
   );

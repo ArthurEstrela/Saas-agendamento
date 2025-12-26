@@ -1,11 +1,11 @@
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Mail, Lock } from "lucide-react";
+import { Loader2, Mail, Lock, LogIn } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import type { UserProfile } from "../../types";
 
-// Componentes UI Padronizados
+// UI Components
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
@@ -44,33 +44,50 @@ export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      
-      {/* Input de E-mail */}
-      <Input
-        icon={<Mail className="h-5 w-5" />}
-        placeholder="Seu e-mail"
-        type="email"
-        error={errors.email?.message}
-        {...register("email")}
-      />
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="space-y-5 animate-fade-in"
+    >
+      <div className="space-y-4">
+        <div className="relative">
+          <div className="absolute left-3 top-2.5 text-gray-500 pointer-events-none z-10">
+            <Mail className="h-5 w-5" />
+          </div>
+          <Input
+            placeholder="Seu e-mail"
+            type="email"
+            className="pl-10 h-11 bg-gray-800/50 border-gray-700 focus:bg-gray-800 transition-colors"
+            error={errors.email?.message}
+            {...register("email")}
+          />
+        </div>
 
-      {/* Input de Senha */}
-      <Input
-        icon={<Lock className="h-5 w-5" />}
-        placeholder="Sua senha"
-        type="password"
-        error={errors.password?.message}
-        {...register("password")}
-      />
+        <div className="relative">
+          <div className="absolute left-3 top-2.5 text-gray-500 pointer-events-none z-10">
+            <Lock className="h-5 w-5" />
+          </div>
+          <Input
+            placeholder="Sua senha"
+            type="password"
+            className="pl-10 h-11 bg-gray-800/50 border-gray-700 focus:bg-gray-800 transition-colors"
+            error={errors.password?.message}
+            {...register("password")}
+          />
+        </div>
+      </div>
 
-      {/* Botão de Login */}
       <Button
         type="submit"
         disabled={isSubmitting}
-        className="w-full"
+        className="w-full h-11 text-base font-bold shadow-lg shadow-primary/10 mt-2"
       >
-        {isSubmitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Entrar"}
+        {isSubmitting ? (
+          <Loader2 className="animate-spin mr-2 h-5 w-5" />
+        ) : (
+          <div className="flex items-center gap-2">
+            <LogIn size={18} /> Entrar
+          </div>
+        )}
       </Button>
     </form>
   );

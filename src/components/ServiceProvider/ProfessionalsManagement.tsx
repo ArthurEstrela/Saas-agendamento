@@ -1,177 +1,111 @@
 import { useState } from "react";
-// O shallow não é estritamente necessário se usarmos seletores individuais,
-// mas pode ser mantido para seletores mais complexos se necessário.
-// Neste caso, vamos priorizar a chamada individual.
 import { useProfileStore } from "../../store/profileStore";
 import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
 import { ProfessionalModal } from "./ProfessionalModal";
 import { ProfessionalCard } from "./ProfessionalCard";
 import { ConfirmationModal } from "../Common/ConfirmationModal";
 import { Loader2, Users, UserPlus } from "lucide-react";
-// Importar o tipo ServiceProviderProfile é essencial para o "narrowing" de tipo
-import type {
-  Professional,
-  Service,
-  ServiceProviderProfile,
-} from "../../types";
+import type { Professional, ServiceProviderProfile } from "../../types";
+
+// UI
+import { Button } from "../ui/button";
+import { Typography } from "../ui/typography";
 
 type ProfessionalFormData = {
   name: string;
-  email?: string; // <-- ADICIONADO
-  password?: string; // <-- ADICIONADO
+  email?: string;
+  password?: string;
   serviceIds: string[];
 };
 
 export const ProfessionalsManagement = () => {
-  // 1. CHAME TODOS OS HOOKS NO TOPO DO COMPONENTE
-  // Isso resolve as warnings: "React Hook 'use...' is called conditionally."
-
-  // Seletores individuais do Zustand para buscar as propriedades estáveis
   const userProfile = useProfileStore((state) => state.userProfile);
   const professionalsState = useProfileStore((state) => state.professionals);
-
-  // Hooks do ProfessionalsManagementStore
   const {
     isSubmitting: isLoading,
     addProfessional,
     updateProfessional,
-    removeProfessional: deleteProfessional,
+    removeProfessional,
   } = useProfessionalsManagementStore();
 
-  // Hooks de Estado Local (useState)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProfessional, setEditingProfessional] =
     useState<Professional | null>(null);
-
-  const [confirmationState, setConfirmationState] = useState<{
+  const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
-    professionalToDelete: Professional | null;
-  }>({
-    isOpen: false,
-    professionalToDelete: null,
-  });
+    prof: Professional | null;
+  }>({ isOpen: false, prof: null });
 
-  // 2. LÓGICA CONDICIONAL E EARLY RETURN DEPOIS DOS HOOKS
-  // Verifica se o perfil carregou e se é do tipo ServiceProvider.
-  if (!userProfile || userProfile.role !== "serviceProvider") {
-    // Exibe um loader se estiver carregando, ou null se não for o papel correto
-    if (!userProfile) {
-      return (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="animate-spin text-amber-500" size={48} />
-        </div>
-      );
-    }
-    return null;
-  }
+  if (!userProfile || userProfile.role !== "serviceProvider") return null;
 
-  // 3. NARRAÇÃO DE TIPO (Type Narrowing)
-  // Depois do check, o TypeScript sabe que userProfile é ServiceProviderProfile
   const providerProfile = userProfile as ServiceProviderProfile;
+  const services = providerProfile.services || [];
+  const professionals = professionalsState || [];
 
-  // 4. DERIVAÇÃO SEGURA DE ESTADO (Fora do Seletor)
-  const services: Service[] = providerProfile.services || [];
-  const professionals: Professional[] = professionalsState || [];
-  const availableServices: Service[] = services;
-
-  const handleOpenModal = (professional: Professional | null = null) => {
-    setEditingProfessional(professional);
+  const handleOpenModal = (prof: Professional | null = null) => {
+    setEditingProfessional(prof);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingProfessional(null);
-  };
-
-const handleSaveProfessional = async (
-    formData: ProfessionalFormData, // <-- O tipo agora inclui email/senha
+  const handleSave = async (
+    formData: ProfessionalFormData,
     photoFile: File | null
   ) => {
-    const providerId = providerProfile.id;
-
-    const selectedServices = availableServices.filter((s) =>
+    const selectedServices = services.filter((s) =>
       formData.serviceIds.includes(s.id)
     );
 
     if (editingProfessional) {
-      // Lógica de ATUALIZAÇÃO (permanece a mesma)
-      const payload = {
+      await updateProfessional(providerProfile.id, editingProfessional.id, {
         name: formData.name,
         services: selectedServices,
         availability: editingProfessional.availability || [],
         photoFile,
         photoURL: editingProfessional.photoURL,
-      };
-      await updateProfessional(
-        providerId,
-        editingProfessional.id,
-        payload
-      );
-
+      });
     } else {
-      // Lógica de CRIAÇÃO (atualizada para enviar todos os dados)
-      // O 'addProfessional' da sua store agora receberá os novos campos
-      const payload = {
+      await addProfessional(providerProfile.id, {
         name: formData.name,
-        email: formData.email!, // '!' é seguro por causa do schema do modal
-        password: formData.password!, // '!' é seguro
+        email: formData.email!,
+        password: formData.password!,
         services: selectedServices,
-        serviceIds: formData.serviceIds, // Envie os IDs para a Cloud Function
+        serviceIds: formData.serviceIds,
         availability: [],
         photoFile,
-      };
-      
-      // Esta chamada para 'addProfessional' é o *próximo passo*
-      // Teremos que modificar a 'professionalsManagementStore'
-      // para que 'addProfessional' chame a Cloud Function.
-      await addProfessional(providerId, payload);
+      });
     }
-    
-    handleCloseModal();
-  };
-
-  const handleDeleteRequest = (professional: Professional) => {
-    setConfirmationState({ isOpen: true, professionalToDelete: professional });
+    setIsModalOpen(false);
+    setEditingProfessional(null);
   };
 
   const confirmDelete = () => {
-    // Já checamos o userProfile no topo, só precisamos checar a seleção
-    if (confirmationState.professionalToDelete) {
-      deleteProfessional(
-        providerProfile.id,
-        confirmationState.professionalToDelete.id
-      );
-    }
-    setConfirmationState({ isOpen: false, professionalToDelete: null });
+    if (confirmState.prof)
+      removeProfessional(providerProfile.id, confirmState.prof.id);
+    setConfirmState({ isOpen: false, prof: null });
   };
 
   return (
-    <div>
-      {/* O resto do componente permanece inalterado, pois a lógica estava correta */}
-      {/* ... (Cabeçalho) */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-10">
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 border-b border-gray-800 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-white">Meus Profissionais</h1>
-          <p className="text-lg text-gray-400 mt-2">
-            Gerencie a equipe que atende em seu estabelecimento.
-          </p>
+          <Typography variant="h2" className="text-3xl font-bold">
+            Equipe
+          </Typography>
+          <Typography variant="muted" className="mt-1">
+            Gerencie os profissionais do seu negócio.
+          </Typography>
         </div>
-        <div>
-          <button
-            onClick={() => handleOpenModal()}
-            className="primary-button flex items-center gap-2"
-          >
-            <UserPlus size={20} />
-            Adicionar Profissional
-          </button>
-        </div>
+        <Button
+          onClick={() => handleOpenModal()}
+          className="gap-2 font-bold shadow-lg shadow-primary/20"
+        >
+          <UserPlus size={18} /> Novo Profissional
+        </Button>
       </div>
 
-      {/* Lista de Profissionais */}
       {professionalsState === null ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="animate-spin text-amber-500" size={48} />
+        <div className="flex justify-center p-10">
+          <Loader2 className="animate-spin" />
         </div>
       ) : professionals.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -180,40 +114,43 @@ const handleSaveProfessional = async (
               key={prof.id}
               professional={prof}
               onEdit={() => handleOpenModal(prof)}
-              onDelete={() => handleDeleteRequest(prof)}
+              onDelete={() => setConfirmState({ isOpen: true, prof })}
             />
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
-          <Users size={48} className="mb-4" />
-          <h3 className="text-xl font-semibold text-gray-300">
-            Nenhum profissional cadastrado
+        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl">
+          <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
+            <Users size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">
+            Sua equipe está vazia
           </h3>
-          <p>Clique em "Adicionar Profissional" para começar.</p>
+          <p className="text-gray-400 mb-6 max-w-sm text-center">
+            Cadastre profissionais para distribuir os agendamentos.
+          </p>
+          <Button variant="outline" onClick={() => handleOpenModal()}>
+            Adicionar Profissional
+          </Button>
         </div>
       )}
 
-      {/* Modais */}
       <ProfessionalModal
         isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSaveProfessional}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
         professional={editingProfessional}
-        availableServices={availableServices}
+        availableServices={services}
         isLoading={isLoading}
       />
+
       <ConfirmationModal
-        isOpen={confirmationState.isOpen}
-        onClose={() =>
-          setConfirmationState({ isOpen: false, professionalToDelete: null })
-        }
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState({ isOpen: false, prof: null })}
         onConfirm={confirmDelete}
-        title="Confirmar Exclusão"
-        message={`Tem certeza que deseja excluir permanentemente o profissional "${
-          confirmationState.professionalToDelete?.name || ""
-        }"? Esta ação não pode ser desfeita.`}
-        confirmText="Excluir"
+        title="Remover Profissional?"
+        message={`Tem certeza que deseja remover "${confirmState.prof?.name}"?`}
+        confirmText="Remover"
       />
     </div>
   );

@@ -3,18 +3,23 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import type { Service } from "../../types";
-import {
-  Loader2,
-  X,
-  Scissors,
-  AlignLeft,
-  Clock,
-  DollarSign,
-} from "lucide-react";
+import { Loader2, Scissors, AlignLeft, Clock, DollarSign } from "lucide-react";
 
-// Schema de validação
+// UI Components
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import { Button } from "../ui/button";
+import { Label } from "../ui/label";
+
 const serviceSchema = z.object({
-  name: z.string().min(3, "O nome do serviço é obrigatório"),
+  name: z.string().min(3, "Nome do serviço é obrigatório"),
   description: z
     .string()
     .min(10, "A descrição deve ter pelo menos 10 caracteres"),
@@ -58,112 +63,108 @@ export const ServiceModal = ({
     }
   }, [service, reset, isOpen]);
 
-  if (!isOpen) return null;
+  const handleSave = (data: ServiceFormData) => onSave(data);
+
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center backdrop-blur-sm">
-      <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg border border-gray-700 m-4">
-        <form onSubmit={handleSubmit(onSave)} className="p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">
-              {service ? "Editar Serviço" : "Adicionar Serviço"}
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 text-gray-400 hover:text-white"
-            >
-              <X size={24} />
-            </button>
-          </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[500px] bg-gray-900 border-gray-800">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+            {service ? (
+              <Scissors className="text-primary" />
+            ) : (
+              <Scissors className="text-gray-400" />
+            )}
+            {service ? "Editar Serviço" : "Novo Serviço"}
+          </DialogTitle>
+        </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Nome do Serviço */}
-            <div>
-              <label className="label-text">Nome do Serviço</label>
-              <div className="input-container">
-                <Scissors className="input-icon" />
-                <input
-                  {...register("name")}
-                  placeholder="Ex: Corte Masculino"
-                  className="input-field pl-10"
-                />
-              </div>
-              {errors.name && (
-                <p className="error-message">{errors.name.message}</p>
-              )}
-            </div>
-
-            {/* Descrição */}
-            <div>
-              <label className="label-text">Descrição</label>
-              <div className="input-container">
-                <AlignLeft className="input-icon" />
-                <textarea
-                  {...register("description")}
-                  placeholder="Descreva o que está incluso no serviço..."
-                  className="input-field pl-10 h-24 resize-none"
-                />
-              </div>
-              {errors.description && (
-                <p className="error-message">{errors.description.message}</p>
-              )}
-            </div>
-
-            {/* Duração e Preço */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label-text">Duração (minutos)</label>
-                <div className="input-container">
-                  <Clock className="input-icon" />
-                  <input
-                    {...register("duration", { valueAsNumber: true })}
-                    type="number"
-                    className="input-field pl-10"
-                  />
-                </div>
-                {errors.duration && (
-                  <p className="error-message">{errors.duration.message}</p>
-                )}
-              </div>
-              <div>
-                <label className="label-text">Preço (R$)</label>
-                <div className="input-container">
-                  <DollarSign className="input-icon" />
-                  <input
-                    {...register("price", { valueAsNumber: true })}
-                    type="number"
-                    step="0.01"
-                    className="input-field pl-10"
-                  />
-                </div>
-                {errors.price && (
-                  <p className="error-message">{errors.price.message}</p>
-                )}
-              </div>
+        <form
+          id="service-form"
+          onSubmit={handleSubmit(handleSave)}
+          className="space-y-5 py-4"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="name">Nome do Serviço</Label>
+            <div className="relative">
+              <Scissors className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                id="name"
+                {...register("name")}
+                className="pl-9"
+                placeholder="Ex: Corte Degrade"
+                error={errors.name?.message}
+              />
             </div>
           </div>
 
-          <div className="flex justify-end gap-4 mt-8">
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                onClose();
-              }}
-              className="secondary-button"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="primary-button w-36 flex justify-center"
-            >
-              {isLoading ? <Loader2 className="animate-spin" /> : "Salvar"}
-            </button>
+          <div className="space-y-2">
+            <Label htmlFor="description">Descrição</Label>
+            <div className="relative">
+              <AlignLeft className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+              <Textarea
+                id="description"
+                {...register("description")}
+                className="pl-9 min-h-[80px] resize-none bg-gray-800 border-gray-700"
+                placeholder="O que está incluso?"
+              />
+            </div>
+            {errors.description && (
+              <p className="text-xs text-destructive mt-1">
+                {errors.description.message}
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="duration">Duração (min)</Label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  id="duration"
+                  type="number"
+                  {...register("duration", { valueAsNumber: true })}
+                  className="pl-9"
+                  error={errors.duration?.message}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="price">Preço (R$)</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  {...register("price", { valueAsNumber: true })}
+                  className="pl-9"
+                  error={errors.price?.message}
+                />
+              </div>
+            </div>
           </div>
         </form>
-      </div>
-    </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            form="service-form"
+            disabled={isLoading}
+            className="min-w-[120px] font-bold"
+          >
+            {isLoading ? (
+              <Loader2 className="animate-spin h-4 w-4 mr-2" />
+            ) : null}
+            {service ? "Salvar" : "Criar Serviço"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

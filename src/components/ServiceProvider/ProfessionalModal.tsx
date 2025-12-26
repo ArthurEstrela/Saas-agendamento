@@ -1,20 +1,34 @@
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import type { Professional, Service } from '../../types';
-import { Loader2, User, Image as ImageIcon, X, Mail, Key } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import type { Professional, Service } from "../../types";
+import { Loader2, User, Image as ImageIcon, Mail, Key } from "lucide-react";
 
-// --- SCHEMA ATUALIZADO ---
-// Adicionamos email e senha (apenas na criação)
+// UI Components
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Label } from "../ui/label";
+import { Checkbox } from "../ui/checkbox";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+
 const professionalSchema = z.object({
-  name: z.string().min(3, 'O nome é obrigatório'),
-  email: z.string().email('E-mail inválido'), // <-- NOVO
-  password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres').optional(), // <-- NOVO
-  serviceIds: z.array(z.string()).min(1, 'Selecione pelo menos um serviço'),
+  name: z.string().min(3, "O nome é obrigatório"),
+  email: z.string().email("E-mail inválido"),
+  password: z
+    .string()
+    .min(6, "A senha deve ter pelo menos 6 caracteres")
+    .optional(),
+  serviceIds: z.array(z.string()).min(1, "Selecione pelo menos um serviço"),
 });
 
-// Tornar a senha opcional se o profissional já existir (modo de edição)
 const professionalEditSchema = professionalSchema.extend({
   password: z.string().optional(),
 });
@@ -24,53 +38,54 @@ type ProfessionalFormData = z.infer<typeof professionalSchema>;
 interface ProfessionalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // A 'onSave' agora envia todos os dados, incluindo email/senha
-  onSave: (data: ProfessionalFormData, photoFile: File | null) => void; 
+  onSave: (data: ProfessionalFormData, photoFile: File | null) => void;
   professional?: Professional | null;
   availableServices: Service[];
   isLoading: boolean;
 }
 
-export const ProfessionalModal = ({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  professional, 
-  availableServices, 
-  isLoading 
+export const ProfessionalModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  professional,
+  availableServices,
+  isLoading,
 }: ProfessionalModalProps) => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(professional?.photoURL || null);
-
-  // Determina se está em modo de edição
+  const [previewUrl, setPreviewUrl] = useState<string | null>(
+    professional?.photoURL || null
+  );
   const isEditMode = !!professional;
 
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<ProfessionalFormData>({
-    // Escolhe o schema de validação correto
-    resolver: zodResolver(isEditMode ? professionalEditSchema : professionalSchema),
+    resolver: zodResolver(
+      isEditMode ? professionalEditSchema : professionalSchema
+    ),
   });
 
   useEffect(() => {
-    if (professional) {
-      reset({
-        name: professional.name,
-        serviceIds: professional.services.map(s => s.id),
-        email: professional.email || '',
-      });
-      setPreviewUrl(professional.photoURL || null);
-    } else {
-      reset({ name: '', email: '', password: '', serviceIds: [] });
-      setPreviewUrl(null);
+    if (isOpen) {
+      if (professional) {
+        reset({
+          name: professional.name,
+          serviceIds: professional.services.map((s) => s.id),
+          email: professional.email || "",
+        });
+        setPreviewUrl(professional.photoURL || null);
+      } else {
+        reset({ name: "", email: "", password: "", serviceIds: [] });
+        setPreviewUrl(null);
+      }
+      setPhotoFile(null);
     }
-    setPhotoFile(null);
-  }, [professional, reset, isOpen]); // Resetar também quando abre
-  
-  if (!isOpen) return null;
+  }, [professional, reset, isOpen]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -79,90 +94,169 @@ export const ProfessionalModal = ({
       setPreviewUrl(URL.createObjectURL(file));
     }
   };
-  
-  const onSubmit = (data: ProfessionalFormData) => {
-    onSave(data, photoFile);
-  };
+
+  const onSubmit = (data: ProfessionalFormData) => onSave(data, photoFile);
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center backdrop-blur-sm">
-      <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg border border-gray-700 m-4">
-        <form onSubmit={handleSubmit(onSubmit)} className="p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">{isEditMode ? 'Editar Profissional' : 'Adicionar Profissional'}</h2>
-            <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white"><X size={24} /></button>
-          </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[550px] bg-gray-900 border-gray-800">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-white">
+            {isEditMode ? "Editar Profissional" : "Novo Profissional"}
+          </DialogTitle>
+        </DialogHeader>
 
-          <div className="space-y-6">
-            {/* Foto e Nome */}
-            <div className='flex items-center gap-6'>
-              <label htmlFor="photo-upload" className="cursor-pointer">
-                  <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center border-2 border-dashed border-gray-600 hover:border-amber-500">
-                  {previewUrl ? <img src={previewUrl} alt="Preview" className="w-full h-full rounded-full object-cover" /> : <ImageIcon size={32} className="text-gray-500" />}
-                  </div>
-                  <input id="photo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-              </label>
-              <div className="flex-1">
-                  <label className="label-text">Nome do Profissional</label>
-                  <div className="input-container">
-                      <User className="input-icon" />
-                      <input {...register('name')} className="input-field pl-10" />
-                  </div>
-                  {errors.name && <p className="error-message">{errors.name.message}</p>}
+        <form
+          id="pro-form"
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-6 py-2"
+        >
+          <div className="flex flex-col sm:flex-row gap-6">
+            {/* Upload Foto */}
+            <div className="flex flex-col items-center gap-2">
+              <Label
+                htmlFor="photo-upload"
+                className="cursor-pointer group relative"
+              >
+                <Avatar className="h-24 w-24 border-2 border-dashed border-gray-600 group-hover:border-primary transition-colors">
+                  <AvatarImage
+                    src={previewUrl || ""}
+                    className="object-cover"
+                  />
+                  <AvatarFallback className="bg-gray-800">
+                    <ImageIcon className="text-gray-500 group-hover:text-primary transition-colors" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-xs text-white font-medium">
+                    Alterar
+                  </span>
+                </div>
+              </Label>
+              <input
+                id="photo-upload"
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            {/* Dados Pessoais */}
+            <div className="flex-1 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome Completo</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="name"
+                    {...register("name")}
+                    className="pl-9"
+                    error={errors.name?.message}
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* --- NOVOS CAMPOS DE LOGIN --- */}
-            {/* Só mostra email/senha se estiver a *criar* um novo profissional */}
-            {!isEditMode && (
-              <>
-                <div>
-                  <label className="label-text">E-mail de Acesso</label>
-                  <div className="input-container">
-                    <Mail className="input-icon" />
-                    <input {...register('email')} className="input-field pl-10" placeholder="email@profissional.com" />
+              {!isEditMode && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">E-mail de Acesso</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                      <Input
+                        id="email"
+                        {...register("email")}
+                        className="pl-9"
+                        placeholder="email@exemplo.com"
+                        error={errors.email?.message}
+                      />
+                    </div>
                   </div>
-                  {errors.email && <p className="error-message">{errors.email.message}</p>}
-                </div>
-                <div>
-                  <label className="label-text">Senha Provisória</label>
-                  <div className="input-container">
-                    <Key className="input-icon" />
-                    <input type="password" {...register('password')} className="input-field pl-10" placeholder="••••••••" />
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Senha Provisória</Label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                      <Input
+                        id="password"
+                        type="password"
+                        {...register("password")}
+                        className="pl-9"
+                        placeholder="••••••••"
+                        error={errors.password?.message}
+                      />
+                    </div>
                   </div>
-                  {errors.password && <p className="error-message">{errors.password.message}</p>}
-                </div>
-              </>
-            )}
-            {/* --- FIM DOS NOVOS CAMPOS --- */}
-
-            {/* Serviços Associados */}
-            <div>
-              <label className="label-text">Serviços Realizados</label>
-              {availableServices.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3 bg-black/30 p-4 rounded-lg max-h-48 overflow-y-auto">
-                  {availableServices.map(service => (
-                    <label key={service.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-800/50 cursor-pointer">
-                      <input type="checkbox" {...register('serviceIds')} value={service.id} className="form-checkbox bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500" />
-                      <span className="text-gray-200">{service.name}</span>
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-sm">Você precisa cadastrar serviços primeiro na aba "Meus Serviços".</p>
+                </>
               )}
-              {errors.serviceIds && <p className="error-message">{errors.serviceIds.message}</p>}
             </div>
           </div>
 
-          <div className="flex justify-end gap-4 mt-8">
-            <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
-            <button type="submit" disabled={isLoading} className="primary-button w-36 flex justify-center">
-              {isLoading ? <Loader2 className="animate-spin" /> : 'Salvar'}
-            </button>
+          {/* Seleção de Serviços */}
+          <div className="space-y-3">
+            <Label>Serviços Realizados</Label>
+            {availableServices.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-950/50 p-4 rounded-xl border border-gray-800 max-h-48 overflow-y-auto custom-scrollbar">
+                <Controller
+                  name="serviceIds"
+                  control={control}
+                  defaultValue={[]}
+                  render={({ field }) => (
+                    <>
+                      {availableServices.map((service) => (
+                        <div
+                          key={service.id}
+                          className="flex items-center space-x-2 p-2 rounded hover:bg-gray-800/50 transition-colors"
+                        >
+                          <Checkbox
+                            id={`srv-${service.id}`}
+                            checked={field.value.includes(service.id)}
+                            onCheckedChange={(checked) => {
+                              return checked
+                                ? field.onChange([...field.value, service.id])
+                                : field.onChange(
+                                    field.value.filter(
+                                      (value) => value !== service.id
+                                    )
+                                  );
+                            }}
+                          />
+                          <label
+                            htmlFor={`srv-${service.id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-gray-300"
+                          >
+                            {service.name}
+                          </label>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                />
+              </div>
+            ) : (
+              <div className="text-center p-4 bg-gray-800/50 rounded-lg text-sm text-gray-500">
+                Nenhum serviço cadastrado.
+              </div>
+            )}
+            {errors.serviceIds && (
+              <p className="text-xs text-destructive">
+                {errors.serviceIds.message}
+              </p>
+            )}
           </div>
         </form>
-      </div>
-    </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="pro-form" disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="animate-spin h-4 w-4 mr-2" />
+            ) : null}
+            Salvar Profissional
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

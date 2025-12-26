@@ -5,11 +5,15 @@ import * as z from "zod";
 import { Link } from "react-router-dom";
 import { Mail, Loader2, Send, CheckCircle, ArrowLeft } from "lucide-react";
 import { sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "../firebase/config"; // Importa a instância de autenticação do Firebase
+import { auth } from "../firebase/config";
 import logo from "../assets/stylo-logo.png";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Schema de validação
+// UI
+import { Input } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+
 const schema = z.object({
   email: z.string().email("Por favor, insira um e-mail válido"),
 });
@@ -34,132 +38,128 @@ const ForgotPasswordPage = () => {
     setIsSubmitting(true);
     setError(null);
     setSuccess(false);
-
     try {
       await sendPasswordResetEmail(auth, data.email);
       setSuccess(true);
-    } catch (err: unknown) {
-      console.error("Erro ao enviar e-mail de redefinição:", err);
-      let errorMessage = "Ocorreu um erro ao tentar redefinir a senha.";
-
-      // Mapeamento de erros comuns do Firebase
-      if (typeof err === "object" && err !== null && "code" in err) {
-        const firebaseError = err as { code: string };
-        switch (firebaseError.code) {
-          case "auth/user-not-found":
-          case "auth/invalid-email":
-            errorMessage = "Usuário não encontrado ou e-mail inválido.";
-            break;
-          default:
-            errorMessage = "Falha no envio. Tente novamente mais tarde.";
-        }
-      }
-      setError(errorMessage);
+    } catch (err: any) {
+      let msg = "Falha no envio. Tente novamente.";
+      if (err.code === "auth/user-not-found") msg = "Usuário não encontrado.";
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-black text-white p-4">
+    <div className="flex justify-center items-center min-h-screen bg-black text-white p-4 relative">
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black -z-10" />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-gray-900/50 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-lg p-8"
+        className="w-full max-w-md"
       >
         <div className="text-center mb-8">
           <Link to="/">
-            <img src={logo} alt="Stylo" className="h-12 mx-auto mb-4" />
+            <img
+              src={logo}
+              alt="Stylo"
+              className="h-10 mx-auto mb-6 opacity-80 hover:opacity-100 transition-opacity"
+            />
           </Link>
-          <h1 className="text-3xl font-bold text-white">Esqueci a Senha</h1>
-          <p className="text-gray-400">
-            Informe seu e-mail para receber um link de redefinição.
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Recuperar Senha
+          </h1>
+          <p className="text-gray-400 text-sm">
+            Não se preocupe, vamos te ajudar a voltar.
           </p>
         </div>
 
-        <AnimatePresence mode="wait">
-          {success ? (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="text-center space-y-6"
-            >
-              <CheckCircle size={64} className="text-green-400 mx-auto" />
-              <p className="text-lg text-white font-semibold">
-                E-mail Enviado!
-              </p>
-              <p className="text-gray-400">
-                Verifique sua caixa de entrada (e spam) para encontrar o link de
-                redefinição.
-              </p>
-              <Link
-                to="/login"
-                className="primary-button flex items-center justify-center gap-2"
-              >
-                <ArrowLeft size={20} />
-                Voltar para o Login
-              </Link>
-            </motion.div>
-          ) : (
-            <motion.form
-              key="form"
-              onSubmit={handleSubmit(onSubmit)}
-              className="space-y-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              {error && (
-                <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-center border border-red-500/30">
-                  {error}
-                </div>
+        <Card className="bg-gray-900/50 backdrop-blur-md border-gray-800 shadow-2xl">
+          <CardContent className="p-8">
+            <AnimatePresence mode="wait">
+              {success ? (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-center space-y-6"
+                >
+                  <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle size={32} className="text-green-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">
+                      E-mail Enviado!
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      Verifique sua caixa de entrada (e spam) para redefinir sua
+                      senha.
+                    </p>
+                  </div>
+                  <Link to="/login">
+                    <Button className="w-full font-bold">
+                      <ArrowLeft size={18} className="mr-2" /> Voltar para Login
+                    </Button>
+                  </Link>
+                </motion.div>
+              ) : (
+                <motion.form
+                  key="form"
+                  onSubmit={handleSubmit(onSubmit)}
+                  className="space-y-6"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  {error && (
+                    <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md text-center font-medium border border-destructive/20">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Mail
+                        className="absolute left-3 top-3 text-gray-500 z-10"
+                        size={18}
+                      />
+                      <Input
+                        {...register("email")}
+                        placeholder="Seu e-mail cadastrado"
+                        className="pl-10 bg-gray-950 border-gray-700 h-11"
+                        error={errors.email?.message}
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full font-bold h-11"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <>
+                        <Send size={18} className="mr-2" /> Enviar Link de
+                        Recuperação
+                      </>
+                    )}
+                  </Button>
+                </motion.form>
               )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
 
-              {/* Campo de E-mail */}
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
-                <input
-                  {...register("email")}
-                  type="email"
-                  placeholder="Seu e-mail cadastrado"
-                  className={`input-field pl-10 ${
-                    errors.email ? "border-red-500" : ""
-                  }`}
-                />
-                {errors.email && (
-                  <p className="error-message mt-1">{errors.email.message}</p>
-                )}
-              </div>
-
-              {/* Botão de Envio */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="primary-button w-full flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <>
-                    <Send size={20} /> Enviar Link
-                  </>
-                )}
-              </button>
-            </motion.form>
-          )}
-        </AnimatePresence>
-
-        <div className="mt-6 text-center text-gray-400">
-          <Link
-            to="/login"
-            className="font-semibold text-[#daa520] hover:text-yellow-400 flex items-center justify-center gap-1"
-          >
-            <ArrowLeft size={16} /> Voltar para o login
+        <div className="mt-8 text-center">
+          <Link to="/login">
+            <Button
+              variant="link"
+              className="text-gray-400 hover:text-white gap-2"
+            >
+              <ArrowLeft size={16} /> Voltar para o login
+            </Button>
           </Link>
         </div>
       </motion.div>

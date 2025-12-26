@@ -7,25 +7,24 @@ import { ConfirmationModal } from "../Common/ConfirmationModal";
 import { Loader2, ListPlus, Wrench } from "lucide-react";
 import type { Service } from "../../types";
 
+// UI
+import { Button } from "../ui/button";
+import { Typography } from "../ui/typography";
+
 export const ServicesManagement = () => {
   const { userProfile } = useProfileStore();
   const {
     isSubmitting: isLoading,
     addService,
     updateService,
-    removeService: deleteService,
+    removeService,
   } = useServiceManagementStore();
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
-
-  const [confirmationState, setConfirmationState] = useState<{
+  const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
-    serviceToDelete: Service | null;
-  }>({
-    isOpen: false,
-    serviceToDelete: null,
-  });
+    service: Service | null;
+  }>({ isOpen: false, service: null });
 
   const services =
     userProfile?.role === "serviceProvider" && userProfile.services
@@ -37,97 +36,90 @@ export const ServicesManagement = () => {
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
+  const handleSave = async (data: Omit<Service, "id">) => {
+    if (!userProfile) return;
+    if (editingService)
+      await updateService(userProfile.id, editingService.id, data);
+    else await addService(userProfile.id, data);
     setIsModalOpen(false);
     setEditingService(null);
   };
 
-  const handleSaveService = async (data: Omit<Service, "id">) => {
-    if (!userProfile) return;
-    if (editingService) {
-      await updateService(userProfile.id, editingService.id, data);
-    } else {
-      await addService(userProfile.id, data);
-    }
-    handleCloseModal();
-  };
-
-  const handleDeleteRequest = (service: Service) => {
-    setConfirmationState({ isOpen: true, serviceToDelete: service });
-  };
-
   const confirmDelete = () => {
-    if (userProfile && confirmationState.serviceToDelete) {
-      deleteService(userProfile.id, confirmationState.serviceToDelete);
-    }
-    setConfirmationState({ isOpen: false, serviceToDelete: null });
+    if (userProfile && confirmState.service)
+      removeService(userProfile.id, confirmState.service);
+    setConfirmState({ isOpen: false, service: null });
   };
+
+  if (!userProfile)
+    return (
+      <div className="flex justify-center p-10">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
 
   return (
-    <div>
-      {/* Cabeçalho */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-10">
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 border-b border-gray-800 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-white">Meus Serviços</h1>
-          <p className="text-lg text-gray-400 mt-2">
-            Adicione e gerencie os serviços que você oferece.
-          </p>
+          <Typography variant="h2" className="text-3xl font-bold">
+            Meus Serviços
+          </Typography>
+          <Typography variant="muted" className="mt-1">
+            Gerencie seu catálogo de serviços.
+          </Typography>
         </div>
-        <div>
-          <button
-            onClick={() => handleOpenModal()}
-            className="primary-button flex items-center gap-2"
-          >
-            <ListPlus size={20} />
-            Adicionar Serviço
-          </button>
-        </div>
+        <Button
+          onClick={() => handleOpenModal()}
+          className="gap-2 font-bold shadow-lg shadow-primary/20"
+        >
+          <ListPlus size={18} /> Adicionar Serviço
+        </Button>
       </div>
 
-      {/* Lista de Serviços */}
-      {!userProfile ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="animate-spin text-amber-500" size={48} />
-        </div>
-      ) : services.length > 0 ? (
+      {services.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {services.map((service) => (
             <ServiceCard
               key={service.id}
               service={service}
               onEdit={() => handleOpenModal(service)}
-              onDelete={() => handleDeleteRequest(service)}
+              onDelete={() => setConfirmState({ isOpen: true, service })}
             />
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
-          <Wrench size={48} className="mb-4" />
-          <h3 className="text-xl font-semibold text-gray-300">
+        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl">
+          <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
+            <Wrench size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">
             Nenhum serviço cadastrado
           </h3>
-          <p>
-            Clique em "Adicionar Serviço" para começar a montar seu catálogo.
+          <p className="text-gray-400 mb-6 max-w-sm text-center">
+            Adicione serviços para que seus clientes possam agendar horários com
+            você.
           </p>
+          <Button variant="outline" onClick={() => handleOpenModal()}>
+            Começar Agora
+          </Button>
         </div>
       )}
 
-      {/* Modais */}
       <ServiceModal
         isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSaveService}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
         service={editingService}
         isLoading={isLoading}
       />
+
       <ConfirmationModal
-        isOpen={confirmationState.isOpen}
-        onClose={() =>
-          setConfirmationState({ isOpen: false, serviceToDelete: null })
-        }
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState({ isOpen: false, service: null })}
         onConfirm={confirmDelete}
-        title="Confirmar Exclusão"
-        message={`Tem certeza que deseja excluir permanentemente o serviço "${confirmationState.serviceToDelete?.name}"? Esta ação não pode ser desfeita.`}
+        title="Excluir Serviço?"
+        message={`Deseja realmente remover "${confirmState.service?.name}"? Isso não pode ser desfeito.`}
         confirmText="Excluir"
       />
     </div>

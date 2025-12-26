@@ -1,11 +1,10 @@
-// src/components/ServiceProviderDashboard.tsx
-
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Menu, ShieldAlert, Sparkles } from "lucide-react";
 
 import { useProfileStore } from "../store/profileStore";
-import type { ServiceProviderProfile } from "../types";
+// Importe o tipo ProviderDashboardView daqui agora
+import type { ServiceProviderProfile, ProviderDashboardView } from "../types";
 
 import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
 import { AgendaView } from "./ServiceProvider/Agenda/AgendaView";
@@ -18,35 +17,26 @@ import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 import { Notifications } from "./Common/Notifications";
 import { SubscriptionManagement } from "./ServiceProvider/SubscriptionManagement";
 
-// 1. Defina uma interface para as props que as views recebem
 interface DashboardViewProps {
   userProfile: ServiceProviderProfile | null;
 }
 
-export type ProviderDashboardView =
-  | "agenda"
-  | "profile"
-  | "services"
-  | "professionals"
-  | "availability"
-  | "financial"
-  | "reviews"
-  | "notifications"
-  | "subscription";
-
-// 2. Tipe o Record para aceitar componentes com DashboardViewProps
-// Usamos 'any' no cast dos componentes individuais se necessário, ou garantimos que eles aceitem a prop.
-// A forma mais segura e flexível aqui é garantir que o Record espere componentes que aceitam userProfile.
-const viewComponents: Record<ProviderDashboardView, React.ComponentType<DashboardViewProps>> = {
+const viewComponents: Record<
+  ProviderDashboardView,
+  React.ComponentType<DashboardViewProps>
+> = {
   agenda: AgendaView as React.ComponentType<DashboardViewProps>,
   financial: FinancialManagement as React.ComponentType<DashboardViewProps>,
   profile: ProfileManagement as React.ComponentType<DashboardViewProps>,
-  professionals: ProfessionalsManagement as React.ComponentType<DashboardViewProps>,
-  availability: AvailabilityManagement as React.ComponentType<DashboardViewProps>,
+  professionals:
+    ProfessionalsManagement as React.ComponentType<DashboardViewProps>,
+  availability:
+    AvailabilityManagement as React.ComponentType<DashboardViewProps>,
   services: ServicesManagement as React.ComponentType<DashboardViewProps>,
   reviews: ReviewsManagement as React.ComponentType<DashboardViewProps>,
   notifications: Notifications as React.ComponentType<DashboardViewProps>,
-  subscription: SubscriptionManagement as React.ComponentType<DashboardViewProps>,
+  subscription:
+    SubscriptionManagement as React.ComponentType<DashboardViewProps>,
 };
 
 const ServiceProviderDashboard = () => {
@@ -69,7 +59,6 @@ const ServiceProviderDashboard = () => {
 
   const ActiveComponent = viewComponents[activeView];
 
-  // Adicionar a verificação de loading
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900">
@@ -100,7 +89,7 @@ const ServiceProviderDashboard = () => {
           </button>
           <span className="text-xl font-bold text-white">Stylo</span>
         </div>
-        
+
         {needsSubscription && activeView !== "subscription" && (
           <div className="bg-amber-600 text-black p-3 rounded-lg mb-4 text-center font-semibold flex items-center justify-center gap-2">
             <Sparkles size={20} />
@@ -114,7 +103,7 @@ const ServiceProviderDashboard = () => {
             para liberar todos os recursos.
           </div>
         )}
-        
+
         {subscriptionProblem && activeView !== "subscription" && (
           <div className="bg-red-600 text-white p-3 rounded-lg mb-4 text-center font-semibold flex items-center justify-center gap-2">
             <ShieldAlert size={20} />
@@ -137,7 +126,6 @@ const ServiceProviderDashboard = () => {
             transition={{ duration: 0.25 }}
             className="flex-grow flex flex-col"
           >
-            {/* Agora ActiveComponent aceita userProfile sem erro */}
             <ActiveComponent userProfile={profile} />
           </motion.div>
         </AnimatePresence>

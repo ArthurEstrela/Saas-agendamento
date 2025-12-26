@@ -1,13 +1,17 @@
-// src/components/Common/ReviewModal.tsx
 import { useState, useEffect } from 'react';
-import type { EnrichedAppointment } from '../../store/userAppointmentsStore'; // Usando um tipo mais consistente
-import { Star, X } from 'lucide-react';
-import { toast } from 'react-hot-toast'; // Import direto para a validação
+import type { EnrichedAppointment } from '../../store/userAppointmentsStore';
+import { Star, Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+
+// Componentes Primitivos
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { Button } from '../ui/button';
+import { Textarea } from '../ui/textarea';
+import { Label } from '../ui/label';
 
 interface ReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // Alterado para um tipo mais específico e consistente com o resto da aplicação
   appointment: EnrichedAppointment; 
   onSubmit: (rating: number, comment: string) => void;
   isLoading?: boolean;
@@ -16,19 +20,17 @@ interface ReviewModalProps {
 const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false }: ReviewModalProps) => {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [hoverRating, setHoverRating] = useState(0); // Novo estado para efeito visual ao passar o mouse
 
-  // Reseta o estado quando o modal é fechado/reaberto
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
       setRating(0);
       setComment("");
+      setHoverRating(0);
     }
   }, [isOpen]);
 
   const handleSubmit = () => {
-    // A validação de formulário é uma das poucas exceções
-    // onde um toast pode ser disparado de um componente,
-    // pois é um feedback direto de uma ação do usuário na UI.
     if (rating === 0) {
       toast.error("Por favor, selecione uma classificação de estrelas.");
       return;
@@ -36,75 +38,62 @@ const ReviewModal = ({ isOpen, onClose, appointment, onSubmit, isLoading = false
     onSubmit(rating, comment);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in-down">
-      <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-700 max-w-md w-full relative transform transition-all duration-300">
-        <button 
-            onClick={onClose} 
-            className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
-            aria-label="Fechar modal"
-        >
-            <X size={24} />
-        </button>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-gray-900 border-gray-800">
+        <DialogHeader>
+          <DialogTitle className="text-center text-xl text-white">Avaliar Agendamento</DialogTitle>
+          <DialogDescription className="text-center text-gray-400">
+            Como foi sua experiência com <span className="text-primary font-medium">{appointment.professionalName}</span>?
+          </DialogDescription>
+        </DialogHeader>
 
-        <h3 className="text-2xl font-bold text-white mb-2 text-center">
-          Avaliar Agendamento
-        </h3>
-        <p className="text-gray-300 mb-6 text-center">
-          Compartilhe sua experiência com {appointment.professionalName}.
-        </p>
-
-        <div className="mb-6 text-center">
-          <p className="text-gray-300 mb-3 font-semibold">Sua classificação:</p>
-          <div className="flex justify-center space-x-1">
+        <div className="flex flex-col items-center justify-center py-6 space-y-6">
+          {/* Estrelas */}
+          <div className="flex justify-center gap-2" onMouseLeave={() => setHoverRating(0)}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <Star
+              <button
                 key={star}
-                className={`w-10 h-10 cursor-pointer transition-all duration-200 ${
-                  rating >= star
-                    ? "text-yellow-400 fill-yellow-400 transform scale-110"
-                    : "text-gray-500 hover:text-yellow-300"
-                }`}
+                type="button"
+                className="focus:outline-none transition-transform hover:scale-110"
                 onClick={() => setRating(star)}
-              />
+                onMouseEnter={() => setHoverRating(star)}
+              >
+                <Star
+                  size={32}
+                  className={`transition-colors duration-200 ${
+                    (hoverRating || rating) >= star
+                      ? "text-primary fill-primary"
+                      : "text-gray-700 fill-gray-800"
+                  }`}
+                />
+              </button>
             ))}
+          </div>
+
+          <div className="w-full space-y-3">
+             <Label htmlFor="comment" className="text-gray-200">Comentário (Opcional)</Label>
+             <Textarea
+                id="comment"
+                placeholder="Conte-nos o que achou do serviço..."
+                className="bg-gray-800 border-gray-700 min-h-[100px] resize-none focus-visible:ring-primary"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+             />
           </div>
         </div>
 
-        <div className="mb-8">
-          <label htmlFor="comment" className="block text-gray-300 font-semibold mb-2">
-            Comentário (opcional):
-          </label>
-          <textarea
-            id="comment"
-            className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-500 focus:border-transparent resize-y transition"
-            rows={4}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Como foi o serviço? O que você achou do profissional?"
-          />
-        </div>
-
-        <div className="flex justify-end space-x-4">
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+        <DialogFooter className="sm:justify-between gap-3 sm:gap-0">
+          <Button variant="ghost" onClick={onClose} disabled={isLoading} className="w-full sm:w-auto">
             Cancelar
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="px-6 py-2 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-          >
-            {isLoading ? 'Enviando...' : 'Enviar Avaliação'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button onClick={handleSubmit} disabled={isLoading} className="w-full sm:w-auto font-bold">
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Enviar Avaliação
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

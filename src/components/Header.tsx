@@ -1,104 +1,152 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import logo from '../assets/stylo-logo.png';
+import { Menu, X, LayoutDashboard, LogOut, User } from 'lucide-react'; // Ícones Lucide
 
-// Ícones para o menu mobile
-const MenuIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16m-7 6h7" />
-  </svg>
-);
-
-const CloseIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);  
+// Componentes UI
+import { Button } from './ui/button';
+import { cn } from '../lib/utils/cn';
 
 const Header = () => {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [isOpen, setIsOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setHasScrolled(window.scrollY > 10);
-    };
+    const handleScroll = () => setHasScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Fecha o menu mobile ao mudar de rota
+  useEffect(() => setIsOpen(false), [location]);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const navLinks = (
-    <>
-      <Link to="/sobre-nos" className="text-gray-300 hover:text-[#daa520] transition-colors duration-300">Sobre Nós</Link>
-      <Link to="/contato" className="text-gray-300 hover:text-[#daa520] transition-colors duration-300">Contato</Link>
-      <Link to="/faq" className="text-gray-300 hover:text-[#daa520] transition-colors duration-300">FAQ</Link>
-    </>
-  );
+  const navLinks = [
+    { name: 'Sobre Nós', path: '/sobre-nos' },
+    { name: 'Contato', path: '/contato' },
+    { name: 'FAQ', path: '/faq' },
+  ];
 
   return (
     <header 
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-        hasScrolled ? 'bg-black/80 backdrop-blur-lg shadow-lg shadow-[#daa520]/5' : 'bg-transparent'
-      }`}
+      className={cn(
+        "fixed top-0 left-0 w-full z-50 transition-all duration-300 border-b border-transparent",
+        hasScrolled 
+            ? "bg-background/95 backdrop-blur-md shadow-md border-gray-800" 
+            : "bg-transparent"
+      )}
     >
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
+          
+          {/* Logo */}
           <div className="flex-shrink-0">
-            <Link to="/" className="flex items-center space-x-2">
-              <img className="h-10 w-auto" src={logo} alt="Stylo" />
+            <Link to="/" className="flex items-center gap-2 group">
+              <img 
+                className="h-10 w-auto transition-transform group-hover:scale-105" 
+                src={logo} 
+                alt="Stylo" 
+              />
             </Link>
           </div>
-          <nav className="hidden md:flex items-center space-x-8">
-            {navLinks}
-            {user ? (
-              <>
-                <Link to="/dashboard" className="bg-[#daa520] text-black hover:bg-[#c8961e] font-bold py-2 px-4 rounded-lg transition-colors duration-300">
-                  Dashboard
+
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center space-x-6">
+            {navLinks.map((link) => (
+                <Link key={link.path} to={link.path}>
+                    <Button variant="ghost" className="text-gray-300 hover:text-primary hover:bg-transparent text-sm font-medium">
+                        {link.name}
+                    </Button>
                 </Link>
-                <button onClick={handleLogout} className="text-gray-300 hover:text-[#daa520] transition-colors duration-300">
-                  Sair
-                </button>
-              </>
+            ))}
+
+            <div className="h-6 w-px bg-gray-800 mx-2" /> {/* Separator */}
+
+            {user ? (
+              <div className="flex items-center gap-3">
+                <Link to="/dashboard">
+                  <Button variant="default" className="gap-2 font-bold shadow-[0_0_15px_rgba(218,165,32,0.2)] hover:shadow-[0_0_20px_rgba(218,165,32,0.4)]">
+                    <LayoutDashboard size={16} />
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="icon" onClick={handleLogout} title="Sair" className="text-gray-400 hover:text-destructive hover:bg-destructive/10">
+                    <LogOut size={20} />
+                </Button>
+              </div>
             ) : (
-              <Link to="/login" className="bg-[#daa520] text-black hover:bg-[#c8961e] font-bold py-2 px-4 rounded-lg transition-colors duration-300">
-                Entrar
-              </Link>
+              <div className="flex items-center gap-3">
+                 <Link to="/login">
+                    <Button variant="ghost" className="text-gray-300 hover:text-white">
+                        Entrar
+                    </Button>
+                 </Link>
+                 <Link to="/register-type">
+                    <Button variant="default" className="font-bold">
+                        Cadastre-se
+                    </Button>
+                 </Link>
+              </div>
             )}
           </nav>
+
+          {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center">
-            <button onClick={() => setIsOpen(!isOpen)} className="text-white focus:outline-none" aria-label="Abrir menu">
-              {isOpen ? <CloseIcon /> : <MenuIcon />}
-            </button>
+            <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)} className="text-gray-100">
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
       {isOpen && (
-        <div className="md:hidden bg-black/95 backdrop-blur-lg pb-4">
-          <nav className="container mx-auto px-4 flex flex-col space-y-4 text-center">
-            {navLinks}
-            <div className="border-t border-[#daa520]/20 pt-4 flex flex-col space-y-4">
+        <div className="md:hidden bg-background/95 backdrop-blur-xl border-b border-gray-800 animate-fade-in-down">
+          <nav className="px-4 pt-2 pb-6 space-y-2 flex flex-col">
+            {navLinks.map((link) => (
+                <Link key={link.path} to={link.path} className="block">
+                    <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-primary">
+                        {link.name}
+                    </Button>
+                </Link>
+            ))}
+            
+            <div className="border-t border-gray-800 my-4 pt-4 flex flex-col gap-3">
               {user ? (
                 <>
-                  <Link to="/dashboard" className="bg-[#daa520] text-black hover:bg-[#c8961e] font-bold py-2 px-4 rounded-lg transition-colors duration-300">
-                    Dashboard
+                  <Link to="/dashboard" className="w-full">
+                    <Button className="w-full gap-2 justify-center font-bold">
+                        <LayoutDashboard size={16} />
+                        Acessar Dashboard
+                    </Button>
                   </Link>
-                  <button onClick={handleLogout} className="text-gray-300 hover:text-[#daa520] transition-colors duration-300">
-                    Sair
-                  </button>
+                  <Button variant="destructive" onClick={handleLogout} className="w-full gap-2 justify-center bg-destructive/10 text-destructive hover:bg-destructive/20 border-none">
+                     <LogOut size={16} />
+                     Sair da conta
+                  </Button>
                 </>
               ) : (
-                <Link to="/login" className="bg-[#daa520] text-black hover:bg-[#c8961e] font-bold py-2 px-4 rounded-lg transition-colors duration-300">
-                  Entrar
-                </Link>
+                <>
+                  <Link to="/login" className="w-full">
+                    <Button variant="outline" className="w-full border-gray-700 text-gray-300">
+                        <User size={16} className="mr-2"/> Entrar
+                    </Button>
+                  </Link>
+                  <Link to="/register-type" className="w-full">
+                    <Button className="w-full font-bold">
+                        Começar agora
+                    </Button>
+                  </Link>
+                </>
               )}
             </div>
           </nav>

@@ -1,9 +1,8 @@
-// src/components/Professional/ProfessionalHome.tsx
-
 import { useMemo } from "react";
-import { useProviderAppointmentsStore } from "../../store/providerAppointmentsStore";
-// 1. IMPORTAR O TIPO ENRICHED
-import type { EnrichedProviderAppointment } from "../../store/providerAppointmentsStore";
+import {
+  useProviderAppointmentsStore,
+  type EnrichedProviderAppointment,
+} from "../../store/providerAppointmentsStore";
 import type { ProfessionalProfile, Appointment } from "../../types";
 import {
   TrendingUp,
@@ -19,6 +18,11 @@ import { format, isSameDay, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FaWhatsapp } from "react-icons/fa";
 
+// UI
+import { Card, CardContent } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+
 interface ProfessionalHomeProps {
   userProfile: ProfessionalProfile;
 }
@@ -26,10 +30,8 @@ interface ProfessionalHomeProps {
 export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
   const { appointments } = useProviderAppointmentsStore();
 
-  // --- Lógica dos Lembretes (WhatsApp) ---
   const tomorrowAppointments = useMemo(() => {
     const tomorrow = addDays(new Date(), 1);
-
     return appointments
       .filter(
         (app) =>
@@ -44,46 +46,30 @@ export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
   }, [appointments, userProfile.professionalId]);
 
   const generateWhatsAppLink = (appointment: Appointment) => {
-    // 2. CORREÇÃO: Cast seguro usando o tipo EnrichedProviderAppointment
     const phone =
       appointment.clientPhone ||
       (appointment as EnrichedProviderAppointment).client?.phoneNumber ||
       "";
-
-    // Remove tudo que não é número
     const cleanPhone = phone.replace(/\D/g, "");
-
     if (!cleanPhone) return null;
-
     const time = format(new Date(appointment.startTime), "HH:mm");
     const message = `Olá ${appointment.clientName}, confirmando seu horário amanhã às ${time}. Tudo certo?`;
-
     return `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
-  // --- Cálculos de Métricas (Performance) ---
   const metrics = useMemo(() => {
     const myAppointments = appointments.filter(
       (a) => a.professionalId === userProfile.professionalId
     );
-
     const today = new Date();
-
-    // 1. Agendamentos de Hoje
     const todayAppointments = myAppointments.filter(
       (a) => isSameDay(new Date(a.startTime), today) && a.status === "scheduled"
     );
-
-    // 2. Total Realizado (Geral)
     const completed = myAppointments.filter((a) => a.status === "completed");
-
-    // 3. Estimativa de Faturamento
     const estimatedRevenue = completed.reduce(
       (acc, curr) => acc + (curr.totalPrice || 0),
       0
     );
-
-    // 4. Média de Avaliações
     const reviewedAppts = myAppointments.filter((a) => a.review);
     const avgRating =
       reviewedAppts.length > 0
@@ -91,7 +77,7 @@ export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
             (acc, curr) => acc + (curr.review?.rating || 0),
             0
           ) / reviewedAppts.length
-        : 5.0; // Começa com 5
+        : 5.0;
 
     return {
       todayCount: todayAppointments.length,
@@ -105,254 +91,224 @@ export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
     };
   }, [appointments, userProfile.professionalId]);
 
+  const MotionCard = motion(Card);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Cabeçalho de Boas Vindas */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">
-            Olá, <span className="text-amber-500">{userProfile.name}</span>! 👋
+            Olá, <span className="text-primary">{userProfile.name}</span>! 👋
           </h1>
-          <p className="text-gray-400 mt-2">
-            Aqui está o resumo da sua performance e agenda.
+          <p className="text-gray-400 mt-1">
+            Resumo da sua performance e agenda.
           </p>
         </div>
-
-        {/* Badge Informativa Simples */}
-        <div className="bg-gray-800/80 px-4 py-2 rounded-full border border-gray-700 text-xs text-gray-400 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+        <Badge
+          variant="outline"
+          className="px-3 py-1 bg-gray-900 border-gray-700 text-gray-400 gap-2 h-9"
+        >
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />{" "}
           Sistema Online
-        </div>
+        </Badge>
       </div>
 
-      {/* --- SEÇÃO DE LEMBRETES (NOVA) --- */}
       {tomorrowAppointments.length > 0 && (
-        <motion.section
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-green-900/20 to-gray-800/50 border border-green-500/30 rounded-2xl p-6 relative overflow-hidden"
         >
-          {/* Background Decoration */}
-          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-            <FaWhatsapp size={100} />
-          </div>
-
-          <div className="flex items-center justify-between mb-6 relative z-10">
-            <div>
-              <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
-                <FaWhatsapp className="text-green-500" size={24} />
-                Confirmar Agenda de Amanhã
-              </h2>
-              <p className="text-sm text-gray-400">
-                Envie lembretes com 1 clique para reduzir faltas.
-              </p>
+          <Card className="bg-gradient-to-r from-green-900/20 to-gray-900/50 border-green-500/30 overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+              <FaWhatsapp size={100} />
             </div>
-            <span className="text-sm font-bold bg-green-500 text-black px-3 py-1 rounded-full shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-              {tomorrowAppointments.length} clientes
-            </span>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 relative z-10">
-            {tomorrowAppointments.map((app) => {
-              const waLink = generateWhatsAppLink(app);
-
-              return (
-                <div
-                  key={app.id}
-                  className="bg-gray-900/80 backdrop-blur-sm p-4 rounded-xl flex items-center justify-between border border-gray-700 hover:border-green-500/50 transition-all group shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 group-hover:text-green-400 transition-colors">
-                      <Clock size={18} />
-                    </div>
-                    <div>
-                      <p
-                        className="text-white font-bold text-sm truncate max-w-[120px]"
-                        title={app.clientName}
-                      >
-                        {app.clientName}
-                      </p>
-                      <p className="text-xs text-green-400 font-mono flex items-center gap-1">
-                        {format(new Date(app.startTime), "HH:mm")} •{" "}
-                        {app.serviceName}
-                      </p>
-                    </div>
-                  </div>
-
-                  {waLink ? (
-                    <a
-                      href={waLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-[#25D366] hover:bg-[#128C7E] text-white p-2.5 rounded-lg transition-all shadow-lg shadow-green-900/20 hover:scale-105 active:scale-95 flex items-center gap-2 text-xs font-bold"
-                      title="Enviar lembrete no WhatsApp"
-                    >
-                      <span>Avisar</span>
-                      <FaWhatsapp size={16} />
-                    </a>
-                  ) : (
-                    <button
-                      disabled
-                      className="bg-gray-800 text-gray-600 p-2 rounded-lg cursor-not-allowed border border-gray-700"
-                      title="Telefone não cadastrado"
-                    >
-                      <FaWhatsapp size={18} />
-                    </button>
-                  )}
+            <CardContent className="p-6">
+              <div className="flex justify-between items-center mb-6 relative z-10">
+                <div>
+                  <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
+                    <FaWhatsapp /> Confirmar Agenda de Amanhã
+                  </h2>
+                  <p className="text-sm text-gray-400">
+                    Envie lembretes para reduzir faltas.
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </motion.section>
+                <Badge className="bg-green-600 text-white hover:bg-green-600">
+                  {tomorrowAppointments.length} clientes
+                </Badge>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 relative z-10">
+                {tomorrowAppointments.map((app) => {
+                  const waLink = generateWhatsAppLink(app);
+                  return (
+                    <div
+                      key={app.id}
+                      className="bg-gray-900/80 p-3 rounded-xl flex items-center justify-between border border-gray-700 hover:border-green-500/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="h-8 w-8 rounded-full bg-gray-800 flex items-center justify-center text-gray-400">
+                          <Clock size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-white font-bold text-sm truncate">
+                            {app.clientName}
+                          </p>
+                          <p className="text-xs text-green-400 font-mono">
+                            {format(new Date(app.startTime), "HH:mm")}
+                          </p>
+                        </div>
+                      </div>
+                      {waLink ? (
+                        <Button
+                          size="sm"
+                          asChild
+                          className="bg-green-600 hover:bg-green-500 text-white h-8 text-xs font-bold gap-2"
+                        >
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <FaWhatsapp /> Avisar
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          disabled
+                          className="h-8 w-8"
+                        >
+                          <FaWhatsapp size={16} className="text-gray-600" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
-      {/* Grid de Cards de Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Ganhos Estimados */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 shadow-lg"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">
-                Faturamento Estimado
-              </p>
-              <h3 className="text-2xl font-bold text-white mt-1">
-                {new Intl.NumberFormat("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                }).format(metrics.revenue)}
-              </h3>
-            </div>
-            <div className="p-2 bg-green-500/10 rounded-lg text-green-500">
-              <DollarSign size={20} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Card 2: Atendimentos Realizados */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 shadow-lg"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">
-                Serviços Realizados
-              </p>
-              <h3 className="text-2xl font-bold text-white mt-1">
-                {metrics.completedCount}
-              </h3>
-            </div>
-            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
-              <CheckCircle2 size={20} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Card 3: Agenda Hoje */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 shadow-lg"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">Agenda Hoje</p>
-              <h3 className="text-2xl font-bold text-white mt-1">
-                {metrics.todayCount} clientes
-              </h3>
-            </div>
-            <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-              <CalendarClock size={20} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Card 4: Avaliação */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 shadow-lg"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">Sua Nota</p>
-              <div className="flex items-center gap-1 mt-1">
-                <h3 className="text-2xl font-bold text-white">
-                  {metrics.rating.toFixed(1)}
+        {[
+          {
+            title: "Faturamento Estimado",
+            value: new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(metrics.revenue),
+            icon: DollarSign,
+            color: "text-green-500",
+            bg: "bg-green-500/10",
+          },
+          {
+            title: "Realizados",
+            value: metrics.completedCount,
+            icon: CheckCircle2,
+            color: "text-blue-500",
+            bg: "bg-blue-500/10",
+          },
+          {
+            title: "Agenda Hoje",
+            value: metrics.todayCount,
+            icon: CalendarClock,
+            color: "text-amber-500",
+            bg: "bg-amber-500/10",
+          },
+          {
+            title: "Sua Nota",
+            value: metrics.rating.toFixed(1),
+            icon: TrendingUp,
+            color: "text-yellow-500",
+            bg: "bg-yellow-500/10",
+            subIcon: (
+              <Star
+                size={14}
+                className="text-yellow-500 fill-yellow-500 ml-1"
+              />
+            ),
+          },
+        ].map((item, i) => (
+          <MotionCard
+            key={i}
+            whileHover={{ scale: 1.02 }}
+            className="bg-gray-900/50 border-gray-800"
+          >
+            <CardContent className="p-6 flex justify-between items-start">
+              <div>
+                <p className="text-sm text-gray-400 font-medium">
+                  {item.title}
+                </p>
+                <h3 className="text-2xl font-bold text-white mt-1 flex items-center">
+                  {item.value} {item.subIcon}
                 </h3>
-                <Star
-                  size={18}
-                  className="text-yellow-400 fill-yellow-400 mb-1"
-                />
               </div>
-            </div>
-            <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500">
-              <TrendingUp size={20} />
-            </div>
-          </div>
-        </motion.div>
+              <div className={`p-2 rounded-lg ${item.bg} ${item.color}`}>
+                <item.icon size={20} />
+              </div>
+            </CardContent>
+          </MotionCard>
+        ))}
       </div>
 
-      {/* Próximo Cliente (Destaque) */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-8 rounded-3xl border border-gray-800 relative overflow-hidden shadow-2xl">
+      <Card className="bg-gradient-to-r from-gray-900 to-gray-800 border-gray-800 relative overflow-hidden">
         <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
           <Users size={150} />
         </div>
-
-        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-          <CalendarClock className="text-amber-500" /> Próximo Cliente
-        </h2>
-
-        {metrics.nextAppointment ? (
-          <div className="flex flex-col md:flex-row items-center gap-6 bg-black/20 p-6 rounded-xl border border-gray-700/30 backdrop-blur-sm">
-            <div className="text-center md:text-left min-w-[120px]">
-              <p className="text-4xl font-bold text-white tracking-tighter">
-                {format(new Date(metrics.nextAppointment.startTime), "HH:mm")}
-              </p>
-              <p className="text-gray-400 text-xs uppercase font-bold tracking-widest mt-1">
-                {format(new Date(metrics.nextAppointment.startTime), "EEEE", {
-                  locale: ptBR,
-                })}
-              </p>
-            </div>
-            <div className="w-px h-16 bg-gray-700 hidden md:block"></div>
-            <div className="flex-1 w-full md:w-auto text-center md:text-left">
-              <h3 className="text-xl font-bold text-white mb-1">
-                {metrics.nextAppointment.clientName}
-              </h3>
-              <p className="text-gray-300 flex items-center justify-center md:justify-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                {metrics.nextAppointment.serviceName}
-              </p>
-            </div>
-            <div className="flex gap-2 w-full md:w-auto">
+        <CardContent className="p-8">
+          <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+            <CalendarClock className="text-primary" /> Próximo Cliente
+          </h2>
+          {metrics.nextAppointment ? (
+            <div className="flex flex-col md:flex-row items-center gap-6 bg-black/20 p-6 rounded-xl border border-gray-700/50 backdrop-blur-sm relative z-10">
+              <div className="text-center md:text-left min-w-[100px]">
+                <p className="text-4xl font-bold text-white">
+                  {format(new Date(metrics.nextAppointment.startTime), "HH:mm")}
+                </p>
+                <p className="text-gray-400 text-xs uppercase font-bold tracking-widest mt-1">
+                  {format(new Date(metrics.nextAppointment.startTime), "EEEE", {
+                    locale: ptBR,
+                  })}
+                </p>
+              </div>
+              <div className="w-px h-16 bg-gray-700 hidden md:block"></div>
+              <div className="flex-1 text-center md:text-left">
+                <h3 className="text-xl font-bold text-white mb-1">
+                  {metrics.nextAppointment.clientName}
+                </h3>
+                <Badge
+                  variant="secondary"
+                  className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                >
+                  {metrics.nextAppointment.serviceName}
+                </Badge>
+              </div>
               {(() => {
                 const link = generateWhatsAppLink(metrics.nextAppointment);
-                return link ? (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 md:flex-none px-4 py-2 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white font-bold transition-colors flex items-center justify-center gap-2"
-                  >
-                    <FaWhatsapp />
-                    Confirmar
-                  </a>
-                ) : null;
+                return (
+                  link && (
+                    <Button
+                      asChild
+                      className="bg-green-600 hover:bg-green-500 text-white font-bold gap-2"
+                    >
+                      <a href={link} target="_blank" rel="noopener noreferrer">
+                        <FaWhatsapp size={18} /> Confirmar
+                      </a>
+                    </Button>
+                  )
+                );
               })()}
             </div>
-          </div>
-        ) : (
-          <div className="text-center py-12 text-gray-500 flex flex-col items-center">
-            <CheckCircle2 size={48} className="mb-4 text-gray-700" />
-            <p className="text-lg font-medium">Agenda de hoje concluída!</p>
-            <p className="text-sm">
-              Aproveite seu descanso ou prepare-se para amanhã. ☕
-            </p>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="text-center py-12 text-gray-500 flex flex-col items-center">
+              <CheckCircle2 size={48} className="mb-4 text-gray-700" />
+              <p className="text-lg font-medium">Agenda de hoje concluída!</p>
+              <p className="text-sm">Bom descanso. ☕</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

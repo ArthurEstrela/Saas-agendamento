@@ -1,60 +1,29 @@
-import { useEffect, type ElementType } from "react"; // <--- 1. Importar ElementType
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Search,
   Calendar,
   Heart,
   LogOut,
-  ImageIcon,
   Bell,
+  User as UserIcon,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
 import { useNotificationStore } from "../../store/notificationsStore";
-import { Link, useNavigate } from "react-router-dom";
 import logo from "../../assets/stylo-logo.png";
+import type { Section } from "../ClientDashboard";
 
-type NavSection =
-  | "search"
-  | "appointments"
-  | "favorites"
-  | "profile"
-  | "notifications";
+// UI Components
+import { Button } from "../ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Badge } from "../ui/badge";
+import { cn } from "../../lib/utils/cn";
 
 interface ClientSideNavProps {
-  activeSection: NavSection;
-  setActiveSection: (section: NavSection) => void;
+  activeSection: Section;
+  setActiveSection: (section: Section) => void;
 }
-
-// 2. Criar a interface para tipar as props do NavItem
-interface NavItemProps {
-  icon: ElementType; // Tipo correto para componentes de ícone (React Components)
-  label: string;
-  isActive: boolean;
-  count?: number; // Opcional
-  onClick: () => void;
-}
-
-// 3. Aplicar a tipagem no componente NavItem
-const NavItem = ({ icon: Icon, label, isActive, count = 0, onClick }: NavItemProps) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 text-base font-medium ${
-      isActive
-        ? "bg-amber-500/10 text-amber-400"
-        : "text-gray-400 hover:bg-gray-800 hover:text-white"
-    }`}
-  >
-    <div className="flex items-center">
-      <Icon className="mr-3 flex-shrink-0" size={22} />
-      <span>{label}</span>
-    </div>
-    {count > 0 && (
-      <span className="flex items-center justify-center w-6 h-6 bg-amber-500 text-black text-xs font-bold rounded-full">
-        {count}
-      </span>
-    )}
-  </button>
-);
 
 export const ClientSideNav = ({
   activeSection,
@@ -63,98 +32,135 @@ export const ClientSideNav = ({
   const { logout, user } = useAuthStore();
   const navigate = useNavigate();
   const { userProfile } = useProfileStore();
-  const { unreadCount, fetchNotifications, clearNotifications } =
-    useNotificationStore();
+  const { unreadCount, fetchNotifications } = useNotificationStore();
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchNotifications(user.uid);
-    }
-    return () => {
-      clearNotifications();
-    };
-  }, [user, fetchNotifications, clearNotifications]);
+    if (user?.uid) fetchNotifications(user.uid);
+  }, [user, fetchNotifications]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/");
   };
 
-  const navItems = [
-    { id: "search", label: "Buscar", icon: Search },
-    { id: "appointments", label: "Agendamentos", icon: Calendar },
+  const navItems: { id: Section; label: string; icon: React.ElementType }[] = [
+    { id: "search", label: "Explorar", icon: Search },
+    { id: "appointments", label: "Meus Agendamentos", icon: Calendar },
     { id: "favorites", label: "Favoritos", icon: Heart },
-    {
-      id: "notifications",
-      label: "Notificações",
-      icon: Bell,
-      count: unreadCount,
-    },
+    { id: "notifications", label: "Notificações", icon: Bell },
   ];
 
   return (
-    <div className="flex flex-col justify-between h-full text-white">
-      <div>
-        <div className="mb-12 px-2">
-          <Link to="/dashboard">
-            <img src={logo} alt="Stylo" className="h-10" />
-          </Link>
-        </div>
-
-        <nav className="space-y-2">
-          {navItems.map((item) => (
-            <NavItem
-              key={item.id}
-              icon={item.icon}
-              label={item.label}
-              isActive={activeSection === item.id}
-              count={item.count}
-              onClick={() => setActiveSection(item.id as NavSection)}
-            />
-          ))}
-        </nav>
+    <div className="flex flex-col h-full">
+      {/* Logo Area */}
+      <div className="p-8 pb-4 flex justify-center md:justify-start">
+        <Link to="/dashboard" className="block">
+          <img
+            src={logo}
+            alt="Stylo"
+            className="h-10 w-auto hover:scale-105 transition-transform duration-300"
+          />
+        </Link>
       </div>
 
-      <div className="border-t border-gray-700/50 pt-4">
-        {/* Botão de Perfil */}
+      {/* Navigation */}
+      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isActive = activeSection === item.id;
+          const Icon = item.icon;
+
+          return (
+            <Button
+              key={item.id}
+              variant="ghost"
+              onClick={() => setActiveSection(item.id)}
+              className={cn(
+                "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 group relative",
+                isActive
+                  ? "bg-primary/10 text-primary hover:bg-primary/15"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+              )}
+            >
+              {/* Indicador lateral ativo */}
+              {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_#daa520]" />
+              )}
+
+              <Icon
+                size={20}
+                className={cn(
+                  "mr-3 transition-transform duration-300",
+                  isActive
+                    ? "text-primary scale-110"
+                    : "text-gray-500 group-hover:text-white group-hover:scale-105"
+                )}
+              />
+              <span className={cn(isActive && "font-bold")}>{item.label}</span>
+
+              {item.id === "notifications" && unreadCount > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="ml-auto h-5 w-auto min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                >
+                  {unreadCount}
+                </Badge>
+              )}
+            </Button>
+          );
+        })}
+      </nav>
+
+      {/* Footer User Profile */}
+      <div className="p-4 border-t border-gray-800 bg-black/20">
         <button
           onClick={() => setActiveSection("profile")}
-          className={`w-full flex items-center p-2 rounded-lg transition-all duration-200 text-base font-medium ${
+          className={cn(
+            "flex items-center w-full p-2.5 rounded-xl transition-all duration-200 group text-left",
             activeSection === "profile"
-              ? "bg-amber-500/10"
-              : "hover:bg-gray-800/50"
-          }`}
+              ? "bg-gray-800 border border-gray-700 shadow-inner"
+              : "hover:bg-gray-800/50 border border-transparent"
+          )}
         >
-          <div className="relative mr-3">
-            {userProfile?.profilePictureUrl ? (
-              <img
-                src={userProfile.profilePictureUrl}
-                alt="Foto do perfil"
-                className="w-10 h-10 rounded-full object-cover border-2 border-amber-500"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center border-2 border-gray-600">
-                <ImageIcon size={20} className="text-gray-400" />
-              </div>
+          <Avatar
+            className={cn(
+              "h-10 w-10 border transition-all",
+              activeSection === "profile"
+                ? "border-primary shadow-[0_0_10px_rgba(218,165,32,0.3)]"
+                : "border-gray-700 group-hover:border-gray-500"
             )}
-          </div>
-          <span
-            className={`truncate ${
-              activeSection === "profile" ? "text-amber-400" : "text-white"
-            }`}
           >
-            {userProfile?.name || userProfile?.email}
-          </span>
+            <AvatarImage
+              src={userProfile?.profilePictureUrl}
+              className="object-cover"
+            />
+            <AvatarFallback className="bg-gray-700 text-gray-300">
+              <UserIcon size={18} />
+            </AvatarFallback>
+          </Avatar>
+
+          <div className="ml-3 overflow-hidden flex-1">
+            <p
+              className={cn(
+                "text-sm font-semibold truncate transition-colors",
+                activeSection === "profile"
+                  ? "text-primary"
+                  : "text-white group-hover:text-gray-200"
+              )}
+            >
+              {userProfile?.name?.split(" ")[0] || "Usuário"}
+            </p>
+            <p className="text-xs text-gray-500 truncate">Ver meu perfil</p>
+          </div>
         </button>
 
-        {/* Botão de Sair */}
-        <button
+        <Button
+          variant="ghost"
           onClick={handleLogout}
-          className="w-full flex items-center p-3 mt-2 rounded-lg transition-all duration-200 text-gray-400 hover:bg-red-500/10 hover:text-red-400 text-base font-medium"
+          className="w-full justify-start mt-2 h-10 px-4 text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-3 text-sm"
         >
-          <LogOut className="mr-3" size={22} />
+          <LogOut size={18} />
           Sair
-        </button>
+        </Button>
       </div>
     </div>
   );

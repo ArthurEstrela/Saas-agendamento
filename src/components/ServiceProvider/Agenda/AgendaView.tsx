@@ -1,12 +1,7 @@
-// src/components/ServiceProvider/Agenda/AgendaView.tsx
-
-export type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
-export type ViewMode = "card" | "list" | "calendar";
-
 import { useState, useMemo, useEffect } from "react";
-import { 
-  useProviderAppointmentsStore, 
-  type EnrichedProviderAppointment
+import {
+  useProviderAppointmentsStore,
+  type EnrichedProviderAppointment,
 } from "../../../store/providerAppointmentsStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
 import type {
@@ -24,11 +19,14 @@ import {
   Clock as ClockIcon,
 } from "lucide-react";
 import { startOfDay, isPast } from "date-fns";
-
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useFilteredAppointments } from "../../../hooks/useFilteredAppointments";
 import { AgendaModalsWrapper } from "./AgendaModalsWrapper";
 
+// Importação que faltava!
+import { cn } from "../../../lib/utils/cn";
+
+// Abas e Componentes
 import { RequestsTab } from "../RequestsTab";
 import { HistoryTab } from "../HistoryTab";
 import { ProfessionalFilter } from "./ProfessionalFilter";
@@ -39,54 +37,45 @@ import { TimeGridCalendar } from "./TimeGridCalendar";
 import { DateSelector } from "../DateSelector";
 import { PendingIssuesTab } from "./PendingIssuesTab";
 
+// UI
+import { Button } from "../../ui/button";
+import { Badge } from "../../ui/badge";
+import { Card } from "../../ui/card";
+
+export type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
+export type ViewMode = "card" | "list" | "calendar";
+
 interface AgendaViewProps {
   userProfile: UserProfile | null;
 }
 
 export const AgendaView = ({ userProfile }: AgendaViewProps) => {
-  // 1. MOVER TODOS OS HOOKS PARA O TOPO
-  const { 
-    appointments, 
-    isLoading, 
-    fetchAppointments, 
-    updateStatus // ✅ Adicionado para passar ao RequestsTab
-  } = useProviderAppointmentsStore();
-
+  const { appointments, isLoading, fetchAppointments, updateStatus } =
+    useProviderAppointmentsStore();
   const { openModal } = useAgendaModalStore();
 
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
-
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
     "calendar"
   );
-
   const [selectedProfessionalId, setSelectedProfessionalId] =
     usePersistentState<string>("agenda_professional_filter", "all");
 
   const isOwner = userProfile?.role === "serviceProvider";
 
   useEffect(() => {
-    const handleInitialResize = () => {
-      if (window.innerWidth < 768) {
-        setViewMode((prev) => (prev === "calendar" ? "list" : prev));
-      }
-    };
-    handleInitialResize();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (window.innerWidth < 768)
+      setViewMode((prev) => (prev === "calendar" ? "list" : prev));
+  }, [setViewMode]);
 
   useEffect(() => {
     if (!userProfile) return;
-
     const providerId = isOwner
       ? (userProfile as ServiceProviderProfile).id
       : (userProfile as ProfessionalProfile).serviceProviderId;
-
-    if (providerId) {
-      fetchAppointments(providerId);
-    }
+    if (providerId) fetchAppointments(providerId);
   }, [isOwner, userProfile, fetchAppointments]);
 
   const filteredAppointments = useFilteredAppointments(
@@ -102,7 +91,6 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     () => appointments.filter((a) => a.status === "pending").length,
     [appointments]
   );
-
   const pendingPastCount = useMemo(() => {
     const beginningOfToday = startOfDay(new Date());
     return appointments.filter(
@@ -113,42 +101,37 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     ).length;
   }, [appointments]);
 
-  const handleOpenDetails = (appointment: Appointment) => {
+  const handleOpenDetails = (appointment: Appointment) =>
     openModal("details", appointment);
-  };
 
-  // 2. VERIFICAÇÃO DE LOADING
-  if (!userProfile) {
+  if (!userProfile)
     return (
-      <div className="flex justify-center items-center h-96">
-        <Loader2 className="animate-spin text-amber-500" size={48} />
+      <div className="flex justify-center h-96 items-center">
+        <Loader2 className="animate-spin text-primary" size={40} />
       </div>
     );
-  }
 
-  // Cast seguro pois os appointments do store já são enriched
-  const enrichedFiltered = filteredAppointments as EnrichedProviderAppointment[];
+  const enrichedFiltered =
+    filteredAppointments as EnrichedProviderAppointment[];
 
-  const renderScheduledContent = () => {
-    if (isLoading) {
+  const renderContent = () => {
+    if (isLoading)
       return (
-        <div className="flex justify-center items-center h-96">
-          <Loader2 className="animate-spin text-amber-500" size={48} />
+        <div className="flex justify-center h-96 items-center">
+          <Loader2 className="animate-spin text-primary" size={40} />
         </div>
       );
-    }
+
     if (viewMode !== "calendar" && filteredAppointments.length === 0) {
       return (
         <div className="flex flex-col justify-center items-center h-96 text-gray-500">
-          <CalendarIcon size={48} className="mb-4" />
-          <p className="text-lg font-semibold">
-            Nenhum agendamento para este dia.
-          </p>
-          <p className="text-sm">Nem confirmados, nem pendentes.</p>
+          <CalendarIcon size={64} className="mb-4 opacity-20" />
+          <p className="text-lg font-medium">Agenda vazia para este dia.</p>
         </div>
       );
     }
-    if (viewMode === "calendar") {
+
+    if (viewMode === "calendar")
       return (
         <TimeGridCalendar
           appointments={filteredAppointments}
@@ -156,179 +139,135 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
           onAppointmentSelect={handleOpenDetails}
         />
       );
-    }
-
-    switch (viewMode) {
-      case "card":
-        return (
-          <ScheduledAppointmentsTab
-            appointments={enrichedFiltered}
-            onAppointmentSelect={handleOpenDetails}
-          />
-        );
-      case "list":
-        return (
-          <AgendaListView
-            appointments={filteredAppointments}
-            onAppointmentSelect={handleOpenDetails}
-          />
-        );
-      default:
-        return (
-          <ScheduledAppointmentsTab
-            appointments={enrichedFiltered}
-            onAppointmentSelect={handleOpenDetails}
-          />
-        );
-    }
+    if (viewMode === "list")
+      return (
+        <AgendaListView
+          appointments={filteredAppointments}
+          onAppointmentSelect={handleOpenDetails}
+        />
+      );
+    return (
+      <ScheduledAppointmentsTab
+        appointments={enrichedFiltered}
+        onAppointmentSelect={handleOpenDetails}
+      />
+    );
   };
 
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (
-    <div className="min-h-0 flex-1 flex flex-col bg-gray-900/60 rounded-2xl text-white p-4 sm:p-6 border border-gray-800 shadow-2xl shadow-black/50">
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-gray-800 shrink-0">
-        <motion.h1
-          initial={{ x: -20, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          className="text-3xl font-extrabold text-white shrink-0 flex items-center gap-2"
-        >
-          <CalendarIcon size={28} className="text-amber-500" />
-          Agenda Profissional
-        </motion.h1>
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          {isOwner && (
-            <ProfessionalFilter
-              selectedProfessionalId={selectedProfessionalId}
-              // ✅ CORREÇÃO: Tratar null (id || 'all')
-              onSelectProfessional={(id) => setSelectedProfessionalId(id || "all")}
-            />
-          )}
+    <Card className="min-h-0 flex-1 flex flex-col bg-gray-900/60 backdrop-blur-sm border-gray-800 shadow-2xl overflow-hidden">
+      {/* Header */}
+      <div className="p-4 sm:p-6 pb-2 border-b border-gray-800">
+        <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-4">
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <CalendarIcon className="text-primary" /> Agenda
+          </h1>
 
-          {(activeTab === "scheduled" || activeTab === "history") && (
-            <DateSelector
-              selectedDate={selectedDay}
-              setSelectedDate={setSelectedDay}
-              label={
-                activeTab === "scheduled" &&
-                viewMode === "calendar" &&
-                !isMobileView
-                  ? "Semana:"
-                  : "Dia:"
-              }
-            />
-          )}
-          {activeTab === "scheduled" && (
-            <AgendaViewSwitcher
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              icons={{
-                card: <LayoutGrid size={18} />,
-                list: <List size={18} />,
-                calendar: <ClockIcon size={18} />,
-              }}
-            />
-          )}
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            {isOwner && (
+              <ProfessionalFilter
+                selectedProfessionalId={selectedProfessionalId}
+                onSelectProfessional={(id) =>
+                  setSelectedProfessionalId(id || "all")
+                }
+              />
+            )}
+
+            {(activeTab === "scheduled" || activeTab === "history") && (
+              <DateSelector
+                selectedDate={selectedDay}
+                setSelectedDate={setSelectedDay}
+                label={
+                  activeTab === "scheduled" &&
+                  viewMode === "calendar" &&
+                  !isMobileView
+                    ? "Semana:"
+                    : "Dia:"
+                }
+              />
+            )}
+
+            {activeTab === "scheduled" && (
+              <AgendaViewSwitcher
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                icons={{
+                  card: <LayoutGrid size={16} />,
+                  list: <List size={16} />,
+                  calendar: <ClockIcon size={16} />,
+                }}
+              />
+            )}
+          </div>
         </div>
-      </header>
 
-      <nav className="flex items-center overflow-x-auto bg-black/50 rounded-xl p-1 space-x-1 mt-4 border border-gray-800 shrink-0 scrollbar-hide">
-        <button
-          onClick={() => setActiveTab("requests")}
-          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
-            activeTab === "requests"
-              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
-              : "text-gray-400 hover:bg-gray-800"
-          }`}
-        >
-          Solicitações
-          {pendingCount > 0 && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold"
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-2">
+          {[
+            { id: "requests", label: "Solicitações", count: pendingCount },
+            { id: "scheduled", label: "Agenda", count: 0 },
+            {
+              id: "pendingIssues",
+              label: "Pendências",
+              count: pendingPastCount,
+            },
+            { id: "history", label: "Histórico", count: 0 },
+          ].map((tab) => (
+            <Button
+              key={tab.id}
+              variant={activeTab === tab.id ? "default" : "ghost"}
+              onClick={() => setActiveTab(tab.id as AgendaTab)}
+              className={cn(
+                "relative h-9 rounded-full px-4 text-sm font-medium transition-all",
+                activeTab === tab.id
+                  ? "bg-primary text-black hover:bg-primary/90"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+              )}
             >
-              {pendingCount}
-            </motion.span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("scheduled")}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
-            activeTab === "scheduled"
-              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
-              : "text-gray-400 hover:bg-gray-800"
-          }`}
-        >
-          Agenda
-        </button>
-        <button
-          onClick={() => setActiveTab("pendingIssues")}
-          className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
-            activeTab === "pendingIssues"
-              ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/10"
-              : "text-gray-400 hover:bg-gray-800"
-          }`}
-        >
-          Pendências
-          {pendingPastCount > 0 && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold"
-            >
-              {pendingPastCount}
-            </motion.span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out whitespace-nowrap ${
-            activeTab === "history"
-              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10"
-              : "text-gray-400 hover:bg-gray-800"
-          }`}
-        >
-          Histórico
-        </button>
-      </nav>
+              {tab.label}
+              {tab.count > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full text-[10px]"
+                >
+                  {tab.count}
+                </Badge>
+              )}
+            </Button>
+          ))}
+        </div>
+      </div>
 
-      <main className="flex-1 mt-6 min-h-0 overflow-hidden">
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-black/20">
         <AnimatePresence mode="wait">
           <motion.div
-            key={
-              activeTab +
-              viewMode +
-              selectedDay.toISOString() +
-              (isOwner ? selectedProfessionalId : "professional_view")
-            }
-            initial={{ opacity: 0, y: 15 }}
+            key={`${activeTab}-${viewMode}-${selectedDay.toISOString()}`}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
             className="h-full"
           >
             {activeTab === "requests" && (
               <RequestsTab
                 appointments={enrichedFiltered}
                 onAppointmentSelect={handleOpenDetails}
-                // ✅ CORREÇÃO: Passando onUpdateStatus corretamente
-                onUpdateStatus={(id, status) => updateStatus(id, status)}
+                onUpdateStatus={updateStatus}
               />
             )}
-            {activeTab === "scheduled" && renderScheduledContent()}
+            {activeTab === "scheduled" && renderContent()}
             {activeTab === "pendingIssues" && (
               <PendingIssuesTab
                 appointments={enrichedFiltered}
-                // ✅ IMPORTANTE: Certifique-se que PendingIssuesTab aceita esta prop
-                // Se der erro, remova esta linha ou atualize o PendingIssuesTab
                 onAppointmentSelect={handleOpenDetails}
               />
             )}
             {activeTab === "history" && (
               <HistoryTab
                 appointments={enrichedFiltered}
-                // ✅ IMPORTANTE: Certifique-se que HistoryTab aceita esta prop
                 onAppointmentSelect={handleOpenDetails}
               />
             )}
@@ -337,6 +276,6 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       </main>
 
       <AgendaModalsWrapper />
-    </div>
+    </Card>
   );
 };

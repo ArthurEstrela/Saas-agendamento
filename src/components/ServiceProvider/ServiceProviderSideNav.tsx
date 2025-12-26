@@ -1,9 +1,7 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import logo from "../../assets/stylo-logo.png";
 import {
   LayoutDashboard,
-  User,
   Scissors,
   Users,
   Clock,
@@ -13,41 +11,21 @@ import {
   LogOut,
   X,
   CreditCard,
+  User as UserIcon,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { useProfileStore } from "../../store/profileStore"; // 1. Importamos a store do perfil
-import type { ServiceProviderProfile } from "../../types"; // 2. Importamos o tipo correto
-import type { ProviderDashboardView } from "../ServiceProviderDashboard"; // Importa o tipo
-import { useNotificationStore } from "../../store/notificationsStore"; // Importar a store
+import { useProfileStore } from "../../store/profileStore";
+import type {
+  ServiceProviderProfile,
+  ProviderDashboardView,
+} from "../../types"; // Importação corrigida!
+import { useNotificationStore } from "../../store/notificationsStore";
 
-
-interface NavItemProps {
-  icon: React.ElementType;
-  text: string;
-  view: ProviderDashboardView;
-  active: boolean;
-  onClick: (view: ProviderDashboardView) => void;
-  disabled?: boolean;
-}
-
-const NavItem = ({ icon: Icon, text, view, active, onClick, disabled }: NavItemProps) => (
-  <button
-    onClick={() => onClick(view)}
-    disabled={disabled} // <-- Aplicar "disabled"
-    className={`flex items-center w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${
-      active
-        ? "bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20"
-        : "text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-md"
-    } ${
-      disabled ? "opacity-50 cursor-not-allowed" : "" // <-- Estilo de desabilitado
-    }`}
-  >
-    <Icon className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
-    <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">
-      {text}
-    </span>
-  </button>
-);
+// UI Components
+import { Button } from "../ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Badge } from "../ui/badge";
+import { cn } from "../../lib/utils/cn";
 
 interface SideNavProps {
   activeView: ProviderDashboardView;
@@ -66,162 +44,167 @@ export const ServiceProviderSideNav = ({
 }: SideNavProps) => {
   const { userProfile } = useProfileStore();
   const { logout } = useAuthStore();
-  const { unreadCount } = useNotificationStore(); // Pegar a contagem de não lidas
+  const { unreadCount } = useNotificationStore();
 
   const providerProfile = userProfile as ServiceProviderProfile;
 
- const handleNavClick = (view: ProviderDashboardView) => {
-    if (disableNav && view !== "subscription") return; // Não deixa clicar se nav desabilitada
+  const handleNavClick = (view: ProviderDashboardView) => {
+    if (disableNav && view !== "subscription") return;
     setActiveView(view);
-    setIsOpen(false); // Fecha o menu no mobile
+    setIsOpen(false);
   };
+
+  const navItems: {
+    id: ProviderDashboardView;
+    label: string;
+    icon: React.ElementType;
+  }[] = [
+    { id: "agenda", label: "Agenda", icon: LayoutDashboard },
+    { id: "services", label: "Serviços", icon: Scissors },
+    { id: "professionals", label: "Profissionais", icon: Users },
+    { id: "availability", label: "Disponibilidade", icon: Clock },
+    { id: "financial", label: "Financeiro", icon: DollarSign },
+    { id: "reviews", label: "Avaliações", icon: Star },
+    { id: "subscription", label: "Assinatura", icon: CreditCard },
+    { id: "notifications", label: "Notificações", icon: Bell },
+  ];
 
   return (
     <>
-      {/* Overlay para mobile */}
+      {/* Overlay Mobile */}
       <div
-        className={`fixed inset-0 bg-black/60 z-30 md:hidden transition-opacity duration-300 ${
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={cn(
+          "fixed inset-0 bg-black/80 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300",
+          isOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
+        )}
         onClick={() => setIsOpen(false)}
-      ></div>
-      {/* Container do SideNav */}
+      />
+
+      {/* Sidebar */}
       <aside
-        className={`w-72 h-screen bg-black p-4 flex flex-col border-r border-gray-800 fixed top-0 left-0 z-40
-                       transition-transform duration-300 ease-in-out
-                       md:translate-x-0
-                       ${isOpen ? "translate-x-0" : "-translate-x-full"}
-                      `}
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-72 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
       >
-        <div className="flex items-center justify-between mb-10 px-2">
-          <Link to="/">
-            <img className="h-10 w-auto" src={logo} alt="Stylo" />
+        <div className="flex items-center justify-between p-6 h-20">
+          <Link to="/" onClick={() => setIsOpen(false)}>
+            <img
+              className="h-8 w-auto hover:scale-105 transition-transform"
+              src={logo}
+              alt="Stylo"
+            />
           </Link>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setIsOpen(false)}
             className="md:hidden text-gray-400 hover:text-white"
           >
             <X size={24} />
-          </button>
+          </Button>
         </div>
-        <nav className="flex-grow flex flex-col space-y-2">
-          <NavItem
-            icon={LayoutDashboard}
-            text="Agenda"
-            view="agenda"
-            active={activeView === "agenda"}
-            onClick={handleNavClick}
-            disabled={disableNav} // <-- Aplicar disable
-          />
-          <NavItem
-            icon={Scissors}
-            text="Serviços"
-            view="services"
-            active={activeView === "services"}
-            onClick={handleNavClick}
-            disabled={disableNav} // <-- Aplicar disable
-          />
-          <NavItem
-            icon={Users}
-            text="Profissionais"
-            view="professionals"
-            active={activeView === "professionals"}
-            onClick={handleNavClick}
-            disabled={disableNav} // <-- Aplicar disable
-          />
-          <NavItem
-            icon={Clock}
-            text="Disponibilidade"
-            view="availability"
-            active={activeView === "availability"}
-            onClick={handleNavClick}
-            disabled={disableNav} // <-- Aplicar disable
-          />
-          <NavItem
-            icon={DollarSign}
-            text="Financeiro"
-            view="financial"
-            active={activeView === "financial"}
-            onClick={handleNavClick}
-            disabled={disableNav} // <-- Aplicar disable
-          />
-          <NavItem
-            icon={Star}
-            text="Avaliações"
-            view="reviews"
-            active={activeView === "reviews"}
-            onClick={handleNavClick}
-            disabled={disableNav} // <-- Aplicar disable
-          />
-          <NavItem
-            icon={CreditCard}
-            text="Assinatura"
-            view="subscription"
-            active={activeView === "subscription"}
-            onClick={handleNavClick}
-            // Este NUNCA é desabilitado
-          />
-          <button
-            onClick={() => handleNavClick("notifications")}
-            disabled={disableNav} // <-- Aplicar disable
-            className={`flex items-center justify-between w-full h-12 px-4 text-left transition-all duration-300 ease-in-out group ${
-              activeView === "notifications"
-                ? "bg-[#daa520] text-black rounded-lg shadow-lg shadow-[#daa520]/20"
-                : "text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-md"
-            }`}
-          >
-            <div className="flex items-center">
-              <Bell className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
-              <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">
-                Notificações
-              </span>
-            </div>
-            {unreadCount > 0 && (
-              <span className="flex items-center justify-center w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full">
-                {unreadCount}
-              </span>
-            )}
-          </button>
+
+        <nav className="flex-grow flex flex-col gap-1 px-3 py-4 overflow-y-auto custom-scrollbar">
+          {navItems.map((item) => {
+            const isActive = activeView === item.id;
+            const isDisabled = disableNav && item.id !== "subscription";
+            const Icon = item.icon;
+
+            return (
+              <Button
+                key={item.id}
+                variant="ghost"
+                onClick={() => handleNavClick(item.id)}
+                disabled={isDisabled}
+                className={cn(
+                  "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group",
+                  isActive
+                    ? "bg-[#daa520] text-black hover:bg-[#b8860b] shadow-md shadow-[#daa520]/20"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-white",
+                  isDisabled && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <Icon
+                  size={20}
+                  className={cn(
+                    "mr-3 transition-transform duration-300",
+                    !isActive && !isDisabled && "group-hover:scale-110",
+                    isActive
+                      ? "text-black"
+                      : "text-gray-500 group-hover:text-white"
+                  )}
+                />
+                <span
+                  className={cn(
+                    "transition-transform duration-300",
+                    !isActive && !isDisabled && "group-hover:translate-x-1"
+                  )}
+                >
+                  {item.label}
+                </span>
+
+                {item.id === "notifications" && unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                  >
+                    {unreadCount}
+                  </Badge>
+                )}
+              </Button>
+            );
+          })}
         </nav>
-        <div className="mt-auto border-t border-gray-800 pt-4">
+
+        <div className="p-4 border-t border-gray-800 bg-black/20 space-y-2">
           <button
             onClick={() => handleNavClick("profile")}
-            disabled={disableNav} // <-- Aplicar disable
-            className={`flex items-center w-full p-2 text-left rounded-lg transition-all duration-300 ease-in-out group
-                ${
+            disabled={disableNav}
+            className={cn(
+              "flex items-center w-full p-2 text-left rounded-xl transition-all duration-200 group outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              activeView === "profile" ? "bg-gray-800" : "hover:bg-gray-800/50",
+              disableNav && "opacity-50 cursor-not-allowed pointer-events-none"
+            )}
+          >
+            <Avatar className="h-10 w-10 border border-gray-700 group-hover:border-[#daa520] transition-colors">
+              <AvatarImage
+                src={providerProfile?.logoUrl}
+                alt={providerProfile?.businessName}
+                className="object-cover"
+              />
+              <AvatarFallback className="bg-gray-700 text-gray-400">
+                <UserIcon size={18} />
+              </AvatarFallback>
+            </Avatar>
+
+            <div className="ml-3 overflow-hidden">
+              <p
+                className={cn(
+                  "font-bold text-sm truncate transition-colors",
                   activeView === "profile"
-                    ? "bg-gray-700/80"
-                    : "hover:bg-gray-800/50"
-                }
-              `}
-          >
-            <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 overflow-hidden flex items-center justify-center mr-3">
-              {providerProfile?.logoUrl ? (
-                <img
-                  src={providerProfile.logoUrl}
-                  alt={providerProfile.businessName}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User size={20} className="text-gray-400" />
-              )}
-            </div>
-            <div className="overflow-hidden">
-              <p className="font-semibold text-white text-sm truncate">
-                {providerProfile?.businessName}
+                    ? "text-white"
+                    : "text-gray-200 group-hover:text-[#daa520]"
+                )}
+              >
+                {providerProfile?.businessName || "Meu Negócio"}
               </p>
-              <p className="text-xs text-gray-400">Ver Perfil</p>
+              <p className="text-xs text-gray-500 group-hover:text-gray-400">
+                Ver Perfil
+              </p>
             </div>
           </button>
-          <button
+
+          <Button
+            variant="ghost"
             onClick={logout}
-            className="flex items-center w-full h-12 px-4 mt-1 text-left text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all duration-300 ease-in-out group"
+            className="w-full justify-start h-10 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-3"
           >
-            <LogOut className="h-6 w-6 mr-4 transition-transform duration-300 group-hover:scale-110" />
-            <span className="font-semibold transition-transform duration-300 group-hover:translate-x-1">
-              Sair
-            </span>
-          </button>
+            <LogOut size={18} />
+            <span className="font-semibold">Sair</span>
+          </Button>
         </div>
       </aside>
     </>

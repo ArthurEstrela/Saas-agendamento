@@ -1,5 +1,3 @@
-// Em src/components/Professional/ProfessionalProfileManagement.tsx
-
 import { useState } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { UserProfile, ProfessionalProfile } from "../../types";
@@ -7,10 +5,17 @@ import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
-import { Camera, Save, Loader2, User, FileText } from "lucide-react";
-import { Input } from "../ServiceProvider/ProfileManagement";
+import { Camera, Save, Loader2, User, FileText, Mail } from "lucide-react";
 import { uploadProfilePicture } from "../../firebase/userService";
 import toast from "react-hot-toast";
+
+// UI
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import { Card, CardContent } from "../ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Label } from "../ui/label";
 
 const professionalSchema = z.object({
   name: z.string().min(3, "O nome é obrigatório"),
@@ -29,7 +34,6 @@ export const ProfessionalProfileManagement = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Certifique-se de ter atualizado src/types.ts com o campo 'bio'
   const profile = userProfile as ProfessionalProfile;
 
   const {
@@ -40,10 +44,7 @@ export const ProfessionalProfileManagement = ({
     formState: { errors, isDirty },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
-    defaultValues: {
-      name: profile?.name || "",
-      bio: profile?.bio || "",
-    },
+    defaultValues: { name: profile?.name || "", bio: profile?.bio || "" },
   });
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,7 +61,6 @@ export const ProfessionalProfileManagement = ({
         toast.success("Foto atualizada!");
       }
     } catch {
-      // ✅ CORREÇÃO: Removemos '(error)' pois não estava sendo usado
       toast.error("Erro ao enviar foto.");
     } finally {
       setIsUploading(false);
@@ -75,7 +75,6 @@ export const ProfessionalProfileManagement = ({
       toast.success("Perfil atualizado!");
       reset(data);
     } catch {
-      // ✅ CORREÇÃO: Removemos '(e)' pois não estava sendo usado
       toast.error("Erro ao salvar.");
     } finally {
       setIsSaving(false);
@@ -95,28 +94,22 @@ export const ProfessionalProfileManagement = ({
         <p className="text-gray-400">Como você aparece para os clientes.</p>
       </div>
 
-      <div className="bg-gray-800/50 border border-gray-700 rounded-2xl overflow-hidden">
-        {/* Banner Decorativo */}
-        <div className="h-32 bg-gradient-to-r from-amber-600/20 to-amber-900/20 border-b border-gray-700"></div>
-
-        <div className="px-8 pb-8 relative">
-          {/* Avatar Sobreposto */}
-          <div className="-mt-16 mb-6 flex justify-between items-end">
+      <Card className="bg-gray-900/50 border-gray-800 overflow-hidden">
+        <div className="h-32 bg-gradient-to-r from-primary/10 to-amber-900/20 border-b border-gray-800"></div>
+        <CardContent className="px-8 pb-8 relative">
+          {/* Avatar Upload */}
+          <div className="-mt-16 mb-8 flex">
             <div className="relative group">
-              <div className="w-32 h-32 rounded-full border-4 border-gray-900 bg-gray-800 overflow-hidden">
-                {profile.profilePictureUrl ? (
-                  <img
-                    src={profile.profilePictureUrl}
-                    className="w-full h-full object-cover"
-                    alt={profile.name}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <User size={40} className="text-gray-600" />
-                  </div>
-                )}
-              </div>
-              <label className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 cursor-pointer transition-all">
+              <Avatar className="w-32 h-32 border-4 border-gray-900 bg-gray-800 shadow-xl">
+                <AvatarImage
+                  src={profile.profilePictureUrl}
+                  className="object-cover"
+                />
+                <AvatarFallback>
+                  <User size={40} className="text-gray-500" />
+                </AvatarFallback>
+              </Avatar>
+              <label className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 cursor-pointer transition-all z-10">
                 {isUploading ? (
                   <Loader2 className="animate-spin" />
                 ) : (
@@ -134,55 +127,64 @@ export const ProfessionalProfileManagement = ({
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input
-                label="Nome de Exibição"
-                id="name"
-                icon={User}
-                error={errors.name}
-                {...register("name")}
-              />
-              <Input
-                label="Email (Login)"
-                id="email"
-                icon={User}
-                value={profile.email}
-                disabled
-                className="opacity-50 cursor-not-allowed"
-              />
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome de Exibição</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
+                  <Input
+                    id="name"
+                    {...register("name")}
+                    className="pl-10"
+                    error={errors.name?.message}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email (Login)</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
+                  <Input
+                    id="email"
+                    value={profile.email}
+                    disabled
+                    className="pl-10 opacity-60"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+              <Label htmlFor="bio" className="flex items-center gap-2">
                 <FileText size={16} /> Sobre mim (Bio)
-              </label>
-              <textarea
+              </Label>
+              <Textarea
+                id="bio"
                 {...register("bio")}
-                rows={4}
                 placeholder="Escreva um pouco sobre sua experiência e especialidades..."
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl p-4 text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all resize-none"
+                className="min-h-[120px] bg-gray-950 border-gray-700 resize-none"
               />
               <p className="text-xs text-gray-500 text-right">
                 {watch("bio")?.length || 0}/300
               </p>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-gray-700/50">
-              <button
+            <div className="flex justify-end pt-4 border-t border-gray-800">
+              <Button
                 type="submit"
                 disabled={isSaving || !isDirty}
-                className="bg-amber-500 text-black font-bold px-6 py-3 rounded-lg hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                className="font-bold px-6"
               >
                 {isSaving ? (
-                  <Loader2 className="animate-spin" />
+                  <Loader2 className="animate-spin mr-2" />
                 ) : (
-                  <Save size={20} />
-                )}
+                  <Save className="mr-2" />
+                )}{" "}
                 Salvar Alterações
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </motion.div>
   );
 };

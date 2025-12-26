@@ -1,123 +1,65 @@
-// src/components/ServiceProvider/Agenda/AgendaModalsWrapper.tsx
-
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
-import { useToast } from "../../../hooks/useToast";
-
-// Importe os seus 3 componentes de modal
+import { useReviewStore } from "../../../store/reviewStore"; // Se necessário
 import { AppointmentDetailsModal } from "./AppointmentDetailsModal";
 import { ServiceCompletionModal } from "../ServiceCompletionModal";
 import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
-import type { Appointment } from "../../../types";
 
-/**
- * Este componente gere a lógica e a renderização de todos os modals
- * da Agenda, ouvindo a 'useAgendaModalStore'.
- */
 export const AgendaModalsWrapper = () => {
-  const { modalView, selectedAppointment, closeModal, setModalView } = useAgendaModalStore();
-  
-  const { 
-    isLoading, 
-    completeAppointment, 
-    updateStatus 
-  } = useProviderAppointmentsStore();
-  
-  // ✅ 1. CORREÇÃO: Usar showSuccess e showError em vez de showToast (que não existe)
-  const { showSuccess, showError } = useToast();
+  const { modals, closeModal, selectedAppointment } = useAgendaModalStore();
+  const { updateStatus, completeAppointment, cancelAppointment, isLoading } =
+    useProviderAppointmentsStore();
 
-  // --- Handlers de Confirmação ---
-
-  const handleConfirmCompletion = async (finalPrice: number) => {
-    if (!selectedAppointment) return;
-    try {
-      await completeAppointment(selectedAppointment.id, finalPrice);
-      showSuccess("Agendamento concluído com sucesso!");
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Erro ao concluir.";
-      showError(msg);
-    } finally {
-      closeModal();
-    }
-  };
-
-  const handleConfirmCancelOrDecline = async (reason: string) => {
-    if (!selectedAppointment) return;
-    const isDeclining = modalView === "decline";
-    try {
-      // ✅ 2. CORREÇÃO: Passar 'undefined' no 3º argumento (finalPrice)
-      // A assinatura é: (id, status, finalPrice?, rejectionReason?)
-      await updateStatus(selectedAppointment.id, "cancelled", undefined, reason);
-      
-      showSuccess(`Agendamento ${isDeclining ? "recusado" : "cancelado"} com sucesso!`);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Erro ao processar.";
-      showError(msg);
-    } finally {
-      closeModal();
-    }
-  };
-
-  const handleConfirmAccept = async () => {
-    if (!selectedAppointment) return;
-    try {
-      await updateStatus(selectedAppointment.id, "scheduled");
-      showSuccess("Agendamento confirmado!");
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Erro ao confirmar.";
-      showError(msg);
-    } finally {
-      closeModal();
-    }
-  };
-
-  // ✅ 3. Lógica de Mapeamento para o Modal de Detalhes
-  // O modal emite 'onStatusChange', nós decidimos o que fazer com base no status.
-  const handleStatusChange = (id: string, newStatus: Appointment['status']) => {
-    if (newStatus === 'scheduled') {
-      // Confirmar agendamento
-      handleConfirmAccept();
-    } else if (newStatus === 'cancelled') {
-      // Se era pendente e foi cancelado = Recusar. Se era agendado = Cancelar.
-      if (selectedAppointment?.status === 'pending') {
-        setModalView("decline");
-      } else {
-        setModalView("cancel");
-      }
-    }
-  };
+  if (!selectedAppointment) return null;
 
   return (
     <>
-      {/* Modal de Detalhes */}
+      {/* Detalhes */}
       <AppointmentDetailsModal
-        isOpen={modalView === "details"}
-        onClose={closeModal}
+        isOpen={modals.details}
+        onClose={() => closeModal("details")}
         appointment={selectedAppointment}
-        
-        // ✅ 4. CORREÇÃO: Passar as props que o componente realmente espera
-        onStatusChange={handleStatusChange}
-        onComplete={() => setModalView("complete")}
+        onStatusChange={(id, status) => {
+          if (status === "cancelled") {
+            // Abre o modal de cancelamento em vez de cancelar direto
+            // A lógica de abrir outro modal pode ser tratada no store se preferir
+            closeModal("details");
+            // Aqui você chamaria openModal('cancel', selectedAppointment)
+          } else {
+            updateStatus(id, status);
+            closeModal("details");
+          }
+        }}
+        onComplete={() => {
+          closeModal("details");
+          // Abre modal de conclusão (valor final)
+          // openModal('completion', selectedAppointment) -- precisa implementar no store
+        }}
       />
-      
-      {/* Modal de Conclusão */}
+
+      {/* Conclusão (Valor Final) */}
       <ServiceCompletionModal
-        isOpen={modalView === "complete"}
-        onClose={closeModal}
-        onConfirm={handleConfirmCompletion}
+        isOpen={modals.completion}
+        onClose={() => closeModal("completion")}
         appointment={selectedAppointment}
         isLoading={isLoading}
+        onConfirm={async (finalPrice) => {
+          await completeAppointment(selectedAppointment.id, finalPrice);
+          closeModal("completion");
+        }}
       />
-      
-      {/* Modal de Cancelar/Recusar */}
+
+      {/* Cancelamento */}
       <CancelAppointmentModal
-        isOpen={modalView === "cancel" || modalView === "decline"}
-        onClose={closeModal}
-        appointmentId={selectedAppointment?.id || ""}
-        onConfirm={handleConfirmCancelOrDecline}
+        isOpen={modals.cancel}
+        onClose={() => closeModal("cancel")}
+        appointmentId={selectedAppointment.id}
         userType="serviceProvider"
-        intent={modalView === "decline" ? "decline" : "cancel"}
         isLoading={isLoading}
+        onConfirm={async (reason) => {
+          await cancelAppointment(selectedAppointment.id, reason);
+          closeModal("cancel");
+        }}
       />
     </>
   );

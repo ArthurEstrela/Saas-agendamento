@@ -1,5 +1,9 @@
 import type { Professional } from '../../types';
-import { Edit, Trash2, Scissors } from 'lucide-react';
+import { Edit, Trash2 } from 'lucide-react';
+import { Card, CardContent, CardFooter } from '../ui/card';
+import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 
 interface ProfessionalCardProps {
   professional: Professional;
@@ -8,53 +12,70 @@ interface ProfessionalCardProps {
 }
 
 export const ProfessionalCard = ({ professional, onEdit, onDelete }: ProfessionalCardProps) => {
-  // --- A CORREÇÃO ---
-  // Garante que 'services' é sempre um array, mesmo se 'professional.services' for undefined.
   const services = professional.services || [];
+  const initials = professional.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 
   return (
-    <div className="bg-black/30 rounded-2xl flex flex-col transition-all duration-300 border border-transparent hover:border-amber-500/50 card-hover-effect">
-      <div className="p-5 flex-grow">
-        {/* Cabeçalho do Card */}
-        <div className="flex items-center gap-4 mb-4">
-          <img
-            src={professional.photoURL || `https://ui-avatars.com/api/?name=${professional.name.replace(' ', '+')}&background=1f2937&color=fcd34d`}
-            alt={professional.name}
-            className="w-16 h-16 rounded-full object-cover border-2 border-amber-500/50"
-          />
+    <Card className="flex flex-col h-full hover:border-primary/50 transition-all duration-300 group">
+      <CardContent className="p-6 flex-grow">
+        <div className="flex items-center gap-4 mb-5">
+          <Avatar className="h-16 w-16 border-2 border-gray-800 group-hover:border-primary transition-colors">
+            <AvatarImage src={professional.photoURL} alt={professional.name} />
+            <AvatarFallback className="bg-gray-800 text-lg font-bold text-primary">
+                {initials}
+            </AvatarFallback>
+          </Avatar>
+          
           <div>
-            <h3 className="text-lg font-bold text-white">{professional.name}</h3>
+            <h3 className="text-lg font-bold text-gray-100 group-hover:text-primary transition-colors">
+                {professional.name}
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+                {services.length} {services.length === 1 ? 'serviço' : 'serviços'}
+            </p>
           </div>
         </div>
 
-        {/* Lista de Serviços (Agora usando 'services' que é seguro) */}
-        <div>
-          <h4 className="text-sm font-semibold text-gray-400 mb-2">Serviços:</h4>
+        <div className="space-y-2">
+          <h4 className="text-xs uppercase tracking-wider font-semibold text-gray-500">Especialidades</h4>
           <div className="flex flex-wrap gap-2">
             {services.length > 0 ? (
-              services.slice(0, 3).map(service => ( // Mostra até 3 serviços
-                <span key={service.id} className="text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded-md flex items-center gap-1">
-                  <Scissors size={12}/> {service.name}
-                </span>
+              services.slice(0, 3).map(service => (
+                <Badge key={service.id} variant="secondary" className="bg-gray-800 text-gray-300 font-normal">
+                  {service.name}
+                </Badge>
               ))
             ) : (
-              <span className="text-xs text-gray-500">Nenhum serviço associado.</span>
+              <span className="text-sm text-gray-600 italic">Nenhum serviço atribuído</span>
             )}
-            {/* Correção aqui também */}
+            
             {services.length > 3 && (
-                <span className="text-xs bg-gray-800 text-amber-400 px-2 py-1 rounded-md">
-                  +{services.length - 3} outros
-                </span>
+                <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5">
+                  +{services.length - 3}
+                </Badge>
             )}
           </div>
         </div>
-      </div>
+      </CardContent>
       
-      {/* Rodapé com Ações */}
-      <div className="bg-black/20 p-3 border-t border-gray-700/50 flex justify-end items-center gap-2">
-        <button onClick={onDelete} className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-        <button onClick={onEdit} className="p-2 text-gray-400 hover:text-amber-400 transition-colors" title="Editar"><Edit size={18} /></button>
-      </div>
-    </div>
+      <CardFooter className="p-3 bg-black/20 border-t border-gray-800/50 flex justify-end gap-2">
+        <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onDelete} 
+            className="text-gray-500 hover:text-destructive hover:bg-destructive/10"
+        >
+            <Trash2 size={16} />
+        </Button>
+        <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onEdit}
+            className="text-gray-400 hover:text-primary hover:bg-primary/10"
+        >
+            <Edit size={16} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };

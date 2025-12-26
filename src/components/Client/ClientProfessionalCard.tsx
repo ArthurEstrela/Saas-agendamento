@@ -1,68 +1,40 @@
-import { Link } from "react-router-dom";
-import type { ClientProfile, ServiceProviderProfile } from "../../types";
-import { MapPin, Sparkles, Heart, Star } from "lucide-react";
-import { useProfileStore } from "../../store/profileStore";
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { MapPin, Heart, Star, Scissors } from "lucide-react";
+import { useProfileStore } from "../../store/profileStore";
+import type { ClientProfile, ServiceProviderProfile } from "../../types";
 
-// 1. CORREÇÃO: Estender a interface para incluir a propriedade opcional 'distance'
+// UI Components
+import { Card, CardContent, CardFooter } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Button } from "../ui/button";
+import { cn } from "../../lib/utils/cn";
+
+// Interface estendida
 interface EnrichedProviderProfile extends ServiceProviderProfile {
   distance?: number;
 }
 
 interface Props {
-  provider: EnrichedProviderProfile; // Usar a interface estendida aqui
+  provider: EnrichedProviderProfile;
 }
 
-const StarRating = ({ rating, count }: { rating: number; count: number }) => {
-  if (count === 0) {
-    return (
-      <div className="flex items-center gap-2 mt-2">
-        <Star size={16} className="text-gray-600" />
-        <span className="text-xs text-gray-500">Nenhuma avaliação</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2 mt-2">
-      <div className="flex">
-        {[...Array(5)].map((_, i) => (
-          <Star
-            key={i}
-            size={16}
-            className={
-              i < Math.round(rating)
-                ? "text-amber-400 fill-amber-400"
-                : "text-gray-600"
-            }
-          />
-        ))}
-      </div>
-      <span className="text-xs text-gray-400">
-        {rating.toFixed(1)} ({count})
-      </span>
-    </div>
-  );
-};
-
 export const ClientProfessionalCard = ({ provider }: Props) => {
+  const { userProfile, toggleFavorite } = useProfileStore();
   const { reviews } = provider;
 
-  // Calcula a média das avaliações aqui mesmo no componente
+  // Calcula a média das avaliações
   const reviewSummary = useMemo(() => {
     const totalReviews = reviews?.length || 0;
-    if (totalReviews === 0) {
-      return { average: 0, count: 0 };
-    }
+    if (totalReviews === 0) return { average: 0, count: 0 };
     const average =
-      reviews!.reduce((acc, review) => acc + review.rating, 0) / totalReviews; // Use o '!' se necessário ou verifique se reviews existe antes
+      reviews!.reduce((acc, review) => acc + review.rating, 0) / totalReviews;
     return { average, count: totalReviews };
   }, [reviews]);
 
-  const { userProfile, toggleFavorite } = useProfileStore();
+  // Verifica favorito
   const isClientProfile = userProfile?.role === "client";
-
-  // Verifica se o provedor atual está na lista de favoritos do cliente
   const isFavorited = isClientProfile
     ? (userProfile as ClientProfile).favoriteProfessionals?.includes(
         provider.id
@@ -70,61 +42,127 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
     : false;
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
-    e.preventDefault(); // Impede a navegação ao clicar no coração
-    e.stopPropagation(); // Impede que o clique se propague para o Link
+    e.preventDefault();
+    e.stopPropagation();
     toggleFavorite(provider.id);
   };
 
-  return (
-    <div className="relative bg-black/30 rounded-2xl overflow-hidden group border border-transparent transition-all duration-300 hover:shadow-2xl hover:shadow-amber-500/10 hover:border-amber-500">
-      {/* Botão de Favoritar */}
-      <button
-        onClick={handleFavoriteClick}
-        className="absolute top-4 right-4 z-10 p-2 bg-gray-900/50 rounded-full transition-all duration-300 hover:bg-red-500/20"
-        aria-label="Adicionar aos favoritos"
-      >
-        <Heart
-          size={20}
-          className={`transition-all ${
-            isFavorited ? "text-red-500 fill-current" : "text-white"
-          }`}
-        />
-      </button>
+  // Formatação de categoria (pega a primeira ou usa padrão)
+  const category = provider.categories?.[0] || provider.areaOfWork || "Geral";
+  const initials = provider.businessName.substring(0, 2).toUpperCase();
 
-      <Link to={`/agendar/${provider.publicProfileSlug}`} className="block">
-        {/* Imagem/Logo */}
-        <div className="h-40 bg-gray-800 flex items-center justify-center">
-          {provider.logoUrl ? (
+  return (
+    <Link
+      to={`/agendar/${provider.publicProfileSlug || provider.id}`}
+      className="block h-full group"
+    >
+      <Card className="h-full overflow-hidden border-gray-800 bg-gray-900/40 backdrop-blur-md transition-all duration-300 hover:border-primary/50 hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] relative">
+        {/* --- Botão Favoritar (Absoluto) --- */}
+        <button
+          onClick={handleFavoriteClick}
+          className="absolute top-3 right-3 z-20 p-2.5 bg-black/40 backdrop-blur-md rounded-full transition-all duration-300 hover:bg-black/70 group/heart border border-white/10"
+          aria-label="Favoritar"
+        >
+          <Heart
+            size={18}
+            className={cn(
+              "transition-all duration-300",
+              isFavorited
+                ? "text-red-500 fill-red-500 scale-110"
+                : "text-white group-hover/heart:text-red-400"
+            )}
+          />
+        </button>
+
+        {/* --- Área do Banner (Hero) --- */}
+        <div className="relative h-40 overflow-hidden">
+          {provider.bannerUrl ? (
             <img
-              src={provider.logoUrl}
-              alt={provider.businessName}
-              className="h-full w-full object-cover"
+              src={provider.bannerUrl}
+              alt="Banner"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             />
           ) : (
-            <Sparkles className="text-amber-500/50" size={48} />
+            <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+              <Scissors className="text-gray-700 w-12 h-12 opacity-30" />
+            </div>
+          )}
+
+          {/* Overlay Gradiente */}
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-90" />
+
+          {/* Badge de Distância (se existir) */}
+          {provider.distance !== undefined && (
+            <Badge
+              variant="secondary"
+              className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm border-none text-xs font-medium text-white gap-1"
+            >
+              <MapPin size={10} className="text-primary" />{" "}
+              {provider.distance.toFixed(1)} km
+            </Badge>
           )}
         </div>
 
-        {/* Informações */}
-        <div className="p-5">
-          <h3 className="text-xl font-bold text-white truncate group-hover:text-amber-400 transition-colors">
-            {provider.businessName}
-          </h3>
-          <p className="text-gray-400 mt-1 text-sm">{provider.areaOfWork}</p>
-          <StarRating
-            rating={reviewSummary.average}
-            count={reviewSummary.count}
-          />
-          <div className="flex items-center text-gray-500 mt-4 text-xs">
-            <MapPin size={14} className="mr-2 flex-shrink-0" />
-            <span>
-              {`${provider.businessAddress.city}, ${provider.businessAddress.state}`}
-              {/* 2. Agora o TS aceita provider.distance porque estendemos a interface */}
-              {provider.distance !== undefined && ` - ${provider.distance.toFixed(1)} km`}
-            </span>
+        {/* --- Conteúdo --- */}
+        <CardContent className="p-5 pt-0 relative">
+          {/* Avatar Sobreposto */}
+          <div className="-mt-10 mb-3 flex justify-between items-end">
+            <Avatar className="h-20 w-20 border-4 border-gray-900 shadow-xl group-hover:border-gray-800 transition-colors">
+              <AvatarImage src={provider.logoUrl} alt={provider.businessName} />
+              <AvatarFallback className="bg-gray-800 text-lg font-bold text-primary border border-gray-700">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+
+            {/* Badge de Nota */}
+            <div className="mb-2 flex items-center gap-1 bg-gray-800/80 px-2 py-1 rounded-lg border border-gray-700 shadow-sm">
+              <Star size={14} className="text-amber-400 fill-amber-400" />
+              <span className="text-sm font-bold text-white">
+                {reviewSummary.average > 0
+                  ? reviewSummary.average.toFixed(1)
+                  : "Novo"}
+              </span>
+              {reviewSummary.count > 0 && (
+                <span className="text-xs text-gray-500">
+                  ({reviewSummary.count})
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      </Link>
-    </div>
+
+          <div className="space-y-2">
+            <div>
+              <Badge
+                variant="outline"
+                className="mb-2 text-[10px] h-5 border-gray-700 text-gray-400 uppercase tracking-wider"
+              >
+                {category}
+              </Badge>
+              <h3 className="text-xl font-bold text-white truncate group-hover:text-primary transition-colors">
+                {provider.businessName}
+              </h3>
+            </div>
+
+            <div className="flex items-center text-sm text-gray-400 gap-1.5">
+              <MapPin size={14} className="text-gray-500 shrink-0" />
+              <span className="truncate">
+                {provider.businessAddress?.city
+                  ? `${provider.businessAddress.city}, ${provider.businessAddress.state}`
+                  : "Localização não informada"}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+
+        <CardFooter className="p-5 pt-0">
+          <Button
+            variant="ghost"
+            className="w-full border border-gray-700 bg-gray-800/30 text-gray-300 group-hover:bg-primary group-hover:text-black group-hover:border-primary font-bold transition-all"
+          >
+            Ver Agenda
+          </Button>
+        </CardFooter>
+      </Card>
+    </Link>
   );
 };

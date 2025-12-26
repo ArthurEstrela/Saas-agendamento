@@ -201,3 +201,14 @@ export interface ProfessionalProfile extends BaseUser {
   avatarUrl?: string;
   bio?: string;
 }
+
+export type ProviderDashboardView =
+  | "agenda"
+  | "profile"
+  | "services"
+  | "professionals"
+  | "availability"
+  | "financial"
+  | "reviews"
+  | "notifications"
+  | "subscription";

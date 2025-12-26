@@ -1,28 +1,20 @@
-// src/components/Common/CancelAppointmentModal.tsx
-
-import { useState, useEffect } from "react"; // ****** useEffect ADICIONADO ******
+import { useState, useEffect } from "react";
 import { AlertTriangle, Send, Loader2 } from "lucide-react";
-// ****** Importações de UI (opcional, mas recomendado) ******
-import { Button } from "../ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "../ui/dialog";
 
-// ****** INTERFACE ATUALIZADA ******
+// UI Components
+import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../ui/dialog";
+import { Textarea } from "../ui/textarea";
+
 interface CancelAppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (reason: string) => void;
   isLoading: boolean;
-  userType: "client" | "serviceProvider"; // 'provider' -> 'serviceProvider' para consistência
-  intent?: "cancel" | "decline"; // <-- NOVA PROP
-  appointmentId: string; // <-- Adicionado para garantir reset do estado
+  userType: "client" | "serviceProvider";
+  intent?: "cancel" | "decline";
+  appointmentId: string;
 }
-// **********************************
 
 export const CancelAppointmentModal = ({
   isOpen,
@@ -30,87 +22,90 @@ export const CancelAppointmentModal = ({
   onConfirm,
   isLoading,
   userType,
-  intent = "cancel", // <-- Valor padrão
+  intent = "cancel",
   appointmentId,
 }: CancelAppointmentModalProps) => {
   const [reason, setReason] = useState("");
-  const [error, setError] = useState(""); // ****** LÓGICA DE TEXTO DINÂMICO ******
+  const [error, setError] = useState("");
 
   const isProvider = userType === "serviceProvider";
   const isDecline = intent === "decline";
 
   const title = isDecline ? "Confirmar Recusa" : "Confirmar Cancelamento";
-  const confirmButtonText = isDecline ? "Recusar" : "Cancelar";
+  const confirmButtonText = isDecline ? "Recusar Agendamento" : "Confirmar Cancelamento";
 
   const description = isProvider
-    ? `Por favor, informe ao cliente o motivo da ${
-        isDecline ? "recusa" : "cancelamento"
-      } (obrigatório).`
-    : "Você tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.";
+    ? `Informe ao cliente o motivo da ${isDecline ? "recusa" : "cancelamento"} (obrigatório).`
+    : "Você tem certeza que deseja cancelar? Essa ação não pode ser desfeita.";
 
   const placeholder = isProvider
-    ? `Motivo da ${isDecline ? "recusa" : "cancelamento"} (obrigatório)`
-    : "Motivo do cancelamento (opcional)"; // **************************************** // ****** RESETAR O ESTADO ****** // Reseta o formulário sempre que o modal for aberto para um novo agendamento
+    ? `Descreva o motivo... (Mínimo 10 caracteres)`
+    : "Gostaria de nos dizer o motivo? (Opcional)";
+
   useEffect(() => {
     if (isOpen) {
       setReason("");
       setError("");
     }
-  }, [isOpen, appointmentId]); // ******************************
+  }, [isOpen, appointmentId]);
+
   const handleConfirm = () => {
-    // A validação de motivo é mais forte para o provider
     if (isProvider && reason.trim().length < 10) {
-      setError("Por favor, forneça um motivo de pelo menos 10 caracteres.");
+      setError("Por favor, detalhe um pouco mais o motivo (mín. 10 caracteres).");
       return;
     }
     setError("");
     onConfirm(reason);
-  }; // Usando o componente Dialog de shadcn para consistência com os outros modais
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-md text-white shadow-xl p-0">
-        <DialogHeader className="p-4 border-b border-gray-800">
-          <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-            <AlertTriangle className="text-red-400" />
-            {title} {/* <-- Texto dinâmico */}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-gray-900 border-gray-800">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-500">
+            <AlertTriangle size={20} />
+            {title}
           </DialogTitle>
+          <DialogDescription className="text-gray-400">
+            {description}
+          </DialogDescription>
         </DialogHeader>
-        <div className="p-6">
-          <p className="text-gray-400 mb-4 text-sm">
-            {description} {/* <-- Texto dinâmico */}
-          </p>
-          <textarea
+
+        <div className="py-4 space-y-4">
+          <Textarea
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={placeholder} /* <-- Texto dinâmico */
-            className="w-full h-24 p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors resize-none"
+            onChange={(e) => {
+                setReason(e.target.value);
+                if(error) setError("");
+            }}
+            placeholder={placeholder}
+            className="min-h-[120px] bg-gray-800 border-gray-700 focus-visible:ring-red-500 resize-none"
           />
           
-          {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+          {error && (
+            <p className="text-xs text-red-400 font-medium bg-red-500/10 p-2 rounded border border-red-500/20 animate-fade-in-down">
+                {error}
+            </p>
+          )}
         </div>
         
-        <DialogFooter className="p-4 bg-gray-800/50 flex flex-row sm:justify-end gap-3">
-          
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Voltar 
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+            Voltar
           </Button>
           
           <Button
             variant="destructive"
             onClick={handleConfirm}
             disabled={isLoading}
-            className="flex items-center justify-center gap-2"
+            className="bg-red-600 hover:bg-red-700"
           >
-            
             {isLoading ? (
-              <Loader2 className="animate-spin" size={18} />
+              <Loader2 className="animate-spin mr-2" size={18} />
             ) : (
-              <>
-                 <Send size={16} />
-                {confirmButtonText} {/* <-- Texto dinâmico */}
-              </>
+              <Send size={16} className="mr-2" />
             )}
+            {confirmButtonText}
           </Button>
         </DialogFooter>
       </DialogContent>

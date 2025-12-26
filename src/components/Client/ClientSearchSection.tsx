@@ -1,14 +1,23 @@
-// src/components/Client/ClientSearchSection.tsx
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchStore } from "../../store/searchStore";
 import { ClientProfessionalCard } from "./ClientProfessionalCard";
 import { Loader2, Search, Frown } from "lucide-react";
 import { useProfileStore } from "../../store/profileStore";
-import { ProviderFilter } from './ProviderFilter';
+import { ProviderFilter } from "./ProviderFilter";
 import type { PaymentMethod, ServiceProviderProfile } from "../../types";
 
-// Função de distância (mantida)
-const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+// UI
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Card, CardContent } from "../ui/card";
+
+// Função de distância
+const getDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) => {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -22,7 +31,6 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c;
 };
 
-// Interface para os filtros
 interface AppliedFilters {
   distance: number;
   areaOfWork: string;
@@ -30,7 +38,6 @@ interface AppliedFilters {
   paymentMethods: PaymentMethod[];
 }
 
-// Interface estendida para incluir propriedades calculadas
 interface EnrichedProvider extends ServiceProviderProfile {
   distance?: number;
   averageRating?: number;
@@ -38,154 +45,156 @@ interface EnrichedProvider extends ServiceProviderProfile {
 
 export const ClientSearchSection = () => {
   const { userProfile } = useProfileStore();
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const { results: rawResults, isLoading, search } = useSearchStore();
-
   const [searchTerm, setSearchTerm] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
-      distance: 50,
-      areaOfWork: 'all',
-      minRating: 0,
-      paymentMethods: [],
+    distance: 50,
+    areaOfWork: "all",
+    minRating: 0,
+    paymentMethods: [],
   });
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      (position) =>
         setUserLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
-      },
-      (error) => {
-        console.error("Erro ao obter localização", error);
-      }
+        }),
+      (error) => console.error("Erro ao obter localização", error)
     );
-    search('');
+    search("");
   }, [search]);
 
-  const availableAreas = useMemo(() => {
-      const areas = new Set(rawResults.map(p => p.areaOfWork).filter(Boolean));
-      return Array.from(areas) as string[];
-  }, [rawResults]);
+  const availableAreas = useMemo(
+    () =>
+      Array.from(
+        new Set(rawResults.map((p) => p.areaOfWork).filter(Boolean))
+      ) as string[],
+    [rawResults]
+  );
 
   const filteredAndSortedProviders = useMemo(() => {
-    // Tipamos explicitamente como EnrichedProvider[] para aceitar distance e averageRating
-    let filtered: EnrichedProvider[] = rawResults.map(p => ({...p})); 
+    let filtered: EnrichedProvider[] = rawResults.map((p) => ({ ...p }));
 
-    // Filtro de Área
-    if (appliedFilters.areaOfWork !== 'all') {
-      filtered = filtered.filter(p => p.areaOfWork === appliedFilters.areaOfWork);
-    }
-
-    // 1. CORREÇÃO: Verificação segura de PaymentMethods
+    if (appliedFilters.areaOfWork !== "all")
+      filtered = filtered.filter(
+        (p) => p.areaOfWork === appliedFilters.areaOfWork
+      );
     if (appliedFilters.paymentMethods.length > 0) {
-      filtered = filtered.filter(p => {
-        // Só retorna true se p.paymentMethods existir E contiver todos os filtros selecionados
-        return p.paymentMethods && appliedFilters.paymentMethods.every(pm => 
-          p.paymentMethods!.includes(pm) // O '!' aqui diz ao TS: "já verifiquei que existe antes"
-        );
-      });
+      filtered = filtered.filter(
+        (p) =>
+          p.paymentMethods &&
+          appliedFilters.paymentMethods.every((pm) =>
+            p.paymentMethods!.includes(pm)
+          )
+      );
     }
 
-    // Cálculo de Média
-    filtered = filtered.map(provider => {
-        const totalReviews = provider.reviews?.length || 0;
-        const average = totalReviews > 0
-            ? provider.reviews!.reduce((acc, review) => acc + review.rating, 0) / totalReviews
-            : 0;
-        return { ...provider, averageRating: average };
+    filtered = filtered.map((provider) => {
+      const totalReviews = provider.reviews?.length || 0;
+      const average =
+        totalReviews > 0
+          ? provider.reviews!.reduce((acc, review) => acc + review.rating, 0) /
+            totalReviews
+          : 0;
+      return { ...provider, averageRating: average };
     });
 
-    // Filtro de Avaliação Mínima
-    if (appliedFilters.minRating > 0) {
-        filtered = filtered.filter(p => (p.averageRating || 0) >= appliedFilters.minRating);
-    }
+    if (appliedFilters.minRating > 0)
+      filtered = filtered.filter(
+        (p) => (p.averageRating || 0) >= appliedFilters.minRating
+      );
 
-    // Cálculo de Distância
     if (userLocation) {
-        filtered = filtered
-            .map(provider => ({
-                ...provider,
-                distance: (provider.businessAddress && provider.businessAddress.lat && provider.businessAddress.lng) 
-                ? getDistance(
-                    userLocation.lat,
-                    userLocation.lng,
-                    provider.businessAddress.lat,
-                    provider.businessAddress.lng
-                ) : Infinity,
-            }))
-            .filter(provider => (provider.distance || Infinity) <= appliedFilters.distance);
+      filtered = filtered
+        .map((provider) => ({
+          ...provider,
+          distance:
+            provider.businessAddress?.lat && provider.businessAddress?.lng
+              ? getDistance(
+                  userLocation.lat,
+                  userLocation.lng,
+                  provider.businessAddress.lat,
+                  provider.businessAddress.lng
+                )
+              : Infinity,
+        }))
+        .filter(
+          (provider) =>
+            (provider.distance || Infinity) <= appliedFilters.distance
+        );
     } else {
-         filtered = filtered.map(provider => ({ ...provider, distance: Infinity }));
+      filtered = filtered.map((provider) => ({
+        ...provider,
+        distance: Infinity,
+      }));
     }
 
-    // Ordenação
-    return filtered.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
-
+    return filtered.sort(
+      (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
+    );
   }, [rawResults, userLocation, appliedFilters]);
-
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     search(searchTerm);
   };
+  const handleApplyFilters = useCallback(
+    (filters: AppliedFilters) => setAppliedFilters(filters),
+    []
+  );
 
-  // 2. CORREÇÃO: Substituído 'any' por 'AppliedFilters'
-  const handleApplyFilters = useCallback((filters: AppliedFilters) => {
-    setAppliedFilters(filters);
-  }, []);
-
-  const WelcomeMessage = () => {
-    const firstName = userProfile?.name.split(" ")[0];
-    return (
-      <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-        Bem-vindo, <span className="text-amber-400">{firstName || 'Cliente'}</span>!
-      </h1>
-    );
-  };
+  const firstName = userProfile?.name.split(" ")[0] || "Cliente";
 
   return (
-    <div>
-      <div className="mb-10">
-        <WelcomeMessage />
-        <p className="text-md sm:text-lg text-gray-400">
-          Encontre os melhores profissionais para o seu estilo.
-        </p>
+    <div className="space-y-8">
+      {/* Header e Busca */}
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+            Bem-vindo, <span className="text-primary">{firstName}</span>!
+          </h1>
+          <p className="text-gray-400">
+            Encontre os melhores profissionais para o seu estilo.
+          </p>
+        </div>
 
-        <div className="mt-8 max-w-3xl flex items-center gap-4">
-          <form onSubmit={handleSearch} className="flex-grow">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nome, serviço (ex: barbearia)..."
-                className="w-full bg-black/30 text-white placeholder-gray-500 rounded-lg py-3 pl-12 pr-16 border-2 border-transparent focus:border-amber-500 focus:ring-0 transition-all duration-300 text-base"
-              />
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
-              <button
-                type="submit"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors"
-              >
-                <Search className="text-gray-900" size={20} />
-              </button>
-            </div>
+        <div className="flex flex-col sm:flex-row gap-3 max-w-4xl">
+          <form onSubmit={handleSearch} className="flex-grow relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 h-5 w-5" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nome, barbearia, serviço..."
+              className="pl-10 h-12 bg-gray-900/50 border-gray-700 focus-visible:ring-primary text-base"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-black hover:bg-primary/90 h-8"
+            >
+              Buscar
+            </Button>
           </form>
-          
-          <ProviderFilter 
-            onApplyFilters={handleApplyFilters} 
-            availableAreas={availableAreas} 
+
+          <ProviderFilter
+            onApplyFilters={handleApplyFilters}
+            availableAreas={availableAreas}
             initialFilters={appliedFilters}
           />
         </div>
       </div>
 
+      {/* Resultados */}
       <div>
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="animate-spin text-amber-500" size={48} />
+            <Loader2 className="animate-spin text-primary" size={48} />
           </div>
         ) : filteredAndSortedProviders.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -194,13 +203,17 @@ export const ClientSearchSection = () => {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl">
-            <Frown size={48} className="mb-4" />
-            <h3 className="text-xl font-semibold text-gray-300">
-              Nenhum resultado encontrado
-            </h3>
-            <p>Tente ajustar os termos da busca ou os filtros.</p>
-          </div>
+          <Card className="bg-gray-900/40 border-dashed border-gray-800">
+            <CardContent className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <Frown size={48} className="mb-4 opacity-50" />
+              <h3 className="text-xl font-semibold text-gray-300">
+                Nenhum resultado encontrado
+              </h3>
+              <p className="text-sm">
+                Tente ajustar os termos da busca ou os filtros.
+              </p>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

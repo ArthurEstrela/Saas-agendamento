@@ -1,478 +1,348 @@
-// src/components/ServiceProvider/AvailabilityManagement.tsx
-
 import { useState, useEffect } from "react";
 import { useProfileStore } from "../../store/profileStore";
-import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
-
-import type {
-  Professional,
-  DailyAvailability,
-  ServiceProviderProfile,
-  ProfessionalProfile,
-  UserProfile,
-} from "../../types";
+import { useAvailabilityStore } from "../../store/availabilityStore";
 import {
-  Clock,
+  Loader2,
   Plus,
   Trash2,
   Save,
-  Loader2,
-  AlertTriangle,
-  Image as ImageIcon,
+  Clock,
+  CalendarCheck,
+  User,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { useToast } from "../../hooks/useToast";
+import type { DailyAvailability, TimeSlot } from "../../types";
+
+// UI Components
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Card, CardHeader, CardContent, CardFooter } from "../ui/card";
+import { Switch } from "../ui/switch";
+import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { cn } from "../../lib/utils/cn";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Constantes
-const weekDays: DailyAvailability["dayOfWeek"][] = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
+const DAYS_OF_WEEK: { key: DailyAvailability["dayOfWeek"]; label: string }[] = [
+  { key: "Monday", label: "Segunda-feira" },
+  { key: "Tuesday", label: "Terça-feira" },
+  { key: "Wednesday", label: "Quarta-feira" },
+  { key: "Thursday", label: "Quinta-feira" },
+  { key: "Friday", label: "Sexta-feira" },
+  { key: "Saturday", label: "Sábado" },
+  { key: "Sunday", label: "Domingo" },
 ];
-const weekDaysPt: { [key in DailyAvailability["dayOfWeek"]]: string } = {
-  Sunday: "Domingo",
-  Monday: "Segunda-feira",
-  Tuesday: "Terça-feira",
-  Wednesday: "Quarta-feira",
-  Thursday: "Quinta-feira",
-  Friday: "Sexta-feira",
-  Saturday: "Sábado",
-};
 
-// --- Helper para preencher a semana ---
-const getFullWeekAvailability = (
-  availability: DailyAvailability[] | undefined
-): DailyAvailability[] => {
-  return weekDays.map((dayName) => {
-    return (
-      availability?.find((a) => a.dayOfWeek === dayName) || {
-        dayOfWeek: dayName,
-        isAvailable: false,
-        slots: [],
-      }
-    );
-  });
-};
+export const AvailabilityManagement = () => {
+  const { userProfile, professionals } = useProfileStore();
+  const { availability, isLoading, fetchAvailability, updateAvailability } =
+    useAvailabilityStore();
+  const { showSuccess, showError } = useToast();
 
-interface AvailabilityManagementProps {
-  userProfile: UserProfile | null;
-}
-
-export const AvailabilityManagement = ({
-  userProfile,
-}: AvailabilityManagementProps) => {
-  // --- 1. LÓGICA DE ROLE E ESTADO ---
-  const { updateProfessional } = useProfessionalsManagementStore();
-  const allProfessionals = useProfileStore((state) => state.professionals);
-
-  // Estado local
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [availability, setAvailability] = useState<DailyAvailability[]>([]);
-  const [currentProfessional, setCurrentProfessional] =
-    useState<Professional | null>(null);
+  const [localAvailability, setLocalAvailability] = useState<
+    DailyAvailability[]
+  >([]);
+  const [hasChanges, setHasChanges] = useState(false);
   const [selectedProfId, setSelectedProfId] = useState<string>("");
 
-  // Calculamos isOwner com fallback para false se userProfile for null
-  // para evitar problemas em renderizações iniciais.
   const isOwner = userProfile?.role === "serviceProvider";
 
-  // --- 3. EFEITO DE CARREGAMENTO DE DADOS (MOVIDO PARA O TOPO) ---
+  // Identifica o profissional selecionado com segurança
+  const currentProfessional = isOwner
+    ? selectedProfId === userProfile?.id
+      ? userProfile
+      : professionals?.find((p) => p.id === selectedProfId)
+    : userProfile;
+
+  // Inicialização: Se for dono e não tiver ID, seleciona ele mesmo
   useEffect(() => {
-    // Se não tiver perfil, não faz sentido rodar a lógica
-    if (!userProfile) return;
-
-    setIsLoading(true);
-
-    if (isOwner) {
-      // --- Lógica do Dono ---
-      if (!allProfessionals || allProfessionals.length === 0) {
-        setIsLoading(false);
-        setCurrentProfessional(null); 
-        setAvailability([]); 
-        return;
-      }
-
-      const profId = selectedProfId || allProfessionals[0].id;
-      if (selectedProfId !== profId) {
-        setSelectedProfId(profId);
-      }
-
-      const selected = allProfessionals.find((p) => p.id === profId);
-
-      if (selected) {
-        setCurrentProfessional(selected);
-        setAvailability(getFullWeekAvailability(selected.availability));
-      } else {
-        // Fallback
-        setCurrentProfessional(allProfessionals[0]);
-        setAvailability(
-          getFullWeekAvailability(allProfessionals[0].availability)
-        );
-        setSelectedProfId(allProfessionals[0].id);
-      }
-      setIsLoading(false);
-    } else {
-      // --- Lógica do Profissional ---
-      if (!allProfessionals) {
-        return;
-      }
-
-      const { professionalId } = userProfile as ProfessionalProfile;
-
-      const myProfessionalData = allProfessionals.find(
-        (p) => p.id === professionalId
-      );
-
-      if (myProfessionalData) {
-        setCurrentProfessional(myProfessionalData);
-        setAvailability(
-          getFullWeekAvailability(myProfessionalData.availability)
-        );
-      } else {
-        console.error(
-          "Erro de dados: Não foi possível encontrar os dados do profissional logado."
-        );
-        setCurrentProfessional(null);
-        setAvailability([]);
-      }
-      setIsLoading(false);
+    if (userProfile && !selectedProfId) {
+      setSelectedProfId(userProfile.id);
+      fetchAvailability(userProfile.id);
     }
-  }, [isOwner, userProfile, allProfessionals, selectedProfId]);
+  }, [userProfile, selectedProfId, fetchAvailability]);
 
-  // --- 4. HANDLERS ---
+  // Sincroniza estado local com a store
+  useEffect(() => {
+    if (availability.length > 0) {
+      setLocalAvailability(availability);
+    } else {
+      const initial = DAYS_OF_WEEK.map((d) => ({
+        dayOfWeek: d.key,
+        isAvailable: false,
+        slots: [{ start: "09:00", end: "18:00" }],
+      }));
+      setLocalAvailability(initial);
+    }
+  }, [availability]);
 
-  const handleIsAvailableChange = (
-    day: DailyAvailability["dayOfWeek"],
-    isAvailable: boolean
-  ) => {
-    setAvailability((prev) =>
-      prev.map((d) =>
-        d.dayOfWeek === day
-          ? {
-              ...d,
-              isAvailable,
-              slots:
-                isAvailable && d.slots.length === 0
-                  ? [{ start: "09:00", end: "18:00" }]
-                  : d.slots,
-            }
-          : d
+  const handleProfessionalChange = (profId: string) => {
+    setSelectedProfId(profId);
+    setHasChanges(false);
+    fetchAvailability(profId);
+  };
+
+  const handleDayToggle = (dayKey: string, checked: boolean) => {
+    setLocalAvailability((prev) =>
+      prev.map((day) =>
+        day.dayOfWeek === dayKey ? { ...day, isAvailable: checked } : day
       )
     );
+    setHasChanges(true);
   };
 
   const handleSlotChange = (
-    day: DailyAvailability["dayOfWeek"],
-    slotIndex: number,
-    field: "start" | "end",
+    dayKey: string,
+    index: number,
+    field: keyof TimeSlot,
     value: string
   ) => {
-    setAvailability((prev) =>
-      prev.map((d) => {
-        if (d.dayOfWeek === day) {
-          const newSlots = [...d.slots];
-          newSlots[slotIndex] = { ...newSlots[slotIndex], [field]: value };
-          return { ...d, slots: newSlots };
-        }
-        return d;
+    setLocalAvailability((prev) =>
+      prev.map((day) => {
+        if (day.dayOfWeek !== dayKey) return day;
+        const newSlots = [...day.slots];
+        newSlots[index] = { ...newSlots[index], [field]: value };
+        return { ...day, slots: newSlots };
       })
     );
+    setHasChanges(true);
   };
 
-  const handleAddSlot = (day: DailyAvailability["dayOfWeek"]) => {
-    setAvailability((prev) =>
-      prev.map((d) =>
-        d.dayOfWeek === day
-          ? { ...d, slots: [...d.slots, { start: "19:00", end: "21:00" }] }
-          : d
-      )
+  const addSlot = (dayKey: string) => {
+    setLocalAvailability((prev) =>
+      prev.map((day) => {
+        if (day.dayOfWeek !== dayKey) return day;
+        return {
+          ...day,
+          slots: [...day.slots, { start: "08:00", end: "12:00" }],
+        };
+      })
     );
+    setHasChanges(true);
   };
 
-  const handleRemoveSlot = (
-    day: DailyAvailability["dayOfWeek"],
-    slotIndex: number
-  ) => {
-    setAvailability((prev) =>
-      prev.map((d) =>
-        d.dayOfWeek === day
-          ? { ...d, slots: d.slots.filter((_, i) => i !== slotIndex) }
-          : d
-      )
+  const removeSlot = (dayKey: string, index: number) => {
+    setLocalAvailability((prev) =>
+      prev.map((day) => {
+        if (day.dayOfWeek !== dayKey) return day;
+        return { ...day, slots: day.slots.filter((_, i) => i !== index) };
+      })
     );
+    setHasChanges(true);
   };
 
-  // --- 5. LÓGICA DE SALVAR ---
   const handleSave = async () => {
-    if (!currentProfessional || !userProfile) return;
-    setIsSaving(true);
-
-    const providerId = isOwner
-      ? (userProfile as ServiceProviderProfile).id
-      : (userProfile as ProfessionalProfile).serviceProviderId;
-
-    const professionalIdToSave = isOwner
-      ? selectedProfId
-      : (userProfile as ProfessionalProfile).professionalId;
-
-    const updatedProfessional = {
-      ...currentProfessional,
-      availability: availability,
-    };
-
-    // ✅ CORREÇÃO: Comentário para ignorar erro de variável 'id' não usada
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id, photoURL, ...payloadWithoutId } = updatedProfessional;
-    
-    const payload = {
-      ...payloadWithoutId,
-      photoURL: photoURL,
-      photoFile: null,
-    };
-
+    if (!selectedProfId) return;
     try {
-      await updateProfessional(providerId, professionalIdToSave, payload);
+      await updateAvailability(selectedProfId, localAvailability);
+      showSuccess("Horários atualizados com sucesso!");
+      setHasChanges(false);
     } catch (error) {
-      console.error("Falha ao salvar a disponibilidade:", error);
+      showError("Erro ao salvar horários.");
     }
-
-    setIsSaving(false);
   };
 
-  // --- 2. VERIFICAÇÃO DE DADOS (Retornos antecipados MOVIDOS para baixo) ---
-  // Agora que os hooks foram declarados, podemos dar return com segurança.
-  
-  if (!userProfile) {
+  // Se não houver perfil carregado, mostra loader
+  if (!userProfile)
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="animate-spin text-amber-500" size={48} />
+      <div className="flex justify-center p-10">
+        <Loader2 className="animate-spin text-primary" />
       </div>
     );
-  }
 
-  // --- 6. RENDERIZAÇÃO (ESTADOS DE LOADING E VAZIO) ---
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="animate-spin text-amber-500" size={48} />
-      </div>
-    );
-  }
-
-  if (isOwner && (!allProfessionals || allProfessionals.length === 0)) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-black/20 rounded-2xl p-8">
-        <AlertTriangle size={48} className="mb-4 text-amber-500" />
-        <h3 className="text-xl font-semibold text-gray-300">
-          Nenhum profissional cadastrado
-        </h3>
-        <p className="text-center mt-2">
-          Cadastre um profissional na seção "Profissionais" para gerenciar a
-          disponibilidade.
-        </p>
-      </div>
-    );
-  }
-
-  if (!currentProfessional) {
-    return (
-      <div className="flex justify-center items-center h-64 text-gray-500">
-        <AlertTriangle size={32} className="mr-3" />
-        Não foi possível carregar os dados do profissional.
-      </div>
-    );
-  }
-
-  // --- 7. RENDERIZAÇÃO (COMPONENTE PRINCIPAL) ---
+  // --- CORREÇÃO DO ERRO ---
+  // Acessamos as propriedades com optional chaining (?.) para evitar o crash se currentProfessional for undefined/null
+  const initials =
+    currentProfessional?.name?.substring(0, 2).toUpperCase() || "US";
+  const photoUrl =
+    (currentProfessional as any)?.photoURL ||
+    (currentProfessional as any)?.profilePictureUrl ||
+    "";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
-    >
-      <h1 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
-        <Clock /> Gerenciar Disponibilidade
-      </h1>
+    <div className="space-y-8 pb-20">
+      {/* --- CABEÇALHO DO PROFISSIONAL --- */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
+        <div className="flex items-center gap-5 w-full md:w-auto">
+          <Avatar className="h-20 w-20 border-2 border-primary shadow-[0_0_15px_rgba(218,165,32,0.3)]">
+            <AvatarImage src={photoUrl} className="object-cover" />
+            <AvatarFallback className="bg-gray-800 text-xl font-bold text-gray-400">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
 
-      {/* --- SELETOR (RENDERIZAÇÃO CONDICIONAL) --- */}
-      <div className="bg-black/30 p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row items-start md:items-center gap-6">
-        <div className="flex-shrink-0 w-20 h-20 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden border-2 border-amber-500/50">
-          {currentProfessional?.photoURL ? (
-            <img
-              src={currentProfessional.photoURL}
-              alt={currentProfessional.name}
-              className="w-full h-full object-cover"
-            />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-primary mb-1">
+              Editando horários de:
+            </p>
+
+            {isOwner && professionals && professionals.length > 0 ? (
+              <div className="w-full md:w-64">
+                <Select
+                  value={selectedProfId}
+                  onValueChange={handleProfessionalChange}
+                >
+                  <SelectTrigger className="bg-gray-950 border-gray-700 h-10 text-lg font-bold text-white">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                    <SelectItem value={userProfile.id} className="font-bold">
+                      {userProfile.name} (Eu)
+                    </SelectItem>
+                    {professionals.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <h2 className="text-2xl font-bold text-white">
+                {currentProfessional?.name || "Carregando..."}
+              </h2>
+            )}
+          </div>
+        </div>
+
+        <Button
+          onClick={handleSave}
+          disabled={!hasChanges || isLoading}
+          className={cn(
+            "gap-2 font-bold px-8 h-12 text-base transition-all shadow-lg",
+            hasChanges &&
+              "shadow-primary/20 animate-pulse bg-primary text-black hover:bg-primary/90"
+          )}
+        >
+          {isLoading ? (
+            <Loader2 className="animate-spin" size={20} />
           ) : (
-            <ImageIcon className="text-gray-400" size={32} />
+            <Save size={20} />
           )}
-        </div>
-
-        <div className="flex-grow">
-          <p className="text-sm font-medium text-gray-300 mb-1">
-            {isOwner ? "Profissional Selecionado" : "Meu Perfil"}
-          </p>
-          <h2 className="text-2xl font-bold text-white mb-3">
-            {currentProfessional?.name || "Selecione..."}
-          </h2>
-
-          {isOwner && allProfessionals && (
-            <select
-              id="professional-select"
-              onChange={(e) => setSelectedProfId(e.target.value)}
-              value={selectedProfId}
-              className="w-full max-w-xs bg-gray-800 p-3 rounded-lg border border-gray-700 text-white focus:ring-2 focus:ring-amber-500 appearance-none transition-colors"
-            >
-              {allProfessionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+          Salvar Alterações
+        </Button>
       </div>
 
-      {/* --- GRID DOS DIAS DA SEMANA --- */}
-      <>
-        <h2 className="text-2xl font-bold text-white pt-4">
-          Horários de Trabalho
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {availability.map((day) => (
-            <motion.div
-              key={day.dayOfWeek}
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className={cn(
-                "bg-black/30 p-5 rounded-2xl border border-gray-800 transition-all duration-300",
-                {
-                  "border-amber-500/50 shadow-lg shadow-amber-900/10":
-                    day.isAvailable,
-                  "hover:border-gray-600": !day.isAvailable,
-                }
-              )}
-            >
-              {/* Cabeçalho do Dia (Nome e Toggle) */}
-              <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-700/50">
-                <h3 className="text-lg font-semibold text-white">
-                  {weekDaysPt[day.dayOfWeek]}
-                </h3>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={day.isAvailable}
-                    onChange={(e) =>
-                      handleIsAvailableChange(day.dayOfWeek, e.target.checked)
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                </label>
-              </div>
+      {/* --- GRID DE HORÁRIOS --- */}
+      {isLoading && localAvailability.length === 0 ? (
+        <div className="flex justify-center p-20">
+          <Loader2 className="animate-spin text-primary" size={40} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {DAYS_OF_WEEK.map(({ key, label }) => {
+            const dayData = localAvailability.find(
+              (d) => d.dayOfWeek === key
+            ) || { isAvailable: false, slots: [] };
 
-              {/* Slots de Horário (Apenas se disponível) */}
-              {day.isAvailable && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="space-y-3 pt-2"
-                >
-                  {day.slots.map((slot, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 p-2 bg-gray-800/50 rounded-lg"
-                    >
-                      {/* Campo De */}
-                      <div className="flex-1 min-w-0">
-                        <label className="text-gray-400 text-xs block mb-1">
-                          De:
-                        </label>
-                        <input
-                          type="time"
-                          value={slot.start}
-                          onChange={(e) =>
-                            handleSlotChange(
-                              day.dayOfWeek,
-                              i,
-                              "start",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-gray-900 p-2 rounded-md border border-gray-600 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition text-sm"
-                        />
-                      </div>
-
-                      {/* Campo Até */}
-                      <div className="flex-1 min-w-0">
-                        <label className="text-gray-400 text-xs block mb-1">
-                          Até:
-                        </label>
-                        <input
-                          type="time"
-                          value={slot.end}
-                          onChange={(e) =>
-                            handleSlotChange(
-                              day.dayOfWeek,
-                              i,
-                              "end",
-                              e.target.value
-                            )
-                          }
-                          className="w-full bg-gray-900 p-2 rounded-md border border-gray-600 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition text-sm"
-                        />
-                      </div>
-
-                      {/* Botão Remover */}
-                      <button
-                        onClick={() => handleRemoveSlot(day.dayOfWeek, i)}
-                        className="p-2 text-gray-500 hover:text-red-400 rounded-full hover:bg-red-900/50 transition self-end mb-0.5 flex-shrink-0"
-                        title="Remover Intervalo"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-
-                  {/* Botão Adicionar */}
-                  <button
-                    onClick={() => handleAddSlot(day.dayOfWeek)}
-                    className="flex items-center gap-2 text-sm text-amber-500 hover:text-yellow-300 mt-2 p-1 rounded-md transition"
+            return (
+              <Card
+                key={key}
+                className={cn(
+                  "transition-all duration-300 border-2",
+                  dayData.isAvailable
+                    ? "border-gray-700 bg-gray-900 shadow-lg"
+                    : "border-gray-800 bg-gray-900/30 opacity-60"
+                )}
+              >
+                <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                  <Label
+                    className={cn(
+                      "text-lg font-bold",
+                      dayData.isAvailable ? "text-white" : "text-gray-500"
+                    )}
                   >
-                    <Plus size={16} /> Adicionar intervalo
-                  </button>
-                </motion.div>
-              )}
-            </motion.div>
-          ))}
-        </div>
+                    {label}
+                  </Label>
+                  <Switch
+                    checked={dayData.isAvailable}
+                    onCheckedChange={(checked) => handleDayToggle(key, checked)}
+                  />
+                </CardHeader>
 
-        {/* Botão de Salvar */}
-        <div className="flex justify-end pt-8">
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !currentProfessional}
-            className="bg-amber-500 text-black font-semibold px-6 py-3 rounded-lg hover:bg-amber-600 transition flex items-center gap-2 disabled:bg-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed shadow-md shadow-amber-500/20"
-          >
-            {isSaving ? (
-              <Loader2 className="animate-spin h-5 w-5" />
-            ) : (
-              <Save className="h-5 w-5" />
-            )}
-            {isSaving ? "Salvando..." : "Salvar Disponibilidade"}
-          </button>
+                <AnimatePresence>
+                  {dayData.isAvailable && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <CardContent className="space-y-3 pt-0">
+                        {dayData.slots.map((slot, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-gray-800/50"
+                          >
+                            <div className="relative flex-1">
+                              <Input
+                                type="time"
+                                value={slot.start}
+                                onChange={(e) =>
+                                  handleSlotChange(
+                                    key,
+                                    idx,
+                                    "start",
+                                    e.target.value
+                                  )
+                                }
+                                className="h-8 text-center bg-gray-800 border-gray-700 text-xs font-mono p-0"
+                              />
+                            </div>
+                            <span className="text-gray-500 text-xs">às</span>
+                            <div className="relative flex-1">
+                              <Input
+                                type="time"
+                                value={slot.end}
+                                onChange={(e) =>
+                                  handleSlotChange(
+                                    key,
+                                    idx,
+                                    "end",
+                                    e.target.value
+                                  )
+                                }
+                                className="h-8 text-center bg-gray-800 border-gray-700 text-xs font-mono p-0"
+                              />
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSlot(key, idx)}
+                              className="h-8 w-8 text-gray-500 hover:text-red-500 hover:bg-red-500/10 shrink-0"
+                              disabled={dayData.slots.length === 1}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                      </CardContent>
+                      <CardFooter className="pt-0 pb-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addSlot(key)}
+                          className="w-full border-dashed border border-gray-700 text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 h-8 text-xs transition-colors"
+                        >
+                          <Plus size={14} className="mr-1" /> Adicionar
+                          Intervalo
+                        </Button>
+                      </CardFooter>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Card>
+            );
+          })}
         </div>
-      </>
-    </motion.div>
+      )}
+    </div>
   );
 };

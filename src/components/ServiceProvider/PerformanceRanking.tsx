@@ -1,5 +1,8 @@
 import { motion } from "framer-motion";
-import { Crown } from "lucide-react";
+import { Crown, Trophy } from "lucide-react";
+
+// UI
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 
 interface RankingItem {
   name: string;
@@ -19,47 +22,86 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export const PerformanceRanking = ({ title, icon: Icon, data }: PerformanceRankingProps) => {
+export const PerformanceRanking = ({
+  title,
+  icon: Icon,
+  data,
+}: PerformanceRankingProps) => {
   const totalRevenue = data.reduce((sum, item) => sum + item.revenue, 0);
 
   return (
-    <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50 h-full">
-      <div className="flex items-center gap-3 mb-4">
-        <Icon className="w-6 h-6 text-amber-400" />
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
-      </div>
-      {data.length > 0 ? (
-        <ul className="space-y-4">
-          {data.map((item, index) => (
-            <motion.li 
-              key={item.name}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-            >
-              <div className="flex justify-between items-center text-sm mb-1">
-                <div className="flex items-center gap-2">
-                  {index === 0 && <Crown className="w-4 h-4 text-yellow-400" />}
-                  <span className="font-medium text-white truncate">{item.name}</span>
+    <Card className="h-full bg-gray-900/50 border-gray-800 shadow-lg">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-3 text-lg font-bold text-white">
+          <div className="p-2 bg-gray-800 rounded-lg text-amber-500">
+            <Icon size={20} />
+          </div>
+          {title}
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        {data.length > 0 ? (
+          <ul className="space-y-5 mt-2">
+            {data.map((item, index) => (
+              <motion.li
+                key={item.name}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+              >
+                <div className="flex justify-between items-end text-sm mb-2">
+                  <div className="flex items-center gap-2">
+                    {index === 0 && (
+                      <Crown className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-pulse" />
+                    )}
+                    {index === 1 && (
+                      <Trophy className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                    {index === 2 && (
+                      <Trophy className="w-3.5 h-3.5 text-amber-700" />
+                    )}
+                    <span
+                      className={`font-medium truncate ${
+                        index === 0 ? "text-white" : "text-gray-300"
+                      }`}
+                    >
+                      {item.name}
+                    </span>
+                  </div>
+                  <span className="font-bold text-gray-200 bg-gray-800 px-2 py-0.5 rounded text-xs">
+                    {formatCurrency(item.revenue)}
+                  </span>
                 </div>
-                <span className="font-semibold text-gray-300">{formatCurrency(item.revenue)}</span>
-              </div>
-              <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
-                <motion.div
-                  className="bg-gradient-to-r from-amber-500 to-yellow-400 h-2 rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: totalRevenue > 0 ? `${(item.revenue / totalRevenue) * 100}%` : '0%' }}
-                  transition={{ duration: 0.5, delay: index * 0.1, ease: "easeOut" }}
-                />
-              </div>
-            </motion.li>
-          ))}
-        </ul>
-      ) : (
-        <div className="flex items-center justify-center h-full text-gray-500">
-          <p>Não há dados de receita no período para gerar o ranking.</p>
-        </div>
-      )}
-    </div>
+
+                <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
+                  <motion.div
+                    className="bg-gradient-to-r from-amber-600 to-yellow-400 h-full rounded-full shadow-[0_0_10px_rgba(251,191,36,0.3)]"
+                    initial={{ width: 0 }}
+                    animate={{
+                      width:
+                        totalRevenue > 0
+                          ? `${(item.revenue / totalRevenue) * 100}%`
+                          : "0%",
+                    }}
+                    transition={{
+                      duration: 0.8,
+                      delay: index * 0.1,
+                      type: "spring",
+                      stiffness: 50,
+                    }}
+                  />
+                </div>
+              </motion.li>
+            ))}
+          </ul>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+            <Trophy size={32} className="mb-2 opacity-20" />
+            <p className="text-sm">Sem dados para o ranking.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

@@ -3,13 +3,35 @@
 @tailwind utilities;
 
 @keyframes fade-in-down {
-  0% { opacity: 0; transform: translateY(-20px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* src/index.css */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #374151; /* gray-700 */
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #4b5563; /* gray-600 */
 }
 
 @layer components {
   /* Mantivemos a estrutura, mas trocamos as cores fixas por variáveis do tema */
-  
+
   .label-text {
     @apply block text-sm font-medium text-gray-300 mb-2;
   }
@@ -64,9 +86,13 @@
   .gradient-border {
     border-image-slice: 1;
     /* CORREÇÃO: Pega as cores direto do config */
-    border-image-source: linear-gradient(to right, theme('colors.primary.DEFAULT'), theme('colors.primary.hover'));
+    border-image-source: linear-gradient(
+      to right,
+      theme("colors.primary.DEFAULT"),
+      theme("colors.primary.hover")
+    );
   }
-  
+
   .card-hover-effect {
     /* CORREÇÃO: Sombra baseada na cor primária */
     @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/10;

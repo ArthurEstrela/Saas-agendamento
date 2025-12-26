@@ -1,10 +1,12 @@
-// src/components/ServiceProvider/Agenda/AppointmentCard.tsx
-
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
-import { format, isPast } from "date-fns"; // isPast ajuda a decidir a mensagem
+import { format, isPast } from "date-fns";
 import { motion } from "framer-motion";
 import { Clock, User, Scissors, DollarSign, MessageCircle } from "lucide-react";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
+
+// UI Primitivos
+import { Card } from "../../ui/card";
+import { Badge } from "../../ui/badge";
 
 export const AppointmentCard = ({
   appointment,
@@ -14,95 +16,90 @@ export const AppointmentCard = ({
   const { setSelectedAppointment } = useProviderAppointmentsStore();
   const { client, startTime, services } = appointment;
 
-  // Handler para abrir o Modal de detalhes (clique no card)
-  const handleCardClick = () => {
-    setSelectedAppointment(appointment); 
-  };
+  const handleCardClick = () => setSelectedAppointment(appointment);
 
-  // Handler para o WhatsApp (clique no botão)
   const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // CRUCIAL: Impede que o modal abra ao clicar no Zap
-
+    e.stopPropagation();
     if (!client?.phoneNumber) return;
-
-    const cleanPhone = client.phoneNumber.replace(/\D/g, '');
+    const cleanPhone = client.phoneNumber.replace(/\D/g, "");
     const serviceName = services[0]?.name || "serviço";
-    
-    // Lógica Inteligente de Mensagem:
+
     let message = "";
-    
     if (isPast(startTime)) {
-      // Passado: Re-engajamento / Saudade
       message = `Olá ${client.name}, faz tempo que não te vejo! Bora marcar aquele ${serviceName}?`;
     } else {
-      // Futuro: Confirmação / Contato
       const timeString = format(startTime, "HH:mm");
       message = `Olá ${client.name}, passando para confirmar nosso agendamento de ${serviceName} às ${timeString}.`;
     }
-
-    const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+    window.open(
+      `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
   };
 
+  // Motion Wrapper
+  const MotionCard = motion(Card);
+
   return (
-    <motion.div
+    <MotionCard
       layout
-      whileHover={{ scale: 1.02, zIndex: 10 }}
+      whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={handleCardClick}
-      className="bg-gray-900 p-4 rounded-lg border border-gray-800 cursor-pointer shadow-lg hover:border-amber-500/30 transition-all duration-200 flex flex-col justify-between group"
+      className="p-3 bg-gray-900 border-gray-800 cursor-pointer hover:border-primary/50 hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-primary/5 transition-all h-full flex flex-col justify-between group"
     >
       <div>
-        {/* Cabeçalho com Horário e Duração */}
-        <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-          <p className="font-bold text-md text-white">
+        {/* Header: Hora e Duração */}
+        <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-800 group-hover:border-gray-700">
+          <Badge
+            variant="outline"
+            className="text-sm font-bold border-primary/20 text-primary bg-primary/5 px-2"
+          >
             {format(startTime, "HH:mm")}
-          </p>
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            <Clock size={12} />
+          </Badge>
+          <div className="flex items-center gap-1 text-[10px] text-gray-500">
+            <Clock size={10} />
             <span>{appointment.totalDuration} min</span>
           </div>
         </div>
 
-        {/* Corpo com Serviço e Cliente */}
-        <div className="py-3 space-y-2">
-          <p className="font-semibold text-white truncate flex items-center gap-2 text-sm">
-            <Scissors size={14} className="text-amber-400 flex-shrink-0" />
-            <span className="truncate">
+        {/* Info Principal */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <User size={12} className="text-gray-400 shrink-0" />
+            <p className="text-sm font-medium text-gray-200 truncate group-hover:text-white">
+              {client?.name || "Cliente"}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Scissors size={12} className="text-gray-500 shrink-0" />
+            <p className="text-xs text-gray-400 truncate">
               {services.map((s) => s.name).join(", ")}
-            </span>
-          </p>
-          <p className="text-sm text-gray-400 flex items-center gap-2">
-            <User size={14} className="flex-shrink-0" />
-            <span className="truncate">
-                {client?.name || "Cliente não identificado"}
-            </span>
-          </p>
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Rodapé com Ação (Zap) e Preço */}
-      <div className="flex justify-between items-center pt-3 border-t border-gray-800 mt-1">
-        
-        {/* Botão WhatsApp (Esquerda) */}
+      {/* Footer: Preço e Ação */}
+      <div className="flex justify-between items-end mt-3 pt-2 border-t border-gray-800 group-hover:border-gray-700">
         {client?.phoneNumber ? (
           <button
             onClick={handleWhatsAppClick}
-            className="p-1.5 rounded-full text-gray-500 hover:text-green-500 hover:bg-green-500/10 transition-colors z-20"
-            title="Enviar mensagem"
+            className="text-gray-500 hover:text-green-500 transition-colors p-1 -ml-1 rounded-md hover:bg-green-500/10"
+            title="Enviar WhatsApp"
           >
-            <MessageCircle size={18} />
+            <MessageCircle size={16} />
           </button>
         ) : (
-          <div className="w-8" /> // Espaçador vazio para manter alinhamento se não tiver fone
+          <div />
         )}
 
-        {/* Preço (Direita) */}
-        <p className="font-bold text-amber-500 text-md flex items-center gap-1">
-          <DollarSign size={14} />
+        <span className="text-sm font-bold text-gray-100 flex items-center">
+          <span className="text-xs text-gray-500 mr-0.5">R$</span>
           {appointment.totalPrice.toFixed(2)}
-        </p>
+        </span>
       </div>
-    </motion.div>
+    </MotionCard>
   );
 };

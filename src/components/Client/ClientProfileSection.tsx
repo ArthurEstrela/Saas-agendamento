@@ -19,13 +19,25 @@ import {
   Camera,
   Save,
   X,
-  UserCircle,
 } from "lucide-react";
 import { IMaskInput } from "react-imask";
-import { motion } from "framer-motion"; // Adicionei animações suaves
+import { motion } from "framer-motion";
 import type { ClientProfile } from "../../types";
 
-// Schema de validação
+// UI Components
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { cn } from "../../lib/utils/cn";
+
 const profileSchema = z.object({
   name: z.string().min(3, "Nome completo é obrigatório"),
   phoneNumber: z.string().min(14, "O telefone é obrigatório"),
@@ -43,7 +55,6 @@ export const ClientProfileSection = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { showSuccess, showError } = useToast();
-
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -81,35 +92,28 @@ export const ClientProfileSection = () => {
   const onSubmit = async (data: ProfileFormData) => {
     if (!userProfile) return;
     setIsSubmitting(true);
-
     try {
       let newProfilePictureUrl = userProfile.profilePictureUrl;
-
       if (profileImageFile) {
         newProfilePictureUrl = await uploadProfilePicture(
           userProfile.id,
           profileImageFile
         );
       }
-
       const updatedProfileData: Partial<ClientProfile> = {
         name: data.name,
         phoneNumber: data.phoneNumber,
         cpf: data.cpf,
         dateOfBirth: data.dateOfBirth,
-        // Correção de tipagem segura
         gender: data.gender as ClientProfile["gender"],
         profilePictureUrl: newProfilePictureUrl,
       };
-
       await updateUserProfile(userProfile.id, updatedProfileData);
       setUserProfile({ ...userProfile, ...updatedProfileData });
-
-      showSuccess("Perfil atualizado com sucesso!");
+      showSuccess("Perfil atualizado!");
       setIsEditing(false);
     } catch (error) {
-      console.error("Erro ao atualizar o perfil:", error);
-      showError("Falha ao atualizar o perfil. Tente novamente.");
+      showError("Erro ao atualizar perfil.");
     } finally {
       setIsSubmitting(false);
       setProfileImageFile(null);
@@ -131,317 +135,242 @@ export const ClientProfileSection = () => {
     }
   };
 
-  if (!userProfile) {
+  if (!userProfile)
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="animate-spin text-[#daa520]" size={48} />
+      <div className="flex justify-center p-12">
+        <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
-  }
+
+  const initials = userProfile.name.substring(0, 2).toUpperCase();
+
+  // Styles wrapper for IMask to match Input component
+  const inputBaseClasses = cn(
+    "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors",
+    "placeholder:text-gray-500",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
+    "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-transparent disabled:border-transparent disabled:text-gray-400 pl-10"
+  );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Cabeçalho da Página */}
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-white">Meu Perfil</h1>
         {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="primary-button flex items-center gap-2 text-sm px-4 py-2"
-          >
-            <Edit2 size={16} />
-            Editar Dados
-          </button>
+          <Button onClick={() => setIsEditing(true)} className="gap-2">
+            <Edit2 size={16} /> Editar
+          </Button>
         )}
       </div>
 
       <div className="bg-gray-800/40 border border-gray-700 rounded-2xl overflow-hidden shadow-xl">
-        {/* Banner Decorativo */}
-        <div className="h-32 bg-gradient-to-r from-[#daa520]/20 to-gray-900 w-full relative">
+        {/* Banner */}
+        <div className="h-32 bg-gradient-to-r from-primary/20 to-gray-900 w-full relative">
           <div className="absolute inset-0 bg-grid-white/5" />
         </div>
 
         <div className="px-8 pb-8 relative">
           <form onSubmit={handleSubmit(onSubmit)}>
-            {/* Seção de Foto (Avatar sobrepondo o banner) */}
+            {/* Header com Avatar */}
             <div className="flex flex-col md:flex-row items-end md:items-center gap-6 -mt-12 mb-8 relative z-10">
               <div className="relative group">
-                <div className="w-32 h-32 rounded-full bg-gray-900 border-4 border-gray-800 shadow-2xl overflow-hidden flex items-center justify-center">
-                  {previewUrl ? (
-                    <img
-                      src={previewUrl}
-                      alt="Foto de perfil"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <UserCircle className="text-gray-600 w-20 h-20" />
-                  )}
+                <Avatar className="w-32 h-32 border-4 border-gray-900 shadow-2xl">
+                  <AvatarImage
+                    src={previewUrl || ""}
+                    className="object-cover"
+                  />
+                  <AvatarFallback className="text-4xl bg-gray-800">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
 
-                  {/* Overlay de Edição da Foto */}
-                  {isEditing && (
-                    <label
-                      htmlFor="profile-picture-upload"
-                      className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200"
-                    >
-                      <Camera size={24} className="text-white mb-1" />
-                      <span className="text-[10px] text-white font-medium uppercase tracking-wide">
-                        Alterar
-                      </span>
-                      <input
-                        id="profile-picture-upload"
-                        type="file"
-                        className="hidden"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                      />
-                    </label>
-                  )}
-                </div>
-                {/* Badge de status (opcional) */}
-                <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-4 border-gray-800 rounded-full"></div>
+                {isEditing && (
+                  <label
+                    htmlFor="pf-upload"
+                    className="absolute inset-0 rounded-full bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200"
+                  >
+                    <Camera size={24} className="text-white mb-1" />
+                    <span className="text-[10px] text-white font-bold uppercase">
+                      Alterar
+                    </span>
+                    <input
+                      id="pf-upload"
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                )}
               </div>
 
               <div className="mb-2">
                 <h2 className="text-2xl font-bold text-white">
                   {userProfile.name}
                 </h2>
-                <p className="text-gray-400 text-sm">Cliente</p>
+                <p className="text-gray-400 text-sm font-medium">Cliente</p>
               </div>
             </div>
 
-            {/* Inputs do Formulário */}
+            {/* Campos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Nome */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-                  Nome Completo
-                </label>
-                <div
-                  className={`input-container transition-colors ${
-                    isEditing
-                      ? "bg-gray-900"
-                      : "bg-transparent border-transparent"
-                  }`}
-                >
-                  <User
-                    className={`input-icon ${
-                      isEditing ? "text-[#daa520]" : "text-gray-600"
-                    }`}
-                  />
-                  <input
+                <Label>Nome Completo</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                  <Input
                     {...register("name")}
-                    className={`input-field pl-10 ${
-                      !isEditing && "text-gray-300"
-                    }`}
                     disabled={!isEditing}
-                    placeholder="Seu nome"
-                  />
-                </div>
-                {errors.name && (
-                  <p className="error-message">{errors.name.message}</p>
-                )}
-              </div>
-
-              {/* Email (Fixo) */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-                  E-mail
-                </label>
-                <div className="input-container bg-transparent border-gray-700/50 opacity-70">
-                  <Mail className="input-icon text-gray-600" />
-                  <input
-                    value={userProfile.email}
-                    className="input-field pl-10 text-gray-400 cursor-not-allowed"
-                    disabled
+                    className="pl-10"
+                    error={errors.name?.message}
                   />
                 </div>
               </div>
 
-              {/* Telefone */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-                  Celular / WhatsApp
-                </label>
+                <Label>E-mail</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                  <Input value={userProfile.email} disabled className="pl-10" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Celular / WhatsApp</Label>
                 <Controller
                   name="phoneNumber"
                   control={control}
-                  render={({ field: { onChange, ref, ...fieldProps } }) => (
-                    <div
-                      className={`input-container transition-colors ${
-                        isEditing
-                          ? "bg-gray-900"
-                          : "bg-transparent border-transparent"
-                      }`}
-                    >
-                      <Phone
-                        className={`input-icon ${
-                          isEditing ? "text-[#daa520]" : "text-gray-600"
-                        }`}
-                      />
+                  render={({ field }) => (
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
                       <IMaskInput
-                        {...fieldProps} // Passa value, onBlur, name, etc. (MENOS onChange e ref)
+                        {...field}
                         mask="(00) 00000-0000"
-                        inputRef={ref} // IMaskInput usa inputRef em vez de ref
-                        className={`input-field pl-10 ${
-                          !isEditing && "text-gray-300"
-                        }`}
+                        className={inputBaseClasses}
                         disabled={!isEditing}
                         placeholder="(00) 00000-0000"
-                        onAccept={(value: string) => {
-                          onChange(value);
-                        }}
                       />
                     </div>
                   )}
                 />
                 {errors.phoneNumber && (
-                  <p className="error-message">{errors.phoneNumber.message}</p>
+                  <p className="text-xs text-destructive">
+                    {errors.phoneNumber.message}
+                  </p>
                 )}
               </div>
 
-              {/* CPF */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-                  CPF
-                </label>
+                <Label>CPF</Label>
                 <Controller
                   name="cpf"
                   control={control}
                   render={({ field }) => (
-                    <div
-                      className={`input-container transition-colors ${
-                        isEditing
-                          ? "bg-gray-900"
-                          : "bg-transparent border-transparent"
-                      }`}
-                    >
-                      <UserCheck
-                        className={`input-icon ${
-                          isEditing ? "text-[#daa520]" : "text-gray-600"
-                        }`}
-                      />
+                    <div className="relative">
+                      <UserCheck className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
                       <IMaskInput
                         {...field}
                         mask="000.000.000-00"
-                        className={`input-field pl-10 ${
-                          !isEditing && "text-gray-300"
-                        }`}
+                        className={inputBaseClasses}
                         disabled={!isEditing}
-                        placeholder="000.000.000-00"
                       />
                     </div>
                   )}
                 />
                 {errors.cpf && (
-                  <p className="error-message">{errors.cpf.message}</p>
+                  <p className="text-xs text-destructive">
+                    {errors.cpf.message}
+                  </p>
                 )}
               </div>
 
-              {/* Nascimento */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-                  Data de Nascimento
-                </label>
+                <Label>Data de Nascimento</Label>
                 <Controller
                   name="dateOfBirth"
                   control={control}
                   render={({ field }) => (
-                    <div
-                      className={`input-container transition-colors ${
-                        isEditing
-                          ? "bg-gray-900"
-                          : "bg-transparent border-transparent"
-                      }`}
-                    >
-                      <Calendar
-                        className={`input-icon ${
-                          isEditing ? "text-[#daa520]" : "text-gray-600"
-                        }`}
-                      />
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
                       <IMaskInput
                         {...field}
                         mask="00/00/0000"
-                        className={`input-field pl-10 ${
-                          !isEditing && "text-gray-300"
-                        }`}
+                        className={inputBaseClasses}
                         disabled={!isEditing}
-                        placeholder="DD/MM/AAAA"
                       />
                     </div>
                   )}
                 />
                 {errors.dateOfBirth && (
-                  <p className="error-message">{errors.dateOfBirth.message}</p>
+                  <p className="text-xs text-destructive">
+                    {errors.dateOfBirth.message}
+                  </p>
                 )}
               </div>
 
-              {/* Gênero */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-                  Gênero
-                </label>
-                <div
-                  className={`input-container transition-colors ${
-                    isEditing
-                      ? "bg-gray-900"
-                      : "bg-transparent border-transparent"
-                  }`}
-                >
-                  {/* Truque visual para manter ícone alinhado no select */}
-                  <User
-                    className={`input-icon ${
-                      isEditing ? "text-[#daa520]" : "text-gray-600"
-                    }`}
-                  />
-                  <select
-                    {...register("gender")}
-                    className={`input-field pl-10 appearance-none ${
-                      !isEditing && "text-gray-300"
-                    }`}
-                    disabled={!isEditing}
-                  >
-                    <option value="Masculino">Masculino</option>
-                    <option value="Feminino">Feminino</option>
-                    <option value="Outro">Outro</option>
-                    <option value="Prefiro não dizer">Prefiro não dizer</option>
-                  </select>
-                </div>
+                <Label>Gênero</Label>
+                <Controller
+                  name="gender"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      disabled={!isEditing}
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      value={field.value}
+                    >
+                      <SelectTrigger className="w-full pl-3">
+                        <div className="flex items-center gap-2">
+                          <User className="h-5 w-5 text-gray-500" />
+                          <SelectValue placeholder="Selecione" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Masculino">Masculino</SelectItem>
+                        <SelectItem value="Feminino">Feminino</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                        <SelectItem value="Prefiro não dizer">
+                          Prefiro não dizer
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {errors.gender && (
-                  <p className="error-message">{errors.gender.message}</p>
+                  <p className="text-xs text-destructive">
+                    {errors.gender.message}
+                  </p>
                 )}
               </div>
             </div>
 
-            {/* Rodapé com Ações (Só aparece se estiver editando) */}
             {isEditing && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-8 pt-6 border-t border-gray-700 flex justify-end gap-3"
               >
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={cancelEdit}
-                  className="secondary-button flex items-center gap-2"
                   disabled={isSubmitting}
                 >
-                  <X size={18} />
-                  Cancelar
-                </button>
-                <button
+                  <X size={18} className="mr-2" /> Cancelar
+                </Button>
+                <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="primary-button flex items-center gap-2 w-40 justify-center"
+                  className="min-w-[140px]"
                 >
                   {isSubmitting ? (
-                    <Loader2 className="animate-spin" size={20} />
+                    <Loader2 className="animate-spin mr-2" size={18} />
                   ) : (
-                    <>
-                      <Save size={18} />
-                      Salvar
-                    </>
+                    <Save size={18} className="mr-2" />
                   )}
-                </button>
+                  Salvar
+                </Button>
               </motion.div>
             )}
           </form>

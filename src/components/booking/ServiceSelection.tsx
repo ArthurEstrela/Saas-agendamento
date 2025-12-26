@@ -6,19 +6,19 @@ import { cn } from "../../lib/utils/cn";
 
 // Primitivos
 import { Button } from "../ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
+import { Badge } from "../ui/badge";
 import { Typography } from "../ui/typography";
 
 export const ServiceSelection = () => {
-  const { provider, selectedServices, toggleService, goToNextStep } =
-    useBookingProcessStore();
+  const { provider, selectedServices, toggleService, goToNextStep } = useBookingProcessStore();
 
   const { totalDuration, totalPrice } = useMemo(() => {
     return selectedServices.reduce(
-      (acc, service) => {
-        acc.totalDuration += service.duration;
-        acc.totalPrice += service.price;
-        return acc;
-      },
+      (acc, service) => ({
+        totalDuration: acc.totalDuration + service.duration,
+        totalPrice: acc.totalPrice + service.price,
+      }),
       { totalDuration: 0, totalPrice: 0 }
     );
   }, [selectedServices]);
@@ -27,96 +27,93 @@ export const ServiceSelection = () => {
   const isServiceSelected = selectedServices.length > 0;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <Typography variant="h2" className="text-center mb-2">
-        Selecione os Serviços
-      </Typography>
-      <Typography variant="p" className="text-center text-gray-400 mb-8">
-        Você pode escolher um ou mais serviços.
-      </Typography>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
+      <div className="text-center mb-8">
+        <Typography variant="h2">Selecione os Serviços</Typography>
+        <Typography variant="muted">Escolha um ou mais serviços para continuar.</Typography>
+      </div>
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto px-1">
         {hasServices ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {provider!.services!.map((service) => {
-              const isSelected = selectedServices.some(
-                (s) => s.id === service.id
-              );
+              const isSelected = selectedServices.some((s) => s.id === service.id);
               return (
                 <motion.div
-                  key={service.id}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => toggleService(service)}
-                  className={cn(
-                    "cursor-pointer p-5 rounded-xl border-2 transition-all duration-200",
-                    isSelected
-                      ? "border-primary bg-primary/10"
-                      : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
-                  )}
+                    key={service.id}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                 >
-                  <div className="flex justify-between items-start">
-                    <Typography variant="h4" className="text-lg font-bold pr-2">
-                      {service.name}
-                    </Typography>
-                    <div
-                      className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200",
-                        isSelected ? "bg-primary" : "bg-gray-700"
-                      )}
+                    <Card
+                    onClick={() => toggleService(service)}
+                    className={cn(
+                        "cursor-pointer h-full transition-all duration-300 border-2",
+                        isSelected
+                        ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(218,165,32,0.15)]"
+                        : "border-gray-800 hover:border-gray-600 bg-gray-900/50"
+                    )}
                     >
-                      {isSelected ? (
-                        <Check size={16} className="text-black" />
-                      ) : (
-                        <Plus size={16} className="text-gray-400" />
-                      )}
-                    </div>
-                  </div>
-                  <Typography variant="muted" className="mt-1">
-                    {service.description}
-                  </Typography>
-                  <div className="flex justify-between items-center mt-4 text-sm">
-                    <span className="text-primary font-semibold">
-                      R$ {service.price.toFixed(2)}
-                    </span>
-                    <span className="text-gray-400">
-                      {service.duration} min
-                    </span>
-                  </div>
+                    <CardHeader className="pb-2 space-y-0">
+                        <div className="flex justify-between items-start gap-4">
+                            <CardTitle className="text-base font-bold text-gray-100 leading-tight">
+                                {service.name}
+                            </CardTitle>
+                            <div className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                                isSelected ? "bg-primary text-black" : "bg-gray-800 text-gray-500"
+                            )}>
+                                {isSelected ? <Check size={14} strokeWidth={3} /> : <Plus size={14} />}
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-gray-400 line-clamp-2 mb-4 min-h-[40px]">
+                            {service.description || "Sem descrição disponível."}
+                        </p>
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-800/50">
+                            <Badge variant="outline" className="border-primary/30 text-primary gap-1">
+                                <DollarSign size={12} /> {service.price.toFixed(2)}
+                            </Badge>
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                                <Clock size={12} /> {service.duration} min
+                            </span>
+                        </div>
+                    </CardContent>
+                    </Card>
                 </motion.div>
               );
             })}
           </div>
         ) : (
-          <div className="text-center py-12 bg-gray-800/50 rounded-xl">
-            <ShoppingCart size={48} className="mx-auto text-gray-600" />
-            <p className="mt-4 text-gray-400">
-              Nenhum serviço disponível no momento.
-            </p>
+          <div className="text-center py-16 bg-gray-900/50 rounded-2xl border border-dashed border-gray-800">
+            <ShoppingCart size={48} className="mx-auto text-gray-600 mb-4" />
+            <Typography variant="h4" className="text-gray-400">Nenhum serviço disponível.</Typography>
           </div>
         )}
+      </div>
 
-        {/* --- Resumo e Botão de Avançar --- */}
-        <div className="sticky bottom-0 mt-8 py-4 px-6 bg-gray-900/80 backdrop-blur-sm rounded-t-2xl border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="text-center md:text-left">
-            <h4 className="font-bold text-white">Resumo do Agendamento</h4>
-            <div className="flex items-center gap-4 text-gray-300 mt-1">
-              <div className="flex items-center gap-1.5">
-                <Clock size={16} /> <span>{totalDuration} min</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <DollarSign size={16} /> <span>R$ {totalPrice.toFixed(2)}</span>
-              </div>
+      {/* --- Resumo Fixo --- */}
+      <div className="fixed bottom-0 left-0 w-full z-40 p-4">
+        <div className="max-w-4xl mx-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl shadow-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-6">
+                <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold">Total Estimado</p>
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl font-bold text-white">R$ {totalPrice.toFixed(2)}</span>
+                        <Badge variant="secondary" className="h-6">
+                            <Clock size={12} className="mr-1" /> {totalDuration} min
+                        </Badge>
+                    </div>
+                </div>
             </div>
-          </div>
-          <Button
-            onClick={goToNextStep}
-            disabled={!isServiceSelected}
-            className="w-full md:w-auto"
-            size="lg"
-          >
-            Avançar
-          </Button>
+            <Button
+                onClick={goToNextStep}
+                disabled={!isServiceSelected}
+                size="lg"
+                className="w-full sm:w-auto px-8 font-bold shadow-lg shadow-primary/20"
+            >
+                Continuar
+            </Button>
         </div>
       </div>
     </motion.div>

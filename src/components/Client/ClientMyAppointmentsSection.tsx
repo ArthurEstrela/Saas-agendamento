@@ -2,36 +2,27 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import {
   useUserAppointmentsStore,
-  type EnrichedAppointment,
 } from "../../store/userAppointmentsStore";
 import { ClientAppointmentCard } from "./ClientAppointmentCard";
 import { AppointmentCardSkeleton } from "./AppointmentCardSkeleton";
-import { Clock, History } from "lucide-react"; // CalendarX removido pois não será mais usado
+import { Clock, History } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
-// Define os tipos de aba para o estado
+// UI
+import { Button } from "../ui/button";
+import { cn } from "../../lib/utils/cn";
+
 type Tab = "upcoming" | "past";
 
 export const ClientMyAppointmentsSection = () => {
   const { user } = useAuthStore();
-  const appointments = useUserAppointmentsStore((state) => state.appointments);
-  const isLoading = useUserAppointmentsStore((state) => state.isLoading);
-  const fetchAppointments = useUserAppointmentsStore(
-    (state) => state.fetchAppointments
-  );
-  const clearAppointments = useUserAppointmentsStore(
-    (state) => state.clearAppointments
-  );
-
+  const { appointments, isLoading, fetchAppointments, clearAppointments } =
+    useUserAppointmentsStore();
   const [activeTab, setActiveTab] = useState<Tab>("upcoming");
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchAppointments(user.uid);
-    }
-    return () => {
-      clearAppointments();
-    };
+    if (user?.uid) fetchAppointments(user.uid);
+    return () => clearAppointments();
   }, [user?.uid, fetchAppointments, clearAppointments]);
 
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
@@ -58,95 +49,90 @@ export const ClientMyAppointmentsSection = () => {
 
   const currentList =
     activeTab === "upcoming" ? upcomingAppointments : pastAppointments;
-  const title =
-    activeTab === "upcoming"
-      ? "Próximos Agendamentos"
-      : "Histórico de Agendamentos";
-  
-  // Ícone dinâmico baseado na aba ativa
   const EmptyIcon = activeTab === "upcoming" ? Clock : History;
-
-  const renderAppointmentList = (list: EnrichedAppointment[]) => (
-    <motion.div
-      key={activeTab}
-      initial={{ opacity: 0, x: activeTab === "upcoming" ? 20 : -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: activeTab === "upcoming" ? -20 : 20 }}
-      transition={{ duration: 0.3 }}
-      className="pt-4"
-    >
-      {list.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {list.map((appointment) => (
-            <ClientAppointmentCard
-              key={appointment.id}
-              appointment={appointment}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 bg-gray-800/50 rounded-xl mt-4">
-          {/* CORREÇÃO: Usando o EmptyIcon dinâmico ao invés do CalendarX fixo */}
-          <EmptyIcon size={48} className="mx-auto text-gray-600" />
-
-          <p className="mt-4 text-gray-400">
-            Nenhum agendamento encontrado nesta categoria.
-          </p>
-        </div>
-      )}
-    </motion.div>
-  );
 
   if (isLoading) {
     return (
-      <div>
-        <h2 className="text-2xl font-bold text-white mb-6">
-          Carregando Agendamentos
-        </h2>
-
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-white">Carregando...</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          <AppointmentCardSkeleton />
-          <AppointmentCardSkeleton />
-          <AppointmentCardSkeleton />
+          {[1, 2, 3].map((i) => (
+            <AppointmentCardSkeleton key={i} />
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-3xl font-bold text-white mb-6">Meus Agendamentos</h1>
-      {/* Estrutura de Abas */}
-      <div className="flex border-b border-gray-700 mb-6 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab("upcoming")}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold transition-colors duration-200 
- ${
-   activeTab === "upcoming"
-     ? "text-amber-500 border-b-2 border-amber-500"
-     : "text-gray-400 hover:text-gray-200"
- }`}
-        >
-          <Clock size={18} /> Próximos ({upcomingAppointments.length})
-        </button>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-3xl font-bold text-white">Meus Agendamentos</h1>
 
-        <button
-          onClick={() => setActiveTab("past")}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold transition-colors duration-200
- ${
-   activeTab === "past"
-     ? "text-amber-500 border-b-2 border-amber-500"
-     : "text-gray-400 hover:text-gray-200"
- }`}
-        >
-          <History size={18} /> Anteriores ({pastAppointments.length})
-        </button>
+        {/* Abas */}
+        <div className="bg-gray-900 p-1 rounded-lg inline-flex border border-gray-800">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveTab("upcoming")}
+            className={cn(
+              "rounded-md transition-all",
+              activeTab === "upcoming"
+                ? "bg-gray-800 text-white shadow-sm"
+                : "text-gray-400 hover:text-white"
+            )}
+          >
+            Próximos ({upcomingAppointments.length})
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveTab("past")}
+            className={cn(
+              "rounded-md transition-all",
+              activeTab === "past"
+                ? "bg-gray-800 text-white shadow-sm"
+                : "text-gray-400 hover:text-white"
+            )}
+          >
+            Histórico ({pastAppointments.length})
+          </Button>
+        </div>
       </div>
-      {/* Título da Seção (abaixo das abas) */}
-      <h2 className="text-2xl font-bold text-white mb-6">{title}</h2>
-      {/* Conteúdo da Aba */}
+
       <AnimatePresence mode="wait">
-        {renderAppointmentList(currentList)}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {currentList.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {currentList.map((appointment) => (
+                <ClientAppointmentCard
+                  key={appointment.id}
+                  appointment={appointment}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 bg-gray-900/30 border border-dashed border-gray-800 rounded-2xl text-center">
+              <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-600">
+                <EmptyIcon size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-300">
+                Nenhum agendamento aqui
+              </h3>
+              <p className="text-gray-500 mt-2 max-w-sm">
+                {activeTab === "upcoming"
+                  ? "Você não tem agendamentos futuros. Que tal marcar algo novo?"
+                  : "Seu histórico de agendamentos está vazio."}
+              </p>
+            </div>
+          )}
+        </motion.div>
       </AnimatePresence>
     </div>
   );

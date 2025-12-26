@@ -1,4 +1,13 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
+import { Button } from "../ui/button";
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -9,6 +18,7 @@ interface ConfirmationModalProps {
   confirmText?: string;
   cancelText?: string;
   isLoading?: boolean;
+  variant?: "danger" | "default"; // Adicionei variante para flexibilidade
 }
 
 export const ConfirmationModal = ({
@@ -17,40 +27,54 @@ export const ConfirmationModal = ({
   onConfirm,
   title,
   message,
-  confirmText = 'Confirmar',
-  cancelText = 'Cancelar',
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
+  isLoading = false,
+  variant = "danger",
 }: ConfirmationModalProps) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center backdrop-blur-sm">
-      <div className="bg-gray-900 rounded-2xl shadow-xl w-full max-w-md border border-gray-700 m-4">
-        <div className="p-8">
-          <div className="flex items-start">
-            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-500/10 sm:mx-0">
-                <AlertTriangle className="h-6 w-6 text-red-400" aria-hidden="true" />
-            </div>
-            <div className="ml-4 text-left">
-                <h3 className="text-xl font-bold text-white" id="modal-title">
-                {title}
-                </h3>
-                <div className="mt-2">
-                <p className="text-sm text-gray-400">
-                    {message}
-                </p>
-                </div>
-            </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-gray-900 border-gray-800">
+        <DialogHeader className="flex flex-col items-center sm:items-start gap-2">
+          <div
+            className={`p-3 rounded-full ${
+              variant === "danger"
+                ? "bg-red-500/10 text-red-500"
+                : "bg-primary/10 text-primary"
+            } mb-2`}
+          >
+            <AlertTriangle className="h-6 w-6" aria-hidden="true" />
           </div>
-          <div className="mt-8 flex justify-end gap-4">
-            <button type="button" onClick={onClose} className="secondary-button">
-              {cancelText}
-            </button>
-            <button type="button" onClick={onConfirm} className="danger-button">
-              {confirmText}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          <DialogTitle className="text-xl font-bold text-white text-center sm:text-left">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="text-center sm:text-left text-gray-400">
+            {message}
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter className="gap-2 sm:gap-0 mt-4">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            disabled={isLoading}
+            className="w-full sm:w-auto"
+          >
+            {cancelText}
+          </Button>
+          <Button
+            variant={variant === "danger" ? "destructive" : "default"}
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="w-full sm:w-auto font-bold"
+          >
+            {isLoading ? (
+              <Loader2 className="animate-spin mr-2 h-4 w-4" />
+            ) : null}
+            {confirmText}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

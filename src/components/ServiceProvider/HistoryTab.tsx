@@ -1,186 +1,209 @@
-// src/components/ServiceProvider/HistoryTab.tsx
-
-import { useState, useMemo, useEffect } from 'react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { useState, useMemo, useEffect } from "react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Search,
   CheckCircle,
   XCircle,
   ChevronLeft,
   ChevronRight,
-} from 'lucide-react'
-import { Button } from '../ui/button'
-import type { EnrichedProviderAppointment } from '../../store/providerAppointmentsStore'
-// IMPORTAR O TIPO APPOINTMENT
-import type { Appointment } from '../../types' 
+  User,
+  Calendar,
+} from "lucide-react";
+import type { EnrichedProviderAppointment } from "../../store/providerAppointmentsStore";
+import type { Appointment } from "../../types";
 
-type HistoryFilterStatus = 'all' | 'completed' | 'cancelled'
+// UI Components
+import { Button } from "../ui/button";
+import { Card, CardContent } from "../ui/card";
+import { Input } from "../ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Badge } from "../ui/badge";
 
-const ITEMS_PER_PAGE = 10
+type HistoryFilterStatus = "all" | "completed" | "cancelled";
 
-// 1. Atualizar o Card para aceitar onClick
-const HistoryCard = ({ 
-  appt, 
-  onClick 
-}: { 
+const ITEMS_PER_PAGE = 10;
+
+const HistoryCard = ({
+  appt,
+  onClick,
+}: {
   appt: EnrichedProviderAppointment;
   onClick: () => void;
 }) => (
-  <div 
-    onClick={onClick} // Adicionar evento de clique
-    className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-800/80 transition-colors"
+  <Card
+    onClick={onClick}
+    className="group hover:border-primary/40 transition-all cursor-pointer bg-gray-900/40 border-gray-800"
   >
-    <div>
-      <p className="font-bold text-white">{appt.client?.name || 'Cliente desconhecido'}</p>
-      <p className="text-sm text-gray-400">
-        {appt.services.map((s) => s.name).join(', ')}
-      </p>
-      <p className="text-xs text-gray-500">com {appt.professionalName}</p>
-    </div>
-    <div className="text-right w-full sm:w-auto">
-      <p className="text-sm font-semibold text-gray-300">
-        {format(appt.startTime, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-      </p>
-      {appt.status === 'completed' ? (
-        <span className="flex items-center justify-end gap-2 text-green-400 text-sm mt-1">
-          <CheckCircle size={16} /> Concluído
-        </span>
-      ) : (
-        <span className="flex items-center justify-end gap-2 text-red-400 text-sm mt-1">
-          <XCircle size={16} /> Cancelado
-        </span>
-      )}
-    </div>
-  </div>
-)
+    <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <User size={16} className="text-primary" />
+          <p className="font-bold text-gray-200 group-hover:text-primary transition-colors">
+            {appt.client?.name || "Cliente desconhecido"}
+          </p>
+        </div>
+        <p className="text-sm text-gray-400 pl-6">
+          {appt.services.map((s) => s.name).join(", ")}
+        </p>
+        <p className="text-xs text-gray-500 pl-6 mt-0.5">
+          com {appt.professionalName}
+        </p>
+      </div>
+
+      <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end gap-2 sm:gap-1 border-t sm:border-none border-gray-800 pt-3 sm:pt-0">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-300">
+          <Calendar size={14} className="text-gray-500" />
+          {format(appt.startTime, "dd MMM, HH:mm", { locale: ptBR })}
+        </div>
+
+        {appt.status === "completed" ? (
+          <Badge
+            variant="success"
+            className="gap-1.5 bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20"
+          >
+            <CheckCircle size={12} /> Concluído
+          </Badge>
+        ) : (
+          <Badge
+            variant="destructive"
+            className="gap-1.5 bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20"
+          >
+            <XCircle size={12} /> Cancelado
+          </Badge>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+);
 
 interface HistoryTabProps {
   appointments: EnrichedProviderAppointment[];
-  // 2. Adicionar a prop que faltava
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
 export const HistoryTab = ({
   appointments,
-  onAppointmentSelect // Receber a prop
+  onAppointmentSelect,
 }: HistoryTabProps) => {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<HistoryFilterStatus>('all')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<HistoryFilterStatus>("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, statusFilter])
+  useEffect(() => setCurrentPage(1), [searchTerm, statusFilter]);
 
   const filteredAppointments = useMemo(() => {
     return appointments
-      .filter((appt) => {
-        const clientName = appt.client?.name?.toLowerCase() || ''
-        return clientName.includes(searchTerm.toLowerCase())
-      })
-      .filter((appt) => {
-        if (statusFilter === 'all') return true
-        return appt.status === statusFilter
-      })
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
-  }, [appointments, searchTerm, statusFilter])
+      .filter((appt) =>
+        (appt.client?.name?.toLowerCase() || "").includes(
+          searchTerm.toLowerCase()
+        )
+      )
+      .filter((appt) =>
+        statusFilter === "all" ? true : appt.status === statusFilter
+      )
+      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+  }, [appointments, searchTerm, statusFilter]);
 
-  const totalPages = Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE)
-
+  const totalPages = Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE);
   const paginatedAppointments = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    return filteredAppointments.slice(startIndex, endIndex)
-  }, [filteredAppointments, currentPage])
-
-  const handleNextPage = () => {
-    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-  }
-
-  const handlePrevPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 1))
-  }
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredAppointments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredAppointments, currentPage]);
 
   return (
-    <div>
-      <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
-        <h2 className="text-xl font-bold text-white">
-          Histórico (Últimos 30 dias)
+    <div className="space-y-6">
+      {/* Header com Filtros */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-900/30 p-4 rounded-xl border border-gray-800/50">
+        <h2 className="text-xl font-bold text-white whitespace-nowrap">
+          Histórico{" "}
+          <span className="text-sm font-normal text-gray-500 hidden sm:inline">
+            (Últimos 30 dias)
+          </span>
         </h2>
-        <div className="flex items-center gap-4 w-full sm:w-auto">
-          <select
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as HistoryFilterStatus)
-            }
-            className="bg-gray-800 border border-gray-700 rounded-lg p-2 text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
-          >
-            <option value="all">Todos Status</option>
-            <option value="completed">Concluídos</option>
-            <option value="cancelled">Cancelados</option>
-          </select>
 
-          <div className="relative flex-grow">
+        <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+          <div className="w-full sm:w-40">
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v as HistoryFilterStatus)}
+            >
+              <SelectTrigger className="bg-gray-800 border-gray-700 h-10">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="completed">Concluídos</SelectItem>
+                <SelectItem value="cancelled">Cancelados</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="relative w-full sm:w-64">
             <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"
             />
-            <input
-              type="text"
-              placeholder="Buscar por cliente..."
+            <Input
+              placeholder="Buscar cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 pl-10 text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              className="pl-9 bg-gray-800 border-gray-700 h-10"
             />
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="space-y-4">
+      {/* Lista */}
+      <div className="space-y-3 min-h-[300px]">
         {paginatedAppointments.length > 0 ? (
           paginatedAppointments.map((appt) => (
-            <HistoryCard 
-              key={appt.id} 
-              appt={appt} 
-              // 3. Passar a função para o clique do card
+            <HistoryCard
+              key={appt.id}
+              appt={appt}
               onClick={() => onAppointmentSelect(appt)}
             />
           ))
         ) : (
-          <p className="text-center text-gray-500 mt-16">
-            {searchTerm || statusFilter !== 'all'
-              ? 'Nenhum agendamento encontrado para esta busca.'
-              : 'Nenhum agendamento encontrado no histórico dos últimos 30 dias.'}
-          </p>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Search size={48} className="text-gray-700 mb-4" />
+            <p className="text-gray-500">Nenhum agendamento encontrado.</p>
+          </div>
         )}
       </div>
 
+      {/* Paginação */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-4 pt-6">
+        <div className="flex justify-center items-center gap-4 pt-4 border-t border-gray-800/50">
           <Button
             variant="outline"
             size="icon"
-            onClick={handlePrevPage}
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
             disabled={currentPage === 1}
-            className="bg-gray-800 text-white border-gray-700 hover:bg-gray-700"
+            className="h-9 w-9"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft size={16} />
           </Button>
-          <span className="text-sm font-medium text-gray-300">
-            Página {currentPage} de {totalPages}
+          <span className="text-sm font-medium text-gray-400">
+            {currentPage} <span className="text-gray-600">/</span> {totalPages}
           </span>
           <Button
             variant="outline"
             size="icon"
-            onClick={handleNextPage}
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
             disabled={currentPage === totalPages}
-            className="bg-gray-800 text-white border-gray-700 hover:bg-gray-700"
+            className="h-9 w-9"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight size={16} />
           </Button>
         </div>
       )}
     </div>
-  )
-}
+  );
+};

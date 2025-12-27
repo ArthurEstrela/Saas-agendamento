@@ -9,9 +9,9 @@ export default {
         input: "#1f2937", // gray-800 do seu input atual
         ring: "#daa520", // Cor do anel de foco
 
-        background: "#0a0a0a", // Seu 'dark-bg' antigo
+        background: "#0f0f12", // Seu 'dark-bg' antigo
         foreground: "#ffffff", // <--- ADICIONE ISSO
-        surface: "#1a1a1a", // Seu 'card-bg' antigo, bom para modais/cards
+        surface: "#1c1c21", // Seu 'card-bg' antigo, bom para modais/cards
 
         // A cor principal da sua marca
         primary: {
@@ -34,7 +34,7 @@ export default {
 
         // Para textos mais apagados (labels, subtextos)
         muted: {
-          DEFAULT: "#1a1a1a",
+          DEFAULT: "#1c1c21",
           foreground: "#9ca3af", // gray-400
         },
       },

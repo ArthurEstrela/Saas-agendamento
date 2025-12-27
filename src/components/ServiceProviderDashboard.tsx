@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Menu, ShieldAlert, Sparkles } from "lucide-react";
 
 import { useProfileStore } from "../store/profileStore";
-// Importe o tipo ProviderDashboardView daqui agora
 import type { ServiceProviderProfile, ProviderDashboardView } from "../types";
 
 import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
@@ -41,7 +40,6 @@ const viewComponents: Record<
 
 const ServiceProviderDashboard = () => {
   const { userProfile } = useProfileStore();
-
   const [activeView, setActiveView] = useState<ProviderDashboardView>("agenda");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
@@ -61,8 +59,8 @@ const ServiceProviderDashboard = () => {
 
   if (!userProfile) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900">
-        <Loader2 className="animate-spin text-amber-500" size={64} />
+      <div className="flex items-center justify-center h-screen bg-background">
+        <Loader2 className="animate-spin text-primary" size={64} />
       </div>
     );
   }
@@ -70,7 +68,13 @@ const ServiceProviderDashboard = () => {
   const disableNav = !isSubscriptionOk && activeView === "subscription";
 
   return (
-    <div className="flex min-h-screen bg-black text-gray-200 font-sans">
+    <div className="flex min-h-screen bg-background text-gray-200 font-sans relative overflow-hidden">
+      {/* --- Efeito de Luz e Profundidade --- */}
+      <div
+        className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_-20%,rgba(218,165,32,0.08),transparent)] pointer-events-none"
+        aria-hidden="true"
+      />
+
       <ServiceProviderSideNav
         activeView={activeView}
         setActiveView={setActiveView}
@@ -78,52 +82,65 @@ const ServiceProviderDashboard = () => {
         setIsOpen={setIsMobileNavOpen}
         disableNav={disableNav}
       />
-      <main className="bg-gray-900/65 flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300 flex flex-col">
-        {/* Botão de menu para mobile */}
-        <div className="md:hidden flex justify-between items-center mb-6">
+
+      {/* Ajustado: 'bg-transparent' para deixar o gradiente aparecer.
+          'z-10' garante que o conteúdo fique acima do gradiente de fundo.
+      */}
+      <main className="flex-grow p-4 sm:p-6 md:p-8 md:ml-72 transition-all duration-300 flex flex-col z-10 relative">
+        {/* Header Mobile - Melhorado com Blur */}
+        <div className="md:hidden flex justify-between items-center mb-6 p-4 -mx-4 -mt-4 bg-background/60 backdrop-blur-md sticky top-0 z-20 border-b border-white/5">
           <button
             onClick={() => setIsMobileNavOpen(true)}
-            className="text-gray-300 p-2"
+            className="text-gray-300 hover:text-primary transition-colors p-2"
           >
             <Menu size={28} />
           </button>
-          <span className="text-xl font-bold text-white">Stylo</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+            Stylo
+          </span>
         </div>
 
+        {/* Banner de Teste - Cores mais suaves/modernas */}
         {needsSubscription && activeView !== "subscription" && (
-          <div className="bg-amber-600 text-black p-3 rounded-lg mb-4 text-center font-semibold flex items-center justify-center gap-2">
-            <Sparkles size={20} />
-            Seu período de teste está ativo.
-            <button
-              onClick={() => setActiveView("subscription")}
-              className="underline font-bold"
-            >
-              Assine agora
-            </button>
-            para liberar todos os recursos.
+          <div className="bg-primary/20 border border-primary/30 text-primary-hover p-4 rounded-xl mb-6 text-center font-medium flex items-center justify-center gap-3 animate-fade-in-down">
+            <Sparkles size={20} className="animate-pulse" />
+            <span>
+              Seu período de teste está ativo.{" "}
+              <button
+                onClick={() => setActiveView("subscription")}
+                className="underline font-bold hover:text-white transition-colors"
+              >
+                Assine agora
+              </button>{" "}
+              para liberar todos os recursos.
+            </span>
           </div>
         )}
 
+        {/* Banner de Problema na Assinatura */}
         {subscriptionProblem && activeView !== "subscription" && (
-          <div className="bg-red-600 text-white p-3 rounded-lg mb-4 text-center font-semibold flex items-center justify-center gap-2">
+          <div className="bg-destructive/20 border border-destructive/30 text-destructive p-4 rounded-xl mb-6 text-center font-medium flex items-center justify-center gap-3 animate-fade-in-down">
             <ShieldAlert size={20} />
-            Há um problema com sua assinatura.
-            <button
-              onClick={() => setActiveView("subscription")}
-              className="underline font-bold"
-            >
-              Regularizar agora
-            </button>
+            <span>
+              Há um problema com sua assinatura.{" "}
+              <button
+                onClick={() => setActiveView("subscription")}
+                className="underline font-bold hover:text-white transition-colors"
+              >
+                Regularizar agora
+              </button>
+            </span>
           </div>
         )}
 
+        {/* Área de Conteúdo Principal */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
             className="flex-grow flex flex-col"
           >
             <ActiveComponent userProfile={profile} />

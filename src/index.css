@@ -108,3 +108,12 @@ input::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* src/index.css */
+@layer base {
+  body {
+    /* Usa a variável --background que definimos no tailwind.config */
+    @apply bg-background text-foreground;
+    background-color: #0f0f12; /* Fallback caso o tailwind não carregue */
+  }
+}

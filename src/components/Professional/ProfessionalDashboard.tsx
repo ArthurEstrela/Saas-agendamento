@@ -34,8 +34,7 @@ const viewComponents: Record<
 > = {
   home: ProfessionalHome,
   agenda: AgendaView as React.ComponentType<DashboardViewProps>,
-  availability:
-    AvailabilityManagement as React.ComponentType<DashboardViewProps>,
+  availability: AvailabilityManagement as React.ComponentType<DashboardViewProps>,
   reviews: ReviewsManagement as React.ComponentType<DashboardViewProps>,
   notifications: Notifications as React.ComponentType<DashboardViewProps>,
   profile: ProfessionalProfileManagement,
@@ -43,8 +42,7 @@ const viewComponents: Record<
 
 const ProfessionalDashboard = () => {
   const { userProfile } = useProfileStore();
-  const [activeView, setActiveView] =
-    useState<ProfessionalDashboardView>("home");
+  const [activeView, setActiveView] = useState<ProfessionalDashboardView>("home");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const profile = userProfile as ProfessionalProfile | null;
@@ -52,14 +50,19 @@ const ProfessionalDashboard = () => {
 
   if (!profile) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black">
+      <div className="flex items-center justify-center h-screen bg-background">
         <Loader2 className="animate-spin text-primary" size={64} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-black text-gray-200 font-sans selection:bg-primary/30">
+    <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative">
+      {/* Background Sutil (Igual ao do Client) */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-primary/5 rounded-full blur-[100px] opacity-30" />
+      </div>
+
       <ProfessionalSideNav
         activeView={activeView}
         setActiveView={setActiveView}
@@ -67,9 +70,10 @@ const ProfessionalDashboard = () => {
         setIsOpen={setIsMobileNavOpen}
       />
 
-      <main className="flex-grow md:ml-72 transition-all duration-300 flex flex-col min-h-screen">
+      {/* Main ajustado: md:ml-72 empurra o conteúdo logo após a sidebar */}
+      <main className="flex-grow md:ml-72 transition-all duration-300 flex flex-col min-h-screen relative z-10">
         {/* Mobile Header */}
-        <div className="md:hidden flex justify-between items-center p-4 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 sticky top-0 z-30">
+        <div className="md:hidden flex justify-between items-center p-4 bg-background/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-30">
           <span className="text-xl font-bold text-white">Stylo</span>
           <Button
             variant="ghost"
@@ -80,15 +84,16 @@ const ProfessionalDashboard = () => {
           </Button>
         </div>
 
-        <div className="p-4 sm:p-6 md:p-8 flex-grow flex flex-col">
+        {/* Área de conteúdo com espaçamento reduzido */}
+        <div className="p-4 lg:p-6 flex-grow flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.25 }}
-              className="flex-grow flex flex-col"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
+              className="flex-grow flex flex-col w-full"
             >
               <ActiveComponent userProfile={profile} />
             </motion.div>

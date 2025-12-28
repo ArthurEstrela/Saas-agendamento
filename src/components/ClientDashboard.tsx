@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
 import logo from "../assets/stylo-logo.png";
 
 // Componentes
@@ -50,56 +50,26 @@ export const ClientDashboard = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#09090b] text-gray-100 font-sans selection:bg-primary/30 overflow-hidden relative">
-      {/* --- BACKGROUND CORRIGIDO (Mais profundidade, menos "preto chapado") --- */}
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.15),rgba(255,255,255,0))]" />
-      <div
-        className="absolute inset-0 bg-gradient-to-b from-transparent via-[#09090b]/50 to-[#09090b]"
-        pointerEvents="none"
+    <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative overflow-x-hidden">
+      {/* --- BACKGROUND (Efeito Aurora Sutil) --- */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-primary/5 rounded-full blur-[100px] opacity-40" />
+        <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] opacity-30" />
+        <div className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] bg-purple-900/5 rounded-full blur-[120px] opacity-30" />
+      </div>
+
+      {/* --- SIDENAV --- */}
+      <ClientSideNav
+        activeSection={activeSection}
+        setActiveSection={handleNavClick}
+        isOpen={isMobileNavOpen}
+        setIsOpen={setIsMobileNavOpen}
       />
 
-      {/* --- MOBILE OVERLAY --- */}
-      <AnimatePresence>
-        {isMobileNavOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
-            onClick={() => setIsMobileNavOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* --- SIDEBAR --- */}
-      <aside
-        className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-[#0c0c0e] border-r border-white/5 
-        transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] md:translate-x-0 md:static flex flex-col shadow-2xl
-        ${isMobileNavOpen ? "translate-x-0" : "-translate-x-full"}
-      `}
-      >
-        <div className="flex items-center justify-between p-6 md:hidden">
-          <img src={logo} alt="Stylo" className="h-8" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsMobileNavOpen(false)}
-          >
-            <X size={24} />
-          </Button>
-        </div>
-
-        <ClientSideNav
-          activeSection={activeSection}
-          setActiveSection={handleNavClick}
-        />
-      </aside>
-
       {/* --- CONTEÚDO PRINCIPAL --- */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-h-screen md:ml-72 transition-all duration-300 relative z-10">
         {/* Header Mobile */}
-        <header className="md:hidden flex justify-between items-center p-4 border-b border-gray-800 bg-[#09090b]/80 backdrop-blur-md sticky top-0 z-30">
+        <header className="md:hidden flex justify-between items-center p-4 border-b border-white/5 bg-background/80 backdrop-blur-md sticky top-0 z-30">
           <Link to="/dashboard">
             <img src={logo} alt="Stylo" className="h-8" />
           </Link>
@@ -107,16 +77,18 @@ export const ClientDashboard = () => {
             variant="ghost"
             size="icon"
             onClick={() => setIsMobileNavOpen(true)}
-            className="text-gray-300"
+            className="text-gray-300 hover:text-white"
           >
             <Menu size={24} />
           </Button>
         </header>
 
-        {/* Área de Scroll */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-10 scroll-smooth">
-          {/* CORREÇÃO DO ESPAÇO: Removi 'mx-auto' e aumentei o max-width */}
-          <div className="w-full max-w-[1600px] min-h-full pb-20">
+        {/* CORREÇÃO DE ESPAÇAMENTO:
+           1. Reduzi o padding para 'p-4 lg:p-6' (era p-8/10)
+           2. Removi 'mx-auto' e 'max-w-7xl' para o conteúdo não centralizar longe da sidebar.
+        */}
+        <div className="flex-1 p-4 lg:p-6">
+          <div className="w-full min-h-full space-y-6">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeSection}
@@ -124,6 +96,7 @@ export const ClientDashboard = () => {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
                 transition={{ duration: 0.2 }}
+                className="w-full"
               >
                 {renderSection()}
               </motion.div>

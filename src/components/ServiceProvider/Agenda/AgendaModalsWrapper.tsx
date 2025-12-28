@@ -1,12 +1,12 @@
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
-import { useReviewStore } from "../../../store/reviewStore"; // Se necessário
 import { AppointmentDetailsModal } from "./AppointmentDetailsModal";
 import { ServiceCompletionModal } from "../ServiceCompletionModal";
 import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
 
 export const AgendaModalsWrapper = () => {
-  const { modals, closeModal, selectedAppointment } = useAgendaModalStore();
+  // CORREÇÃO 1: Usamos 'modalView' e 'setModalView' em vez de 'modals'
+  const { modalView, closeModal, selectedAppointment, setModalView } = useAgendaModalStore();
   const { updateStatus, completeAppointment, cancelAppointment, isLoading } =
     useProviderAppointmentsStore();
 
@@ -16,49 +16,49 @@ export const AgendaModalsWrapper = () => {
     <>
       {/* Detalhes */}
       <AppointmentDetailsModal
-        isOpen={modals.details}
-        onClose={() => closeModal("details")}
+        // CORREÇÃO 2: Verificamos se a string do modal ativo é 'details'
+        isOpen={modalView === "details"}
+        // CORREÇÃO 3: closeModal() não recebe argumentos
+        onClose={() => closeModal()}
         appointment={selectedAppointment}
         onStatusChange={(id, status) => {
           if (status === "cancelled") {
-            // Abre o modal de cancelamento em vez de cancelar direto
-            // A lógica de abrir outro modal pode ser tratada no store se preferir
-            closeModal("details");
-            // Aqui você chamaria openModal('cancel', selectedAppointment)
+            // CORREÇÃO 4: Usamos setModalView para trocar de modal sem fechar tudo
+            setModalView("cancel");
           } else {
             updateStatus(id, status);
-            closeModal("details");
+            closeModal();
           }
         }}
         onComplete={() => {
-          closeModal("details");
-          // Abre modal de conclusão (valor final)
-          // openModal('completion', selectedAppointment) -- precisa implementar no store
+          // CORREÇÃO 5: Troca direta para o modal de conclusão
+          setModalView("complete");
         }}
       />
 
       {/* Conclusão (Valor Final) */}
       <ServiceCompletionModal
-        isOpen={modals.completion}
-        onClose={() => closeModal("completion")}
+        // CORREÇÃO 6: O tipo no store é "complete", não "completion"
+        isOpen={modalView === "complete"}
+        onClose={() => closeModal()}
         appointment={selectedAppointment}
         isLoading={isLoading}
         onConfirm={async (finalPrice) => {
           await completeAppointment(selectedAppointment.id, finalPrice);
-          closeModal("completion");
+          closeModal();
         }}
       />
 
       {/* Cancelamento */}
       <CancelAppointmentModal
-        isOpen={modals.cancel}
-        onClose={() => closeModal("cancel")}
+        isOpen={modalView === "cancel"}
+        onClose={() => closeModal()}
         appointmentId={selectedAppointment.id}
         userType="serviceProvider"
         isLoading={isLoading}
         onConfirm={async (reason) => {
           await cancelAppointment(selectedAppointment.id, reason);
-          closeModal("cancel");
+          closeModal();
         }}
       />
     </>

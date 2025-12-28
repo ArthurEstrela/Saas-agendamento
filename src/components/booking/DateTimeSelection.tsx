@@ -123,7 +123,7 @@ export const DateTimeSelection = () => {
       if (date instanceof Date) {
         setIsLoadingTimes(true);
         setAvailableTimes([]);
-        setTimeSlot(null); // Resetar seleção ao mudar data
+        setTimeSlot(null);
         try {
           const slots = await calculateAvailableSlots(date);
           if (isActive) setAvailableTimes(slots);
@@ -160,19 +160,21 @@ export const DateTimeSelection = () => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="pb-24"
+      className="pb-32"
     >
-      <div className="text-center mb-8">
-        <Typography variant="h2">Data e Horário</Typography>
+      <div className="text-center mb-10">
+        <Typography variant="h2" className="drop-shadow-sm">
+          Data e Horário
+        </Typography>
         <Typography variant="muted">
           Quando você gostaria de ser atendido?
         </Typography>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-5xl mx-auto px-2">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto px-2">
         {/* Coluna do Calendário */}
         <div className="lg:col-span-5 flex justify-center lg:justify-end">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-lg w-full max-w-[350px]">
+          <div className="bg-gray-900/80 border border-white/5 rounded-2xl p-6 shadow-2xl w-full max-w-[380px] backdrop-blur-sm">
             <Calendar
               mode="single"
               selected={date}
@@ -186,67 +188,72 @@ export const DateTimeSelection = () => {
 
         {/* Coluna dos Horários */}
         <div className="lg:col-span-7">
-          <Card className="h-full bg-gray-900/50 border-gray-800">
+          <Card className="h-full bg-gray-900/60 border-white/5 backdrop-blur-sm shadow-xl">
             <CardContent className="p-6 h-full flex flex-col">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-800">
-                <Badge
-                  variant="secondary"
-                  className="h-10 w-10 rounded-full flex items-center justify-center p-0"
-                >
-                  <Clock size={20} className="text-primary" />
-                </Badge>
+              <div className="flex items-center gap-4 mb-6 pb-4 border-b border-white/5">
+                <div className="h-12 w-12 rounded-full flex items-center justify-center bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/5">
+                  <Clock size={24} />
+                </div>
                 <div>
-                  <h3 className="font-bold text-gray-100">
+                  <h3 className="font-bold text-xl text-white">
                     {date
                       ? format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })
                       : "Selecione uma data"}
                   </h3>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm text-gray-400">
                     {date
-                      ? `${availableTimes.length} horários disponíveis`
-                      : "Aguardando seleção"}
+                      ? isLoadingTimes
+                        ? "Verificando..."
+                        : `${availableTimes.length} horários disponíveis`
+                      : "Aguardando seleção no calendário"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex-1 min-h-[300px]">
+              <div className="flex-1 min-h-[350px]">
                 {isLoadingTimes ? (
-                  <div className="h-full flex flex-col items-center justify-center text-primary">
-                    <Loader2 className="animate-spin mb-2" size={32} />
-                    <span className="text-sm">Buscando disponibilidade...</span>
+                  <div className="h-full flex flex-col items-center justify-center text-primary/80">
+                    <Loader2 className="animate-spin mb-3" size={40} />
+                    <span className="text-sm font-medium animate-pulse">
+                      Buscando disponibilidade...
+                    </span>
                   </div>
                 ) : !date ? (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-50">
-                    <ChevronLeft size={48} className="mb-2" />
-                    <span className="text-sm">
-                      Selecione uma data no calendário
+                  <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-60">
+                    <ChevronLeft size={56} className="mb-4 text-gray-700" />
+                    <span className="text-base font-medium">
+                      Escolha um dia ao lado
                     </span>
                   </div>
                 ) : availableTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 content-start">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 content-start">
                     {availableTimes.map((slot) => (
-                      <Button
+                      <motion.button
                         key={slot}
-                        variant={timeSlot === slot ? "default" : "outline"}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => setTimeSlot(slot)}
                         className={cn(
-                          "h-11 border-gray-700 hover:border-gray-500 hover:bg-gray-800 text-gray-300 font-medium transition-all",
-                          timeSlot === slot &&
-                            "border-primary bg-primary text-black hover:bg-primary hover:text-black shadow-[0_0_10px_rgba(218,165,32,0.4)] scale-105"
+                          "h-12 rounded-lg text-sm font-bold border transition-all duration-200 shadow-sm",
+                          timeSlot === slot
+                            ? "bg-primary text-black border-primary shadow-[0_0_15px_rgba(218,165,32,0.4)] ring-2 ring-primary/20"
+                            : "bg-gray-800/50 text-gray-300 border-white/5 hover:border-gray-500 hover:bg-gray-700 hover:text-white"
                         )}
                       >
                         {slot}
-                      </Button>
+                      </motion.button>
                     ))}
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                    <CalendarX size={48} className="mb-4 text-gray-700" />
-                    <p className="text-center font-medium">
+                    <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
+                      <CalendarX size={32} className="text-gray-600" />
+                    </div>
+                    <p className="text-center font-medium text-lg text-gray-400">
                       Sem horários livres
                     </p>
-                    <p className="text-center text-xs mt-1">
-                      Tente selecionar outro dia.
+                    <p className="text-center text-sm mt-1 text-gray-600">
+                      Tente selecionar outro dia no calendário.
                     </p>
                   </div>
                 )}
@@ -257,15 +264,19 @@ export const DateTimeSelection = () => {
       </div>
 
       {/* Footer Fixo */}
-      <div className="fixed bottom-0 left-0 w-full z-40 p-4">
-        <div className="max-w-4xl mx-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl shadow-2xl p-4 flex justify-between items-center gap-4">
-          <Button variant="ghost" onClick={goToPreviousStep}>
+      <div className="fixed bottom-0 left-0 w-full z-50 p-4 pointer-events-none">
+        <div className="max-w-4xl mx-auto pointer-events-auto bg-gray-900/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 flex justify-between items-center gap-4 ring-1 ring-white/5">
+          <Button
+            variant="ghost"
+            onClick={goToPreviousStep}
+            className="hover:bg-white/5"
+          >
             <ChevronLeft size={16} className="mr-2" /> Voltar
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={!date || !timeSlot || isLoadingTimes}
-            className="w-full sm:w-auto px-8 font-bold"
+            className="w-full sm:w-auto px-8 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-105"
           >
             Confirmar e Avançar <ChevronRight size={16} className="ml-2" />
           </Button>

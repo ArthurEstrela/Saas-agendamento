@@ -32,6 +32,7 @@ import {
   DialogDescription,
 } from "../ui/dialog";
 import { Separator } from "../ui/separator";
+import { motion } from "framer-motion";
 
 // ... (Funções auxiliares de Pix mantidas no final) ...
 
@@ -133,216 +134,259 @@ export const Confirmation = () => {
     : "";
 
   return (
-    <>
-      <div className="max-w-2xl mx-auto space-y-6">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="pb-10"
+    >
+      <div className="max-w-3xl mx-auto space-y-8">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white">Quase lá!</h2>
+          <h2 className="text-3xl font-bold text-white mb-2">Quase lá!</h2>
           <p className="text-gray-400">
             Confira os detalhes e escolha como pagar.
           </p>
         </div>
 
-        <Card className="bg-gray-900/50 border-gray-800">
-          <CardContent className="p-6 space-y-6">
+        <Card className="bg-gray-900/60 border-white/5 backdrop-blur-md shadow-2xl overflow-hidden">
+          {/* Header do Card (Total) */}
+          <div className="bg-primary/10 p-6 flex justify-between items-center border-b border-white/5">
+            <div>
+              <p className="text-xs text-primary font-bold uppercase tracking-wider">
+                Valor Total
+              </p>
+              <p className="text-3xl font-extrabold text-white">
+                R$ {totalPrice.toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-black/20 p-3 rounded-full">
+              <CreditCard size={24} className="text-primary" />
+            </div>
+          </div>
+
+          <CardContent className="p-6 md:p-8 space-y-8">
             {/* Resumo do Serviço */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <Scissors size={14} /> Serviços
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <Scissors size={14} /> Serviços Selecionados
               </h3>
-              <div className="bg-black/20 rounded-lg p-3 space-y-2 border border-gray-800">
+              <div className="bg-black/20 rounded-xl p-4 space-y-3 border border-white/5">
                 {selectedServices.map((s) => (
                   <div
                     key={s.id}
-                    className="flex justify-between text-sm text-gray-200"
+                    className="flex justify-between items-center text-sm group"
                   >
-                    <span>{s.name}</span>
-                    <span>R$ {s.price.toFixed(2)}</span>
+                    <span className="text-gray-300 group-hover:text-white transition-colors font-medium">
+                      {s.name}
+                    </span>
+                    <span className="text-gray-400">
+                      R$ {s.price.toFixed(2)}
+                    </span>
                   </div>
                 ))}
-                <Separator className="bg-gray-700" />
-                <div className="flex justify-between font-bold text-primary text-lg">
-                  <span>Total</span>
-                  <span>R$ {totalPrice.toFixed(2)}</span>
-                </div>
               </div>
             </div>
 
-            {/* Data e Profissional */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Calendar size={14} /> Data
+            {/* Data e Profissional (Grid) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <Calendar size={14} /> Quando?
                 </h3>
-                <div className="text-white font-medium capitalize">
-                  {formattedDate}
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {selectedTimeSlot}
+                <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+                  <div className="text-white font-bold capitalize text-lg">
+                    {formattedDate}
+                  </div>
+                  <div className="text-primary font-bold text-xl mt-1">
+                    às {selectedTimeSlot}
+                  </div>
                 </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <User size={14} /> Profissional
+
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <User size={14} /> Com quem?
                 </h3>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-gray-800 flex items-center justify-center text-gray-400">
-                    <User size={16} />
+                <div className="bg-black/20 p-4 rounded-xl border border-white/5 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
+                    {selectedProfessional?.photoURL ? (
+                      <img
+                        src={selectedProfessional.photoURL}
+                        alt="Profissional"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User size={20} />
+                    )}
                   </div>
-                  <span className="text-white font-medium">
+                  <span className="text-white font-bold text-lg">
                     {selectedProfessional?.name}
                   </span>
                 </div>
               </div>
             </div>
+
+            <Separator className="bg-white/10" />
+
+            {/* Pagamento */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                Forma de Pagamento
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-auto p-5 justify-start border-2 relative hover:bg-gray-800 transition-all",
+                    paymentMethod === "pix"
+                      ? "border-primary bg-primary/10"
+                      : "border-gray-700 bg-gray-900/50"
+                  )}
+                  onClick={() => setPaymentMethod("pix")}
+                >
+                  <div className="flex items-center gap-4 w-full">
+                    <div
+                      className={cn(
+                        "p-3 rounded-full transition-colors",
+                        paymentMethod === "pix"
+                          ? "bg-primary text-black"
+                          : "bg-gray-800 text-gray-400"
+                      )}
+                    >
+                      <QrCode size={24} />
+                    </div>
+                    <div className="text-left flex-1">
+                      <div className="font-bold text-white text-base">Pix</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Aprovação imediata
+                      </div>
+                    </div>
+                    {paymentMethod === "pix" && (
+                      <CheckCircle2 className="text-primary" size={24} />
+                    )}
+                  </div>
+                  {paymentMethod === "pix" && (
+                    <span className="absolute -top-3 -right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
+                      RECOMENDADO
+                    </span>
+                  )}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-auto p-5 justify-start border-2 hover:bg-gray-800 transition-all",
+                    paymentMethod === "cash"
+                      ? "border-primary bg-primary/10"
+                      : "border-gray-700 bg-gray-900/50"
+                  )}
+                  onClick={() => setPaymentMethod("cash")}
+                >
+                  <div className="flex items-center gap-4 w-full">
+                    <div
+                      className={cn(
+                        "p-3 rounded-full transition-colors",
+                        paymentMethod === "cash"
+                          ? "bg-primary text-black"
+                          : "bg-gray-800 text-gray-400"
+                      )}
+                    >
+                      <CreditCard size={24} />
+                    </div>
+                    <div className="text-left flex-1">
+                      <div className="font-bold text-white text-base">
+                        Pagar no Local
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Dinheiro ou Cartão
+                      </div>
+                    </div>
+                    {paymentMethod === "cash" && (
+                      <CheckCircle2 className="text-primary" size={24} />
+                    )}
+                  </div>
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-6">
+              <Button
+                variant="ghost"
+                onClick={goToPreviousStep}
+                className="flex-1 border border-white/5 hover:bg-white/5"
+                disabled={status.isConfirming}
+              >
+                Voltar
+              </Button>
+              <Button
+                onClick={handleConfirm}
+                className="flex-[2] font-bold text-base h-12 shadow-lg shadow-primary/20"
+                disabled={status.isConfirming}
+              >
+                {status.isConfirming ? (
+                  <Loader2 className="animate-spin mr-2" />
+                ) : (
+                  <CheckCircle2 className="mr-2" />
+                )}{" "}
+                Confirmar Agendamento
+              </Button>
+            </div>
           </CardContent>
         </Card>
-
-        {/* Pagamento */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-white">Forma de Pagamento</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Button
-              variant="outline"
-              className={cn(
-                "h-auto p-4 justify-start border-2 relative hover:bg-gray-800",
-                paymentMethod === "pix"
-                  ? "border-primary bg-primary/5"
-                  : "border-gray-700 bg-gray-900"
-              )}
-              onClick={() => setPaymentMethod("pix")}
-            >
-              <div className="flex items-center gap-4 w-full">
-                <div
-                  className={cn(
-                    "p-2 rounded-full",
-                    paymentMethod === "pix"
-                      ? "bg-primary text-black"
-                      : "bg-gray-800 text-gray-400"
-                  )}
-                >
-                  <QrCode size={20} />
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-bold text-white">Pix</div>
-                  <div className="text-xs text-gray-400">
-                    Aprovação imediata
-                  </div>
-                </div>
-                {paymentMethod === "pix" && (
-                  <div className="h-4 w-4 rounded-full bg-primary border-2 border-black" />
-                )}
-              </div>
-              {paymentMethod === "pix" && (
-                <span className="absolute -top-2 -right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  RÁPIDO
-                </span>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              className={cn(
-                "h-auto p-4 justify-start border-2 hover:bg-gray-800",
-                paymentMethod === "cash"
-                  ? "border-primary bg-primary/5"
-                  : "border-gray-700 bg-gray-900"
-              )}
-              onClick={() => setPaymentMethod("cash")}
-            >
-              <div className="flex items-center gap-4 w-full">
-                <div
-                  className={cn(
-                    "p-2 rounded-full",
-                    paymentMethod === "cash"
-                      ? "bg-primary text-black"
-                      : "bg-gray-800 text-gray-400"
-                  )}
-                >
-                  <CreditCard size={20} />
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-bold text-white">Pagar no Local</div>
-                  <div className="text-xs text-gray-400">
-                    Dinheiro ou Cartão
-                  </div>
-                </div>
-                {paymentMethod === "cash" && (
-                  <div className="h-4 w-4 rounded-full bg-primary border-2 border-black" />
-                )}
-              </div>
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex gap-4 pt-4">
-          <Button
-            variant="ghost"
-            onClick={goToPreviousStep}
-            className="flex-1"
-            disabled={status.isConfirming}
-          >
-            Voltar
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            className="flex-[2] font-bold text-base"
-            disabled={status.isConfirming}
-          >
-            {status.isConfirming ? (
-              <Loader2 className="animate-spin mr-2" />
-            ) : (
-              <CheckCircle2 className="mr-2" />
-            )}{" "}
-            Confirmar Agendamento
-          </Button>
-        </div>
       </div>
 
       <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
-        <DialogContent className="sm:max-w-md bg-gray-900 border-gray-800">
+        <DialogContent className="sm:max-w-md bg-gray-950 border-gray-800 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-center flex flex-col items-center gap-2">
-              <div className="h-12 w-12 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center">
-                <CheckCircle2 size={28} />
-              </div>
-              <span>Agendamento Realizado!</span>
+            <DialogTitle className="text-center flex flex-col items-center gap-4 pt-4">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="h-16 w-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center border border-green-500/20 shadow-[0_0_20px_rgba(34,197,94,0.2)]"
+              >
+                <CheckCircle2 size={40} />
+              </motion.div>
+              <span className="text-xl">Agendamento Realizado!</span>
             </DialogTitle>
-            <DialogDescription className="text-center">
-              Realize o pagamento para garantir seu horário.
+            <DialogDescription className="text-center text-gray-400">
+              Escaneie o QR Code abaixo para pagar.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="bg-white p-6 rounded-xl flex flex-col items-center justify-center my-2 shadow-inner">
+          <div className="bg-white p-6 rounded-2xl flex flex-col items-center justify-center my-4 shadow-inner ring-4 ring-white/5">
             {pixPayload ? (
-              <QRCodeCanvas value={pixPayload} size={180} />
+              <QRCodeCanvas value={pixPayload} size={200} />
             ) : (
               <div className="h-40 w-40 bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
-                Sem chave Pix
+                Sem chave Pix configurada
               </div>
             )}
-            <div className="mt-4 text-center text-gray-900">
-              <p className="text-xs font-bold uppercase text-gray-500">
-                Valor Total
+            <div className="mt-6 text-center text-gray-900 border-t border-gray-200 pt-4 w-full">
+              <p className="text-xs font-bold uppercase text-gray-500 tracking-wider">
+                Valor a Pagar
               </p>
-              <p className="text-2xl font-extrabold">
+              <p className="text-3xl font-extrabold text-gray-900 mt-1">
                 R$ {totalPrice.toFixed(2)}
               </p>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <Button variant="outline" className="w-full" onClick={copyPixCode}>
+          <div className="space-y-3 pb-2">
+            <Button
+              variant="outline"
+              className="w-full border-gray-700 hover:bg-gray-800 text-gray-300"
+              onClick={copyPixCode}
+            >
               <Copy size={16} className="mr-2" /> Copiar Código Pix
             </Button>
             <Button
-              className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white border-none"
+              className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white border-none font-bold shadow-lg shadow-green-900/20"
               onClick={openWhatsApp}
             >
-              <FaWhatsapp size={18} className="mr-2" /> Enviar Comprovante
+              <FaWhatsapp size={20} className="mr-2" /> Enviar Comprovante
             </Button>
             <Button
               variant="ghost"
-              className="w-full text-xs text-gray-500"
+              className="w-full text-xs text-gray-500 hover:text-gray-300"
               onClick={() => {
                 resetBookingState(true);
                 navigate("/dashboard");
@@ -353,7 +397,7 @@ export const Confirmation = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </motion.div>
   );
 };
 

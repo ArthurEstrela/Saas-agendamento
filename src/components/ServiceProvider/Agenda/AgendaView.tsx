@@ -17,13 +17,13 @@ import {
   List,
   LayoutGrid,
   Clock as ClockIcon,
+  AlertCircle,
 } from "lucide-react";
 import { startOfDay, isPast } from "date-fns";
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useFilteredAppointments } from "../../../hooks/useFilteredAppointments";
 import { AgendaModalsWrapper } from "./AgendaModalsWrapper";
 
-// Importação que faltava!
 import { cn } from "../../../lib/utils/cn";
 
 // Abas e Componentes
@@ -56,19 +56,19 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
 
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
+
+  // Melhoria: Define o padrão inicial baseado no tamanho da tela, mas não força mudança depois
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
-    "calendar"
+    typeof window !== "undefined" && window.innerWidth < 768
+      ? "list"
+      : "calendar"
   );
+
   const [selectedProfessionalId, setSelectedProfessionalId] =
     usePersistentState<string>("agenda_professional_filter", "all");
 
   const isOwner = userProfile?.role === "serviceProvider";
-
-  useEffect(() => {
-    if (window.innerWidth < 768)
-      setViewMode((prev) => (prev === "calendar" ? "list" : prev));
-  }, [setViewMode]);
 
   useEffect(() => {
     if (!userProfile) return;
@@ -106,7 +106,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
 
   if (!userProfile)
     return (
-      <div className="flex justify-center h-96 items-center">
+      <div className="flex justify-center h-[50vh] items-center">
         <Loader2 className="animate-spin text-primary" size={40} />
       </div>
     );
@@ -114,19 +114,24 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
   const enrichedFiltered =
     filteredAppointments as EnrichedProviderAppointment[];
 
+  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
+
   const renderContent = () => {
     if (isLoading)
       return (
-        <div className="flex justify-center h-96 items-center">
+        <div className="flex justify-center h-[50vh] items-center">
           <Loader2 className="animate-spin text-primary" size={40} />
         </div>
       );
 
     if (viewMode !== "calendar" && filteredAppointments.length === 0) {
       return (
-        <div className="flex flex-col justify-center items-center h-96 text-gray-500">
+        <div className="flex flex-col justify-center items-center h-[50vh] text-gray-500 text-center p-4">
           <CalendarIcon size={64} className="mb-4 opacity-20" />
-          <p className="text-lg font-medium">Agenda vazia para este dia.</p>
+          <p className="text-lg font-medium">Agenda vazia.</p>
+          <p className="text-sm">
+            Nenhum agendamento encontrado para este filtro.
+          </p>
         </div>
       );
     }
@@ -154,57 +159,69 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
     );
   };
 
-  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
-
   return (
-    <Card className="min-h-0 flex-1 flex flex-col bg-gray-900/60 backdrop-blur-sm border-gray-800 shadow-2xl overflow-hidden">
+    <Card className="flex-1 flex flex-col bg-gray-900/60 backdrop-blur-sm border-gray-800 shadow-2xl overflow-hidden h-full min-h-0">
       {/* Header */}
-      <div className="p-4 sm:p-6 pb-2 border-b border-gray-800">
-        <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-4">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <CalendarIcon className="text-primary" /> Agenda
-          </h1>
+      <div className="flex-shrink-0 p-4 sm:p-6 pb-2 border-b border-gray-800 z-20 bg-gray-900/95">
+        <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4 mb-4">
+          {/* Título e Filtro de Profissional */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto">
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2 whitespace-nowrap">
+              <CalendarIcon className="text-primary" />
+              <span className="hidden sm:inline">Agenda</span>
+            </h1>
 
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             {isOwner && (
-              <ProfessionalFilter
-                selectedProfessionalId={selectedProfessionalId}
-                onSelectProfessional={(id) =>
-                  setSelectedProfessionalId(id || "all")
-                }
-              />
+              <div className="w-full sm:w-auto sm:min-w-[200px]">
+                <ProfessionalFilter
+                  selectedProfessionalId={selectedProfessionalId}
+                  onSelectProfessional={(id) =>
+                    setSelectedProfessionalId(id || "all")
+                  }
+                />
+              </div>
             )}
+          </div>
 
+          {/* Controles de Data e Visualização */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full xl:w-auto">
             {(activeTab === "scheduled" || activeTab === "history") && (
-              <DateSelector
-                selectedDate={selectedDay}
-                setSelectedDate={setSelectedDay}
-                label={
-                  activeTab === "scheduled" &&
-                  viewMode === "calendar" &&
-                  !isMobileView
-                    ? "Semana:"
-                    : "Dia:"
-                }
-              />
+              <div className="w-full sm:w-auto flex-1">
+                <DateSelector
+                  selectedDate={selectedDay}
+                  setSelectedDate={setSelectedDay}
+                  // Lógica inteligente de label:
+                  // Se for mobile E estiver no modo calendário -> Mostra "Dia" (pois mobile vira day view)
+                  // Se for desktop E estiver no modo calendário -> Mostra "Semana"
+                  label={
+                    activeTab === "scheduled" &&
+                    viewMode === "calendar" &&
+                    !isMobileView
+                      ? "Semana:"
+                      : "Dia:"
+                  }
+                />
+              </div>
             )}
 
             {activeTab === "scheduled" && (
-              <AgendaViewSwitcher
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                icons={{
-                  card: <LayoutGrid size={16} />,
-                  list: <List size={16} />,
-                  calendar: <ClockIcon size={16} />,
-                }}
-              />
+              <div className="flex-shrink-0 self-end sm:self-auto">
+                <AgendaViewSwitcher
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  icons={{
+                    card: <LayoutGrid size={18} />,
+                    list: <List size={18} />,
+                    calendar: <ClockIcon size={18} />,
+                  }}
+                />
+              </div>
             )}
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-2">
+        {/* Navigation Tabs (Scrollável no mobile) */}
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
           {[
             { id: "requests", label: "Solicitações", count: pendingCount },
             { id: "scheduled", label: "Agenda", count: 0 },
@@ -212,6 +229,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
               id: "pendingIssues",
               label: "Pendências",
               count: pendingPastCount,
+              alert: true,
             },
             { id: "history", label: "Histórico", count: 0 },
           ].map((tab) => (
@@ -220,7 +238,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
               variant={activeTab === tab.id ? "default" : "ghost"}
               onClick={() => setActiveTab(tab.id as AgendaTab)}
               className={cn(
-                "relative h-9 rounded-full px-4 text-sm font-medium transition-all",
+                "relative h-9 rounded-full px-4 text-sm font-medium transition-all whitespace-nowrap flex-shrink-0",
                 activeTab === tab.id
                   ? "bg-primary text-black hover:bg-primary/90"
                   : "text-gray-400 hover:text-white hover:bg-gray-800"
@@ -229,8 +247,11 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
               {tab.label}
               {tab.count > 0 && (
                 <Badge
-                  variant="destructive"
-                  className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full text-[10px]"
+                  variant={tab.alert ? "destructive" : "secondary"}
+                  className={cn(
+                    "ml-2 h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full text-[10px]",
+                    tab.alert ? "animate-pulse" : "bg-gray-700 text-white"
+                  )}
                 >
                   {tab.count}
                 </Badge>
@@ -241,15 +262,15 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-black/20">
+      <main className="flex-1 overflow-y-auto p-2 sm:p-4 bg-black/20 relative">
         <AnimatePresence mode="wait">
           <motion.div
             key={`${activeTab}-${viewMode}-${selectedDay.toISOString()}`}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-            className="h-full"
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="h-full flex flex-col"
           >
             {activeTab === "requests" && (
               <RequestsTab
@@ -258,7 +279,9 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
                 onUpdateStatus={updateStatus}
               />
             )}
-            {activeTab === "scheduled" && renderContent()}
+            {activeTab === "scheduled" && (
+              <div className="h-full flex flex-col">{renderContent()}</div>
+            )}
             {activeTab === "pendingIssues" && (
               <PendingIssuesTab
                 appointments={enrichedFiltered}

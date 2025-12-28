@@ -9,9 +9,10 @@ import {
   Scissors,
   DollarSign,
   MessageCircle,
-  CheckCircle,
+  ArrowRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { cn } from "../../../lib/utils/cn";
 
 // Primitivos
 import { Card, CardContent } from "../../ui/card";
@@ -33,8 +34,12 @@ export const PendingIssueCard = ({
     locale: ptBR,
   });
 
+  const handleCardClick = () => {
+    onAppointmentSelect(appointment);
+  };
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Evita abrir o modal ao clicar no WhatsApp
     if (!client?.phoneNumber) return;
 
     const cleanPhone = client.phoneNumber.replace(/\D/g, "");
@@ -55,95 +60,107 @@ export const PendingIssueCard = ({
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900/50 border-yellow-600/50 hover:border-yellow-500 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all duration-300"
+      whileTap={{ scale: 0.99 }}
+      onClick={handleCardClick}
+      className="bg-gray-900/50 border-yellow-600/30 hover:border-yellow-500/50 hover:bg-gray-900/80 cursor-pointer group transition-all duration-300 relative overflow-hidden"
     >
+      {/* Efeito de brilho lateral no hover */}
+      <div className="absolute top-0 left-0 w-1 h-full bg-yellow-600/50 group-hover:bg-yellow-500 transition-colors" />
+
       <CardContent className="p-4 sm:p-5">
-        {/* Header com Alerta */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-yellow-600/20">
+        {/* Header com Alerta e Ações */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-500/10 rounded-full">
-              <AlertTriangle className="text-yellow-500" size={24} />
+            <div className="p-2.5 bg-yellow-500/10 rounded-full shrink-0">
+              <AlertTriangle
+                className="text-yellow-500 animate-pulse"
+                size={20}
+              />
             </div>
             <div>
-              <h3 className="font-bold text-lg text-yellow-500 leading-none mb-1">
+              <h3 className="font-bold text-base sm:text-lg text-yellow-500 leading-tight">
                 Pendente de Conclusão
               </h3>
-              <p className="text-xs text-gray-400 font-medium">
-                Finalizado {timeAgo}
+              <p className="text-xs text-gray-400 font-medium mt-0.5 flex items-center gap-1">
+                Finalizado <span className="text-gray-300">{timeAgo}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0">
             {client?.phoneNumber && (
               <Button
                 size="sm"
                 variant="outline"
-                className="flex-1 sm:flex-none border-green-600/30 text-green-500 hover:bg-green-500/10 hover:border-green-500"
+                className="flex-1 sm:flex-none border-green-600/30 text-green-500 hover:bg-green-500/10 hover:border-green-500 hover:text-green-400 h-9"
                 onClick={handleWhatsAppClick}
-                title="Entrar em contato"
+                title="Contato via WhatsApp"
               >
-                <MessageCircle size={18} className="mr-2" />
-                <span className="sm:hidden lg:inline">WhatsApp</span>
+                <MessageCircle size={16} className="mr-2" />
+                <span className="text-xs font-bold">WhatsApp</span>
               </Button>
             )}
 
             <Button
               size="sm"
-              onClick={() => onAppointmentSelect(appointment)}
-              className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg shadow-green-900/20"
+              variant="ghost"
+              className="flex-1 sm:flex-none bg-yellow-600/10 text-yellow-500 hover:bg-yellow-600 hover:text-white h-9 transition-colors"
             >
-              <CheckCircle size={18} className="mr-2" />
-              Concluir
+              <span className="text-xs font-bold mr-2">Resolver</span>
+              <ArrowRight size={16} />
             </Button>
           </div>
         </div>
 
-        {/* Grid de Detalhes */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-black/20 border border-gray-800/50">
-            <Calendar size={18} className="text-gray-500" />
-            <div className="flex flex-col">
-              <span className="text-xs text-gray-500 uppercase font-bold">
-                Data e Hora
+        {/* Grid de Detalhes - Otimizado para Mobile */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-4">
+          {/* Data */}
+          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30">
+            <Calendar size={16} className="text-gray-500 shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+                Data
               </span>
-              <span className="text-sm text-gray-200 font-medium">
+              <span className="text-xs sm:text-sm text-gray-200 font-medium truncate">
                 {format(startTime, "dd/MM 'às' HH:mm", { locale: ptBR })}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-black/20 border border-gray-800/50">
-            <User size={18} className="text-gray-500" />
-            <div className="flex flex-col">
-              <span className="text-xs text-gray-500 uppercase font-bold">
+          {/* Cliente */}
+          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30">
+            <User size={16} className="text-gray-500 shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
                 Cliente
               </span>
-              <span className="text-sm text-gray-200 font-medium truncate">
-                {client?.name || "Não identificado"}
+              <span className="text-xs sm:text-sm text-gray-200 font-medium truncate">
+                {client?.name || "Anônimo"}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-black/20 border border-gray-800/50">
-            <Scissors size={18} className="text-gray-500" />
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-xs text-gray-500 uppercase font-bold">
+          {/* Serviço */}
+          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30 col-span-2 sm:col-span-1">
+            <Scissors size={16} className="text-gray-500 shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
                 Serviço
               </span>
-              <span className="text-sm text-gray-200 font-medium truncate">
+              <span className="text-xs sm:text-sm text-gray-200 font-medium truncate">
                 {services.map((s) => s.name).join(", ")}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-black/20 border border-gray-800/50">
-            <DollarSign size={18} className="text-primary" />
-            <div className="flex flex-col">
-              <span className="text-xs text-gray-500 uppercase font-bold">
+          {/* Valor */}
+          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30 col-span-2 sm:col-span-1">
+            <DollarSign size={16} className="text-primary shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
                 Valor Total
               </span>
-              <span className="text-sm font-bold text-primary">
+              <span className="text-xs sm:text-sm font-bold text-primary truncate">
                 R$ {appointment.totalPrice.toFixed(2)}
               </span>
             </div>

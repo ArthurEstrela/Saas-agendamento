@@ -5,8 +5,8 @@ import { ServiceCompletionModal } from "../ServiceCompletionModal";
 import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
 
 export const AgendaModalsWrapper = () => {
-  // CORREÇÃO 1: Usamos 'modalView' e 'setModalView' em vez de 'modals'
-  const { modalView, closeModal, selectedAppointment, setModalView } = useAgendaModalStore();
+  const { modalView, closeModal, selectedAppointment, setModalView } =
+    useAgendaModalStore();
   const { updateStatus, completeAppointment, cancelAppointment, isLoading } =
     useProviderAppointmentsStore();
 
@@ -14,16 +14,13 @@ export const AgendaModalsWrapper = () => {
 
   return (
     <>
-      {/* Detalhes */}
+      {/* Detalhes do Agendamento */}
       <AppointmentDetailsModal
-        // CORREÇÃO 2: Verificamos se a string do modal ativo é 'details'
         isOpen={modalView === "details"}
-        // CORREÇÃO 3: closeModal() não recebe argumentos
         onClose={() => closeModal()}
         appointment={selectedAppointment}
         onStatusChange={(id, status) => {
           if (status === "cancelled") {
-            // CORREÇÃO 4: Usamos setModalView para trocar de modal sem fechar tudo
             setModalView("cancel");
           } else {
             updateStatus(id, status);
@@ -31,14 +28,12 @@ export const AgendaModalsWrapper = () => {
           }
         }}
         onComplete={() => {
-          // CORREÇÃO 5: Troca direta para o modal de conclusão
           setModalView("complete");
         }}
       />
 
-      {/* Conclusão (Valor Final) */}
+      {/* Modal de Conclusão (Valor Final) */}
       <ServiceCompletionModal
-        // CORREÇÃO 6: O tipo no store é "complete", não "completion"
         isOpen={modalView === "complete"}
         onClose={() => closeModal()}
         appointment={selectedAppointment}
@@ -49,7 +44,7 @@ export const AgendaModalsWrapper = () => {
         }}
       />
 
-      {/* Cancelamento */}
+      {/* Modal de Cancelamento (Motivo) */}
       <CancelAppointmentModal
         isOpen={modalView === "cancel"}
         onClose={() => closeModal()}

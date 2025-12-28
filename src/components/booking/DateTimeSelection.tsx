@@ -19,7 +19,6 @@ import { Calendar } from "../ui/calendar";
 import { Button } from "../ui/button";
 import { Typography } from "../ui/typography";
 import { Card, CardContent } from "../ui/card";
-import { Badge } from "../ui/badge";
 
 const weekDayMap: { [key: number]: DailyAvailability["dayOfWeek"] } = {
   0: "Sunday",
@@ -174,7 +173,8 @@ export const DateTimeSelection = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto px-2">
         {/* Coluna do Calendário */}
         <div className="lg:col-span-5 flex justify-center lg:justify-end">
-          <div className="bg-gray-900/80 border border-white/5 rounded-2xl p-6 shadow-2xl w-full max-w-[380px] backdrop-blur-sm">
+          {/* Card Wrapper com estilo Glass */}
+          <div className="bg-gray-900/60 border border-white/5 rounded-2xl p-4 shadow-2xl w-full max-w-[360px] backdrop-blur-md flex items-center justify-center">
             <Calendar
               mode="single"
               selected={date}

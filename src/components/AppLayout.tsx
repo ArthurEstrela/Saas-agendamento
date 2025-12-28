@@ -1,28 +1,27 @@
 // src/components/AppLayout.tsx
 
 import React, { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useLocation } from "react-router-dom"; // Importe useLocation
 import Header from "./Header";
 import Footer from "./Footer";
 import { useAuthStore } from "../store/authStore";
-import { useProfileStore } from "../store/profileStore"; // Import correto do store de perfil
-import type { UserProfile } from "../types"; // Importamos o tipo original
+import { useProfileStore } from "../store/profileStore";
+import type { UserProfile } from "../types";
 
 const AppLayout = () => {
-  // 1. Corrigido: 'isLoading' é o nome correto no authStore
   const { user, isLoading } = useAuthStore();
-  
-  // 2. Corrigido: 'userProfile' vem do profileStore
   const { userProfile } = useProfileStore();
-  
   const navigate = useNavigate();
+  const location = useLocation(); // Hook para saber a rota atual
 
-  // NOVO USEEFFECT PARA VERIFICAR AGENDAMENTO PENDENTE
+  // Verifica se a rota atual é parte do dashboard
+  const isDashboardRoute = location.pathname.startsWith("/dashboard");
+
   useEffect(() => {
     if (!isLoading && user && userProfile) {
-      // ✅ CORREÇÃO: Removemos o 'any'.
-      // Criamos uma tipagem local que une UserProfile com a propriedade opcional pendingBooking.
-      const profileWithBooking = userProfile as UserProfile & { pendingBooking?: boolean };
+      const profileWithBooking = userProfile as UserProfile & {
+        pendingBooking?: boolean;
+      };
 
       if (profileWithBooking.pendingBooking) {
         navigate("/booking");
@@ -32,17 +31,18 @@ const AppLayout = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-950 text-gray-200">
-      <Header />
+      {/* Só mostra o Header público se NÃO for dashboard.
+         Isso evita o "duplo header" em dispositivos móveis,
+         já que os dashboards têm seus próprios menus.
+      */}
+      {!isDashboardRoute && <Header />}
+
       <main className="flex-grow">
-        {/* O Outlet renderiza a rota filha (Dashboard, etc.) */}
         <Outlet />
       </main>
-      <Footer />
-      
-      {/* OBS: O <AppointmentDetailsModal /> foi removido daqui pois ele exige propriedades 
-          (isOpen, appointment, etc.) que não estão disponíveis neste contexto global.
-          Ele deve ser usado apenas dentro das telas de agendamento/dashboard onde esses dados existem.
-      */}
+
+      {/* Footer público também é escondido no dashboard para ganhar espaço */}
+      {!isDashboardRoute && <Footer />}
     </div>
   );
 };

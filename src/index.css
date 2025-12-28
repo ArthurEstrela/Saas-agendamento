@@ -117,47 +117,4 @@ input[type="number"] {
     background-color: #0f0f12; /* Fallback caso o tailwind não carregue */
   }
 }
-
-/* Adicione isso ao final do src/index.css */
-
-/* Customização do React Day Picker para Dark Mode + Tailwind */
-.rdp {
-  --rdp-cell-size: 40px; /* Tamanho dos botões */
-  --rdp-accent-color: theme('colors.primary.DEFAULT'); /* Usa sua cor Dourada/Primary */
-  --rdp-background-color: theme('colors.gray.800'); /* Fundo do calendário (opcional) */
-  margin: 0;
-}
-
-/* Ajusta a cor dos dias para ficarem visíveis no fundo escuro */
-.rdp-day {
-  color: theme('colors.gray.300'); 
-}
-
-/* Ajusta o dia selecionado */
-.rdp-day_selected:not([disabled]), 
-.rdp-day_selected:focus:not([disabled]), 
-.rdp-day_selected:active:not([disabled]), 
-.rdp-day_selected:hover:not([disabled]) {
-  background-color: var(--rdp-accent-color);
-  color: theme('colors.primary.foreground'); /* Ou 'black' se o dourado for claro */
-  font-weight: bold;
-}
-
-/* Ajusta o hover nos dias não selecionados */
-.rdp-day:hover:not(.rdp-day_selected) {
-  background-color: theme('colors.gray.700');
-  color: white;
-}
-
-/* Ajusta a cor do texto do mês/ano e dias da semana */
-.rdp-caption_label, .rdp-head_cell {
-  color: theme('colors.gray.200');
-}
-
-/* Botões de navegação (setinhas < >) */
-.rdp-nav_button {
-  color: theme('colors.primary.DEFAULT');
-}
-.rdp-nav_button:hover {
-  background-color: theme('colors.gray.700');
-}
+/* FIM DO ARQUIVO - Sem o bloco .rdp */

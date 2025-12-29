@@ -7,6 +7,7 @@ import {
   getDocs,
   query,
   updateDoc,
+  setDoc, // <--- ADICIONADO
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
@@ -33,7 +34,6 @@ const getProfessionalsCollectionRef = (providerId: string) =>
   collection(db, "serviceProviders", providerId, "professionals");
 
 /**
- * !! NOVO !!
  * Chama a Cloud Function 'createProfessionalUser' para criar o Auth e os docs.
  */
 export const createProfessionalAccount = async (
@@ -58,6 +58,45 @@ export const createProfessionalAccount = async (
 
 /**
  * !! NOVO !!
+ * Cria manualmente o perfil de profissional para o Dono, caso não exista.
+ * Isso resolve o problema do dono não aparecer na agenda.
+ */
+export const createOwnerAsProfessional = async (
+  providerId: string,
+  name: string,
+  email: string,
+  photoURL: string = ""
+): Promise<void> => {
+  const professionalsRef = getProfessionalsCollectionRef(providerId);
+  const newProfessionalRef = doc(professionalsRef); // Gera ID novo automaticamente
+
+  const ownerAsProfessional = {
+    id: newProfessionalRef.id,
+    name: name,
+    email: email,
+    photoURL: photoURL,
+    services: [], // Inicialmente sem serviços vinculados (o usuário deve editar depois)
+    availability: [
+      // Disponibilidade Padrão (Seg-Sex, 09h-18h)
+      ...["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((day) => ({
+        dayOfWeek: day,
+        isAvailable: true,
+        slots: [{ start: "09:00", end: "18:00" }],
+      })),
+      // Fim de semana fechado
+      ...["Saturday", "Sunday"].map((day) => ({
+        dayOfWeek: day,
+        isAvailable: false,
+        slots: [],
+      })),
+    ],
+    isOwner: true, // A flag mágica que identifica o dono
+  };
+
+  await setDoc(newProfessionalRef, ownerAsProfessional);
+};
+
+/**
  * Atualiza as URLs das fotos nos dois documentos (user e professional)
  */
 export const updateProfessionalPhotoUrls = async (
@@ -104,9 +143,6 @@ export const updateProfessionalInProvider = async (
     updatedProfessional.id
   );
 
-  // ✅ CORREÇÃO: Adicionamos o comentário abaixo para ignorar o erro de variável não usada,
-  // pois estamos extraindo o 'id' propositalmente apenas para removê-lo de 'dataToUpdate'.
-  
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id, ...dataToUpdate } = updatedProfessional;
 

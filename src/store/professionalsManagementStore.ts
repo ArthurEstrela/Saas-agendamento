@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { useProfileStore } from "./profileStore";
 import {
   createProfessionalAccount,
+  createOwnerAsProfessional, // <--- ADICIONADO
   updateProfessionalPhotoUrls,
   removeProfessionalFromProvider,
   updateProfessionalInProvider,
@@ -19,7 +20,6 @@ type ProfessionalFormData = Partial<Professional> & {
   photoFile?: File | null;
 };
 
-// 1. Adicionamos a tipagem aqui
 interface ProfessionalsManagementState {
   isSubmitting: boolean;
   error: string | null;
@@ -36,8 +36,14 @@ interface ProfessionalsManagementState {
     providerId: string,
     professionalId: string
   ) => Promise<void>;
-  // ✅ Adicionado:
   fetchProfessionals: (providerId: string) => Promise<void>;
+  // ✅ ADICIONADO: Função para registrar o dono
+  registerOwnerAsProfessional: (
+    providerId: string,
+    name: string,
+    email: string,
+    photoURL?: string
+  ) => Promise<void>;
 }
 
 export const useProfessionalsManagementStore =
@@ -45,15 +51,35 @@ export const useProfessionalsManagementStore =
     isSubmitting: false,
     error: null,
 
-    // ✅ Adicionado: Implementação da função
     fetchProfessionals: async (providerId: string) => {
       set({ isSubmitting: true, error: null });
       try {
-        // Reutilizamos a lógica do profileStore para buscar os dados atualizados
         await useProfileStore.getState().fetchUserProfile(providerId);
       } catch (err) {
         console.error("Erro ao buscar profissionais:", err);
         set({ error: "Falha ao carregar lista de profissionais." });
+      } finally {
+        set({ isSubmitting: false });
+      }
+    },
+
+    // ✅ IMPLEMENTAÇÃO DA NOVA FUNÇÃO
+    registerOwnerAsProfessional: async (
+      providerId,
+      name,
+      email,
+      photoURL = ""
+    ) => {
+      set({ isSubmitting: true, error: null });
+      try {
+        await createOwnerAsProfessional(providerId, name, email, photoURL);
+        // Atualiza a lista globalmente
+        await useProfileStore.getState().fetchUserProfile(providerId);
+        toast.success("Seu perfil foi ativado na equipe!");
+      } catch (err) {
+        console.error("Erro ao registrar dono como profissional:", err);
+        toast.error("Erro ao ativar perfil de atendimento.");
+        set({ error: "Falha ao registrar dono como profissional." });
       } finally {
         set({ isSubmitting: false });
       }
@@ -68,7 +94,7 @@ export const useProfessionalsManagementStore =
         if (!email || !password || !name || !serviceIds) {
           throw new Error("Dados do formulário incompletos.");
         }
-        
+
         const { uid, professionalId } = await createProfessionalAccount({
           name,
           email,
@@ -82,7 +108,7 @@ export const useProfessionalsManagementStore =
             professionalId,
             photoFile
           );
-          
+
           await updateProfessionalPhotoUrls(
             providerId,
             uid,
@@ -132,16 +158,17 @@ export const useProfessionalsManagementStore =
         const finalProfessional: Professional = {
           id: professionalId,
           name: professionalData.name || currentProfessional?.name || "",
-          services: professionalData.services || currentProfessional?.services || [],
+          services:
+            professionalData.services || currentProfessional?.services || [],
           photoURL: photoURL,
           availability:
             professionalData.availability !== undefined
               ? professionalData.availability
               : currentProfessional?.availability || [],
-          // Mantém a flag isOwner se existir
-          isOwner: professionalData.isOwner !== undefined 
-            ? professionalData.isOwner 
-            : currentProfessional?.isOwner,
+          isOwner:
+            professionalData.isOwner !== undefined
+              ? professionalData.isOwner
+              : currentProfessional?.isOwner,
         };
 
         await updateProfessionalInProvider(providerId, finalProfessional);

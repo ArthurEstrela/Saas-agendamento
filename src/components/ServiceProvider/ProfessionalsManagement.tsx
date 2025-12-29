@@ -4,7 +4,7 @@ import { useProfessionalsManagementStore } from "../../store/professionalsManage
 import { ProfessionalModal } from "./ProfessionalModal";
 import { ProfessionalCard } from "./ProfessionalCard";
 import { ConfirmationModal } from "../Common/ConfirmationModal";
-import { Loader2, Users, UserPlus } from "lucide-react";
+import { Loader2, Users, UserPlus, AlertCircle } from "lucide-react"; // Adicionei AlertCircle
 import type { Professional, ServiceProviderProfile } from "../../types";
 
 // UI
@@ -20,17 +20,16 @@ type ProfessionalFormData = {
 
 export const ProfessionalsManagement = () => {
   const userProfile = useProfileStore((state) => state.userProfile);
-  
-  // Nota: Idealmente, o store de management deveria fornecer a lista, mas se o profileStore já tem, ok.
-  // Vou garantir que a gente busque os dados atualizados.
+
   const professionalsState = useProfileStore((state) => state.professionals);
-  
+
   const {
     isSubmitting: isLoading,
     addProfessional,
     updateProfessional,
     removeProfessional,
-    fetchProfessionals, // <--- IMPORTANTE: Precisamos buscar a lista
+    fetchProfessionals,
+    registerOwnerAsProfessional, // <--- Destructure da nova função
   } = useProfessionalsManagementStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,8 +40,6 @@ export const ProfessionalsManagement = () => {
     prof: Professional | null;
   }>({ isOpen: false, prof: null });
 
-  // 1. useEffect para carregar os dados assim que a tela abre
-  // Isso resolve o problema do "criador não aparecer"
   useEffect(() => {
     if (userProfile?.role === "serviceProvider" && userProfile.id) {
       fetchProfessionals(userProfile.id);
@@ -52,16 +49,18 @@ export const ProfessionalsManagement = () => {
   const providerProfile = userProfile as ServiceProviderProfile;
   const services = providerProfile?.services || [];
 
-  // 2. O useMemo DEVE vir antes de qualquer 'return'
   const sortedProfessionals = useMemo(() => {
     if (!professionalsState) return [];
     return [...professionalsState].sort((a, b) => {
-      // Se a for dono, vem antes (-1). Se b for dono, a vem depois (1).
-      return (a.isOwner === b.isOwner) ? 0 : a.isOwner ? -1 : 1;
+      return a.isOwner === b.isOwner ? 0 : a.isOwner ? -1 : 1;
     });
   }, [professionalsState]);
 
-  // 3. AGORA sim podemos fazer o retorno antecipado (Early Return)
+  // ✅ Verifica se o dono já está na lista
+  const hasOwnerProfile = useMemo(() => {
+    return sortedProfessionals.some((p) => p.isOwner);
+  }, [sortedProfessionals]);
+
   if (!userProfile || userProfile.role !== "serviceProvider") return null;
 
   // -- Funções de Handler --
@@ -114,6 +113,16 @@ export const ProfessionalsManagement = () => {
     setConfirmState({ isOpen: false, prof: null });
   };
 
+  // Handler para criar o perfil do dono
+  const handleActivateOwner = async () => {
+    await registerOwnerAsProfessional(
+      providerProfile.id,
+      providerProfile.name,
+      providerProfile.email,
+      providerProfile.profilePictureUrl || ""
+    );
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 border-b border-gray-800 pb-6">
@@ -133,6 +142,33 @@ export const ProfessionalsManagement = () => {
         </Button>
       </div>
 
+      {/* ✅ BANNER DE ALERTA SE O DONO NÃO ESTIVER NA LISTA */}
+      {!isLoading && !hasOwnerProfile && professionalsState !== null && (
+        <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-6 mb-8 animate-fade-in shadow-lg shadow-blue-900/5">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-blue-500/20 rounded-full text-blue-400 mt-1">
+              <AlertCircle size={24} />
+            </div>
+            <div>
+              <h4 className="text-lg font-bold text-blue-100 mb-1">
+                Você não está aparecendo na agenda!
+              </h4>
+              <p className="text-sm text-blue-300 leading-relaxed max-w-xl">
+                Seu perfil de administrador existe, mas você ainda não está
+                listado como um profissional que realiza atendimentos. Clique no
+                botão ao lado para ativar seu perfil na equipe.
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleActivateOwner}
+            className="whitespace-nowrap bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-6 h-auto shadow-xl shadow-blue-900/20"
+          >
+            Ativar meu Perfil de Atendimento
+          </Button>
+        </div>
+      )}
+
       {professionalsState === null ? (
         <div className="flex justify-center p-10">
           <Loader2 className="animate-spin" />
@@ -149,20 +185,23 @@ export const ProfessionalsManagement = () => {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl animate-fade-in">
-          <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
-            <Users size={32} />
+        /* Se a lista estiver vazia e não tiver o banner acima (caso raro), mostra empty state */
+        !hasOwnerProfile && (
+          <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl animate-fade-in">
+            <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
+              <Users size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">
+              Sua equipe está vazia
+            </h3>
+            <p className="text-gray-400 mb-6 max-w-sm text-center">
+              Comece adicionando profissionais para distribuir os agendamentos.
+            </p>
+            <Button variant="outline" onClick={() => handleOpenModal()}>
+              Adicionar Profissional
+            </Button>
           </div>
-          <h3 className="text-xl font-bold text-white mb-2">
-            Sua equipe está vazia
-          </h3>
-          <p className="text-gray-400 mb-6 max-w-sm text-center">
-            Comece adicionando profissionais para distribuir os agendamentos.
-          </p>
-          <Button variant="outline" onClick={() => handleOpenModal()}>
-            Adicionar Profissional
-          </Button>
-        </div>
+        )
       )}
 
       <ProfessionalModal

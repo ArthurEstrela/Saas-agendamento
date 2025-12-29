@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
 import { ProfessionalModal } from "./ProfessionalModal";
@@ -20,12 +20,17 @@ type ProfessionalFormData = {
 
 export const ProfessionalsManagement = () => {
   const userProfile = useProfileStore((state) => state.userProfile);
+  
+  // Nota: Idealmente, o store de management deveria fornecer a lista, mas se o profileStore já tem, ok.
+  // Vou garantir que a gente busque os dados atualizados.
   const professionalsState = useProfileStore((state) => state.professionals);
+  
   const {
     isSubmitting: isLoading,
     addProfessional,
     updateProfessional,
     removeProfessional,
+    fetchProfessionals, // <--- IMPORTANTE: Precisamos buscar a lista
   } = useProfessionalsManagementStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,11 +41,30 @@ export const ProfessionalsManagement = () => {
     prof: Professional | null;
   }>({ isOpen: false, prof: null });
 
-  if (!userProfile || userProfile.role !== "serviceProvider") return null;
+  // 1. useEffect para carregar os dados assim que a tela abre
+  // Isso resolve o problema do "criador não aparecer"
+  useEffect(() => {
+    if (userProfile?.role === "serviceProvider" && userProfile.id) {
+      fetchProfessionals(userProfile.id);
+    }
+  }, [userProfile, fetchProfessionals]);
 
   const providerProfile = userProfile as ServiceProviderProfile;
-  const services = providerProfile.services || [];
-  const professionals = professionalsState || [];
+  const services = providerProfile?.services || [];
+
+  // 2. O useMemo DEVE vir antes de qualquer 'return'
+  const sortedProfessionals = useMemo(() => {
+    if (!professionalsState) return [];
+    return [...professionalsState].sort((a, b) => {
+      // Se a for dono, vem antes (-1). Se b for dono, a vem depois (1).
+      return (a.isOwner === b.isOwner) ? 0 : a.isOwner ? -1 : 1;
+    });
+  }, [professionalsState]);
+
+  // 3. AGORA sim podemos fazer o retorno antecipado (Early Return)
+  if (!userProfile || userProfile.role !== "serviceProvider") return null;
+
+  // -- Funções de Handler --
 
   const handleOpenModal = (prof: Professional | null = null) => {
     setEditingProfessional(prof);
@@ -62,6 +86,7 @@ export const ProfessionalsManagement = () => {
         availability: editingProfessional.availability || [],
         photoFile,
         photoURL: editingProfessional.photoURL,
+        isOwner: editingProfessional.isOwner,
       });
     } else {
       await addProfessional(providerProfile.id, {
@@ -79,6 +104,11 @@ export const ProfessionalsManagement = () => {
   };
 
   const confirmDelete = () => {
+    if (confirmState.prof?.isOwner) {
+      setConfirmState({ isOpen: false, prof: null });
+      return;
+    }
+
     if (confirmState.prof)
       removeProfessional(providerProfile.id, confirmState.prof.id);
     setConfirmState({ isOpen: false, prof: null });
@@ -92,7 +122,7 @@ export const ProfessionalsManagement = () => {
             Equipe
           </Typography>
           <Typography variant="muted" className="mt-1">
-            Gerencie os profissionais do seu negócio.
+            Gerencie os profissionais e suas especialidades.
           </Typography>
         </div>
         <Button
@@ -107,9 +137,9 @@ export const ProfessionalsManagement = () => {
         <div className="flex justify-center p-10">
           <Loader2 className="animate-spin" />
         </div>
-      ) : professionals.length > 0 ? (
+      ) : sortedProfessionals.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {professionals.map((prof) => (
+          {sortedProfessionals.map((prof) => (
             <ProfessionalCard
               key={prof.id}
               professional={prof}
@@ -119,7 +149,7 @@ export const ProfessionalsManagement = () => {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl">
+        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl animate-fade-in">
           <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
             <Users size={32} />
           </div>
@@ -127,7 +157,7 @@ export const ProfessionalsManagement = () => {
             Sua equipe está vazia
           </h3>
           <p className="text-gray-400 mb-6 max-w-sm text-center">
-            Cadastre profissionais para distribuir os agendamentos.
+            Comece adicionando profissionais para distribuir os agendamentos.
           </p>
           <Button variant="outline" onClick={() => handleOpenModal()}>
             Adicionar Profissional
@@ -149,7 +179,7 @@ export const ProfessionalsManagement = () => {
         onClose={() => setConfirmState({ isOpen: false, prof: null })}
         onConfirm={confirmDelete}
         title="Remover Profissional?"
-        message={`Tem certeza que deseja remover "${confirmState.prof?.name}"?`}
+        message={`Tem certeza que deseja remover "${confirmState.prof?.name}"? Esta ação não pode ser desfeita.`}
         confirmText="Remover"
       />
     </div>

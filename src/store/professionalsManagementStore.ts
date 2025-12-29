@@ -1,12 +1,10 @@
-// Em src/store/professionalsManagementStore.ts
+// src/store/professionalsManagementStore.ts
 
 import { create } from "zustand";
 import { useProfileStore } from "./profileStore";
 import {
-  // 1. Importamos as NOVAS funções de serviço
   createProfessionalAccount,
   updateProfessionalPhotoUrls,
-  // E mantemos as antigas
   removeProfessionalFromProvider,
   updateProfessionalInProvider,
   uploadProfessionalPhoto,
@@ -14,14 +12,14 @@ import {
 import type { Professional } from "../types";
 import { toast } from "react-hot-toast";
 
-// --- 2. ATUALIZAMOS O PAYLOAD ---
-type ProfessionalFormData = Partial<Professional> & { // Tornamos mais flexível
+type ProfessionalFormData = Partial<Professional> & {
   email?: string;
   password?: string;
-  serviceIds?: string[]; // Adicionado para a Cloud Function
+  serviceIds?: string[];
   photoFile?: File | null;
 };
 
+// 1. Adicionamos a tipagem aqui
 interface ProfessionalsManagementState {
   isSubmitting: boolean;
   error: string | null;
@@ -38,6 +36,8 @@ interface ProfessionalsManagementState {
     providerId: string,
     professionalId: string
   ) => Promise<void>;
+  // ✅ Adicionado:
+  fetchProfessionals: (providerId: string) => Promise<void>;
 }
 
 export const useProfessionalsManagementStore =
@@ -45,9 +45,20 @@ export const useProfessionalsManagementStore =
     isSubmitting: false,
     error: null,
 
-    /**
-     * --- 3. REESCREVEMOS COMPLETAMENTE O addProfessional ---
-     */
+    // ✅ Adicionado: Implementação da função
+    fetchProfessionals: async (providerId: string) => {
+      set({ isSubmitting: true, error: null });
+      try {
+        // Reutilizamos a lógica do profileStore para buscar os dados atualizados
+        await useProfileStore.getState().fetchUserProfile(providerId);
+      } catch (err) {
+        console.error("Erro ao buscar profissionais:", err);
+        set({ error: "Falha ao carregar lista de profissionais." });
+      } finally {
+        set({ isSubmitting: false });
+      }
+    },
+
     addProfessional: async (providerId, payload) => {
       set({ isSubmitting: true, error: null });
 
@@ -58,7 +69,6 @@ export const useProfessionalsManagementStore =
           throw new Error("Dados do formulário incompletos.");
         }
         
-        // 1. Chama a Cloud Function com os dados principais
         const { uid, professionalId } = await createProfessionalAccount({
           name,
           email,
@@ -66,7 +76,6 @@ export const useProfessionalsManagementStore =
           serviceIds,
         });
 
-        // 2. Se a função foi bem-sucedida E houver uma foto, faz o upload
         if (photoFile) {
           const photoURL = await uploadProfessionalPhoto(
             providerId,
@@ -74,7 +83,6 @@ export const useProfessionalsManagementStore =
             photoFile
           );
           
-          // 3. Atualiza os documentos com a URL da foto
           await updateProfessionalPhotoUrls(
             providerId,
             uid,
@@ -83,7 +91,6 @@ export const useProfessionalsManagementStore =
           );
         }
 
-        // 4. Atualiza o estado global
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 
@@ -103,9 +110,6 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    /**
-     * updateProfessional (Sua lógica original está correta)
-     */
     updateProfessional: async (providerId, professionalId, payload) => {
       set({ isSubmitting: true, error: null });
 
@@ -134,6 +138,10 @@ export const useProfessionalsManagementStore =
             professionalData.availability !== undefined
               ? professionalData.availability
               : currentProfessional?.availability || [],
+          // Mantém a flag isOwner se existir
+          isOwner: professionalData.isOwner !== undefined 
+            ? professionalData.isOwner 
+            : currentProfessional?.isOwner,
         };
 
         await updateProfessionalInProvider(providerId, finalProfessional);
@@ -156,15 +164,11 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    /**
-     * removeProfessional (Sua lógica original está correta)
-     */
     removeProfessional: async (providerId, professionalId) => {
       set({ isSubmitting: true, error: null });
 
       const removeAndRefetchPromise = async () => {
         await removeProfessionalFromProvider(providerId, professionalId);
-        // TODO: Adicionar Cloud Function para deletar o Auth user
         await useProfileStore.getState().fetchUserProfile(providerId);
       };
 

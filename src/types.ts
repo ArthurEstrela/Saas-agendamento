@@ -69,6 +69,7 @@ export interface Professional {
   photoURL?: string;
   services: Service[]; // Array of Service objects
   availability: DailyAvailability[];
+  isOwner?: boolean; // <--- ADICIONE ISTO
 }
 
 export interface Review {

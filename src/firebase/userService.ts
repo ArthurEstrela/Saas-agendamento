@@ -1,7 +1,8 @@
+// src/firebase/userService.ts
+
 import {
   doc,
   getDoc,
-  setDoc,
   serverTimestamp,
   updateDoc,
   Timestamp,
@@ -12,6 +13,7 @@ import {
   where,
   getDocs,
   limit,
+  writeBatch, // <--- Importante para criar os dois documentos atomicamente
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./config";
@@ -22,7 +24,32 @@ import type {
   UserRole,
 } from "../types";
 
-// ... (suas outras funções como convertTimestamps, createSlug, etc. continuam aqui)
+// --- CONSTANTES ---
+
+// Disponibilidade padrão para o Dono (Seg-Sex, 09h-18h)
+const DEFAULT_AVAILABILITY = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+].map((day) => ({
+  dayOfWeek: day,
+  isAvailable: true,
+  slots: [{ start: "09:00", end: "18:00" }],
+}));
+
+// Fins de semana fechados por padrão
+["Saturday", "Sunday"].forEach((day) => {
+  DEFAULT_AVAILABILITY.push({
+    dayOfWeek: day,
+    isAvailable: false,
+    slots: [],
+  });
+});
+
+// --- HELPER FUNCTIONS ---
+
 const convertTimestamps = (
   data: Record<string, unknown>
 ): Record<string, unknown> => {
@@ -53,6 +80,8 @@ const createSlug = (text: string) => {
     .replace(/-+$/, "");
 };
 
+// --- CORE FUNCTIONS ---
+
 export const createUserProfile = async (
   uid: string,
   email: string,
@@ -60,6 +89,8 @@ export const createUserProfile = async (
   role: UserRole,
   additionalData?: Partial<ServiceProviderProfile | ClientProfile>
 ): Promise<void> => {
+  // Inicializa o Batch para escrita atômica
+  const batch = writeBatch(db);
   const userRef = doc(db, "users", uid);
 
   const baseProfile = {
@@ -74,6 +105,7 @@ export const createUserProfile = async (
   let specificProfile: UserProfile;
 
   if (role === "client") {
+    // --- LÓGICA DE CLIENTE ---
     const clientData = additionalData as Partial<ClientProfile>;
     specificProfile = {
       ...baseProfile,
@@ -85,9 +117,12 @@ export const createUserProfile = async (
       profilePictureUrl: "",
     } as ClientProfile;
 
+    batch.set(userRef, specificProfile);
   } else {
+    // --- LÓGICA DE PRESTADOR DE SERVIÇO (DONO) ---
     const providerData = additionalData as Partial<ServiceProviderProfile>;
     const businessName = providerData?.businessName || `${name}'s Business`;
+
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
@@ -106,11 +141,38 @@ export const createUserProfile = async (
       publicProfileSlug: createSlug(businessName),
       logoUrl: "",
       services: [],
-      professionals: [],
+      professionals: [], // Lista de IDs (mantemos vazia inicialmente)
       reviews: [],
     } as ServiceProviderProfile;
+
+    // 1. Adiciona o perfil principal ao batch
+    batch.set(userRef, specificProfile);
+
+    // 2. CRIA O "PROFISSIONAL ESPELHO"
+    // Isso permite que o dono seja agendável e apareça na lista de equipe
+    const professionalsRef = collection(
+      db,
+      "serviceProviders",
+      uid,
+      "professionals"
+    );
+    const newProfessionalRef = doc(professionalsRef); // ID Automático
+
+    const ownerAsProfessional = {
+      id: newProfessionalRef.id,
+      name: name, // Nome do dono
+      email: email,
+      photoURL: "", // Começa sem foto (o usuário fará upload depois)
+      services: [], // Começa sem serviços vinculados
+      availability: DEFAULT_AVAILABILITY,
+      isOwner: true, // FLAG IMPORTANTE: Identifica que este é o dono
+    };
+
+    batch.set(newProfessionalRef, ownerAsProfessional);
   }
-  await setDoc(userRef, specificProfile);
+
+  // Executa todas as operações de uma vez
+  await batch.commit();
 };
 
 export const getUserProfile = async (
@@ -145,23 +207,22 @@ export const uploadFile = async (file: File, path: string): Promise<string> => {
   return downloadURL;
 };
 
-// ================== NOSSO NOVO ESPECIALISTA ==================
+// ================== UPLOAD DE LOGO DO PRESTADOR ==================
 /**
  * Faz o upload da logo de um prestador de serviço e atualiza o perfil.
- * @param providerId O ID do prestador de serviço (usuário).
- * @param file O arquivo da logo.
- * @returns A URL de download da nova logo.
  */
-export const uploadProviderLogo = async (providerId: string, file: File): Promise<string> => {
+export const uploadProviderLogo = async (
+  providerId: string,
+  file: File
+): Promise<string> => {
   const filePath = `logos/${providerId}/${file.name}`;
-  const downloadURL = await uploadFile(file, filePath); // Usa o "motor"
-  
-  // Ação especialista: atualiza o campo correto no perfil
+  const downloadURL = await uploadFile(file, filePath);
+
   await updateUserProfile(providerId, { logoUrl: downloadURL });
 
   return downloadURL;
 };
-// ==============================================================
+// =================================================================
 
 export const uploadProfilePicture = async (
   uid: string,
@@ -173,8 +234,6 @@ export const uploadProfilePicture = async (
   return downloadURL;
 };
 
-
-// ... (o resto do seu arquivo continua igual)
 export const toggleFavoriteProfessional = async (
   clientId: string,
   professionalId: string
@@ -283,9 +342,9 @@ export const uploadProviderBanner = async (
   if (!userId) throw new Error("ID do usuário é necessário para o upload.");
   const filePath = `providerBanners/${userId}/${file.name}`;
   const storageRef = ref(storage, filePath);
-  
+
   await uploadBytes(storageRef, file);
   const downloadURL = await getDownloadURL(storageRef);
-  
+
   return downloadURL;
 };

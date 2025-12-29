@@ -10,36 +10,36 @@ interface AvailabilityState {
   // Estado para o fluxo de agendamento (Cliente)
   availableSlots: string[];
 
-  // Estado para o fluxo de gerenciamento (Profissional) - FALTAVA ISSO
+  // Estado para o fluxo de gerenciamento
   availability: DailyAvailability[];
 
   isLoading: boolean;
   error: string | null;
 
-  // Ação: Buscar horários livres para um serviço em uma data (Cliente)
+  // Cliente: Buscar horários livres
   fetchAvailableSlots: (
     professional: Professional,
     service: Service,
     date: Date
   ) => Promise<void>;
 
-  // Ação: Buscar a configuração de horários do profissional (Dashboard) - FALTAVA ISSO
-  fetchAvailability: (providerId: string) => Promise<void>;
+  // Dashboard: Buscar configuração (recebe ID do Dono e ID do Profissional)
+  fetchAvailability: (providerId: string, professionalId: string) => Promise<void>;
 
-  // Ação: Salvar a configuração de horários (Dashboard) - FALTAVA ISSO
+  // Dashboard: Salvar configuração (recebe ID do Dono e ID do Profissional)
   updateAvailability: (
     providerId: string,
+    professionalId: string,
     availability: DailyAvailability[]
   ) => Promise<void>;
 }
 
 export const useAvailabilityStore = create<AvailabilityState>((set) => ({
   availableSlots: [],
-  availability: [], // Inicializa vazio para não quebrar a UI
+  availability: [],
   isLoading: false,
   error: null,
 
-  // --- Lógica de Agendamento (Mantida do seu código original) ---
   fetchAvailableSlots: async (professional, service, date) => {
     set({ isLoading: true, error: null, availableSlots: [] });
     try {
@@ -59,9 +59,7 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
         "Saturday",
       ];
 
-      // Garante que availability existe para evitar crash
       const availabilityList = professional.availability || [];
-
       const professionalDaySchedule = availabilityList.find(
         (day) => day.dayOfWeek === weekDays[dayOfWeek]
       );
@@ -117,26 +115,28 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
       let errorMessage = "Não foi possível buscar os horários.";
       if (err instanceof Error) errorMessage = err.message;
       set({ error: errorMessage, isLoading: false });
-      // toast.error(errorMessage); // Opcional
     }
   },
 
-  // --- Lógica de Gerenciamento (Adicionada para corrigir o erro) ---
-  fetchAvailability: async (providerId: string) => {
+  // --- Lógica de Gerenciamento Corrigida ---
+
+  fetchAvailability: async (providerId: string, professionalId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const docRef = doc(db, "users", providerId);
+      // Agora busca na subcoleção correta: serviceProviders/{providerId}/professionals/{professionalId}
+      const docRef = doc(db, "serviceProviders", providerId, "professionals", professionalId);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Garante que é um array, mesmo se o campo não existir no banco
         const availabilityData = Array.isArray(data.availability)
           ? data.availability
           : [];
         set({ availability: availabilityData });
       } else {
-        set({ availability: [] });
+        // Se não achar, tenta buscar do perfil do usuário como fallback (legado)
+        console.warn("Profissional não encontrado na subcoleção, verificando legado...");
+        set({ availability: [] }); 
       }
       set({ isLoading: false });
     } catch (error: any) {
@@ -148,18 +148,21 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
 
   updateAvailability: async (
     providerId: string,
+    professionalId: string,
     availability: DailyAvailability[]
   ) => {
     set({ isLoading: true, error: null });
     try {
-      const docRef = doc(db, "users", providerId);
-      // Atualiza apenas o campo availability no Firestore
+      // Agora atualiza na subcoleção correta
+      const docRef = doc(db, "serviceProviders", providerId, "professionals", professionalId);
+      
       await updateDoc(docRef, { availability });
+      
       set({ availability, isLoading: false });
     } catch (error: any) {
       console.error("Erro ao atualizar disponibilidade:", error);
       set({ error: "Erro ao salvar horários.", isLoading: false });
-      throw error; // Lança o erro para o componente tratar
+      throw error;
     }
   },
 }));

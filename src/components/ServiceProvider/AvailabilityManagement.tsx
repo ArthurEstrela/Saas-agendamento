@@ -1,15 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import { useAvailabilityStore } from "../../store/availabilityStore";
-import {
-  Loader2,
-  Plus,
-  Trash2,
-  Save,
-  Clock,
-  CalendarCheck,
-  User,
-} from "lucide-react";
+import { Loader2, Plus, Trash2, Save } from "lucide-react";
 import { useToast } from "../../hooks/useToast";
 import type { DailyAvailability, TimeSlot } from "../../types";
 
@@ -54,20 +46,50 @@ export const AvailabilityManagement = () => {
 
   const isOwner = userProfile?.role === "serviceProvider";
 
-  // Identifica o profissional selecionado com segurança
-  const currentProfessional = isOwner
-    ? selectedProfId === userProfile?.id
-      ? userProfile
-      : professionals?.find((p) => p.id === selectedProfId)
-    : userProfile;
+  // 1. Organiza a lista: Dono primeiro, depois o resto da equipe
+  const sortedProfessionals = useMemo(() => {
+    if (!professionals) return [];
+    return [...professionals].sort((a, b) => {
+      if (a.isOwner) return -1;
+      if (b.isOwner) return 1;
+      return 0;
+    });
+  }, [professionals]);
 
-  // Inicialização: Se for dono e não tiver ID, seleciona ele mesmo
+  // 2. Identifica o profissional selecionado na lista unificada
+  const currentProfessional = sortedProfessionals.find(
+    (p) => p.id === selectedProfId
+  );
+
+  // 3. Inicialização inteligente
   useEffect(() => {
-    if (userProfile && !selectedProfId) {
-      setSelectedProfId(userProfile.id);
-      fetchAvailability(userProfile.id);
+    if (
+      isOwner &&
+      !selectedProfId &&
+      sortedProfessionals.length > 0 &&
+      userProfile?.id
+    ) {
+      // Tenta pegar o profissional que é dono
+      const ownerProfile = sortedProfessionals.find((p) => p.isOwner);
+
+      if (ownerProfile) {
+        setSelectedProfId(ownerProfile.id);
+        // Passa o ID do Dono (userProfile.id) E o ID do Profissional (ownerProfile.id)
+        fetchAvailability(userProfile.id, ownerProfile.id);
+      } else {
+        // Fallback
+        const firstProf = sortedProfessionals[0];
+        setSelectedProfId(firstProf.id);
+        fetchAvailability(userProfile.id, firstProf.id);
+      }
     }
-  }, [userProfile, selectedProfId, fetchAvailability]);
+  }, [
+    isOwner,
+    selectedProfId,
+    sortedProfessionals,
+    fetchAvailability,
+    userProfile,
+  ]);
 
   // Sincroniza estado local com a store
   useEffect(() => {
@@ -84,9 +106,11 @@ export const AvailabilityManagement = () => {
   }, [availability]);
 
   const handleProfessionalChange = (profId: string) => {
+    if (!userProfile?.id) return;
     setSelectedProfId(profId);
     setHasChanges(false);
-    fetchAvailability(profId);
+    // ✅ CORREÇÃO: Passa userProfile.id (provider) E profId (professional)
+    fetchAvailability(userProfile.id, profId);
   };
 
   const handleDayToggle = (dayKey: string, checked: boolean) => {
@@ -139,9 +163,14 @@ export const AvailabilityManagement = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedProfId) return;
+    if (!selectedProfId || !userProfile?.id) return;
     try {
-      await updateAvailability(selectedProfId, localAvailability);
+      // ✅ CORREÇÃO: Passa userProfile.id (provider) E selectedProfId (professional)
+      await updateAvailability(
+        userProfile.id,
+        selectedProfId,
+        localAvailability
+      );
       showSuccess("Horários atualizados com sucesso!");
       setHasChanges(false);
     } catch (error) {
@@ -149,7 +178,6 @@ export const AvailabilityManagement = () => {
     }
   };
 
-  // Se não houver perfil carregado, mostra loader
   if (!userProfile)
     return (
       <div className="flex justify-center p-10">
@@ -157,14 +185,10 @@ export const AvailabilityManagement = () => {
       </div>
     );
 
-  // --- CORREÇÃO DO ERRO ---
-  // Acessamos as propriedades com optional chaining (?.) para evitar o crash se currentProfessional for undefined/null
   const initials =
     currentProfessional?.name?.substring(0, 2).toUpperCase() || "US";
-  const photoUrl =
-    (currentProfessional as any)?.photoURL ||
-    (currentProfessional as any)?.profilePictureUrl ||
-    "";
+
+  const photoUrl = currentProfessional?.photoURL || "";
 
   return (
     <div className="space-y-8 pb-20">
@@ -183,7 +207,7 @@ export const AvailabilityManagement = () => {
               Editando horários de:
             </p>
 
-            {isOwner && professionals && professionals.length > 0 ? (
+            {isOwner && sortedProfessionals.length > 0 ? (
               <div className="w-full md:w-64">
                 <Select
                   value={selectedProfId}
@@ -193,12 +217,10 @@ export const AvailabilityManagement = () => {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-900 border-gray-700 text-white">
-                    <SelectItem value={userProfile.id} className="font-bold">
-                      {userProfile.name} (Eu)
-                    </SelectItem>
-                    {professionals.map((p) => (
+                    {/* Lista Unificada */}
+                    {sortedProfessionals.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.name}
+                        {p.name} {p.isOwner && "(Você)"}
                       </SelectItem>
                     ))}
                   </SelectContent>

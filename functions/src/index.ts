@@ -609,6 +609,15 @@ export const createAppointment = onCall(
       throw new HttpsError("invalid-argument", "Dados incompletos.");
     }
 
+    if (providerId) {
+      await checkSubscription(providerId);
+    } else {
+      throw new HttpsError(
+        "invalid-argument",
+        "ID do estabelecimento não fornecido."
+      );
+    }
+
     const start = new Date(startTime);
     const end = new Date(endTime);
     if (start < new Date())
@@ -765,7 +774,7 @@ export const cancelAppointmentByClient = onCall(
     try {
       await db.runTransaction(async (transaction) => {
         const docSnap = await transaction.get(appointmentRef);
-        
+
         if (!docSnap.exists) {
           throw new HttpsError("not-found", "Agendamento não encontrado.");
         }
@@ -774,12 +783,21 @@ export const cancelAppointmentByClient = onCall(
 
         // 1. Verificar se quem está cancelando é o dono do agendamento
         if (appointment.clientId !== uid) {
-          throw new HttpsError("permission-denied", "Este agendamento não é seu.");
+          throw new HttpsError(
+            "permission-denied",
+            "Este agendamento não é seu."
+          );
         }
 
         // 2. Verificar status atual
-        if (appointment.status !== "scheduled" && appointment.status !== "pending") {
-           throw new HttpsError("failed-precondition", "Agendamento não pode ser cancelado neste estado.");
+        if (
+          appointment.status !== "scheduled" &&
+          appointment.status !== "pending"
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Agendamento não pode ser cancelado neste estado."
+          );
         }
 
         // 3. Buscar regra de cancelamento do PRESTADOR (Business Owner)
@@ -790,19 +808,19 @@ export const cancelAppointmentByClient = onCall(
         const providerData = providerSnap.data();
 
         // Default: 2 horas se não configurado
-        const minHours = providerData?.cancellationMinHours ?? 2; 
+        const minHours = providerData?.cancellationMinHours ?? 2;
 
         // 4. Validação de Tempo
         const startTime = appointment.startTime.toDate();
         const now = new Date(); // Hora atual do servidor (UTC)
-        
+
         // Diferença em milissegundos
         const diffMs = startTime.getTime() - now.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
 
         if (diffHours < minHours) {
           throw new HttpsError(
-            "failed-precondition", 
+            "failed-precondition",
             `O prazo para cancelamento online expirou. Necessário ${minHours}h de antecedência.`
           );
         }
@@ -812,17 +830,40 @@ export const cancelAppointmentByClient = onCall(
           status: "cancelled",
           rejectionReason: reason, // Reutilizando campo ou crie 'cancellationReason'
           cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-          cancelledBy: "client"
+          cancelledBy: "client",
         });
       });
 
       return { success: true };
-
     } catch (error: any) {
       logger.error("Erro ao cancelar agendamento:", error);
       // Repassar erro HttpsError para o front
       if (error instanceof HttpsError) throw error;
-      throw new HttpsError("internal", error.message || "Erro interno ao cancelar.");
+      throw new HttpsError(
+        "internal",
+        error.message || "Erro interno ao cancelar."
+      );
     }
   }
 );
+
+const checkSubscription = async (uid: string) => {
+  if (!uid) return;
+
+  const userDoc = await db.collection("users").doc(uid).get();
+  const userData = userDoc.data();
+
+  const allowedStatuses = ["active", "trialing", "trial"];
+
+  const status = userData?.subscriptionStatus;
+
+  if (!status || !allowedStatuses.includes(status)) {
+    logger.warn(
+      `Bloqueio de Kill Switch acionado para provider: ${uid}. Status: ${status}`
+    );
+    throw new HttpsError(
+      "permission-denied",
+      "O estabelecimento está com a assinatura inativa ou pendente. Agendamento não permitido."
+    );
+  }
+};

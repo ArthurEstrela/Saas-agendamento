@@ -47,9 +47,11 @@ export const getReviewsForProvider = async (
   providerId: string
 ): Promise<Review[]> => {
   const reviewsCollection = collection(db, "reviews");
+  
+  // CORREÇÃO: Usar 'serviceProviderId' para ser consistente com o objeto Review e a Cloud Function
   const q = query(
     reviewsCollection,
-    where("providerId", "==", providerId), // Assumindo que a review tem o providerId
+    where("serviceProviderId", "==", providerId), 
     orderBy("createdAt", "desc")
   );
 

@@ -207,3 +207,13 @@ export const getAppointmentsForProfessionalOnDate = async (
     convertAppointmentTimestamps(doc.id, doc.data())
   );
 };
+
+export const cancelAppointmentSecurely = async (
+  appointmentId: string,
+  reason: string
+): Promise<void> => {
+  const cancelCallable = httpsCallable(functions, "cancelAppointmentByClient");
+  
+  // Isso vai lançar erro se a Cloud Function rejeitar (ex: fora do prazo)
+  await cancelCallable({ appointmentId, reason });
+};

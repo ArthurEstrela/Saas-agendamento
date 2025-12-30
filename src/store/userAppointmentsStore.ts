@@ -18,7 +18,7 @@ import type {
 } from "../types";
 import { getUserProfile } from "../firebase/userService";
 import { toast } from "react-hot-toast";
-import { updateAppointmentStatus } from '../firebase/bookingService'
+import { cancelAppointmentSecurely } from '../firebase/bookingService';
 
 export interface EnrichedAppointment extends Appointment {
   provider?: ServiceProviderProfile;
@@ -151,19 +151,25 @@ export const useUserAppointmentsStore = create<
     set(initialState);
   },
    cancelAppointment: async (appointmentId, reason) => {
-    const promise = updateAppointmentStatus(appointmentId, 'cancelled', reason);
+    // Usamos toast.promise para feedback visual automático (loading, success, error)
+    const promise = cancelAppointmentSecurely(appointmentId, reason);
 
     toast.promise(promise, {
-      loading: 'Cancelando agendamento...',
+      loading: 'Verificando prazo de cancelamento...',
       success: 'Agendamento cancelado com sucesso!',
-      error: 'Falha ao cancelar o agendamento.',
+      error: (err) => {
+        // Tenta extrair a mensagem amigável da Cloud Function
+        const message = err?.message || 'Falha ao cancelar.';
+        // Se for erro de prazo, a mensagem virá clara do backend
+        return message; 
+      },
     });
 
     try {
       await promise;
+      // O onSnapshot se encarrega de atualizar a lista 'appointments' automaticamente
     } catch (error) {
-      console.error('Erro ao cancelar agendamento:', error);
-      // O toast.promise já lida com a exibição do erro.
+      console.error('Erro na store ao cancelar:', error);
     }
   },
 }));

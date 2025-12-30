@@ -745,3 +745,84 @@ export const completeAppointment = onCall(
     }
   }
 );
+
+export const cancelAppointmentByClient = onCall(
+  { region: REGION, cors: ["http://localhost:5173"] }, // Ajuste o CORS conforme prod
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Autenticação necessária.");
+    }
+
+    const { appointmentId, reason } = request.data;
+    const uid = request.auth.uid;
+
+    if (!appointmentId || !reason) {
+      throw new HttpsError("invalid-argument", "ID e motivo são obrigatórios.");
+    }
+
+    const appointmentRef = db.collection("appointments").doc(appointmentId);
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const docSnap = await transaction.get(appointmentRef);
+        
+        if (!docSnap.exists) {
+          throw new HttpsError("not-found", "Agendamento não encontrado.");
+        }
+
+        const appointment = docSnap.data()!;
+
+        // 1. Verificar se quem está cancelando é o dono do agendamento
+        if (appointment.clientId !== uid) {
+          throw new HttpsError("permission-denied", "Este agendamento não é seu.");
+        }
+
+        // 2. Verificar status atual
+        if (appointment.status !== "scheduled" && appointment.status !== "pending") {
+           throw new HttpsError("failed-precondition", "Agendamento não pode ser cancelado neste estado.");
+        }
+
+        // 3. Buscar regra de cancelamento do PRESTADOR (Business Owner)
+        // O appointment tem providerId (dono do negócio) e professionalId (funcionário)
+        // A regra fica no providerId (ServiceProviderProfile)
+        const providerRef = db.collection("users").doc(appointment.providerId);
+        const providerSnap = await transaction.get(providerRef);
+        const providerData = providerSnap.data();
+
+        // Default: 2 horas se não configurado
+        const minHours = providerData?.cancellationMinHours ?? 2; 
+
+        // 4. Validação de Tempo
+        const startTime = appointment.startTime.toDate();
+        const now = new Date(); // Hora atual do servidor (UTC)
+        
+        // Diferença em milissegundos
+        const diffMs = startTime.getTime() - now.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+
+        if (diffHours < minHours) {
+          throw new HttpsError(
+            "failed-precondition", 
+            `O prazo para cancelamento online expirou. Necessário ${minHours}h de antecedência.`
+          );
+        }
+
+        // 5. Executar cancelamento
+        transaction.update(appointmentRef, {
+          status: "cancelled",
+          rejectionReason: reason, // Reutilizando campo ou crie 'cancellationReason'
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          cancelledBy: "client"
+        });
+      });
+
+      return { success: true };
+
+    } catch (error: any) {
+      logger.error("Erro ao cancelar agendamento:", error);
+      // Repassar erro HttpsError para o front
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError("internal", error.message || "Erro interno ao cancelar.");
+    }
+  }
+);

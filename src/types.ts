@@ -77,6 +77,8 @@ export interface Review {
   appointmentId: string;
   clientId: string;
   clientName: string;
+  serviceProviderId: string;
+  professionalId: string;
   professionalName: string;
   rating: number;
   comment: string;
@@ -152,12 +154,9 @@ export interface ServiceProviderProfile extends BaseUser {
   areaOfWork?: string;
   logoUrl?: string;
   bannerUrl?: string;
-  
-  // --- NOVOS CAMPOS PIX ---
-  pixKey?: string; 
+  pixKey?: string;
   pixKeyType?: "cpf" | "cnpj" | "email" | "phone" | "random";
-  // ------------------------
-
+  cancellationMinHours?: number;
   socialLinks?: {
     instagram?: string;
     facebook?: string;
@@ -165,12 +164,21 @@ export interface ServiceProviderProfile extends BaseUser {
     whatsapp?: string;
   };
   paymentMethods?: PaymentMethod[]; // Quais métodos o provider aceita
-  subscriptionStatus?: "active" | "cancelled" | "past_due" | "trial" | "free" | string;
+  subscriptionStatus?:
+    | "active"
+    | "cancelled"
+    | "past_due"
+    | "trial"
+    | "free"
+    | string;
   stripeSubscriptionId?: string;
 }
 
 // Union Type para o perfil do usuário logado
-export type UserProfile = ClientProfile | ServiceProviderProfile | ProfessionalProfile;
+export type UserProfile =
+  | ClientProfile
+  | ServiceProviderProfile
+  | ProfessionalProfile;
 
 // Tipos para a área Financeira
 
@@ -180,7 +188,7 @@ export interface Expense {
   amount: number;
   date: Date | FieldValue;
   category: string;
-  type: "one-time" | "recurring"; 
+  type: "one-time" | "recurring";
   frequency?: "monthly";
 }
 
@@ -188,7 +196,7 @@ export interface FinancialData {
   totalRevenue: number;
   totalExpenses: number;
   netIncome: number;
-  monthlyRevenue: Record<string, number>; 
+  monthlyRevenue: Record<string, number>;
   expenses: Expense[];
   appointments: Appointment[];
   topServices: { name: string; revenue: number }[];

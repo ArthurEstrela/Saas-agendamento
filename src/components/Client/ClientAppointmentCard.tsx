@@ -32,7 +32,7 @@ const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
   const statusConfig = {
     scheduled: { label: "Confirmado", variant: "success", icon: CheckCircle },
     pending: { label: "Pendente", variant: "warning", icon: MoreHorizontal },
-    completed: { label: "Concluído", variant: "secondary", icon: CheckCircle }, // Secondary (Cinza) para itens passados
+    completed: { label: "Concluído", variant: "secondary", icon: CheckCircle },
     cancelled: { label: "Cancelado", variant: "destructive", icon: XCircle },
   } as const;
 
@@ -108,15 +108,26 @@ export const ClientAppointmentCard = ({
     setCancelModalOpen(false);
   };
 
-  const cancellationDeadline = subHours(appointment.startTime, 2);
+  // --- LÓGICA DE CANCELAMENTO MELHORADA ---
+  // Obtém a regra do prestador ou usa 2h como padrão
+  const minHoursNotice = provider?.cancellationMinHours ?? 2;
+
+  // Calcula o tempo limite baseado na regra
+  const cancellationDeadline = subHours(appointment.startTime, minHoursNotice);
+
   const now = new Date();
+
+  // Pode cancelar se: Status válido E Agora < Prazo Limite
   const canCancel =
     (status === "scheduled" || status === "pending") &&
     isBefore(now, cancellationDeadline);
+
+  // Expirou se: Status válido E Agora > Prazo Limite E Ainda não aconteceu o serviço
   const hasCancellationTimeExpired =
     (status === "scheduled" || status === "pending") &&
     !isBefore(now, cancellationDeadline) &&
     isBefore(now, appointment.startTime);
+  // -----------------------------------------
 
   // Lógica de Imagem
   const displayImage =
@@ -250,9 +261,17 @@ export const ClientAppointmentCard = ({
             </div>
           ) : null}
 
+          {/* Mensagem de Erro Melhorada - Mostra o motivo exato */}
           {hasCancellationTimeExpired && (
-            <div className="w-full flex items-center justify-center gap-2 text-xs text-yellow-500 bg-yellow-500/10 p-2 rounded border border-yellow-500/20">
-              <AlertCircle size={14} /> Cancelamento online expirado
+            <div className="w-full flex flex-col items-center justify-center gap-1 text-center p-2 rounded border border-yellow-500/20 bg-yellow-500/10">
+              <div className="flex items-center gap-2 text-xs text-yellow-500 font-bold">
+                <AlertCircle size={14} /> Cancelamento online expirado
+              </div>
+              <span className="text-[10px] text-yellow-500/80 leading-tight">
+                Necessário {minHoursNotice}h de antecedência.
+                <br />
+                Entre em contato com o estabelecimento.
+              </span>
             </div>
           )}
         </CardFooter>

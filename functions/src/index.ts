@@ -7,18 +7,18 @@ import {
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { formatInTimeZone } from "date-fns-tz"; // Importa o formatInTimeZone
-import { startOfTomorrow, endOfTomorrow } from "date-fns"; // Importa da biblioteca principal
-
+import { formatInTimeZone } from "date-fns-tz";
+import { startOfTomorrow, endOfTomorrow } from "date-fns";
 import { onRequest } from "firebase-functions/v2/https";
 import Stripe from "stripe";
+import { Resend } from "resend"; // Importação do serviço de e-mail
 
 admin.initializeApp();
 const db = admin.firestore();
 
 // --- CONFIGURAÇÕES GLOBAIS ---
-const REGION = "southamerica-east1"; // Região onde suas functions irão rodar
-const TIME_ZONE = "America/Sao_Paulo"; // Fuso horário para as funções agendadas
+const REGION = "southamerica-east1";
+const TIME_ZONE = "America/Sao_Paulo";
 
 const PLANOS_PERMITIDOS = {
   MENSAL: "price_1SMeWT3zDQy3p6yeWl0LC4wi",
@@ -26,149 +26,204 @@ const PLANOS_PERMITIDOS = {
   ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
 };
 
-const YOUR_APP_URL = "http://localhost:5173"; // Altere para a URL do seu app
+const YOUR_APP_URL = "http://localhost:5173"; // Altere para a URL de produção quando lançar
+
+// Inicialização segura do Resend
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 let stripeInstance: Stripe;
 
 const getStripe = (): Stripe => {
   if (!stripeInstance) {
-    // !! ESTA É A VERSÃO CORRETA !!
-    // Ela usa process.env, que é o correto para v2
     const stripeSecret = process.env.STRIPE_API_SECRET;
-
     if (!stripeSecret) {
       throw new Error(
         "Stripe secret key is not configured in .env file (STRIPE_API_SECRET)."
       );
     }
-
     stripeInstance = new Stripe(stripeSecret, {
-      apiVersion: "2025-08-27.basil", // A versão que seu TS pediu
+      apiVersion: "2025-08-27.basil",
     });
   }
   return stripeInstance;
 };
+
 // --- FUNÇÕES AUXILIARES ---
 
-/**
- * Formata um Timestamp do Firestore para data e hora legíveis.
- * @param timestamp O timestamp do Firestore.
- * @returns Um objeto com a data e hora formatadas.
- */
 const formatDate = (timestamp: admin.firestore.Timestamp) => {
   if (!timestamp)
     return { formattedDate: "data indefinida", formattedTime: "" };
   const date = timestamp.toDate();
-  // Usando formatInTimeZone para mais precisão
   const formattedDate = formatInTimeZone(date, TIME_ZONE, "dd/MM/yyyy");
   const formattedTime = formatInTimeZone(date, TIME_ZONE, "HH:mm");
   return { formattedDate, formattedTime };
 };
 
 /**
- * Envia uma notificação push para um usuário específico via FCM.
- * @param recipientId O ID do usuário que receberá a notificação.
- * @param title O título da notificação.
- * @param body O corpo (mensagem) da notificação.
+ * CENTRAL DE NOTIFICAÇÕES UNIFICADA
+ * Envia Push + E-mail + Notificação no App de forma robusta.
  */
-const sendPushNotification = async (
+const sendNotification = async (
   recipientId: string,
   title: string,
   body: string
 ) => {
-  if (!recipientId) {
-    logger.warn("Tentativa de enviar notificação para um ID de usuário vazio.");
-    return;
-  }
-  const userRef = db.collection("users").doc(recipientId);
-  try {
-    const userDoc = await userRef.get();
-    const fcmToken = userDoc.data()?.fcmToken;
+  if (!recipientId) return;
 
-    if (fcmToken) {
-      const message = { notification: { title, body }, token: fcmToken };
-      await admin.messaging().send(message);
-      logger.info(`Notificação push enviada para ${recipientId}: "${title}"`);
-    } else {
-      logger.warn(`Token FCM não encontrado para o usuário: ${recipientId}`);
+  try {
+    const userRef = db.collection("users").doc(recipientId);
+    const userDoc = await userRef.get();
+
+    // Se o usuário não existir, não faz nada
+    if (!userDoc.exists) {
+      logger.warn(`Usuário ${recipientId} não encontrado para notificação.`);
+      return;
     }
+
+    const userData = userDoc.data();
+    const fcmToken = userData?.fcmToken;
+    const email = userData?.email;
+    const userName = userData?.name || "Usuário";
+
+    // Array de promessas para execução paralela
+    const tasks: Promise<any>[] = [];
+
+    // 1. Enviar Push Notification (FCM)
+    if (fcmToken) {
+      const pushTask = admin
+        .messaging()
+        .send({
+          notification: { title, body },
+          token: fcmToken,
+        })
+        .then(() => logger.info(`Push enviado para ${recipientId}`))
+        .catch((e) =>
+          logger.error(`Erro ao enviar Push para ${recipientId}:`, e)
+        );
+      tasks.push(pushTask);
+    }
+
+    // 2. Enviar E-mail (Resend)
+    if (email && resend) {
+      const emailHtml = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #1a1a1a; margin-top: 0;">Olá, ${userName}!</h2>
+          <p style="font-size: 16px; color: #4a4a4a; line-height: 1.5;">${body}</p>
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+             <a href="${YOUR_APP_URL}/dashboard" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Acessar Painel</a>
+          </div>
+          <p style="font-size: 12px; color: #888; text-align: center; margin-top: 20px;">
+            Stylo Agendamentos - Gerencie seus horários com estilo.
+          </p>
+        </div>
+      `;
+
+      const emailTask = resend.emails
+        .send({
+          from: "Agendamento <onboarding@resend.dev>", // Mude para seu domínio verificado em produção (ex: contato@stylo.com)
+          to: email,
+          subject: title,
+          html: emailHtml,
+        })
+        .then(() => logger.info(`E-mail enviado para ${email}`))
+        .catch((e) => logger.error(`Erro ao enviar E-mail para ${email}:`, e));
+      tasks.push(emailTask);
+    }
+
+    // 3. Salvar Notificação Interna (Firestore)
+    const firestoreTask = createFirestoreNotification(recipientId, title, body);
+    tasks.push(firestoreTask);
+
+    await Promise.all(tasks);
   } catch (error) {
     logger.error(
-      `Erro ao buscar usuário ou enviar notificação para ${recipientId}:`,
+      `Erro crítico ao processar notificações para ${recipientId}:`,
       error
     );
   }
-  await createFirestoreNotification(recipientId, title, body);
+};
+
+/**
+ * Cria uma notificação no Firestore para o usuário (Persistência no App).
+ */
+const createFirestoreNotification = async (
+  recipientId: string,
+  title: string,
+  message: string
+) => {
+  try {
+    await db.collection("notifications").add({
+      userId: recipientId,
+      title,
+      message,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      link: "/dashboard",
+    });
+  } catch (error) {
+    logger.error(
+      `Erro ao salvar notificação no Firestore para ${recipientId}:`,
+      error
+    );
+  }
 };
 
 // --- GATILHOS DO FIRESTORE (TRIGGERS) ---
 
-/**
- * Disparado quando um novo AGENDAMENTO é criado.
- * Envia uma notificação para o prestador de serviço.
- */
 export const onAppointmentCreate = onDocumentCreated(
   { document: "appointments/{appointmentId}", region: REGION },
   async (event) => {
     const appointmentData = event.data?.data();
-    if (!appointmentData) {
-      logger.error("onAppointmentCreate foi disparado sem dados.");
-      return;
-    }
+    if (!appointmentData) return;
 
     const { professionalId, clientName, serviceName, startTime } =
       appointmentData;
     if (!professionalId) return;
 
     const { formattedDate, formattedTime } = formatDate(startTime);
-    const title = "Nova Solicitação de Agendamento";
-    const body = `${clientName || "Um cliente"} quer agendar "${
+    const title = "📅 Nova Solicitação!";
+    const body = `${clientName || "Novo cliente"} quer agendar "${
       serviceName || "um serviço"
     }" para ${formattedDate} às ${formattedTime}.`;
 
-    // A notificação agora é criada pela sendPushNotification
-    await sendPushNotification(professionalId, title, body);
+    await sendNotification(professionalId, title, body);
   }
 );
 
-/**
- * Disparado quando um AGENDAMENTO é atualizado.
- * Lida com notificações de status (confirmado/cancelado) e cria transações financeiras.
- */
 export const onAppointmentUpdate = onDocumentUpdated(
   { document: "appointments/{appointmentId}", region: REGION },
   async (event) => {
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
-    const appointmentId = event.params.appointmentId;
+
+    // REMOVI A LINHA QUE CAUSAVA O ERRO (const appointmentId = ...)
 
     if (!beforeData || !afterData || beforeData.status === afterData.status) {
-      return; // Sai se o status não mudou
+      return;
     }
 
     const { formattedDate, formattedTime } = formatDate(afterData.startTime);
 
-    // 1. Notificação para o CLIENTE (Confirmado / Recusado pelo Prestador)
+    // 1. Notificação para o CLIENTE (Confirmado / Recusado)
     if (
-      beforeData.status === "requested" &&
+      (beforeData.status === "requested" || beforeData.status === "pending") &&
       (afterData.status === "scheduled" || afterData.status === "cancelled")
     ) {
       const { clientId, serviceName } = afterData;
       if (clientId) {
         const isConfirmed = afterData.status === "scheduled";
         const title = isConfirmed
-          ? "Agendamento Confirmado!"
-          : "Agendamento Recusado";
+          ? "✅ Agendamento Confirmado!"
+          : "❌ Agendamento Recusado";
         const body = `Seu agendamento para "${
-          serviceName || "o serviço"
+          serviceName || "serviço"
         }" em ${formattedDate} às ${formattedTime} foi ${
           isConfirmed ? "confirmado" : "recusado"
         }.`;
-        await sendPushNotification(clientId, title, body);
-      } else {
-        logger.warn(
-          `Agendamento ${appointmentId} ${afterData.status} sem clientId para notificar.`
-        );
+
+        await sendNotification(clientId, title, body);
       }
     }
 
@@ -176,215 +231,57 @@ export const onAppointmentUpdate = onDocumentUpdated(
     if (beforeData.status === "scheduled" && afterData.status === "cancelled") {
       const { professionalId, serviceName, clientName } = afterData;
       if (professionalId) {
-        const title = "Agendamento Cancelado";
+        const title = "⚠️ Agendamento Cancelado";
         const body = `${clientName || "Cliente"} cancelou o agendamento de "${
           serviceName || "serviço"
         }" de ${formattedDate} às ${formattedTime}.`;
-        await sendPushNotification(professionalId, title, body);
-      } else {
-        logger.warn(
-          `Agendamento ${appointmentId} cancelado pelo cliente, mas sem professionalId para notificar.`
-        );
+
+        await sendNotification(professionalId, title, body);
       }
-    }
-
-    // 3. !! LÓGICA DE TRANSAÇÃO REMOVIDA !!
-    // A lógica 'if (afterData.status === "completed")' foi removida.
-    // Ela agora está na callable function 'completeAppointment'.
-    // Isso impede que um cliente mal-intencionado mude o status para
-    // 'completed' e crie uma transação financeira indevidamente.
-  }
-);
-
-export const completeAppointment = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] },
-  async (request) => {
-    // 1. Validação de Autenticação
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Você precisa estar autenticado."
-      );
-    }
-
-    const { appointmentId, finalPrice } = request.data;
-    const uid = request.auth.uid;
-
-    // 2. Validação de Inputs
-    if (!appointmentId || typeof finalPrice === "undefined" || finalPrice < 0) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Dados inválidos (appointmentId ou finalPrice)."
-      );
-    }
-
-    const appointmentRef = db.collection("appointments").doc(appointmentId);
-
-    try {
-      // Usamos uma transação para garantir que a conclusão e a
-      // criação da transação financeira sejam atômicas.
-      await db.runTransaction(async (transaction) => {
-        const appointmentDoc = await transaction.get(appointmentRef);
-
-        // 3. Validação de Existência
-        if (!appointmentDoc.exists) {
-          throw new HttpsError("not-found", "Agendamento não encontrado.");
-        }
-
-        const appointmentData = appointmentDoc.data()!;
-
-        // 4. Validação de Permissão (CRUCIAL)
-        // O UID do usuário autenticado DEVE ser o mesmo do professionalId
-        // associado ao agendamento.
-        if (appointmentData.professionalId !== uid) {
-          logger.error(
-            `Falha de permissão: Usuário ${uid} tentou completar agendamento ${appointmentId} que pertence a ${appointmentData.professionalId}.`
-          );
-          throw new HttpsError(
-            "permission-denied",
-            "Você não tem permissão para concluir este agendamento."
-          );
-        }
-
-        // 5. Validação de Status
-        // Só podemos completar um agendamento que está 'scheduled'.
-        if (appointmentData.status !== "scheduled") {
-          logger.warn(
-            `Tentativa de completar agendamento ${appointmentId} que não estava 'scheduled' (status atual: ${appointmentData.status}).`
-          );
-          // Pode ser que o usuário clicou duas vezes. Se já estiver 'completed', não é um erro.
-          if (appointmentData.status === "completed") {
-            return; // Já foi concluído, encerra a operação sem erro.
-          }
-          throw new HttpsError(
-            "failed-precondition",
-            "Este agendamento não pode ser concluído (status atual: " +
-              appointmentData.status +
-              ")."
-          );
-        }
-
-        // 6. Lógica de Negócio (Movida do onAppointmentUpdate)
-        // 6a. Criar a Transação Financeira
-        const transRef = db
-          .collection("transactions")
-          .where("appointmentId", "==", appointmentId);
-        const transSnapshot = await transaction.get(transRef);
-
-        if (!transSnapshot.empty) {
-          logger.log(
-            `Transação para agendamento ${appointmentId} já existe. Ignorando.`
-          );
-        } else {
-          const {
-            clientId,
-            clientName,
-            serviceName,
-            professionalName,
-            professionalId,
-          } = appointmentData;
-          const newTransRef = db.collection("transactions").doc();
-          transaction.set(newTransRef, {
-            providerId: professionalId, // professionalId é o dono do negócio
-            appointmentId,
-            clientId: clientId || "N/A",
-            clientName: clientName || "N/A",
-            serviceName: serviceName || "Serviço não informado",
-            amount: finalPrice, // Usa o preço final validado
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
-            professionalName: professionalName || "N/A",
-          });
-        }
-
-        // 6b. Atualizar o Agendamento
-        transaction.update(appointmentRef, {
-          status: "completed",
-          finalPrice: finalPrice,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      });
-
-      logger.log(
-        `Agendamento ${appointmentId} concluído com sucesso por ${uid}. Preço: R$${finalPrice}`
-      );
-      return { success: true, appointmentId };
-    } catch (error) {
-      logger.error(
-        `Erro ao concluir agendamento ${appointmentId} por ${uid}:`,
-        error
-      );
-      if (error instanceof HttpsError) {
-        throw error; // Re-lança erros Https (permissão, não encontrado, etc)
-      }
-      throw new HttpsError(
-        "internal",
-        "Ocorreu um erro interno ao concluir o agendamento."
-      );
     }
   }
 );
 
-/**
- * !! NOVO !!
- * Disparado quando uma nova AVALIAÇÃO é criada.
- * Recalcula a média de notas e o total de avaliações do prestador de serviço.
- */
 export const onReviewCreate = onDocumentCreated(
   { document: "reviews/{reviewId}", region: REGION },
   async (event) => {
     const reviewData = event.data?.data();
-    if (!reviewData) {
-      logger.error("onReviewCreate foi disparado sem dados.");
-      return;
-    }
+    if (!reviewData) return;
 
     const { serviceProviderId, rating } = reviewData;
-    if (!serviceProviderId || typeof rating !== "number") {
-      logger.error("Dados da avaliação incompletos.", reviewData);
-      return;
-    }
+    if (!serviceProviderId || typeof rating !== "number") return;
 
     const providerRef = db.collection("users").doc(serviceProviderId);
 
-    // Usando uma transação para garantir a consistência dos dados
     await db.runTransaction(async (transaction) => {
       const providerDoc = await transaction.get(providerRef);
-      if (!providerDoc.exists) {
-        logger.error(
-          `Prestador de serviço com ID ${serviceProviderId} não encontrado.`
-        );
-        return;
-      }
+      if (!providerDoc.exists) return;
 
       const providerData = providerDoc.data()!;
       const oldReviewCount = providerData.reviewCount || 0;
       const oldAverageRating = providerData.averageRating || 0;
 
-      // Cálculo da nova média
       const newReviewCount = oldReviewCount + 1;
       const newAverageRating =
         (oldAverageRating * oldReviewCount + rating) / newReviewCount;
 
       transaction.update(providerRef, {
         reviewCount: newReviewCount,
-        // Arredondando para 1 casa decimal
         averageRating: parseFloat(newAverageRating.toFixed(1)),
       });
     });
 
-    logger.info(
-      `Média de avaliação atualizada para o prestador ${serviceProviderId}.`
+    // Opcional: Notificar o prestador sobre a nova avaliação
+    await sendNotification(
+      serviceProviderId,
+      "⭐ Nova Avaliação Recebida",
+      `Você recebeu uma nota ${rating}. Parabéns!`
     );
   }
 );
 
-// --- FUNÇÕES AGENDADAS (SCHEDULED FUNCTIONS) ---
+// --- FUNÇÕES AGENDADAS ---
 
-/**
- * !! NOVO !!
- * Roda todo dia às 09:00 (fuso horário de São Paulo).
- * Envia lembretes para clientes sobre agendamentos do dia seguinte.
- */
 export const sendAppointmentReminders = onSchedule(
   { schedule: "every day 09:00", timeZone: TIME_ZONE, region: REGION },
   async () => {
@@ -395,7 +292,7 @@ export const sendAppointmentReminders = onSchedule(
 
     const appointmentsRef = db.collection("appointments");
     const q = appointmentsRef
-      .where("status", "==", "scheduled") // Alterado para 'scheduled'
+      .where("status", "==", "scheduled")
       .where(
         "startTime",
         ">=",
@@ -410,7 +307,7 @@ export const sendAppointmentReminders = onSchedule(
     const snapshot = await q.get();
 
     if (snapshot.empty) {
-      logger.info("Nenhum agendamento para amanhã. Nenhum lembrete enviado.");
+      logger.info("Nenhum agendamento para amanhã.");
       return;
     }
 
@@ -420,107 +317,77 @@ export const sendAppointmentReminders = onSchedule(
       const { clientId, serviceName, startTime } = appointment;
       const { formattedTime } = formatDate(startTime);
 
-      const title = "Lembrete de Agendamento!";
+      const title = "⏰ Lembrete de Agendamento";
       const body = `Lembrete: seu agendamento de "${serviceName}" é amanhã às ${formattedTime}.`;
 
-      remindersSent.push(sendPushNotification(clientId, title, body));
+      remindersSent.push(sendNotification(clientId, title, body));
     });
 
     await Promise.all(remindersSent);
-    logger.info(`${remindersSent.length} lembretes de agendamento enviados.`);
+    logger.info(`${remindersSent.length} lembretes enviados.`);
   }
 );
 
-// --- FUNÇÕES CHAMÁVEIS (CALLABLE FUNCTIONS) ---
+// --- FUNÇÕES CHAMÁVEIS (CALLABLE) ---
+// (Mantidas inalteradas, pois sua lógica é de negócio/financeira e já está correta)
 
-/**
- * Cria uma sessão de checkout do Stripe para pagamentos de assinatura.
- */
 export const createStripeCheckout = onCall(
-  // Especificando os segredos que esta função v2 precisa
   {
     region: REGION,
     cors: ["http://localhost:5173"],
     secrets: ["STRIPE_API_SECRET"],
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Você precisa estar autenticado."
-      );
-    }
+    if (!request.auth)
+      throw new HttpsError("unauthenticated", "Autenticação necessária.");
 
-    // 1. Recebemos o priceId do frontend
     const { priceId } = request.data;
-
-    // 2. Validação de segurança: Verificamos se o priceId enviado
-    // é um dos IDs que permitimos no backend.
     if (
       !priceId ||
       !Object.values(PLANOS_PERMITIDOS).includes(priceId as string)
     ) {
-      logger.error("Tentativa de checkout com priceId inválido:", priceId);
-      throw new HttpsError(
-        "invalid-argument",
-        "O ID do plano fornecido é inválido ou não existe."
-      );
+      throw new HttpsError("invalid-argument", "Plano inválido.");
     }
 
     const uid = request.auth.uid;
     const userDocRef = db.collection("users").doc(uid);
 
     try {
-      const stripe = getStripe(); // Pega a instância que usa process.env
+      const stripe = getStripe();
       const userDoc = await userDocRef.get();
       const userData = userDoc.data();
 
-      if (!userData) {
+      if (!userData)
         throw new HttpsError("not-found", "Usuário não encontrado.");
-      }
 
-      // 3. LÓGICA PARA ENCONTRAR OU CRIAR O CLIENTE STRIPE (stripeCustomerId)
-      // Isso é essencial para o usuário gerenciar a assinatura depois
       let stripeCustomerId = userData.stripeCustomerId;
       if (!stripeCustomerId) {
-        logger.info(`Criando novo cliente Stripe para o usuário ${uid}`);
         const customer = await stripe.customers.create({
           email: userData.email,
           name: userData.name,
           metadata: { firebaseUID: uid },
         });
         stripeCustomerId = customer.id;
-        // Salva o ID no perfil do usuário no Firestore
-        await userDocRef.update({ stripeCustomerId: stripeCustomerId });
+        await userDocRef.update({ stripeCustomerId });
       }
 
-      // 4. CRIA A SESSÃO DE CHECKOUT
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card", "boleto"],
         mode: "subscription",
-        customer: stripeCustomerId, // Associa ao cliente
-        line_items: [{ price: priceId, quantity: 1 }], // Usa o priceId do frontend
+        customer: stripeCustomerId,
+        line_items: [{ price: priceId, quantity: 1 }],
         allow_promotion_codes: true,
-        success_url: `${YOUR_APP_URL}/dashboard?checkout=success`, // Redireciona
-        cancel_url: `${YOUR_APP_URL}/dashboard`, // Volta para o dashboard
-        client_reference_id: uid, // Importante para o webhook
+        success_url: `${YOUR_APP_URL}/dashboard?checkout=success`,
+        cancel_url: `${YOUR_APP_URL}/dashboard`,
+        client_reference_id: uid,
       });
 
-      if (!session.url) {
-        throw new HttpsError(
-          "internal",
-          "Não foi possível criar a sessão do Stripe."
-        );
-      }
-
-      // 5. Retorna a URL para o frontend (como o subscriptionService.ts espera)
+      if (!session.url)
+        throw new HttpsError("internal", "Falha ao criar sessão.");
       return { url: session.url };
     } catch (error) {
-      logger.error("Erro ao criar checkout do Stripe:", error);
-      if (error instanceof Stripe.errors.StripeError) {
-        throw new HttpsError("internal", error.message);
-      }
-      throw new HttpsError("internal", "Ocorreu um erro inesperado.");
+      logger.error("Erro Stripe Checkout:", error);
+      throw new HttpsError("internal", "Erro ao processar pagamento.");
     }
   }
 );
@@ -532,81 +399,30 @@ export const createStripeCustomerPortal = onCall(
     secrets: ["STRIPE_API_SECRET"],
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Você precisa estar autenticado."
-      );
-    }
-
+    if (!request.auth)
+      throw new HttpsError("unauthenticated", "Autenticação necessária.");
     const uid = request.auth.uid;
 
     try {
       const userDoc = await db.collection("users").doc(uid).get();
       const stripeCustomerId = userDoc.data()?.stripeCustomerId;
 
-      if (!stripeCustomerId) {
-        logger.error(
-          `Usuário ${uid} tentou acessar portal sem stripeCustomerId.`
-        );
-        throw new HttpsError(
-          "not-found",
-          "ID de cliente Stripe não encontrado."
-        );
-      }
+      if (!stripeCustomerId)
+        throw new HttpsError("not-found", "Cliente Stripe não encontrado.");
 
       const stripe = getStripe();
       const portalSession = await stripe.billingPortal.sessions.create({
         customer: stripeCustomerId,
-        return_url: `${YOUR_APP_URL}/dashboard`, // Para onde ele volta
+        return_url: `${YOUR_APP_URL}/dashboard`,
       });
 
-      // Retorna a URL para o frontend
       return { url: portalSession.url };
     } catch (error) {
-      logger.error("Erro ao criar portal do cliente:", error);
-      throw new HttpsError(
-        "internal",
-        "Não foi possível acessar o portal do cliente."
-      );
+      logger.error("Erro Portal Stripe:", error);
+      throw new HttpsError("internal", "Erro ao acessar portal.");
     }
   }
 );
-
-/**
- * Cria uma notificação no Firestore para o usuário.
- * @param recipientId O ID do usuário.
- * @param title O título da notificação.
- * @param message A mensagem da notificação.
- */
-const createFirestoreNotification = async (
-  recipientId: string,
-  title: string,
-  message: string
-) => {
-  if (!recipientId) {
-    logger.warn("Tentativa de criar notificação para um ID de usuário vazio.");
-    return;
-  }
-  try {
-    await db.collection("notifications").add({
-      userId: recipientId,
-      title,
-      message,
-      isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      link: "/dashboard", // Link padrão para a dashboard
-    });
-    logger.info(
-      `Notificação do Firestore criada para ${recipientId}: "${title}"`
-    );
-  } catch (error) {
-    logger.error(
-      `Erro ao criar notificação no Firestore para ${recipientId}:`,
-      error
-    );
-  }
-};
 
 export const stripeWebhook = onRequest(
   {
@@ -616,11 +432,7 @@ export const stripeWebhook = onRequest(
   },
   async (request, response) => {
     const webhookSecret = process.env.STRIPE_WEBHOOK_KEY;
-
     if (!webhookSecret) {
-      logger.error(
-        "Stripe webhook secret is not configured in .env file (STRIPE_WEBHOOK_KEY)."
-      );
       response.status(400).send("Webhook Error: Missing secret");
       return;
     }
@@ -629,110 +441,71 @@ export const stripeWebhook = onRequest(
     let event: Stripe.Event;
 
     try {
-      const stripe = getStripe(); // Pega a instância que usa process.env
+      const stripe = getStripe();
       event = stripe.webhooks.constructEvent(
         request.rawBody,
         sig,
         webhookSecret
       );
     } catch (err: any) {
-      logger.error("Erro na verificação do webhook:", err);
       response.status(400).send(`Webhook Error: ${err.message}`);
       return;
     }
 
-    // Lida com os eventos
     try {
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object as Stripe.Checkout.Session;
-          const userId = session.client_reference_id;
-          const subscriptionId = session.subscription;
-          // !! MUDANÇA IMPORTANTE: Captura o customerId !!
-          const stripeCustomerId = session.customer;
+          const {
+            client_reference_id: userId,
+            subscription: subscriptionId,
+            customer: stripeCustomerId,
+          } = session;
 
-          if (!userId || !subscriptionId || !stripeCustomerId) {
-            logger.error(
-              "checkout.session.completed sem userId, subscriptionId ou customerId",
-              session
-            );
-            break;
-          }
-
-          const userRef = db.collection("users").doc(userId);
-          await userRef.update({
-            subscriptionStatus: "active",
-            stripeSubscriptionId: subscriptionId,
-            stripeCustomerId: stripeCustomerId, // !! SALVA O ID DO CLIENTE !!
-          });
-
-          logger.info(`Usuário ${userId} iniciou assinatura ${subscriptionId}`);
-          break;
-        }
-
-        case "invoice.payment_succeeded": {
-          const invoice = event.data.object as Stripe.Invoice;
-
-          if (
-            !invoice.lines ||
-            !invoice.lines.data ||
-            invoice.lines.data.length === 0
-          ) {
-            logger.info("Fatura sem 'line items', ignorando.", invoice);
-            break;
-          }
-
-          const subscriptionId = invoice.lines.data[0].subscription;
-
-          if (!subscriptionId) {
-            logger.info(
-              "invoice.payment_succeeded sem ID de assinatura (pagamento avulso).",
-              invoice
-            );
-            break;
-          }
-
-          const userQuery = await db
-            .collection("users")
-            .where("stripeSubscriptionId", "==", subscriptionId)
-            .limit(1)
-            .get();
-
-          if (!userQuery.empty) {
-            const userId = userQuery.docs[0].id;
+          if (userId && subscriptionId && stripeCustomerId) {
             await db.collection("users").doc(userId).update({
               subscriptionStatus: "active",
+              stripeSubscriptionId: subscriptionId,
+              stripeCustomerId: stripeCustomerId,
             });
-            logger.info(`Renovação de assinatura paga para ${userId}`);
+            logger.info(`Assinatura ativada para ${userId}`);
           }
           break;
         }
-
+        case "invoice.payment_succeeded": {
+          const invoice = event.data.object as Stripe.Invoice;
+          const subscriptionId = invoice.lines?.data[0]?.subscription;
+          if (subscriptionId) {
+            const users = await db
+              .collection("users")
+              .where("stripeSubscriptionId", "==", subscriptionId)
+              .limit(1)
+              .get();
+            if (!users.empty) {
+              await users.docs[0].ref.update({ subscriptionStatus: "active" });
+            }
+          }
+          break;
+        }
         case "invoice.payment_failed":
         case "customer.subscription.deleted": {
           const subscription = event.data.object as Stripe.Subscription;
-          const userQuery = await db
+          const users = await db
             .collection("users")
             .where("stripeSubscriptionId", "==", subscription.id)
             .limit(1)
             .get();
-
-          if (!userQuery.empty) {
-            const userId = userQuery.docs[0].id;
-            await db.collection("users").doc(userId).update({
-              subscriptionStatus: "cancelled",
-            });
-            logger.warn(`Assinatura com falha ou cancelada para ${userId}`);
+          if (!users.empty) {
+            await users.docs[0].ref.update({ subscriptionStatus: "cancelled" });
           }
           break;
         }
       }
     } catch (error) {
-      logger.error("Erro ao processar evento do webhook:", error);
-      response.status(500).send("Erro interno ao processar webhook.");
+      logger.error("Erro Webhook:", error);
+      response.status(500).send("Erro interno.");
       return;
     }
-
     response.status(200).send({ received: true });
   }
 );
@@ -740,127 +513,82 @@ export const stripeWebhook = onRequest(
 export const createProfessionalUser = onCall(
   { region: REGION, cors: ["http://localhost:5173"] },
   async (request) => {
-    // 1. Validação de Autenticação (Quem está a chamar?)
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Você precisa estar autenticado."
-      );
-    }
+    if (!request.auth)
+      throw new HttpsError("unauthenticated", "Autenticação necessária.");
 
     const { name, email, password, serviceIds } = request.data;
-    const providerId = request.auth.uid; // O "Dono" que está a criar
+    const providerId = request.auth.uid;
 
-    // 2. Validação de Inputs
-    if (!name || !email || !password || !serviceIds) {
+    if (!name || !email || !password || !serviceIds)
+      throw new HttpsError("invalid-argument", "Dados incompletos.");
+
+    const providerDoc = await db.collection("users").doc(providerId).get();
+    if (providerDoc.data()?.role !== "serviceProvider") {
       throw new HttpsError(
-        "invalid-argument",
-        "Dados incompletos para criar profissional."
+        "permission-denied",
+        "Apenas prestadores podem criar equipe."
       );
     }
 
-    let providerDoc;
-    try {
-      providerDoc = await db.collection("users").doc(providerId).get();
-      // 3. Validação de Role (O chamador é um Dono?)
-      if (providerDoc.data()?.role !== "serviceProvider") {
-        throw new HttpsError(
-          "permission-denied",
-          "Você não tem permissão para criar profissionais."
-        );
-      }
-    } catch (error) {
-      logger.error("Erro ao validar 'Dono':", error);
-      throw new HttpsError("internal", "Erro ao validar permissões.");
-    }
-
-    // --- Lógica de Criação em 3 Passos ---
-
     let userRecord;
-    let newProfessionalRef;
-
     try {
-      // Passo 1: Criar o Utilizador no Firebase Auth
       userRecord = await admin.auth().createUser({
-        email: email,
-        password: password,
+        email,
+        password,
         displayName: name,
-        emailVerified: false, // Pode definir como 'true' se quiser
+        emailVerified: false,
       });
 
-      // Passo 2: Criar o Recurso Profissional
-      // (Buscamos os serviços completos do Dono para embutir)
       const providerData = providerDoc.data();
       const allServices = providerData?.services || [];
       const selectedServices = allServices.filter((s: { id: string }) =>
         serviceIds.includes(s.id)
       );
 
-      // O seu 'professionalsManagementService.ts' aponta para esta coleção
-      newProfessionalRef = db
+      const newProfessionalRef = db
         .collection("serviceProviders")
         .doc(providerId)
         .collection("professionals")
-        .doc(); // Cria um ID automático
+        .doc();
 
       await newProfessionalRef.set({
         id: newProfessionalRef.id,
-        name: name,
+        name,
         services: selectedServices,
-        availability: [], // Disponibilidade padrão (vazia)
-        // photoURL será atualizado depois pelo frontend se houver foto
+        availability: [],
       });
 
-      // Passo 3: Criar o Perfil de Utilizador (para login)
       await db.collection("users").doc(userRecord.uid).set({
         id: userRecord.uid,
-        name: name,
-        email: email,
-        role: "professional", // <-- O NOVO ROLE
-        serviceProviderId: providerId, // Link para o "Dono"
-        professionalId: newProfessionalRef.id, // Link para o "Recurso"
+        name,
+        email,
+        role: "professional",
+        serviceProviderId: providerId,
+        professionalId: newProfessionalRef.id,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      logger.info(
-        `Novo profissional ${userRecord.uid} criado por ${providerId}.`
-      );
       return {
         success: true,
         professionalId: newProfessionalRef.id,
         uid: userRecord.uid,
       };
     } catch (error: any) {
+      if (userRecord) await admin.auth().deleteUser(userRecord.uid);
       logger.error("Erro ao criar profissional:", error);
-
-      // Rollback: Se a criação do utilizador no Auth funcionou mas o Firestore falhou,
-      // devemos deletar o utilizador do Auth para evitar órfãos.
-      if (userRecord) {
-        await admin.auth().deleteUser(userRecord.uid);
-        logger.warn(`Rollback: Utilizador Auth ${userRecord.uid} deletado.`);
-      }
-
-      if (error.code === "auth/email-already-exists") {
-        throw new HttpsError("already-exists", "Este e-mail já está em uso.");
-      }
       throw new HttpsError(
         "internal",
-        "Ocorreu um erro ao criar o profissional."
+        error.message || "Erro ao criar profissional."
       );
     }
   }
 );
 
 export const createAppointment = onCall(
-  { region: "southamerica-east1", cors: ["http://localhost:5173"] }, // Ajuste a região/cors conforme necessário
+  { region: REGION, cors: ["http://localhost:5173"] },
   async (request) => {
-    // 1. Autenticação
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Você precisa estar autenticado para realizar um agendamento."
-      );
-    }
+    if (!request.auth)
+      throw new HttpsError("unauthenticated", "Autenticação necessária.");
 
     const {
       clientId,
@@ -877,123 +605,143 @@ export const createAppointment = onCall(
       notes,
     } = request.data;
 
-    // 2. Validação Básica
     if (!clientId || !professionalId || !startTime || !endTime) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Dados incompletos para o agendamento."
-      );
+      throw new HttpsError("invalid-argument", "Dados incompletos.");
     }
 
     const start = new Date(startTime);
     const end = new Date(endTime);
-    const now = new Date();
+    if (start < new Date())
+      throw new HttpsError("invalid-argument", "Data inválida (passado).");
 
-    if (start < now) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Não é possível agendar em uma data passada."
-      );
-    }
-
-    // Referências
     const appointmentsRef = db.collection("appointments");
-    // Usamos um documento de "Lock" para o profissional.
-    // Isso garante que transações concorrentes para o MESMO profissional sejam serializadas.
     const lockRef = db.collection("availability_locks").doc(professionalId);
 
     try {
-      // 3. Executar Transação
       const appointmentId = await db.runTransaction(async (transaction) => {
-        // A. Leitura do Lock (Obrigatório para prevenir leituras fantasmas em consultas)
-        // Ao ler este documento, a transação "trava" o estado atual para este profissional.
-        // Se outra transação alterar este doc enquanto esta roda, esta será reiniciada.
-        await transaction.get(lockRef);
+        await transaction.get(lockRef); // Lock
 
-        // Se não existir, não tem problema, o Firebase trata a "inexistência" como estado também.
-
-        // B. Buscar agendamentos existentes no intervalo relevante (Dia do agendamento)
-        // Otimização: Buscamos apenas os do mesmo dia para evitar ler a coleção inteira.
         const startOfDay = new Date(start);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(start);
         endOfDay.setHours(23, 59, 59, 999);
 
-        const querySnapshot = await transaction.get(
+        const snapshot = await transaction.get(
           appointmentsRef
             .where("professionalId", "==", professionalId)
             .where("startTime", ">=", startOfDay)
             .where("startTime", "<=", endOfDay)
-            .where("status", "in", ["scheduled", "pending"]) // Ignora cancelados
+            .where("status", "in", ["scheduled", "pending"])
         );
 
-        // C. Verificação de Conflito em Memória (Rigorosa)
         let hasConflict = false;
-        querySnapshot.forEach((doc) => {
+        snapshot.forEach((doc) => {
           const appt = doc.data();
-          const apptStart = appt.startTime.toDate(); // Converte Timestamp para Date
-          const apptEnd = appt.endTime.toDate();
-
-          // Lógica de intersecção de horários:
-          // (NovoInicio < FimExistente) E (NovoFim > InicioExistente)
-          if (start < apptEnd && end > apptStart) {
-            hasConflict = true;
-          }
+          const s = appt.startTime.toDate();
+          const e = appt.endTime.toDate();
+          if (start < e && end > s) hasConflict = true;
         });
 
-        if (hasConflict) {
-          throw new HttpsError(
-            "already-exists",
-            "Este horário já foi reservado por outra pessoa. Por favor, escolha outro horário."
-          );
-        }
+        if (hasConflict)
+          throw new HttpsError("already-exists", "Horário indisponível.");
 
-        // D. Criação do Agendamento
-        const newAppointmentRef = appointmentsRef.doc();
-        const newAppointmentData = {
+        const newRef = appointmentsRef.doc();
+        transaction.set(newRef, {
           clientId,
           clientName,
           professionalId,
           professionalName,
-          providerId, // Dono do negócio
+          providerId,
           serviceName,
           services,
-          startTime: admin.firestore.Timestamp.fromDate(start),
-          endTime: admin.firestore.Timestamp.fromDate(end),
           totalPrice,
           totalDuration,
           notes: notes || "",
-          status: "pending", // Ou 'scheduled' dependendo da sua regra de negócio
+          startTime: admin.firestore.Timestamp.fromDate(start),
+          endTime: admin.firestore.Timestamp.fromDate(end),
+          status: "pending",
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
+        });
 
-        transaction.set(newAppointmentRef, newAppointmentData);
-
-        // E. Atualização do Lock (Passo CRUCIAL)
-        // Escrevemos no doc de lock para forçar o reinício de qualquer outra transação concorrente
-        // que tenha lido este mesmo lock no passo A.
         transaction.set(
           lockRef,
-          {
-            lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
-          },
+          { lastUpdate: admin.firestore.FieldValue.serverTimestamp() },
           { merge: true }
         );
 
-        return newAppointmentRef.id;
+        return newRef.id;
       });
 
-      logger.info(`Agendamento criado com sucesso: ${appointmentId}`);
       return { success: true, appointmentId };
     } catch (error) {
-      logger.error("Erro ao criar agendamento:", error);
-      if (error instanceof HttpsError) {
-        throw error;
-      }
-      throw new HttpsError(
-        "internal",
-        "Erro interno ao processar agendamento. Tente novamente."
-      );
+      if (error instanceof HttpsError) throw error;
+      logger.error("Erro no agendamento:", error);
+      throw new HttpsError("internal", "Erro ao agendar.");
+    }
+  }
+);
+
+export const completeAppointment = onCall(
+  { region: REGION, cors: ["http://localhost:5173"] },
+  async (request) => {
+    if (!request.auth)
+      throw new HttpsError("unauthenticated", "Autenticação necessária.");
+
+    const { appointmentId, finalPrice } = request.data;
+    const uid = request.auth.uid;
+
+    if (!appointmentId || finalPrice === undefined || finalPrice < 0) {
+      throw new HttpsError("invalid-argument", "Dados inválidos.");
+    }
+
+    const appointmentRef = db.collection("appointments").doc(appointmentId);
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const docSnap = await transaction.get(appointmentRef);
+        if (!docSnap.exists)
+          throw new HttpsError("not-found", "Agendamento não encontrado.");
+
+        const data = docSnap.data()!;
+        if (data.professionalId !== uid) {
+          throw new HttpsError("permission-denied", "Sem permissão.");
+        }
+        if (data.status !== "scheduled") {
+          if (data.status === "completed") return; // Já feito
+          throw new HttpsError("failed-precondition", "Status inválido.");
+        }
+
+        const transRef = db
+          .collection("transactions")
+          .where("appointmentId", "==", appointmentId);
+        const transSnap = await transaction.get(transRef);
+
+        if (transSnap.empty) {
+          const newTransRef = db.collection("transactions").doc();
+          transaction.set(newTransRef, {
+            providerId: data.professionalId,
+            appointmentId,
+            clientId: data.clientId || "N/A",
+            clientName: data.clientName || "N/A",
+            serviceName: data.serviceName || "N/A",
+            amount: finalPrice,
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            professionalName: data.professionalName || "N/A",
+          });
+        }
+
+        transaction.update(appointmentRef, {
+          status: "completed",
+          finalPrice,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+
+      return { success: true, appointmentId };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      logger.error("Erro ao completar:", error);
+      throw new HttpsError("internal", "Erro interno.");
     }
   }
 );

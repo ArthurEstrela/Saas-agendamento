@@ -172,6 +172,7 @@ export interface ServiceProviderProfile extends BaseUser {
     | "free"
     | string;
   stripeSubscriptionId?: string;
+  onboardingDismissed?: boolean;
 }
 
 // Union Type para o perfil do usuário logado

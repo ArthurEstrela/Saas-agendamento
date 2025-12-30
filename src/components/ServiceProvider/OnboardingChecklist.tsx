@@ -12,7 +12,7 @@ import {
   Scissors,
   CalendarClock,
   Trophy,
-  PartyPopper, // Ícone de festa
+  PartyPopper,
   X,
 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../lib/utils/cn";
 import { collection, getDocs, query } from "firebase/firestore";
 import { db } from "../../firebase/config";
-import confetti from "canvas-confetti"; // Opcional: Efeito visual extra (se quiser instalar)
+import confetti from "canvas-confetti";
 
 interface OnboardingChecklistProps {
   onChangeView: (view: ProviderDashboardView) => void;
@@ -30,12 +30,24 @@ interface OnboardingChecklistProps {
 export const OnboardingChecklist = ({
   onChangeView,
 }: OnboardingChecklistProps) => {
-  const { userProfile } = useProfileStore();
+  // Pegamos também a função updateUserProfile para salvar a alteração
+  const { userProfile, updateUserProfile } = useProfileStore();
+
   const [hasAvailability, setHasAvailability] = useState(false);
   const [isLoadingCheck, setIsLoadingCheck] = useState(true);
-  const [isDismissed, setIsDismissed] = useState(false); // Novo estado para fechar manualmente
+  const [isDismissed, setIsDismissed] = useState(false);
 
-  // 1. Verificações (Mantidas iguais)
+  // 1. Sincroniza com o banco: Se já estiver marcado como dispensado no perfil, esconde.
+  useEffect(() => {
+    if (userProfile && userProfile.role === "serviceProvider") {
+      const profile = userProfile as ServiceProviderProfile;
+      if (profile.onboardingDismissed) {
+        setIsDismissed(true);
+      }
+    }
+  }, [userProfile]);
+
+  // 2. Verificações de Perfil e Serviços
   const isProfileComplete = useMemo(() => {
     if (!userProfile || userProfile.role !== "serviceProvider") return false;
     const profile = userProfile as ServiceProviderProfile;
@@ -48,6 +60,7 @@ export const OnboardingChecklist = ({
     return profile.services && profile.services.length > 0;
   }, [userProfile]);
 
+  // 3. Verificação de Disponibilidade (Async)
   useEffect(() => {
     const checkAvailability = async () => {
       if (!userProfile) return;
@@ -72,7 +85,7 @@ export const OnboardingChecklist = ({
         });
         setHasAvailability(availabilityConfigured);
       } catch (error) {
-        console.error("Erro:", error);
+        console.error("Erro ao verificar disponibilidade:", error);
       } finally {
         setIsLoadingCheck(false);
       }
@@ -80,6 +93,7 @@ export const OnboardingChecklist = ({
     checkAvailability();
   }, [userProfile]);
 
+  // 4. Definição dos Passos
   const steps = [
     {
       id: "profile",
@@ -114,19 +128,38 @@ export const OnboardingChecklist = ({
   const progress = (completedCount / steps.length) * 100;
   const isAllDone = completedCount === steps.length;
 
-  // Efeito de Confete quando termina tudo
+  // 5. Função para fechar e salvar no banco
+  const handleDismiss = async () => {
+    // UI Otimista: esconde imediatamente
+    setIsDismissed(true);
+
+    if (userProfile && userProfile.role === "serviceProvider") {
+      try {
+        // Salva a flag no Firestore
+        await updateUserProfile(userProfile.id, {
+          onboardingDismissed: true,
+        } as Partial<ServiceProviderProfile>);
+      } catch (error) {
+        console.error("Erro ao salvar status do onboarding:", error);
+        // Não revertemos o estado visual para não frustrar o usuário,
+        // mas o erro é logado.
+      }
+    }
+  };
+
+  // Efeito de Confete
   useEffect(() => {
     if (isAllDone && !isDismissed) {
-      // Dispara confetes se a lib estiver instalada, senão apenas ignora
-      // npm install canvas-confetti @types/canvas-confetti
       if (typeof confetti === "function") {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       }
     }
   }, [isAllDone, isDismissed]);
 
-  if (isDismissed) return null; // Se o usuário fechou, some de vez.
+  // Se já dispensou, não renderiza nada
+  if (isDismissed) return null;
 
+  // Loading state (skeleton)
   if (isLoadingCheck && !isAllDone)
     return (
       <div className="w-full h-32 mb-8 bg-gray-900/50 rounded-xl animate-pulse border border-gray-800" />
@@ -141,7 +174,7 @@ export const OnboardingChecklist = ({
         className="mb-8"
       >
         {isAllDone ? (
-          // --- ESTADO DE CELEBRAÇÃO (NOVO) ---
+          // --- ESTADO DE CELEBRAÇÃO ---
           <Card className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 border-green-500/30 overflow-hidden relative">
             <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
               <div className="flex items-center gap-4">
@@ -159,7 +192,7 @@ export const OnboardingChecklist = ({
                 </div>
               </div>
               <Button
-                onClick={() => setIsDismissed(true)}
+                onClick={handleDismiss}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 shadow-lg shadow-green-900/20"
               >
                 Fechar e Começar
@@ -167,7 +200,7 @@ export const OnboardingChecklist = ({
             </CardContent>
           </Card>
         ) : (
-          // --- ESTADO DE CHECKLIST (PADRÃO) ---
+          // --- ESTADO DE CHECKLIST ---
           <Card className="bg-gradient-to-br from-gray-900 to-gray-950 border-amber-500/20 overflow-hidden relative shadow-xl">
             {/* Barra de Progresso */}
             <div className="absolute top-0 left-0 h-1 bg-gray-800 w-full z-10">
@@ -190,9 +223,9 @@ export const OnboardingChecklist = ({
                     Complete {steps.length} passos para ativar sua agenda.
                   </p>
                 </div>
-                {/* Botão de Fechar discreto se ele quiser ignorar o onboarding */}
+                {/* Botão de Fechar com a nova função de persistência */}
                 <button
-                  onClick={() => setIsDismissed(true)}
+                  onClick={handleDismiss}
                   className="text-gray-600 hover:text-gray-300 transition-colors"
                   title="Ignorar configuração"
                 >

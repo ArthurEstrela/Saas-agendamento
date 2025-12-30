@@ -7,7 +7,7 @@ import { Loader2, Menu, ShieldAlert, Sparkles } from "lucide-react";
 import { useProfileStore } from "../store/profileStore";
 import type { ServiceProviderProfile, ProviderDashboardView } from "../types";
 
-// Componentes internos (mantendo os imports originais)
+// Componentes internos
 import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
 import { AgendaView } from "./ServiceProvider/Agenda/AgendaView";
 import { FinancialManagement } from "./ServiceProvider/FinancialManagement";
@@ -18,12 +18,13 @@ import { ServicesManagement } from "./ServiceProvider/ServicesManagement";
 import { ReviewsManagement } from "./ServiceProvider/ReviewsManagement";
 import { Notifications } from "./Common/Notifications";
 import { SubscriptionManagement } from "./ServiceProvider/SubscriptionManagement";
+// [NOVO] Import do Checklist
+import { OnboardingChecklist } from "./ServiceProvider/OnboardingChecklist";
 
 interface DashboardViewProps {
   userProfile: ServiceProviderProfile | null;
 }
 
-// Mapeamento de Views (mantido)
 const viewComponents: Record<
   ProviderDashboardView,
   React.ComponentType<DashboardViewProps>
@@ -63,7 +64,6 @@ const ServiceProviderDashboard = () => {
 
   if (!userProfile) {
     return (
-      // MUDANÇA: h-[100dvh] para garantir centro exato no mobile
       <div className="flex items-center justify-center h-[100dvh] bg-background">
         <Loader2 className="animate-spin text-primary" size={64} />
       </div>
@@ -73,7 +73,6 @@ const ServiceProviderDashboard = () => {
   const disableNav = !isSubscriptionOk && activeView === "subscription";
 
   return (
-    // MUDANÇA: min-h-[100dvh] ao invés de min-h-screen
     <div className="flex min-h-[100dvh] bg-background text-gray-200 font-sans relative overflow-hidden">
       {/* Background Decorativo */}
       <div
@@ -104,9 +103,14 @@ const ServiceProviderDashboard = () => {
           </span>
         </div>
 
+        {/* --- CHECKLIST DE ONBOARDING (WIZARD) --- */}
+        {/* Só aparece se estiver na aba Agenda (Home) e houver pendências */}
+        {activeView === "agenda" && (
+          <OnboardingChecklist onChangeView={setActiveView} />
+        )}
+
         {/* --- BANNER DE TESTE (RESPONSIVO) --- */}
         {needsSubscription && activeView !== "subscription" && (
-          // MUDANÇA: flex-col no mobile, flex-row no sm. Text-center no mobile.
           <div className="bg-primary/20 border border-primary/30 text-primary-hover p-4 rounded-xl mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in-down text-center sm:text-left">
             <Sparkles size={20} className="animate-pulse flex-shrink-0" />
             <span className="text-sm sm:text-base">
@@ -124,7 +128,6 @@ const ServiceProviderDashboard = () => {
 
         {/* --- BANNER DE PROBLEMA (RESPONSIVO) --- */}
         {subscriptionProblem && activeView !== "subscription" && (
-          // MUDANÇA: Mesma lógica de responsividade do banner acima
           <div className="bg-destructive/20 border border-destructive/30 text-destructive p-4 rounded-xl mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in-down text-center sm:text-left">
             <ShieldAlert size={20} className="flex-shrink-0" />
             <span className="text-sm sm:text-base">
@@ -147,7 +150,7 @@ const ServiceProviderDashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="flex-grow flex flex-col w-full max-w-full overflow-hidden" // overflow-hidden previne que tabelas estourem a largura
+            className="flex-grow flex flex-col w-full max-w-full overflow-hidden"
           >
             <ActiveComponent userProfile={profile} />
           </motion.div>

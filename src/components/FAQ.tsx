@@ -1,87 +1,181 @@
 // src/components/FAQ.tsx
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronDown, HelpCircle, MessageCircle } from 'lucide-react';
 
 interface FAQItemProps {
   question: string;
   answer: string;
+  isOpen: boolean;
+  onClick: () => void;
+  index: number;
 }
 
-const FAQItem: React.FC<FAQItemProps> = ({ question, answer }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
+const FAQItem: React.FC<FAQItemProps> = ({ question, answer, isOpen, onClick, index }) => {
   return (
-    <div className="border-b border-gray-700 py-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.1 }}
+      className={`border-b border-gray-800 transition-colors duration-300 ${isOpen ? 'bg-gray-900/30' : 'hover:bg-gray-900/20'}`}
+    >
       <dt>
         <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex justify-between items-start text-left text-gray-300"
+          onClick={onClick}
+          className="w-full flex justify-between items-center py-6 px-4 text-left focus:outline-none group"
         >
-          <span className="text-lg font-medium text-white">{question}</span>
-          <span className="ml-6 h-7 flex items-center">
-            <svg
-              className={`h-6 w-6 transform transition-transform duration-300 ${isOpen ? '-rotate-180' : 'rotate-0'}`}
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
+          <span className={`text-lg font-medium transition-colors duration-300 ${isOpen ? 'text-amber-500' : 'text-gray-200 group-hover:text-amber-400'}`}>
+            {question}
+          </span>
+          <span className="ml-6 flex-shrink-0">
+            <motion.div
+              animate={{ rotate: isOpen ? 180 : 0 }}
+              transition={{ duration: 0.3 }}
+              className={`p-1 rounded-full ${isOpen ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 group-hover:bg-gray-700'}`}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-            </svg>
+              <ChevronDown size={20} />
+            </motion.div>
           </span>
         </button>
       </dt>
-      <dd className={`mt-2 pr-12 overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-screen' : 'max-h-0'}`}>
-        <p className="text-base text-gray-400 pt-4">{answer}</p>
-      </dd>
-    </div>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.dd
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <p className="px-4 pb-6 text-base text-gray-400 leading-relaxed border-l-2 border-amber-500/20 ml-4 mb-2">
+              {answer}
+            </p>
+          </motion.dd>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 
 const FAQ = () => {
-    const faqData = [
-        {
-          question: 'O que é a Stylo?',
-          answer: 'A Stylo é uma plataforma de software como serviço (SaaS) desenhada para simplificar a gestão e o agendamento de negócios na área da beleza e bem-estar, como salões, barbearias, estúdios de estética e spas.'
-        },
-        {
-          question: 'Como funciona o agendamento online?',
-          answer: 'Após se registar como profissional, você recebe uma página de agendamento online exclusiva. Os seus clientes podem aceder a esta página, ver a sua disponibilidade em tempo real e marcar um horário diretamente, 24 horas por dia, 7 dias por semana.'
-        },
-        {
-          question: 'Posso testar a plataforma antes de assinar?',
-          answer: 'Sim! Oferecemos um período de teste gratuito para que você possa explorar todas as funcionalidades da Stylo sem compromisso. Basta registar-se para começar.'
-        },
-        {
-          question: 'Que tipo de notificações a plataforma envia?',
-          answer: 'A plataforma envia notificações automáticas via WhatsApp e e-mail para si e para os seus clientes, confirmando novos agendamentos, lembretes de horários e notificações de cancelamento, ajudando a reduzir o número de faltas.'
-        },
-        {
-          question: 'A Stylo processa pagamentos?',
-          answer: 'Sim, integramos com gateways de pagamento seguros para permitir que os seus clientes paguem pelos serviços no momento do agendamento, se assim o desejar. Isto pode ajudar a garantir o compromisso do cliente.'
-        },
-        {
-          question: 'É seguro armazenar os dados dos meus clientes na Stylo?',
-          answer: 'A segurança é a nossa prioridade. Usamos encriptação de ponta e seguimos as melhores práticas de segurança de dados para garantir que todas as informações dos seus clientes e do seu negócio estejam sempre protegidas.'
-        },
-        {
-            question: 'Posso cancelar a minha assinatura a qualquer momento?',
-            answer: 'Sim, você tem total controlo sobre a sua assinatura. Pode cancelar a qualquer momento, sem taxas de cancelamento ou complicações. O seu acesso permanecerá ativo até ao final do período de faturação já pago.'
-        }
-      ];
+  // Estado para permitir apenas um aberto por vez (accordion behavior)
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
+
+  const toggleFAQ = (index: number) => {
+    setOpenIndex(openIndex === index ? null : index);
+  };
+
+  const faqData = [
+    {
+      question: 'O que é a Stylo?',
+      answer: 'A Stylo é uma plataforma SaaS (Software as a Service) premium desenhada para revolucionar a gestão de negócios de beleza. Simplificamos agendamentos, gestão financeira e relacionamento com clientes para salões, barbearias e spas.'
+    },
+    {
+      question: 'Como funciona o agendamento online?',
+      answer: 'Você recebe uma página exclusiva e personalizada. Seus clientes acessam esse link (via Instagram, WhatsApp, etc.), veem sua disponibilidade em tempo real e agendam sozinhos em segundos, 24/7.'
+    },
+    {
+      question: 'Posso testar a plataforma antes de assinar?',
+      answer: 'Com certeza! Oferecemos um período de teste gratuito com acesso total a todas as funcionalidades premium. Sem necessidade de cartão de crédito para começar.'
+    },
+    {
+      question: 'Os lembretes automáticos realmente funcionam?',
+      answer: 'Sim! Nossa taxa de redução de faltas (no-show) chega a 80%. O sistema envia lembretes automáticos via WhatsApp e E-mail, garantindo que seu cliente não esqueça do compromisso.'
+    },
+    {
+      question: 'A Stylo processa pagamentos?',
+      answer: 'Sim. Integramos com gateways seguros para permitir pagamentos antecipados (sinal) ou total via Pix e Cartão de Crédito, garantindo seu faturamento mesmo se o cliente cancelar.'
+    },
+    {
+      question: 'Meus dados e dos meus clientes estão seguros?',
+      answer: 'Segurança é inegociável para nós. Utilizamos criptografia de ponta a ponta e servidores de alta segurança para blindar todas as informações do seu negócio.'
+    },
+    {
+      question: 'Existe fidelidade ou multa de cancelamento?',
+      answer: 'Não acreditamos em prender clientes. Você tem total liberdade para cancelar sua assinatura a qualquer momento através do painel, sem burocracia ou letras miúdas.'
+    }
+  ];
 
   return (
-    <div className="bg-gray-900">
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:py-16 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-center text-3xl font-extrabold text-white sm:text-4xl">Perguntas Frequentes</h2>
-          <p className="text-center mt-4 text-lg text-gray-400">Não consegue encontrar a resposta que procura? Entre em <a href="mailto:suporte@stylo.com" className="font-medium text-yellow-500 hover:text-yellow-400">contato</a> com a nossa equipa.</p>
-          <dl className="mt-12 space-y-2">
+    <div className="bg-gray-950 min-h-screen relative overflow-hidden font-sans">
+      
+      {/* Background Decorativo (Glow) */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
+          <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[120px]" />
+          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="max-w-4xl mx-auto py-20 px-4 sm:py-24 sm:px-6 lg:px-8 relative z-10">
+        
+        {/* Header da Seção */}
+        <div className="text-center mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-900 border border-gray-800 text-amber-500 text-sm font-medium mb-4"
+          >
+            <HelpCircle size={16} />
+            <span>Tira-Dúvidas</span>
+          </motion.div>
+          
+          <motion.h2 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="text-4xl font-extrabold text-white sm:text-5xl tracking-tight"
+          >
+            Perguntas Frequentes
+          </motion.h2>
+          
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2 }}
+            className="mt-4 text-xl text-gray-400"
+          >
+            Tudo o que você precisa saber sobre a revolução na gestão do seu negócio.
+          </motion.p>
+        </div>
+
+        {/* Lista de FAQ */}
+        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+          <dl>
             {faqData.map((item, index) => (
-              <FAQItem key={index} question={item.question} answer={item.answer} />
+              <FAQItem 
+                key={index} 
+                index={index}
+                question={item.question} 
+                answer={item.answer} 
+                isOpen={openIndex === index}
+                onClick={() => toggleFAQ(index)}
+              />
             ))}
           </dl>
         </div>
+
+        {/* Footer CTA */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          className="mt-12 text-center"
+        >
+          <p className="text-gray-400 flex items-center justify-center gap-2">
+            Ainda tem dúvidas? 
+            <a 
+              href="mailto:suporte@stylo.com" 
+              className="font-bold text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-1 hover:underline"
+            >
+              <MessageCircle size={18} /> Falar com o suporte
+            </a>
+          </p>
+        </motion.div>
+
       </div>
     </div>
   );

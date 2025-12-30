@@ -42,11 +42,11 @@ function App() {
           <Route path="/" element={<HomePage />} />
           {/* --- ROTAS PÚBLICAS ADICIONADAS --- */}
           <Route path="/pricing" element={<Pricing />} />
-          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/sobre-nos" element={<AboutUs />} />
           <Route path="/faq" element={<FAQ />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/terms-of-use" element={<TermsOfUse />} />
+          <Route path="/contato" element={<Contact />} />
+          <Route path="/privacidade" element={<PrivacyPolicy />} />
+          <Route path="/termos-de-uso" element={<TermsOfUse />} />
           {/* --- FIM DAS ROTAS ADICIONADAS --- */}
         </Route>
 

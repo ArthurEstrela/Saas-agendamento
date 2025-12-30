@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { Link } from "react-router-dom"; // Adicionado
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Menu } from "lucide-react";
+import logo from "../../assets/stylo-logo.png"; // Adicionado para padronizar
+
 import { useProfileStore } from "../../store/profileStore";
 import type { ProfessionalProfile } from "../../types";
 
@@ -9,12 +12,13 @@ import { AgendaView } from "../ServiceProvider/Agenda/AgendaView";
 import { AvailabilityManagement } from "../ServiceProvider/AvailabilityManagement";
 import { ReviewsManagement } from "../ServiceProvider/ReviewsManagement";
 import { Notifications } from "../Common/Notifications";
-import { ProfessionalSideNav } from "./ProfessionalSideNav";
-import { ProfessionalProfileManagement } from "./ProfessionalProfileManagement";
-import { ProfessionalHome } from "./ProfessionalHome";
+
 
 // UI
 import { Button } from "../ui/button";
+import { ProfessionalHome } from "./ProfessionalHome";
+import { ProfessionalProfileManagement } from "./ProfessionalProfileManagement";
+import { ProfessionalSideNav } from "./ProfessionalSideNav";
 
 export type ProfessionalDashboardView =
   | "home"
@@ -57,8 +61,8 @@ const ProfessionalDashboard = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative">
-      {/* Background Sutil (Igual ao do Client) */}
+    <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative overflow-x-hidden">
+      {/* Background Sutil */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-primary/5 rounded-full blur-[100px] opacity-30" />
       </div>
@@ -70,22 +74,26 @@ const ProfessionalDashboard = () => {
         setIsOpen={setIsMobileNavOpen}
       />
 
-      {/* Main ajustado: md:ml-72 empurra o conteúdo logo após a sidebar */}
-      <main className="flex-grow md:ml-72 transition-all duration-300 flex flex-col min-h-screen relative z-10">
-        {/* Mobile Header */}
-        <div className="md:hidden flex justify-between items-center p-4 bg-background/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-30">
-          <span className="text-xl font-bold text-white">Stylo</span>
+      {/* Conteúdo Principal Padronizado */}
+      <main className="flex-1 flex flex-col min-h-screen md:ml-72 transition-all duration-300 relative z-10">
+        
+        {/* Header Mobile Padronizado */}
+        <header className="md:hidden flex justify-between items-center p-4 border-b border-white/5 bg-background/80 backdrop-blur-md sticky top-0 z-30">
+          <Link to="/dashboard">
+            <img src={logo} alt="Stylo" className="h-8" />
+          </Link>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsMobileNavOpen(true)}
+            className="text-gray-300 hover:text-white"
           >
             <Menu size={24} />
           </Button>
-        </div>
+        </header>
 
-        {/* Área de conteúdo com espaçamento reduzido */}
-        <div className="p-4 lg:p-6 flex-grow flex flex-col">
+        {/* Wrapper de Conteúdo */}
+        <div className="flex-1 p-4 lg:p-6 space-y-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
@@ -93,7 +101,7 @@ const ProfessionalDashboard = () => {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
-              className="flex-grow flex flex-col w-full"
+              className="w-full"
             >
               <ActiveComponent userProfile={profile} />
             </motion.div>

@@ -1,7 +1,7 @@
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import { format, isPast } from "date-fns";
 import { motion } from "framer-motion";
-import { Clock, User, Scissors, DollarSign, MessageCircle } from "lucide-react";
+import { Clock, User, Scissors, MessageCircle } from "lucide-react";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
 
 // UI Primitivos
@@ -43,38 +43,46 @@ export const AppointmentCard = ({
   return (
     <MotionCard
       layout
-      whileHover={{ scale: 1.02, y: -2 }}
-      whileTap={{ scale: 0.98 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileTap={{ scale: 0.97 }}
       onClick={handleCardClick}
-      className="p-3 bg-gray-900 border-gray-800 cursor-pointer hover:border-primary/50 hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-primary/5 transition-all h-full flex flex-col justify-between group"
+      className="relative p-4 bg-gray-900/60 border-gray-800/60 backdrop-blur-sm cursor-pointer hover:border-primary/30 hover:bg-gray-800/80 transition-all h-full flex flex-col justify-between group rounded-xl overflow-hidden"
     >
+      {/* Efeito de borda lateral colorida baseada no status (opcional, mas ajuda visualmente) */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
       <div>
         {/* Header: Hora e Duração */}
-        <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-800 group-hover:border-gray-700">
+        <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-800/50">
           <Badge
             variant="outline"
-            className="text-sm font-bold border-primary/20 text-primary bg-primary/5 px-2"
+            className="text-base font-bold border-primary/20 text-primary bg-primary/5 px-2.5 py-0.5 rounded-md font-mono"
           >
             {format(startTime, "HH:mm")}
           </Badge>
-          <div className="flex items-center gap-1 text-[10px] text-gray-500">
-            <Clock size={10} />
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-950/30 px-2 py-1 rounded-full">
+            <Clock size={12} />
             <span>{appointment.totalDuration} min</span>
           </div>
         </div>
 
         {/* Info Principal */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <User size={12} className="text-gray-400 shrink-0" />
-            <p className="text-sm font-medium text-gray-200 truncate group-hover:text-white">
-              {client?.name || "Cliente"}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-gray-800 p-1.5 rounded-full shrink-0">
+              <User size={14} className="text-gray-400" />
+            </div>
+            <p className="text-sm font-semibold text-gray-200 truncate group-hover:text-white transition-colors">
+              {client?.name || "Cliente sem nome"}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Scissors size={12} className="text-gray-500 shrink-0" />
-            <p className="text-xs text-gray-400 truncate">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-gray-800/50 p-1.5 rounded-full shrink-0">
+              <Scissors size={14} className="text-gray-500" />
+            </div>
+            <p className="text-xs text-gray-400 truncate leading-relaxed">
               {services.map((s) => s.name).join(", ")}
             </p>
           </div>
@@ -82,22 +90,27 @@ export const AppointmentCard = ({
       </div>
 
       {/* Footer: Preço e Ação */}
-      <div className="flex justify-between items-end mt-3 pt-2 border-t border-gray-800 group-hover:border-gray-700">
+      <div className="flex justify-between items-center mt-4 pt-2 border-t border-gray-800/50">
         {client?.phoneNumber ? (
           <button
             onClick={handleWhatsAppClick}
-            className="text-gray-500 hover:text-green-500 transition-colors p-1 -ml-1 rounded-md hover:bg-green-500/10"
+            className="text-gray-400 hover:text-green-400 hover:bg-green-500/10 transition-all p-2 -ml-2 rounded-full flex items-center gap-2 active:scale-95"
             title="Enviar WhatsApp"
           >
-            <MessageCircle size={16} />
+            <MessageCircle size={18} />
+            <span className="text-xs font-medium hidden sm:inline">
+              WhatsApp
+            </span>
           </button>
         ) : (
           <div />
         )}
 
-        <span className="text-sm font-bold text-gray-100 flex items-center">
-          <span className="text-xs text-gray-500 mr-0.5">R$</span>
-          {appointment.totalPrice.toFixed(2)}
+        <span className="font-bold text-gray-100 flex items-baseline bg-gray-950/50 px-3 py-1 rounded-lg border border-gray-800/50">
+          <span className="text-[10px] text-gray-500 mr-1 font-normal uppercase">
+            R$
+          </span>
+          {appointment.totalPrice.toFixed(0)}
         </span>
       </div>
     </MotionCard>

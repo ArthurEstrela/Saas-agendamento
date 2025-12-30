@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { User, MessageCircle } from "lucide-react"; // Usei MessageCircle como ícone genérico ou FaWhatsapp se preferir
+import { User } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
@@ -46,71 +46,70 @@ export const ScheduledAppointmentCard = ({
       layout
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      whileTap={{ scale: 0.98 }}
+      whileTap={{ scale: 0.97 }}
       onClick={() => onAppointmentSelect(appointment)}
-      className="group relative bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800 hover:border-primary/40 rounded-xl p-3 sm:p-4 transition-all cursor-pointer overflow-hidden shadow-sm hover:shadow-md"
+      className="relative bg-gray-900/40 backdrop-blur-sm border border-gray-800/60 rounded-xl p-3 sm:p-4 transition-all cursor-pointer overflow-hidden group active:bg-gray-800/60"
     >
-      {/* Indicador de Status lateral (Glow effect) */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-primary/50" />
-      
-      <div className="flex gap-3 sm:gap-4 pl-2">
-        {/* Bloco de Horário (Destacado) */}
-        <div className="flex flex-col items-center justify-center bg-black/40 rounded-lg p-2 min-w-[3.5rem] sm:min-w-[4rem] border border-gray-800/50 h-fit self-start">
-          <span className="text-lg sm:text-xl font-bold text-gray-100 leading-none font-mono tracking-tight">
+      {/* Indicador de Status lateral com degradê suave */}
+      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-primary to-primary/20" />
+
+      <div className="flex gap-3 pl-2">
+        {/* Bloco de Horário (Foco visual) */}
+        <div className="flex flex-col items-center justify-center bg-gray-950/50 rounded-lg p-2 min-w-[3.5rem] w-16 border border-gray-800 shrink-0 h-fit">
+          <span className="text-lg font-bold text-white leading-none tracking-tight font-mono">
             {format(new Date(appointment.startTime), "HH:mm")}
           </span>
-          <div className="w-full h-px bg-gray-700/50 my-1" />
-          <span className="text-[10px] sm:text-xs text-primary uppercase font-bold">
-            {format(new Date(appointment.startTime), "EEE", { locale: ptBR }).replace('.', '')}
+          <div className="w-full h-px bg-gray-800 my-1" />
+          <span className="text-[10px] text-primary uppercase font-bold tracking-wider">
+            {format(new Date(appointment.startTime), "EEE", {
+              locale: ptBR,
+            }).slice(0, 3)}
           </span>
         </div>
 
         {/* Conteúdo Principal */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between">
-          
-          {/* Header: Cliente e Avatar */}
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          {/* Header: Cliente e Ações */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border border-gray-700/50">
-                <AvatarImage src={client?.profilePictureUrl} className="object-cover"/>
-                <AvatarFallback className="text-[10px] bg-gray-800 text-gray-400">
+              <Avatar className="h-9 w-9 border-2 border-gray-800 shadow-sm">
+                <AvatarImage
+                  src={client?.profilePictureUrl}
+                  className="object-cover"
+                />
+                <AvatarFallback className="text-[10px] bg-gray-800 text-gray-400 font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col min-w-0">
-                <h3 className="text-sm font-bold text-gray-200 truncate group-hover:text-primary transition-colors leading-tight">
+                <h3 className="text-sm font-bold text-gray-100 truncate leading-tight">
                   {appointment.clientName}
                 </h3>
-                <span className="text-[10px] text-gray-500 truncate flex items-center gap-1">
+                <span className="text-[11px] text-gray-500 truncate flex items-center gap-1 mt-0.5">
                   <User size={10} />
                   {appointment.professionalName}
                 </span>
               </div>
             </div>
-            
-            {/* Botão WhatsApp (Maior para toque) */}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleWhatsAppClick}
-              disabled={!hasPhone}
-              className={cn(
-                "h-8 w-8 sm:h-9 sm:w-9 rounded-full transition-all shrink-0 -mt-1 -mr-1",
-                hasPhone
-                  ? "text-green-500 hover:text-white hover:bg-green-500"
-                  : "text-gray-700 opacity-50 cursor-not-allowed"
-              )}
-              title="Confirmar no WhatsApp"
-            >
-              <FaWhatsapp size={18} />
-            </Button>
+
+            {/* Botão WhatsApp - Área de toque otimizada */}
+            {hasPhone && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleWhatsAppClick}
+                className="h-10 w-10 rounded-full text-green-500 hover:text-white hover:bg-green-600 transition-colors shrink-0 -mt-1 -mr-1"
+              >
+                <FaWhatsapp size={20} />
+              </Button>
+            )}
           </div>
 
-          {/* Footer: Serviço e Badge */}
-          <div className="mt-3 flex items-center justify-between">
+          {/* Footer: Serviço */}
+          <div className="flex items-center">
             <Badge
-              variant="outline"
-              className="px-2 py-0.5 h-6 text-[10px] sm:text-xs font-normal truncate max-w-[80%] border-gray-700 bg-gray-800/50 text-gray-300 group-hover:border-primary/30 group-hover:text-primary transition-colors"
+              variant="secondary"
+              className="px-2 py-0.5 h-auto min-h-[24px] text-[11px] font-medium bg-gray-800/80 text-gray-300 border-transparent truncate max-w-full"
             >
               {appointment.serviceName}
             </Badge>

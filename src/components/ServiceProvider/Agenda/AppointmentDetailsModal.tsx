@@ -52,7 +52,7 @@ export const AppointmentDetailsModal = ({
 
   const statusVariantMap = {
     pending: "warning",
-    scheduled: "default", // ou primary
+    scheduled: "default",
     completed: "success",
     cancelled: "destructive",
   } as const;
@@ -94,55 +94,57 @@ export const AppointmentDetailsModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-gray-950 border-gray-800 p-0 overflow-hidden gap-0">
-        <DialogHeader className="p-6 pb-4 bg-gray-900 border-b border-gray-800">
+      <DialogContent className="w-[95%] sm:max-w-md bg-gray-950 border-gray-800 p-0 overflow-hidden gap-0 rounded-xl">
+        {/* Header Fixo */}
+        <DialogHeader className="p-5 pb-4 bg-gray-900 border-b border-gray-800">
           <div className="flex justify-between items-start">
-            <div className="space-y-1">
-              <DialogTitle className="text-xl font-bold text-white">
-                Detalhes
+            <div className="space-y-1 text-left">
+              <DialogTitle className="text-lg font-bold text-white">
+                Detalhes do Agendamento
               </DialogTitle>
-              <p className="text-xs text-gray-500 font-mono">
-                #{appointment.id.slice(-6).toUpperCase()}
+              <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+                ID: {appointment.id.slice(-6)}
               </p>
             </div>
             <Badge
               variant={statusVariantMap[appointment.status] as any}
-              className="uppercase tracking-wide"
+              className="uppercase text-[10px] tracking-wide px-2 h-6"
             >
               {statusLabels[appointment.status]}
             </Badge>
           </div>
         </DialogHeader>
 
-        <div className="p-6 space-y-6">
+        {/* Conteúdo com Scroll para telas pequenas */}
+        <div className="p-5 space-y-5 max-h-[60vh] sm:max-h-none overflow-y-auto custom-scrollbar">
           {/* Card do Cliente */}
-          <Card className="bg-gray-900/50 border-gray-800 p-4 flex flex-col gap-4">
+          <Card className="bg-gradient-to-br from-gray-900 to-gray-900/50 border-gray-800 p-4 flex flex-col gap-3 shadow-lg">
             <div className="flex items-center gap-4">
-              <Avatar className="h-14 w-14 border-2 border-gray-700">
-                <AvatarImage src={clientPhotoUrl} />
-                <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-bold text-lg">
+              <Avatar className="h-12 w-12 border border-gray-700 shadow-md">
+                <AvatarImage src={clientPhotoUrl} className="object-cover" />
+                <AvatarFallback className="bg-gray-800 text-primary font-bold">
                   {appointment.clientName.charAt(0)}
                 </AvatarFallback>
               </Avatar>
 
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-lg text-white truncate">
+                <p className="font-bold text-base text-white truncate">
                   {appointment.clientName}
                 </p>
                 {hasPhone ? (
                   <button
                     onClick={handleCopyPhone}
-                    className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-primary transition-colors group"
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary transition-colors group mt-0.5"
                   >
-                    <Phone size={14} />
+                    <Phone size={12} />
                     {rawPhone}
                     <Copy
-                      size={12}
+                      size={10}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                     />
                   </button>
                 ) : (
-                  <span className="text-sm text-gray-500 italic">
+                  <span className="text-xs text-gray-600 italic">
                     Sem contato
                   </span>
                 )}
@@ -152,75 +154,78 @@ export const AppointmentDetailsModal = ({
             {hasPhone && (
               <Button
                 variant="outline"
-                className="w-full border-green-600/30 text-green-500 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500 gap-2 h-10"
+                size="sm"
+                className="w-full border-green-900/30 bg-green-900/10 text-green-500 hover:bg-green-900/20 hover:text-green-400 hover:border-green-800 gap-2 h-9 text-xs uppercase tracking-wide font-bold"
                 onClick={handleWhatsApp}
               >
-                <FaWhatsapp size={18} /> Chamar no WhatsApp
+                <FaWhatsapp size={16} /> Enviar mensagem
               </Button>
             )}
           </Card>
 
-          {/* Detalhes do Serviço */}
+          {/* Info Grid */}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <span className="text-xs text-gray-500 uppercase font-bold flex items-center gap-1">
-                  <Calendar size={12} /> Data
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-900/40 p-3 rounded-lg border border-gray-800/50 space-y-1">
+                <span className="text-[10px] text-gray-500 uppercase font-bold flex items-center gap-1.5">
+                  <Calendar size={10} /> Data
                 </span>
                 <p className="text-sm font-medium text-gray-200">
-                  {format(new Date(appointment.startTime), "dd 'de' MMMM")}
+                  {format(new Date(appointment.startTime), "dd/MM")}
                 </p>
               </div>
-              <div className="space-y-1">
-                <span className="text-xs text-gray-500 uppercase font-bold flex items-center gap-1">
-                  <Clock size={12} /> Horário
+              <div className="bg-gray-900/40 p-3 rounded-lg border border-gray-800/50 space-y-1">
+                <span className="text-[10px] text-gray-500 uppercase font-bold flex items-center gap-1.5">
+                  <Clock size={10} /> Horário
                 </span>
                 <p className="text-sm font-medium text-gray-200">
-                  {format(new Date(appointment.startTime), "HH:mm")} -{" "}
-                  {format(new Date(appointment.endTime), "HH:mm")}
+                  {format(new Date(appointment.startTime), "HH:mm")}
                 </p>
               </div>
             </div>
 
-            <div className="h-px bg-gray-800" />
-
-            <div className="flex justify-between items-center">
+            <div className="bg-gray-900/40 p-3 rounded-lg border border-gray-800/50 space-y-3">
               <div className="space-y-1">
-                <span className="text-xs text-gray-500 uppercase font-bold flex items-center gap-1">
-                  <Scissors size={12} /> Serviço
+                <span className="text-[10px] text-gray-500 uppercase font-bold flex items-center gap-1.5">
+                  <Scissors size={10} /> Serviço
                 </span>
-                <p className="text-sm font-medium text-gray-200">
+                <p className="text-sm font-medium text-gray-200 leading-tight">
                   {appointment.serviceName}
                 </p>
               </div>
-              <div className="text-right space-y-1">
-                <span className="text-xs text-gray-500 uppercase font-bold flex items-center justify-end gap-1">
-                  <User size={12} /> Profissional
-                </span>
-                <p className="text-sm font-medium text-gray-200">
-                  {appointment.professionalName}
-                </p>
-              </div>
-            </div>
 
-            <div className="bg-black/40 p-3 rounded-lg flex justify-between items-center border border-gray-800 mt-2">
-              <span className="text-gray-400 text-sm font-medium flex items-center gap-2">
-                <DollarSign size={16} /> Total
-              </span>
-              <span className="text-lg font-bold text-primary">
-                R$ {appointment.totalPrice.toFixed(2)}
-              </span>
+              <div className="h-px bg-gray-800/50" />
+
+              <div className="flex justify-between items-center">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold flex items-center gap-1.5">
+                    <User size={10} /> Profissional
+                  </span>
+                  <p className="text-xs text-gray-300">
+                    {appointment.professionalName}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-bold text-primary flex items-baseline">
+                    <span className="text-xs text-gray-500 font-normal mr-1">
+                      R$
+                    </span>
+                    {appointment.totalPrice.toFixed(2)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="p-4 bg-gray-900 border-t border-gray-800 sm:justify-between gap-3">
+        {/* Footer Actions - Garantindo visibilidade no mobile */}
+        <DialogFooter className="p-4 bg-gray-900 border-t border-gray-800 flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-2">
           {appointment.status === "scheduled" ? (
-            <>
+            <div className="flex flex-col-reverse w-full sm:flex-row gap-3">
               <Button
                 variant="destructive"
                 onClick={() => onStatusChange(appointment.id, "cancelled")}
-                className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
+                className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 h-10"
               >
                 <XCircle size={18} className="mr-2" /> Cancelar
               </Button>
@@ -228,10 +233,10 @@ export const AppointmentDetailsModal = ({
                 onClick={() => onComplete(appointment)}
                 disabled={isTooEarlyToComplete}
                 className={cn(
-                  "flex-1 font-bold",
+                  "flex-1 font-bold h-10",
                   isTooEarlyToComplete
-                    ? "opacity-70 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-500 text-white"
+                    ? "opacity-50 cursor-not-allowed bg-gray-800 text-gray-400"
+                    : "bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20"
                 )}
               >
                 {isTooEarlyToComplete ? (
@@ -241,21 +246,25 @@ export const AppointmentDetailsModal = ({
                 )}
                 Concluir
               </Button>
-            </>
+            </div>
           ) : appointment.status === "pending" ? (
             <div className="flex w-full gap-3">
-              <Button variant="ghost" onClick={onClose} className="flex-1">
+              <Button variant="ghost" onClick={onClose} className="flex-1 h-10">
                 Fechar
               </Button>
               <Button
                 onClick={() => onStatusChange(appointment.id, "scheduled")}
-                className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white"
+                className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white h-10 shadow-lg shadow-blue-900/20"
               >
-                Confirmar
+                Aprovar Agendamento
               </Button>
             </div>
           ) : (
-            <Button variant="secondary" onClick={onClose} className="w-full">
+            <Button
+              variant="secondary"
+              onClick={onClose}
+              className="w-full h-10"
+            >
               Fechar
             </Button>
           )}

@@ -17,7 +17,7 @@ import {
   List,
   LayoutGrid,
   Clock as ClockIcon,
-  AlertCircle,
+  Filter,
 } from "lucide-react";
 import { startOfDay, isPast } from "date-fns";
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
@@ -40,7 +40,6 @@ import { PendingIssuesTab } from "./PendingIssuesTab";
 // UI
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
-import { Card } from "../../ui/card";
 
 export type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
 export type ViewMode = "card" | "list" | "calendar";
@@ -57,16 +56,18 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
   const [activeTab, setActiveTab] = useState<AgendaTab>("scheduled");
 
-  // Melhoria: Define o padrão inicial baseado no tamanho da tela, mas não força mudança depois
+  // Mobile check
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
-    typeof window !== "undefined" && window.innerWidth < 768
-      ? "list"
-      : "calendar"
+    isMobile ? "list" : "calendar"
   );
 
   const [selectedProfessionalId, setSelectedProfessionalId] =
     usePersistentState<string>("agenda_professional_filter", "all");
+
+  const [showFiltersMobile, setShowFiltersMobile] = useState(false);
 
   const isOwner = userProfile?.role === "serviceProvider";
 
@@ -114,8 +115,6 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
   const enrichedFiltered =
     filteredAppointments as EnrichedProviderAppointment[];
 
-  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
-
   const renderContent = () => {
     if (isLoading)
       return (
@@ -125,14 +124,13 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       );
 
     if (viewMode !== "calendar" && filteredAppointments.length === 0) {
+      // Empty State renderizado dentro da ListView para consistência, 
+      // mas se quiser customizar, pode retornar aqui.
       return (
-        <div className="flex flex-col justify-center items-center h-[50vh] text-gray-500 text-center p-4">
-          <CalendarIcon size={64} className="mb-4 opacity-20" />
-          <p className="text-lg font-medium">Agenda vazia.</p>
-          <p className="text-sm">
-            Nenhum agendamento encontrado para este filtro.
-          </p>
-        </div>
+        <AgendaListView
+          appointments={[]}
+          onAppointmentSelect={handleOpenDetails}
+        />
       );
     }
 
@@ -160,68 +158,78 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
   };
 
   return (
-    <Card className="flex-1 flex flex-col bg-gray-900/60 backdrop-blur-sm border-gray-800 shadow-2xl overflow-hidden h-full min-h-0">
-      {/* Header */}
-      <div className="flex-shrink-0 p-4 sm:p-6 pb-2 border-b border-gray-800 z-20 bg-gray-900/95">
-        <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4 mb-4">
-          {/* Título e Filtro de Profissional */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto">
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2 whitespace-nowrap">
-              <CalendarIcon className="text-primary" />
-              <span className="hidden sm:inline">Agenda</span>
-            </h1>
+    // Removido "Card" wrapper no mobile para evitar bordas duplas e padding excessivo
+    <div className="flex-1 flex flex-col md:bg-gray-900/60 md:backdrop-blur-sm md:border md:border-gray-800 md:shadow-2xl md:rounded-xl overflow-hidden h-full min-h-0">
+      
+      {/* Header Responsivo */}
+      <div className="flex-shrink-0 flex flex-col gap-3 p-0 md:p-6 md:pb-2 border-b-0 md:border-b md:border-gray-800 z-10">
+        
+        {/* Linha Superior: Controles Principais */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            
+            {/* Esquerda: Data Selector (Agora Full Width no mobile para facilidade) */}
+            <div className="w-full md:w-auto order-2 md:order-1">
+                 {(activeTab === "scheduled" || activeTab === "history") && (
+                    <DateSelector
+                        selectedDate={selectedDay}
+                        setSelectedDate={setSelectedDay}
+                        label={isMobile ? undefined : "Exibindo:"} // Remove label no mobile pra economizar espaço
+                    />
+                 )}
+            </div>
 
-            {isOwner && (
-              <div className="w-full sm:w-auto sm:min-w-[200px]">
-                <ProfessionalFilter
-                  selectedProfessionalId={selectedProfessionalId}
-                  onSelectProfessional={(id) =>
-                    setSelectedProfessionalId(id || "all")
-                  }
-                />
-              </div>
-            )}
-          </div>
+            {/* Direita: Switcher e Filtros */}
+            <div className="flex items-center justify-end gap-2 order-1 md:order-2">
+                {/* Botão de Filtro Mobile */}
+                {isOwner && isMobile && (
+                    <Button 
+                        size="icon" 
+                        variant={showFiltersMobile ? "default" : "outline"}
+                        className="h-9 w-9 border-gray-700 bg-gray-800"
+                        onClick={() => setShowFiltersMobile(!showFiltersMobile)}
+                    >
+                        <Filter size={16} />
+                    </Button>
+                )}
 
-          {/* Controles de Data e Visualização */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full xl:w-auto">
-            {(activeTab === "scheduled" || activeTab === "history") && (
-              <div className="w-full sm:w-auto flex-1">
-                <DateSelector
-                  selectedDate={selectedDay}
-                  setSelectedDate={setSelectedDay}
-                  // Lógica inteligente de label:
-                  // Se for mobile E estiver no modo calendário -> Mostra "Dia" (pois mobile vira day view)
-                  // Se for desktop E estiver no modo calendário -> Mostra "Semana"
-                  label={
-                    activeTab === "scheduled" &&
-                    viewMode === "calendar" &&
-                    !isMobileView
-                      ? "Semana:"
-                      : "Dia:"
-                  }
-                />
-              </div>
-            )}
-
-            {activeTab === "scheduled" && (
-              <div className="flex-shrink-0 self-end sm:self-auto">
-                <AgendaViewSwitcher
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  icons={{
-                    card: <LayoutGrid size={18} />,
-                    list: <List size={18} />,
-                    calendar: <ClockIcon size={18} />,
-                  }}
-                />
-              </div>
-            )}
-          </div>
+                {/* Switcher de Visualização */}
+                {activeTab === "scheduled" && (
+                    <AgendaViewSwitcher
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        icons={{
+                            card: <LayoutGrid size={16} />,
+                            list: <List size={16} />,
+                            calendar: <ClockIcon size={16} />,
+                        }}
+                    />
+                )}
+            </div>
         </div>
 
-        {/* Navigation Tabs (Scrollável no mobile) */}
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+        {/* Área de Filtro Expansível (Mobile) ou Fixa (Desktop) */}
+        <AnimatePresence>
+            {(isOwner && (!isMobile || showFiltersMobile)) && (
+                <motion.div 
+                    initial={isMobile ? { height: 0, opacity: 0 } : { height: 'auto', opacity: 1 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                >
+                    <div className="py-2 md:py-0 md:w-[250px]">
+                        <ProfessionalFilter
+                            selectedProfessionalId={selectedProfessionalId}
+                            onSelectProfessional={(id) =>
+                                setSelectedProfessionalId(id || "all")
+                            }
+                        />
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+
+        {/* Tabs de Navegação - Scroll Horizontal no Mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-2 md:pt-2">
           {[
             { id: "requests", label: "Solicitações", count: pendingCount },
             { id: "scheduled", label: "Agenda", count: 0 },
@@ -235,13 +243,13 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
           ].map((tab) => (
             <Button
               key={tab.id}
-              variant={activeTab === tab.id ? "default" : "ghost"}
+              variant={activeTab === tab.id ? "default" : "secondary"}
               onClick={() => setActiveTab(tab.id as AgendaTab)}
               className={cn(
-                "relative h-9 rounded-full px-4 text-sm font-medium transition-all whitespace-nowrap flex-shrink-0",
+                "h-8 md:h-9 rounded-full px-4 text-xs md:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 border border-transparent",
                 activeTab === tab.id
-                  ? "bg-primary text-black hover:bg-primary/90"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+                  ? "bg-primary text-black hover:bg-primary/90 shadow-md shadow-primary/20"
+                  : "bg-gray-800/50 text-gray-400 border-gray-700/50 hover:bg-gray-800 hover:text-white"
               )}
             >
               {tab.label}
@@ -249,7 +257,7 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
                 <Badge
                   variant={tab.alert ? "destructive" : "secondary"}
                   className={cn(
-                    "ml-2 h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full text-[10px]",
+                    "ml-2 h-4 md:h-5 min-w-[16px] px-1 flex items-center justify-center rounded-full text-[10px]",
                     tab.alert ? "animate-pulse" : "bg-gray-700 text-white"
                   )}
                 >
@@ -262,43 +270,45 @@ export const AgendaView = ({ userProfile }: AgendaViewProps) => {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-2 sm:p-4 bg-black/20 relative">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${activeTab}-${viewMode}-${selectedDay.toISOString()}`}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.15 }}
-            className="h-full flex flex-col"
-          >
-            {activeTab === "requests" && (
-              <RequestsTab
-                appointments={enrichedFiltered}
-                onAppointmentSelect={handleOpenDetails}
-                onUpdateStatus={updateStatus}
-              />
-            )}
-            {activeTab === "scheduled" && (
-              <div className="h-full flex flex-col">{renderContent()}</div>
-            )}
-            {activeTab === "pendingIssues" && (
-              <PendingIssuesTab
-                appointments={enrichedFiltered}
-                onAppointmentSelect={handleOpenDetails}
-              />
-            )}
-            {activeTab === "history" && (
-              <HistoryTab
-                appointments={enrichedFiltered}
-                onAppointmentSelect={handleOpenDetails}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
+      <main className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
+        <div className="p-0 md:p-4 min-h-full"> {/* Remove padding interno no mobile se quiser full-bleed, ou use p-1 */}
+            <AnimatePresence mode="wait">
+            <motion.div
+                key={`${activeTab}-${viewMode}-${selectedDay.toISOString()}`}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="h-full flex flex-col"
+            >
+                {activeTab === "requests" && (
+                <RequestsTab
+                    appointments={enrichedFiltered}
+                    onAppointmentSelect={handleOpenDetails}
+                    onUpdateStatus={updateStatus}
+                />
+                )}
+                {activeTab === "scheduled" && (
+                <div className="h-full flex flex-col">{renderContent()}</div>
+                )}
+                {activeTab === "pendingIssues" && (
+                <PendingIssuesTab
+                    appointments={enrichedFiltered}
+                    onAppointmentSelect={handleOpenDetails}
+                />
+                )}
+                {activeTab === "history" && (
+                <HistoryTab
+                    appointments={enrichedFiltered}
+                    onAppointmentSelect={handleOpenDetails}
+                />
+                )}
+            </motion.div>
+            </AnimatePresence>
+        </div>
       </main>
 
       <AgendaModalsWrapper />
-    </Card>
+    </div>
   );
 };

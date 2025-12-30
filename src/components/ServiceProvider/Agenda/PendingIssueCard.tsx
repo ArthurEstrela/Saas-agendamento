@@ -10,9 +10,9 @@ import {
   DollarSign,
   MessageCircle,
   ArrowRight,
+  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { cn } from "../../../lib/utils/cn";
 
 // Primitivos
 import { Card, CardContent } from "../../ui/card";
@@ -39,7 +39,7 @@ export const PendingIssueCard = ({
   };
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evita abrir o modal ao clicar no WhatsApp
+    e.stopPropagation();
     if (!client?.phoneNumber) return;
 
     const cleanPhone = client.phoneNumber.replace(/\D/g, "");
@@ -58,113 +58,108 @@ export const PendingIssueCard = ({
   return (
     <MotionCard
       layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileTap={{ scale: 0.99 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileTap={{ scale: 0.98 }}
       onClick={handleCardClick}
-      className="bg-gray-900/50 border-yellow-600/30 hover:border-yellow-500/50 hover:bg-gray-900/80 cursor-pointer group transition-all duration-300 relative overflow-hidden"
+      className="bg-gray-900/40 border-yellow-600/20 active:border-yellow-500/50 backdrop-blur-sm cursor-pointer group transition-all duration-300 relative overflow-hidden rounded-xl"
     >
-      {/* Efeito de brilho lateral no hover */}
-      <div className="absolute top-0 left-0 w-1 h-full bg-yellow-600/50 group-hover:bg-yellow-500 transition-colors" />
+      {/* Indicador lateral pulsante */}
+      <div className="absolute top-0 left-0 w-1.5 h-full bg-yellow-500/80" />
 
-      <CardContent className="p-4 sm:p-5">
-        {/* Header com Alerta e Ações */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-800">
+      <CardContent className="p-4">
+        {/* Header Compacto */}
+        <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-yellow-500/10 rounded-full shrink-0">
-              <AlertTriangle
-                className="text-yellow-500 animate-pulse"
-                size={20}
-              />
+            <div className="bg-yellow-500/10 p-2 rounded-full animate-pulse">
+              <AlertTriangle className="text-yellow-500" size={18} />
             </div>
             <div>
-              <h3 className="font-bold text-base sm:text-lg text-yellow-500 leading-tight">
-                Pendente de Conclusão
-              </h3>
-              <p className="text-xs text-gray-400 font-medium mt-0.5 flex items-center gap-1">
-                Finalizado <span className="text-gray-300">{timeAgo}</span>
+              <h3 className="font-bold text-sm text-yellow-100">Pendente</h3>
+              <p className="text-[10px] text-yellow-500/80 font-mono flex items-center gap-1">
+                <Clock size={10} />
+                {timeAgo}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0">
-            {client?.phoneNumber && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1 sm:flex-none border-green-600/30 text-green-500 hover:bg-green-500/10 hover:border-green-500 hover:text-green-400 h-9"
-                onClick={handleWhatsAppClick}
-                title="Contato via WhatsApp"
-              >
-                <MessageCircle size={16} className="mr-2" />
-                <span className="text-xs font-bold">WhatsApp</span>
-              </Button>
-            )}
-
-            <Button
-              size="sm"
-              variant="ghost"
-              className="flex-1 sm:flex-none bg-yellow-600/10 text-yellow-500 hover:bg-yellow-600 hover:text-white h-9 transition-colors"
-            >
-              <span className="text-xs font-bold mr-2">Resolver</span>
-              <ArrowRight size={16} />
-            </Button>
+          <div className="text-right">
+            <span className="font-bold text-lg text-primary block leading-none">
+              R$ {appointment.totalPrice.toFixed(0)}
+            </span>
+            <span className="text-[10px] text-gray-500 uppercase">Total</span>
           </div>
         </div>
 
-        {/* Grid de Detalhes - Otimizado para Mobile */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-4">
-          {/* Data */}
-          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30">
-            <Calendar size={16} className="text-gray-500 shrink-0" />
+        {/* Info Grid - Mais espaçado no mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/20 p-3 rounded-lg border border-gray-800/50 mb-4">
+          {/* Cliente */}
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="bg-gray-800 p-1.5 rounded-full shrink-0">
+              <User size={14} className="text-gray-400" />
+            </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+              <span className="text-[10px] text-gray-500 font-bold uppercase">
+                Cliente
+              </span>
+              <span className="text-sm font-medium text-gray-200 truncate">
+                {client?.name || "Cliente"}
+              </span>
+            </div>
+          </div>
+
+          {/* Data */}
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="bg-gray-800 p-1.5 rounded-full shrink-0">
+              <Calendar size={14} className="text-gray-400" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-500 font-bold uppercase">
                 Data
               </span>
-              <span className="text-xs sm:text-sm text-gray-200 font-medium truncate">
+              <span className="text-sm font-medium text-gray-200 truncate">
                 {format(startTime, "dd/MM 'às' HH:mm", { locale: ptBR })}
               </span>
             </div>
           </div>
 
-          {/* Cliente */}
-          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30">
-            <User size={16} className="text-gray-500 shrink-0" />
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                Cliente
-              </span>
-              <span className="text-xs sm:text-sm text-gray-200 font-medium truncate">
-                {client?.name || "Anônimo"}
-              </span>
+          {/* Serviço (Full width no mobile) */}
+          <div className="col-span-1 sm:col-span-2 flex items-center gap-2.5 overflow-hidden border-t border-gray-800/50 pt-2 sm:border-0 sm:pt-0">
+            <div className="bg-gray-800 p-1.5 rounded-full shrink-0">
+              <Scissors size={14} className="text-gray-400" />
             </div>
-          </div>
-
-          {/* Serviço */}
-          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30 col-span-2 sm:col-span-1">
-            <Scissors size={16} className="text-gray-500 shrink-0" />
             <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                Serviço
+              <span className="text-[10px] text-gray-500 font-bold uppercase">
+                Serviços
               </span>
-              <span className="text-xs sm:text-sm text-gray-200 font-medium truncate">
+              <span className="text-xs text-gray-300 truncate leading-tight">
                 {services.map((s) => s.name).join(", ")}
               </span>
             </div>
           </div>
+        </div>
 
-          {/* Valor */}
-          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/20 border border-gray-800/30 col-span-2 sm:col-span-1">
-            <DollarSign size={16} className="text-primary shrink-0" />
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                Valor Total
-              </span>
-              <span className="text-xs sm:text-sm font-bold text-primary truncate">
-                R$ {appointment.totalPrice.toFixed(2)}
-              </span>
-            </div>
-          </div>
+        {/* Ações - Botões Grandes para Mobile */}
+        <div className="flex gap-3">
+          {client?.phoneNumber && (
+            <Button
+              variant="outline"
+              className="flex-1 border-green-900/40 text-green-500 hover:bg-green-900/20 hover:text-green-400 h-10"
+              onClick={handleWhatsAppClick}
+            >
+              <MessageCircle size={18} />
+            </Button>
+          )}
+
+          <Button
+            className="flex-[3] bg-yellow-600 hover:bg-yellow-500 text-white font-bold h-10 shadow-lg shadow-yellow-900/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAppointmentSelect(appointment);
+            }}
+          >
+            Resolver Pendência <ArrowRight size={18} className="ml-2" />
+          </Button>
         </div>
       </CardContent>
     </MotionCard>

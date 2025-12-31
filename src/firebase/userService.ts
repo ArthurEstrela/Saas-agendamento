@@ -13,7 +13,7 @@ import {
   where,
   getDocs,
   limit,
-  writeBatch, // <--- Importante para criar os dois documentos atomicamente
+  writeBatch,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./config";
@@ -127,7 +127,11 @@ export const createUserProfile = async (
       ...baseProfile,
       role: "serviceProvider",
       businessName: businessName,
-      cnpj: providerData?.cnpj || "",
+      // --- ALTERAÇÃO AQUI: Suporte a CPF e CNPJ ---
+      documentType: providerData?.documentType || "cnpj", // Padrão seguro
+      cnpj: providerData?.cnpj || undefined, // Salva se existir
+      cpf: providerData?.cpf || undefined, // Salva se existir
+
       businessAddress: providerData?.businessAddress || {
         street: "",
         city: "",
@@ -141,7 +145,7 @@ export const createUserProfile = async (
       publicProfileSlug: createSlug(businessName),
       logoUrl: "",
       services: [],
-      professionals: [], // Lista de IDs (mantemos vazia inicialmente)
+      professionals: [],
       reviews: [],
     } as ServiceProviderProfile;
 
@@ -149,7 +153,6 @@ export const createUserProfile = async (
     batch.set(userRef, specificProfile);
 
     // 2. CRIA O "PROFISSIONAL ESPELHO"
-    // Isso permite que o dono seja agendável e apareça na lista de equipe
     const professionalsRef = collection(
       db,
       "serviceProviders",
@@ -160,12 +163,12 @@ export const createUserProfile = async (
 
     const ownerAsProfessional = {
       id: newProfessionalRef.id,
-      name: name, // Nome do dono
+      name: name,
       email: email,
-      photoURL: "", // Começa sem foto (o usuário fará upload depois)
-      services: [], // Começa sem serviços vinculados
+      photoURL: "",
+      services: [],
       availability: DEFAULT_AVAILABILITY,
-      isOwner: true, // FLAG IMPORTANTE: Identifica que este é o dono
+      isOwner: true,
     };
 
     batch.set(newProfessionalRef, ownerAsProfessional);
@@ -208,9 +211,6 @@ export const uploadFile = async (file: File, path: string): Promise<string> => {
 };
 
 // ================== UPLOAD DE LOGO DO PRESTADOR ==================
-/**
- * Faz o upload da logo de um prestador de serviço e atualiza o perfil.
- */
 export const uploadProviderLogo = async (
   providerId: string,
   file: File
@@ -222,6 +222,7 @@ export const uploadProviderLogo = async (
 
   return downloadURL;
 };
+
 // =================================================================
 
 export const uploadProfilePicture = async (

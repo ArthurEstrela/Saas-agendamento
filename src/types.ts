@@ -29,6 +29,8 @@ export interface TimeSlot {
 export interface ProviderAdditionalData {
   businessName: string;
   cnpj: string;
+  cpf?: string;
+  documentType?: "cpf" | "cnpj";
   address: {
     street: string;
     number: string;
@@ -146,7 +148,9 @@ export interface ServiceProviderProfile extends BaseUser {
   role: "serviceProvider";
   businessName: string;
   businessAddress: Address;
-  cnpj: string;
+  cnpj?: string;
+  cpf?: string;
+  documentType?: "cpf" | "cnpj";
   publicProfileSlug?: string;
   businessPhone?: string;
   services: Service[];

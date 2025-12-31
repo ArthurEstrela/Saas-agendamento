@@ -21,8 +21,8 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
   CardFooter,
+  CardTitle,
 } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
@@ -32,23 +32,28 @@ const PLANOS = {
   TRIMESTRAL: "price_1SMeWT3zDQy3p6yezkMmrByP",
   ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
 };
+
+// Estrutura de dados atualizada para exibir valor mensal equivalente
 const PLAN_DETAILS = {
   [PLANOS.MENSAL]: {
     name: "Mensal",
-    price: "R$ 49,90",
-    period: "/mês",
+    monthlyPrice: "R$ 49,90",
+    totalPrice: null, // Não tem cobrança total diferente
+    billingText: "Cobrado todo mês",
     label: "Flexível",
   },
   [PLANOS.TRIMESTRAL]: {
     name: "Trimestral",
-    price: "R$ 135,00",
-    period: "/trimestre",
+    monthlyPrice: "R$ 45,00", // 135 / 3
+    totalPrice: "R$ 135,00",
+    billingText: "Cobrado a cada 3 meses",
     label: "Popular",
   },
   [PLANOS.ANUAL]: {
     name: "Anual",
-    price: "R$ 468,00",
-    period: "/ano",
+    monthlyPrice: "R$ 39,00", // 468 / 12
+    totalPrice: "R$ 468,00",
+    billingText: "Cobrado anualmente",
     label: "Econômico",
   },
 };
@@ -68,7 +73,8 @@ const PlanCard = ({
   return (
     <Card
       className={cn(
-        "relative transition-all duration-300 hover:-translate-y-1",
+        // Adicionado h-full e flex flex-col para alinhar altura e empurrar o footer
+        "relative transition-all duration-300 hover:-translate-y-1 flex flex-col h-full",
         isPopular
           ? "border-amber-500/50 bg-gray-900 shadow-xl shadow-amber-900/10"
           : "border-gray-800 bg-gray-900/50"
@@ -81,17 +87,29 @@ const PlanCard = ({
       )}
       <CardHeader>
         <h3 className="text-lg font-medium text-gray-300">{details.name}</h3>
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-white">{details.price}</span>
-          <span className="text-sm text-gray-500">{details.period}</span>
+        <div className="flex flex-col">
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-bold text-white">
+              {details.monthlyPrice}
+            </span>
+            <span className="text-sm text-gray-500">/mês</span>
+          </div>
+          {/* Texto explicativo da cobrança real */}
+          <span className="text-xs text-gray-500 mt-1">
+            {details.totalPrice
+              ? `${details.totalPrice} ${details.billingText.toLowerCase()}`
+              : details.billingText}
+          </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+
+      {/* flex-1 aqui faz o conteúdo ocupar o espaço disponível, empurrando o footer para baixo */}
+      <CardContent className="space-y-3 flex-1">
         {[
           "Agendamentos Ilimitados",
           "Gestão Financeira",
           priceId !== PLANOS.MENSAL && "Relatórios Avançados",
-          priceId === PLANOS.ANUAL && "2 Meses Grátis",
+          priceId === PLANOS.ANUAL && "2 Meses Grátis", // Destaque extra pro anual
         ]
           .filter(Boolean)
           .map((f: any, i) => (
@@ -99,7 +117,9 @@ const PlanCard = ({
               key={i}
               className="flex items-center gap-2 text-sm text-gray-300"
             >
-              <CheckCircle2 size={16} className="text-green-500" /> {f}
+              <CheckCircle2 size={16} className="text-green-500 shrink-0" />{" "}
+              {/* shrink-0 para o ícone não esmagar */}
+              {f}
             </div>
           ))}
       </CardContent>
@@ -238,6 +258,7 @@ export const SubscriptionManagement = () => {
                 Planos Disponíveis
               </h3>
             </div>
+            {/* grid auto-rows-fr garante que as linhas do grid tenham a mesma altura base */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {Object.values(PLANOS).map((id) => (
                 <PlanCard

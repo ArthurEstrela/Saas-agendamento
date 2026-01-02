@@ -24,30 +24,6 @@ import type {
   UserRole,
 } from "../types";
 
-// --- CONSTANTES ---
-
-// Disponibilidade padrão para o Dono (Seg-Sex, 09h-18h)
-const DEFAULT_AVAILABILITY = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-].map((day) => ({
-  dayOfWeek: day,
-  isAvailable: true,
-  slots: [{ start: "09:00", end: "18:00" }],
-}));
-
-// Fins de semana fechados por padrão
-["Saturday", "Sunday"].forEach((day) => {
-  DEFAULT_AVAILABILITY.push({
-    dayOfWeek: day,
-    isAvailable: false,
-    slots: [],
-  });
-});
-
 // --- HELPER FUNCTIONS ---
 
 const convertTimestamps = (
@@ -127,10 +103,9 @@ export const createUserProfile = async (
       ...baseProfile,
       role: "serviceProvider",
       businessName: businessName,
-      // --- ALTERAÇÃO AQUI: Suporte a CPF e CNPJ ---
-      documentType: providerData?.documentType || "cnpj", // Padrão seguro
-      cnpj: providerData?.cnpj || undefined, // Salva se existir
-      cpf: providerData?.cpf || undefined, // Salva se existir
+      documentType: providerData?.documentType || "cnpj",
+      cnpj: providerData?.cnpj || undefined,
+      cpf: providerData?.cpf || undefined,
 
       businessAddress: providerData?.businessAddress || {
         street: "",
@@ -145,33 +120,15 @@ export const createUserProfile = async (
       publicProfileSlug: createSlug(businessName),
       logoUrl: "",
       services: [],
-      professionals: [],
+      professionals: [], // Começa vazio
       reviews: [],
     } as ServiceProviderProfile;
 
     // 1. Adiciona o perfil principal ao batch
     batch.set(userRef, specificProfile);
 
-    // 2. CRIA O "PROFISSIONAL ESPELHO"
-    const professionalsRef = collection(
-      db,
-      "serviceProviders",
-      uid,
-      "professionals"
-    );
-    const newProfessionalRef = doc(professionalsRef); // ID Automático
-
-    const ownerAsProfessional = {
-      id: newProfessionalRef.id,
-      name: name,
-      email: email,
-      photoURL: "",
-      services: [],
-      availability: DEFAULT_AVAILABILITY,
-      isOwner: true,
-    };
-
-    batch.set(newProfessionalRef, ownerAsProfessional);
+    // REMOVIDO: Lógica que criava o "Profissional Espelho" automaticamente.
+    // Agora o usuário deve criar profissionais (ou a si mesmo) via Dashboard/Onboarding.
   }
 
   // Executa todas as operações de uma vez

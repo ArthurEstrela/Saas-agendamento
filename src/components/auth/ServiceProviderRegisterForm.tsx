@@ -124,12 +124,10 @@ const schema = z
 
     businessName: z.string().min(2, "O nome do negócio é obrigatório"),
 
-    // Novo campo para tipo de documento
     documentType: z.enum(["cpf", "cnpj"], {
       required_error: "Selecione o tipo de documento",
     }),
 
-    // Validação dinâmica para CPF ou CNPJ
     documentNumber: z.string().refine((val) => {
       const clean = val.replace(/\D/g, "");
       return clean.length === 11 || clean.length === 14;
@@ -203,11 +201,12 @@ export const ServiceProviderRegisterForm = () => {
     watch,
     setValue,
     control,
+    clearErrors,
   } = useForm<ProviderFormData>({
     resolver: zodResolver(schema),
     mode: "onTouched",
     defaultValues: {
-      documentType: "cnpj", // Valor padrão
+      documentType: "cnpj",
     },
   });
 
@@ -221,16 +220,40 @@ export const ServiceProviderRegisterForm = () => {
   const streetValue = watch("street");
   const numberValue = watch("number");
   const cityValue = watch("city");
-  const documentType = watch("documentType"); // Observar para mudar a máscara
+  const documentType = watch("documentType");
 
+  // --- Efeito para limpar erros ao mudar de etapa ---
+  // Isso garante que ao entrar na etapa 4, os campos não estejam vermelhos
   useEffect(() => {
-    if (address) {
-      setValue("street", address.logradouro, { shouldValidate: true });
-      setValue("neighborhood", address.bairro, { shouldValidate: true });
-      setValue("city", address.localidade, { shouldValidate: true });
-      setValue("state", address.uf, { shouldValidate: true });
+    if (currentStep === 4) {
+      // Pequeno timeout para garantir que o render aconteceu
+      const timer = setTimeout(() => {
+        clearErrors([
+          "zipCode",
+          "street",
+          "number",
+          "neighborhood",
+          "city",
+          "state",
+        ]);
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [address, setValue]);
+  }, [currentStep, clearErrors]);
+
+  // --- Efeito do ViaCEP ---
+  useEffect(() => {
+    if (address && !cepError) {
+      // Só preenche se vierem dados válidos
+      if (address.logradouro)
+        setValue("street", address.logradouro, { shouldValidate: true });
+      if (address.bairro)
+        setValue("neighborhood", address.bairro, { shouldValidate: true });
+      if (address.localidade)
+        setValue("city", address.localidade, { shouldValidate: true });
+      if (address.uf) setValue("state", address.uf, { shouldValidate: true });
+    }
+  }, [address, cepError, setValue]);
 
   const fetchCoordinates = useCallback(async () => {
     if (streetValue && numberValue && cityValue) {
@@ -268,39 +291,63 @@ export const ServiceProviderRegisterForm = () => {
 
   const handleCepBlur = () => {
     const cleanedZip = zipCodeValue?.replace(/\D/g, "") || "";
+    // Só busca se tiver 8 dígitos para evitar busca com campo vazio
     if (cleanedZip.length === 8) {
       fetchAddress(cleanedZip);
     }
   };
 
-  const nextStep = async () => {
-    let fieldsToValidate: (keyof ProviderFormData)[] = [];
-    if (currentStep === 1) fieldsToValidate = ["name", "email", "password"];
-    if (currentStep === 2)
-      fieldsToValidate = [
-        "businessName",
-        "documentType",
-        "documentNumber",
-        "businessPhone",
-        "areaOfWork",
-      ];
-    if (currentStep === 3)
-      fieldsToValidate = ["instagram", "facebook", "website"];
+  const stepsFields: Record<number, (keyof ProviderFormData)[]> = {
+    1: ["name", "email", "password"],
+    2: [
+      "businessName",
+      "documentType",
+      "documentNumber",
+      "businessPhone",
+      "areaOfWork",
+    ],
+    3: ["instagram", "facebook", "website"],
+    4: ["zipCode", "street", "number", "neighborhood", "city", "state"],
+  };
 
+  const nextStep = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+    // Se foi acionado por evento, previne comportamento padrão
+    if (e) e.preventDefault();
+
+    const fieldsToValidate = stepsFields[currentStep];
     const isValid = await trigger(fieldsToValidate);
-    if (isValid) setCurrentStep((prev) => prev + 1);
+
+    if (isValid) {
+      setCurrentStep((prev) => prev + 1);
+    }
   };
 
   const prevStep = () => setCurrentStep((prev) => prev - 1);
 
+  // Manipulador de tecla Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); // SEMPRE previne o submit padrão do HTML
+      if (currentStep < 4) {
+        nextStep(); // Se não for a última etapa, avança
+      } else {
+        // Se for a última etapa, dispara o submit do react-hook-form manualmente
+        handleSubmit(onSubmit)();
+      }
+    }
+  };
+
   const onSubmit: SubmitHandler<ProviderFormData> = async (data) => {
+    // GUARDA DE SEGURANÇA:
+    // Se por algum motivo o submit for disparado antes da etapa 4, cancela.
+    // Isso evita que o formulário tente validar tudo se o usuário der Enter na etapa 1.
+    if (currentStep !== 4) return;
+
     const additionalData: Partial<ServiceProviderProfile> = {
       businessName: data.businessName,
-      // Mapeando para os campos corretos baseados no tipo
       documentType: data.documentType,
       cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
       cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
-
       businessPhone: data.businessPhone,
       areaOfWork: data.areaOfWork,
       socialLinks: {
@@ -345,6 +392,7 @@ export const ServiceProviderRegisterForm = () => {
 
       <form
         onSubmit={handleSubmit(onSubmit)}
+        onKeyDown={handleKeyDown}
         className="space-y-6 mt-8 animate-fade-in"
       >
         {/* STEP 1: Acesso */}
@@ -390,7 +438,6 @@ export const ServiceProviderRegisterForm = () => {
               placeholder="Nome do estabelecimento"
             />
 
-            {/* Select Area of Work */}
             <Controller
               name="areaOfWork"
               control={control}
@@ -425,7 +472,6 @@ export const ServiceProviderRegisterForm = () => {
               )}
             />
 
-            {/* Tipo de Documento (CPF vs CNPJ) */}
             <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
               <Controller
                 name="documentType"
@@ -434,7 +480,7 @@ export const ServiceProviderRegisterForm = () => {
                   <RadioGroup
                     onValueChange={(val) => {
                       field.onChange(val);
-                      setValue("documentNumber", ""); // Limpa o número ao trocar
+                      setValue("documentNumber", "");
                     }}
                     defaultValue={field.value}
                     className="flex space-x-4 justify-center"
@@ -456,7 +502,6 @@ export const ServiceProviderRegisterForm = () => {
               />
             </div>
 
-            {/* Input Documento com Máscara Dinâmica */}
             <Controller
               name="documentNumber"
               control={control}
@@ -620,7 +665,7 @@ export const ServiceProviderRegisterForm = () => {
           </section>
         )}
 
-        {/* STEP 4: Endereço (Mantido igual à lógica original, apenas resumido aqui) */}
+        {/* STEP 4: Endereço */}
         {currentStep === 4 && (
           <section className="space-y-4">
             <Typography variant="h3" className="text-center">
@@ -664,7 +709,6 @@ export const ServiceProviderRegisterForm = () => {
                 />
               </div>
             </div>
-            {/* ... Resto dos campos de endereço (number, neighborhood, city, state) mantidos ... */}
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-1">
                 <Input
@@ -724,7 +768,7 @@ export const ServiceProviderRegisterForm = () => {
           <p className="text-sm text-destructive text-center">{authError}</p>
         )}
 
-        {/* Action Buttons: Layout corrigido */}
+        {/* Action Buttons */}
         <div className="flex items-center pt-4 gap-4">
           {currentStep > 1 && (
             <Button
@@ -740,8 +784,8 @@ export const ServiceProviderRegisterForm = () => {
           <Button
             type={currentStep === 4 ? "submit" : "button"}
             disabled={isSubmitting}
+            // Importante: onClick só para navegação, o submit do step 4 é pelo form
             onClick={currentStep === 4 ? undefined : nextStep}
-            // Se for passo 1, w-full. Se for > 1 (e tem botão voltar), w-2/3
             className={currentStep === 1 ? "w-full" : "w-2/3"}
           >
             {currentStep === 4 ? (

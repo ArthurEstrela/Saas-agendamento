@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { getAppointmentsForProfessionalOnDate } from "../../firebase/bookingService";
 import { ptBR } from "date-fns/locale";
-import { format, isToday, set, startOfDay } from "date-fns";
+import { format, isToday, set, startOfDay, addDays } from "date-fns";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -32,6 +32,7 @@ const weekDayMap: { [key: number]: DailyAvailability["dayOfWeek"] } = {
 
 export const DateTimeSelection = () => {
   const {
+    provider, // <-- Pegamos o Provider aqui (que tem a config bookingWindowDays)
     selectedProfessional,
     selectedServices,
     selectedDate,
@@ -40,7 +41,12 @@ export const DateTimeSelection = () => {
     goToPreviousStep,
   } = useBookingProcessStore();
 
+  // Lógica corrigida: usa a config do Provider (Dono)
+  const maxBookingDays = provider?.bookingWindowDays || 30;
+
   const today = startOfDay(new Date());
+  const maxDate = addDays(today, maxBookingDays);
+
   const initialDate =
     selectedDate && new Date(selectedDate) >= today
       ? new Date(selectedDate)
@@ -173,14 +179,17 @@ export const DateTimeSelection = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto px-2">
         {/* Coluna do Calendário */}
         <div className="lg:col-span-5 flex justify-center lg:justify-end">
-          {/* Card Wrapper com estilo Glass */}
           <div className="bg-gray-900/60 border border-white/5 rounded-2xl p-4 shadow-2xl w-full max-w-[360px] backdrop-blur-md flex items-center justify-center">
             <Calendar
               mode="single"
               selected={date}
               onSelect={handleDateSelect}
               locale={ptBR}
-              disabled={{ before: new Date() }}
+              // Bloqueia datas fora da janela permitida
+              disabled={[
+                { before: today },
+                { after: maxDate }
+              ]}
               className="w-full"
             />
           </div>

@@ -691,7 +691,7 @@ export const createAppointment = onCall(
 );
 
 export const completeAppointment = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] },
+  { region: REGION, cors: ["http://localhost:5173"] }, // Ajuste o CORS conforme prod
   async (request) => {
     if (!request.auth)
       throw new HttpsError("unauthenticated", "Autenticação necessária.");
@@ -703,6 +703,10 @@ export const completeAppointment = onCall(
       throw new HttpsError("invalid-argument", "Dados inválidos.");
     }
 
+    const userDocRef = db.collection("users").doc(uid);
+    const userDocSnap = await userDocRef.get();
+    const userData = userDocSnap.data();
+
     const appointmentRef = db.collection("appointments").doc(appointmentId);
 
     try {
@@ -712,9 +716,20 @@ export const completeAppointment = onCall(
           throw new HttpsError("not-found", "Agendamento não encontrado.");
 
         const data = docSnap.data()!;
-        if (data.professionalId !== uid) {
-          throw new HttpsError("permission-denied", "Sem permissão.");
+        
+        const isOwner = data.providerId === uid;
+
+        const isLinkedProfessional = userData?.professionalId === data.professionalId;
+
+        const isDirectMatch = data.professionalId === uid;
+
+        if (!isOwner && !isLinkedProfessional && !isDirectMatch) {
+          throw new HttpsError(
+            "permission-denied", 
+            "Você não tem permissão para finalizar este agendamento."
+          );
         }
+
         if (data.status !== "scheduled") {
           if (data.status === "completed") return; // Já feito
           throw new HttpsError("failed-precondition", "Status inválido.");
@@ -728,7 +743,7 @@ export const completeAppointment = onCall(
         if (transSnap.empty) {
           const newTransRef = db.collection("transactions").doc();
           transaction.set(newTransRef, {
-            providerId: data.professionalId,
+            providerId: data.providerId, // Usa o providerId do agendamento
             appointmentId,
             clientId: data.clientId || "N/A",
             clientName: data.clientName || "N/A",

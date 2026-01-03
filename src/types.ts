@@ -168,6 +168,7 @@ export interface ServiceProviderProfile extends BaseUser {
     whatsapp?: string;
   };
   paymentMethods?: PaymentMethod[]; // Quais métodos o provider aceita
+  bookingWindowDays?: number;
   subscriptionStatus?:
     | "active"
     | "cancelled"

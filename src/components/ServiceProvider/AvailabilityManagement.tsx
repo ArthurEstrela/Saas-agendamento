@@ -1,9 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import { useAvailabilityStore } from "../../store/availabilityStore";
-import { Loader2, Plus, Trash2, Save } from "lucide-react";
+import { Loader2, Plus, Trash2, Save, CalendarRange } from "lucide-react"; // Adicionado CalendarRange
 import { useToast } from "../../hooks/useToast";
-import type { DailyAvailability, TimeSlot } from "../../types";
+import type {
+  DailyAvailability,
+  TimeSlot,
+  ServiceProviderProfile,
+} from "../../types";
 
 // UI Components
 import { Button } from "../ui/button";
@@ -33,7 +37,8 @@ const DAYS_OF_WEEK: { key: DailyAvailability["dayOfWeek"]; label: string }[] = [
 ];
 
 export const AvailabilityManagement = () => {
-  const { userProfile, professionals } = useProfileStore();
+  // Adicionado updateUserProfile ao destructuring
+  const { userProfile, professionals, updateUserProfile } = useProfileStore();
   const { availability, isLoading, fetchAvailability, updateAvailability } =
     useAvailabilityStore();
   const { showSuccess, showError } = useToast();
@@ -44,7 +49,19 @@ export const AvailabilityManagement = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedProfId, setSelectedProfId] = useState<string>("");
 
+  // Novo estado para a Janela de Agendamento
+  const [bookingWindow, setBookingWindow] = useState<number>(30);
+  const [isSavingWindow, setIsSavingWindow] = useState(false);
+
   const isOwner = userProfile?.role === "serviceProvider";
+
+  // Inicializa o estado da janela de agendamento quando o perfil carrega
+  useEffect(() => {
+    if (isOwner && userProfile) {
+      const profile = userProfile as ServiceProviderProfile;
+      setBookingWindow(profile.bookingWindowDays || 30);
+    }
+  }, [userProfile, isOwner]);
 
   // 1. Organiza a lista: Dono primeiro, depois o resto da equipe
   const sortedProfessionals = useMemo(() => {
@@ -74,7 +91,6 @@ export const AvailabilityManagement = () => {
 
       if (ownerProfile) {
         setSelectedProfId(ownerProfile.id);
-        // Passa o ID do Dono (userProfile.id) E o ID do Profissional (ownerProfile.id)
         fetchAvailability(userProfile.id, ownerProfile.id);
       } else {
         // Fallback
@@ -105,11 +121,27 @@ export const AvailabilityManagement = () => {
     }
   }, [availability]);
 
+  // --- HANDLERS ---
+
+  const handleSaveWindow = async () => {
+    if (!userProfile?.id) return;
+    setIsSavingWindow(true);
+    try {
+      await updateUserProfile(userProfile.id, {
+        bookingWindowDays: bookingWindow,
+      });
+      showSuccess("Janela de agendamento atualizada!");
+    } catch (error) {
+      showError("Erro ao atualizar janela de agendamento.");
+    } finally {
+      setIsSavingWindow(false);
+    }
+  };
+
   const handleProfessionalChange = (profId: string) => {
     if (!userProfile?.id) return;
     setSelectedProfId(profId);
     setHasChanges(false);
-    // ✅ CORREÇÃO: Passa userProfile.id (provider) E profId (professional)
     fetchAvailability(userProfile.id, profId);
   };
 
@@ -165,7 +197,6 @@ export const AvailabilityManagement = () => {
   const handleSave = async () => {
     if (!selectedProfId || !userProfile?.id) return;
     try {
-      // ✅ CORREÇÃO: Passa userProfile.id (provider) E selectedProfId (professional)
       await updateAvailability(
         userProfile.id,
         selectedProfId,
@@ -187,11 +218,73 @@ export const AvailabilityManagement = () => {
 
   const initials =
     currentProfessional?.name?.substring(0, 2).toUpperCase() || "US";
-
   const photoUrl = currentProfessional?.photoURL || "";
 
   return (
     <div className="space-y-8 pb-20">
+      {/* --- CONFIGURAÇÃO DA JANELA DE AGENDAMENTO (Visível apenas para o Dono) --- */}
+      {isOwner && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row items-end gap-6 shadow-sm"
+        >
+          <div className="flex items-start gap-4 flex-1">
+            <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-400">
+              <CalendarRange size={24} />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white leading-none mt-1">
+                Janela de Agendamento
+              </h3>
+              <p className="text-sm text-gray-400 max-w-xl">
+                Defina com quanta antecedência os clientes podem ver sua agenda
+                aberta. Isso evita agendamentos muito distantes e melhora a
+                performance.
+              </p>
+
+              <div className="flex items-center gap-3 pt-2">
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={bookingWindow}
+                    onChange={(e) => setBookingWindow(Number(e.target.value))}
+                    className="w-24 bg-gray-950 border-gray-700 text-white pl-4 pr-2 font-mono text-center focus:ring-blue-500/50 focus:border-blue-500"
+                  />
+                </div>
+                <span className="text-sm font-medium text-gray-500">
+                  dias de antecedência
+                </span>
+              </div>
+            </div>
+          </div>
+          <Button
+            onClick={handleSaveWindow}
+            disabled={
+              isSavingWindow ||
+              bookingWindow ===
+                (userProfile as ServiceProviderProfile).bookingWindowDays
+            }
+            className={cn(
+              "w-full md:w-auto min-w-[140px]",
+              bookingWindow !==
+                (userProfile as ServiceProviderProfile).bookingWindowDays
+                ? "bg-blue-600 hover:bg-blue-500 text-white"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+            )}
+          >
+            {isSavingWindow ? (
+              <Loader2 className="animate-spin mr-2" size={16} />
+            ) : (
+              <Save size={16} className="mr-2" />
+            )}
+            {isSavingWindow ? "Salvando..." : "Salvar Config"}
+          </Button>
+        </motion.div>
+      )}
+
       {/* --- CABEÇALHO DO PROFISSIONAL --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
         <div className="flex items-center gap-5 w-full md:w-auto">
@@ -217,7 +310,6 @@ export const AvailabilityManagement = () => {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-900 border-gray-700 text-white">
-                    {/* Lista Unificada */}
                     {sortedProfessionals.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name} {p.isOwner && "(Você)"}
@@ -238,7 +330,7 @@ export const AvailabilityManagement = () => {
           onClick={handleSave}
           disabled={!hasChanges || isLoading}
           className={cn(
-            "gap-2 font-bold px-8 h-12 text-base transition-all shadow-lg",
+            "gap-2 font-bold px-8 h-12 text-base transition-all shadow-lg w-full md:w-auto",
             hasChanges &&
               "shadow-primary/20 animate-pulse bg-primary text-black hover:bg-primary/90"
           )}

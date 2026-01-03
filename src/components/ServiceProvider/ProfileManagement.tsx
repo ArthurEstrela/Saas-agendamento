@@ -18,7 +18,12 @@ import {
   QrCode,
   Clock,
   Info,
-  FileText, // Ícone genérico para documento
+  FileText,
+  Hash,
+  Globe,
+  Building2,
+  Map as MapIcon,
+  Navigation,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -46,7 +51,13 @@ import { FaWhatsapp } from "react-icons/fa";
 // UI Components
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../ui/card";
 import { Label } from "../ui/label";
 import {
   Select,
@@ -62,6 +73,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import { Badge } from "../ui/badge";
 
 // Leaflet Fix
 // @ts-ignore
@@ -102,7 +114,7 @@ const MapEvents = ({
   return position === null ? null : <Marker position={position}></Marker>;
 };
 
-// --- SCHEMA ATUALIZADO ---
+// --- SCHEMA ---
 const profileSchema = z.object({
   businessName: z.string().min(3, "O nome do negócio é obrigatório"),
   publicProfileSlug: z
@@ -113,20 +125,15 @@ const profileSchema = z.object({
   name: z.string().min(3, "Nome do responsável é obrigatório"),
   businessPhone: z.string().optional(),
   email: z.string().email("Email inválido"),
-
-  // Alteração: Suporte a CPF/CNPJ
   documentType: z.enum(["cpf", "cnpj"]),
-  documentNumber: z.string(), // Validação simplificada pois é read-only na edição
-
+  documentNumber: z.string(),
   logoUrl: z.string().optional(),
   bannerUrl: z.string().optional(),
-
   cancellationMinHours: z.coerce
     .number()
     .min(0, "Não pode ser negativo")
     .max(720, "Máximo de 30 dias (720h)")
     .default(2),
-
   pixKey: z.string().optional(),
   pixKeyType: z.enum(["cpf", "cnpj", "email", "phone", "random"]).optional(),
   businessAddress: z.object({
@@ -174,6 +181,7 @@ export const ProfileManagement = () => {
       socialLinks: { instagram: "", facebook: "", website: "" },
       pixKeyType: "cpf",
       cancellationMinHours: 2,
+      documentType: "cpf", // <--- CORREÇÃO AQUI: Valor padrão para evitar undefined
     },
   });
 
@@ -189,21 +197,14 @@ export const ProfileManagement = () => {
   const numberValue = watch("businessAddress.number");
   const cityValue = watch("businessAddress.city");
 
-  // Monitorar o tipo de documento para exibir a label correta
-  const documentType = watch("documentType");
+  // CORREÇÃO: Fallback para evitar crash se watch retornar undefined
+  const documentType = watch("documentType") || "cpf";
 
-  const {
-    address,
-    loading: cepLoading,
-    error: cepError,
-    fetchAddress,
-  } = useViaCep();
+  const { address, loading: cepLoading, fetchAddress } = useViaCep();
 
   useEffect(() => {
     if (userProfile && userProfile.role === "serviceProvider") {
       const profile = userProfile as ServiceProviderProfile;
-
-      // Determinar qual documento exibir
       const docType = profile.documentType || (profile.cpf ? "cpf" : "cnpj");
       const docNumber = profile.cpf || profile.cnpj || "";
 
@@ -214,7 +215,7 @@ export const ProfileManagement = () => {
         cancellationMinHours: profile.cancellationMinHours ?? 2,
       };
 
-      // @ts-ignore - Ignorando erro de tipagem estrita do Zod no reset inicial
+      // @ts-ignore
       reset(defaultValues);
 
       setLogoPreview(profile.logoUrl || null);
@@ -331,11 +332,8 @@ export const ProfileManagement = () => {
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
     if (!userProfile || !isDirty) return;
     setIsSaving(true);
-
-    // Preparar dados para salvar, removendo campos apenas de visualização se necessário
     const updatedData = {
       ...data,
-      // Garante que mantemos os campos originais de cpf/cnpj atualizados se o usuário mudar algo (embora esteja disabled)
       cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
       cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
       businessAddress: {
@@ -344,14 +342,14 @@ export const ProfileManagement = () => {
         lng: position?.lng,
       },
     };
-
     await updateUserProfile(userProfile.id, updatedData);
     setIsSaving(false);
     // @ts-ignore
     reset(updatedData);
   };
 
-  const inputBaseClasses = cn(
+  // Classe padrão para inputs simulados com IMask
+  const imaskClass = cn(
     "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors",
     "placeholder:text-gray-500",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
@@ -366,54 +364,87 @@ export const ProfileManagement = () => {
     );
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="pb-20"
+    >
+      {/* --- CROPPER MODAL --- */}
       {bannerToCrop && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex flex-col p-4">
-          <div className="relative flex-1">
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
+          <div className="relative w-full max-w-4xl h-[60vh] bg-gray-900 rounded-lg overflow-hidden shadow-2xl border border-gray-800">
             <Cropper
               image={bannerToCrop}
               crop={crop}
               zoom={zoom}
-              aspect={16 / 9}
+              aspect={3 / 1}
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={setCroppedAreaPixels}
             />
           </div>
-          <div className="h-24 flex items-center justify-center gap-4">
-            <Button variant="ghost" onClick={() => setBannerToCrop(null)}>
+          <div className="mt-6 flex items-center justify-center gap-4">
+            <Button
+              variant="secondary"
+              onClick={() => setBannerToCrop(null)}
+              className="px-8"
+            >
               Cancelar
             </Button>
-            <Button onClick={showCroppedImage}>
-              <Crop size={18} className="mr-2" /> Definir Banner
+            <Button onClick={showCroppedImage} className="px-8 font-bold">
+              <Crop size={18} className="mr-2" /> Recortar e Salvar
             </Button>
+          </div>
+          <div className="mt-4 w-full max-w-md px-4">
+            <Label className="text-gray-400 text-xs uppercase tracking-wider mb-2 block text-center">
+              Zoom
+            </Label>
+            <input
+              type="range"
+              value={zoom}
+              min={1}
+              max={3}
+              step={0.1}
+              aria-labelledby="Zoom"
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+            />
           </div>
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pb-10">
-        {/* Banner e Logo (MANTIDO IGUAL) */}
-        <header className="relative mb-24">
-          <div className="group relative h-48 md:h-64 rounded-2xl bg-gray-900/50 border-2 border-dashed border-gray-700 flex items-center justify-center overflow-hidden">
-            {/* ... (código do banner mantido igual) ... */}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        {/* --- HERO HEADER (Banner + Avatar) --- */}
+        <div className="relative mb-32 group">
+          {/* Banner Container */}
+          <div className="relative w-full h-60 md:h-80 rounded-b-[2.5rem] bg-gray-900 overflow-hidden shadow-2xl border-b border-gray-800">
             {isUploadingBanner && (
-              <Loader2 className="animate-spin text-white" size={32} />
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <Loader2 className="animate-spin text-white" size={40} />
+              </div>
             )}
-            {!isUploadingBanner && bannerPreview && (
+
+            {bannerPreview ? (
               <img
                 src={bannerPreview}
                 alt="Banner"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
-            )}
-            {!isUploadingBanner && !bannerPreview && (
-              <div className="text-gray-600 text-center">
-                <ImageIcon size={48} className="mx-auto" />
-                <p className="mt-2 text-sm">Adicione um banner para sua loja</p>
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 text-gray-600">
+                <ImageIcon size={64} className="opacity-20 mb-2" />
+                <span className="text-sm font-medium opacity-40">
+                  Adicione uma capa
+                </span>
               </div>
             )}
-            <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
-              <Camera size={32} />
+
+            {/* Banner Overlay Gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
+
+            {/* Banner Upload Button */}
+            <label className="absolute top-4 right-4 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full cursor-pointer transition-all border border-white/10 shadow-lg group-hover:opacity-100 md:opacity-0 opacity-100">
+              <Camera size={20} />
               <input
                 type="file"
                 className="hidden"
@@ -423,444 +454,484 @@ export const ProfileManagement = () => {
             </label>
           </div>
 
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -translate-y-1/2 w-full px-4 md:px-8 flex flex-col md:flex-row items-center gap-6">
-            {/* ... (código do logo mantido igual) ... */}
-            <div className="relative w-36 h-36 md:w-40 md:h-40 rounded-full group flex-shrink-0 border-4 border-gray-900 bg-gray-900 shadow-xl">
-              {logoPreview ? (
-                <img
-                  src={logoPreview}
-                  alt="Logo"
-                  className="w-full h-full object-cover rounded-full"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Building size={64} className="text-gray-700" />
-                </div>
-              )}
-              <label className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+          {/* Logo & Info Overlay */}
+          <div className="absolute -bottom-24 left-0 w-full flex flex-col items-center px-4">
+            <div className="relative">
+              {/* Avatar Container */}
+              <div className="relative w-40 h-40 md:w-48 md:h-48 rounded-full bg-gray-950 border-[6px] border-gray-950 shadow-2xl flex items-center justify-center overflow-hidden group/avatar">
                 {isUploadingLogo ? (
-                  <Loader2 className="animate-spin" />
+                  <Loader2 className="animate-spin text-primary" size={32} />
+                ) : logoPreview ? (
+                  <img
+                    src={logoPreview}
+                    alt="Logo"
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <Camera size={24} />
+                  <Building size={64} className="text-gray-700" />
                 )}
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={handleLogoUpload}
-                  accept="image/*"
-                  disabled={isUploadingLogo}
-                />
-              </label>
+
+                {/* Avatar Upload Overlay */}
+                <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-all cursor-pointer">
+                  <Camera size={32} className="text-white drop-shadow-lg" />
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                    accept="image/*"
+                    disabled={isUploadingLogo}
+                  />
+                </label>
+              </div>
+
+              {/* Status Badge (Opcional) */}
+              <div
+                className="absolute bottom-4 right-2 bg-green-500 h-6 w-6 rounded-full border-4 border-gray-950"
+                title="Perfil Ativo"
+              />
             </div>
-            <div className="text-center md:text-left pt-2">
-              <h1 className="text-3xl font-bold text-white">
-                {watch("businessName") || "Nome do seu Negócio"}
+
+            <div className="mt-4 text-center space-y-1">
+              <h1 className="text-3xl md:text-4xl font-bold text-white drop-shadow-md">
+                {watch("businessName") || "Nome do Negócio"}
               </h1>
-              <p className="text-gray-400">Gerencie seu perfil público.</p>
+              <div className="flex items-center justify-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="bg-primary/10 text-primary border-primary/20 backdrop-blur-md"
+                >
+                  {(documentType || "cpf").toUpperCase() === "CPF"
+                    ? "Pessoa Física"
+                    : "Pessoa Jurídica"}
+                </Badge>
+                <span className="text-gray-400 text-sm">
+                  {watch("businessAddress.city") &&
+                    `• ${watch("businessAddress.city")}`}
+                </span>
+              </div>
             </div>
           </div>
-        </header>
+        </div>
 
-        {/* Dados Gerais */}
-        <Card className="bg-gray-900/40 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-amber-500 flex items-center gap-2">
-              <Building size={20} /> Dados do Negócio
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="businessName">
-                Nome Fantasia (Exibido aos clientes)
-              </Label>
-              <div className="relative">
-                <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="businessName"
-                  className="pl-10"
-                  {...register("businessName")}
-                  placeholder="Ex: Barbearia do João"
-                  error={errors.businessName?.message}
-                />
-              </div>
-            </div>
+        {/* --- CONTEÚDO PRINCIPAL --- */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 max-w-7xl mx-auto px-4">
+          {/* COLUNA ESQUERDA: Dados Principais */}
+          <div className="xl:col-span-2 space-y-8">
+            {/* Seção Dados Básicos */}
+            <Card className="bg-gray-900/50 border-gray-800 shadow-sm overflow-hidden">
+              <CardHeader className="bg-gray-900/50 border-b border-gray-800/50 pb-4">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                    <Building size={20} />
+                  </div>
+                  Informações Gerais
+                </CardTitle>
+                <CardDescription>
+                  Dados visíveis no seu perfil público
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
+                <div className="space-y-2">
+                  <Label>Nome Fantasia</Label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input
+                      className="pl-10"
+                      {...register("businessName")}
+                      placeholder="Ex: Barbearia Estilo"
+                      error={errors.businessName?.message}
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label
-                htmlFor="publicProfileSlug"
-                className="flex items-center gap-1"
-              >
-                Link do Perfil{" "}
-                <span className="text-xs text-gray-500">(Slug na URL)</span>
-              </Label>
-              <div className="relative">
-                <LinkIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="publicProfileSlug"
-                  className="pl-10"
-                  {...register("publicProfileSlug")}
-                  placeholder="ex: barbearia-do-joao"
-                  error={errors.publicProfileSlug?.message}
-                />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1">
+                    Link Personalizado (Slug)
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info size={12} className="text-gray-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            Seu link será: agendai.com/<strong>seu-slug</strong>
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </Label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input
+                      className="pl-10"
+                      {...register("publicProfileSlug")}
+                      placeholder="ex: barbearia-estilo"
+                      error={errors.publicProfileSlug?.message}
+                    />
+                  </div>
+                </div>
 
-            {/* CAMPO DE DOCUMENTO DINÂMICO (CPF ou CNPJ) */}
-            <div className="space-y-2">
-              <Label htmlFor="documentNumber">
-                {documentType === "cpf" ? "CPF" : "CNPJ"}
-              </Label>
-              <Controller
-                name="documentNumber"
-                control={control}
-                render={({ field }) => (
+                <div className="space-y-2">
+                  <Label>
+                    Documento ({(documentType || "cpf").toUpperCase()})
+                  </Label>
                   <div className="relative">
                     <FileText className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
-                    <IMaskInput
-                      {...field}
-                      id="documentNumber"
-                      mask={
-                        documentType === "cpf"
-                          ? "000.000.000-00"
-                          : "00.000.000/0000-00"
-                      }
-                      className={cn(inputBaseClasses, "opacity-70")}
-                      placeholder={documentType === "cpf" ? "CPF" : "CNPJ"}
-                      disabled // Documento geralmente não se edita
+                    <Controller
+                      name="documentNumber"
+                      control={control}
+                      render={({ field }) => (
+                        <IMaskInput
+                          {...field}
+                          mask={
+                            (documentType || "cpf") === "cpf"
+                              ? "000.000.000-00"
+                              : "00.000.000/0000-00"
+                          }
+                          className={cn(
+                            imaskClass,
+                            "bg-gray-800/50 text-gray-400 cursor-not-allowed"
+                          )}
+                          disabled
+                        />
+                      )}
                     />
                   </div>
-                )}
-              />
-            </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do Responsável</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="name"
-                  className="pl-10"
-                  {...register("name")}
-                  placeholder="Seu nome completo"
-                  error={errors.name?.message}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail de Login</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="email"
-                  className="pl-10 opacity-70"
-                  {...register("email")}
-                  disabled
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="businessPhone">Telefone de Contato</Label>
-              <Controller
-                name="businessPhone"
-                control={control}
-                render={({ field }) => (
+                <div className="space-y-2">
+                  <Label>Telefone Comercial</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
-                    <IMaskInput
-                      {...field}
-                      id="businessPhone"
-                      mask="(00) 00000-0000"
-                      className={inputBaseClasses}
-                      placeholder="(99) 99999-9999"
+                    <Controller
+                      name="businessPhone"
+                      control={control}
+                      render={({ field }) => (
+                        <IMaskInput
+                          {...field}
+                          mask="(00) 00000-0000"
+                          className={imaskClass}
+                          placeholder="(00) 00000-0000"
+                        />
+                      )}
                     />
                   </div>
-                )}
-              />
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* ... Restante do código (Regras de Agendamento, Pix, Endereço e Redes Sociais) permanece idêntico ... */}
-        {/* Estou mantendo o restante para garantir que a estrutura não quebre, mas o foco da mudança foi acima */}
+            {/* Seção Endereço */}
+            <Card className="bg-gray-900/50 border-gray-800 shadow-sm overflow-hidden">
+              <CardHeader className="bg-gray-900/50 border-b border-gray-800/50 pb-4">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+                    <MapPin size={20} />
+                  </div>
+                  Endereço e Localização
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>CEP</Label>
+                    <div className="relative">
+                      <Navigation className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
+                      <Controller
+                        name="businessAddress.zipCode"
+                        control={control}
+                        render={({ field }) => (
+                          <IMaskInput
+                            {...field}
+                            mask="00000-000"
+                            className={imaskClass}
+                            onBlur={handleCepSearch}
+                            placeholder="00000-000"
+                          />
+                        )}
+                      />
+                      {cepLoading && (
+                        <Loader2
+                          size={16}
+                          className="absolute right-3 top-3 animate-spin text-primary"
+                        />
+                      )}
+                    </div>
+                  </div>
 
-        {/* NOVA SEÇÃO: Regras de Agendamento */}
-        <Card className="bg-gray-900/40 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-amber-500 flex items-center gap-2">
-              <Clock size={20} /> Regras de Agendamento
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="cancellationMinHours"
-                  className="flex items-center gap-2"
-                >
-                  Antecedência para Cancelamento (Horas)
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info size={14} className="text-gray-400 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="bg-gray-800 border-gray-700 text-white max-w-xs">
-                        <p>
-                          Define quanto tempo antes do agendamento o cliente
-                          ainda pode cancelar pelo app.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </Label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                  <Input
-                    id="cancellationMinHours"
-                    type="number"
-                    min="0"
-                    className="pl-10"
-                    {...register("cancellationMinHours")}
-                    placeholder="Ex: 2"
+                  <div className="md:col-span-2 space-y-2">
+                    <Label>Rua / Logradouro</Label>
+                    <div className="relative">
+                      <MapIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                      <Input
+                        className="pl-10"
+                        {...register("businessAddress.street")}
+                        placeholder="Rua das Flores"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Número</Label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                      <Input
+                        className="pl-10"
+                        {...register("businessAddress.number")}
+                        placeholder="123"
+                      />
+                    </div>
+                  </div>
+                  <div className="md:col-span-3 space-y-2">
+                    <Label>Bairro</Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                      <Input
+                        className="pl-10"
+                        {...register("businessAddress.neighborhood")}
+                        placeholder="Centro"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Cidade</Label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                      <Input
+                        className="pl-10"
+                        {...register("businessAddress.city")}
+                        placeholder="São Paulo"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Estado (UF)</Label>
+                    <div className="relative">
+                      <Globe className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                      <Input
+                        className="pl-10"
+                        {...register("businessAddress.state")}
+                        placeholder="SP"
+                        maxLength={2}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mapa */}
+                <div className="h-64 md:h-80 w-full rounded-xl overflow-hidden border border-gray-700 shadow-inner relative z-0">
+                  <MapContainer
+                    center={mapCenter}
+                    zoom={mapZoom}
+                    style={{ height: "100%", width: "100%" }}
+                  >
+                    <ChangeView center={mapCenter} zoom={mapZoom} />
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <MapEvents onLocationSelect={handleMapClick} />
+                    {position && <Marker position={position}></Marker>}
+                  </MapContainer>
+                  <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur text-white text-xs px-2 py-1 rounded z-[400]">
+                    Clique no mapa para ajustar o pino
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Seção Redes Sociais */}
+            <Card className="bg-gray-900/50 border-gray-800 shadow-sm overflow-hidden">
+              <CardHeader className="bg-gray-900/50 border-b border-gray-800/50 pb-4">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-2 bg-pink-500/10 rounded-lg text-pink-500">
+                    <Instagram size={20} />
+                  </div>
+                  Presença Digital
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Instagram</Label>
+                    <div className="relative">
+                      <Instagram className="absolute left-3 top-3 h-5 w-5 text-pink-500" />
+                      <Input
+                        className="pl-10"
+                        {...register("socialLinks.instagram")}
+                        placeholder="https://instagram.com/..."
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Facebook</Label>
+                    <div className="relative">
+                      <Facebook className="absolute left-3 top-3 h-5 w-5 text-blue-600" />
+                      <Input
+                        className="pl-10"
+                        {...register("socialLinks.facebook")}
+                        placeholder="https://facebook.com/..."
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WhatsApp (Link)</Label>
+                    <div className="relative">
+                      <FaWhatsapp className="absolute left-3 top-3 h-5 w-5 text-green-500 z-10" />
+                      <Controller
+                        name="socialLinks.whatsapp"
+                        control={control}
+                        render={({ field }) => (
+                          <IMaskInput
+                            {...field}
+                            mask="(00) 00000-0000"
+                            className={imaskClass}
+                            placeholder="(99) 99999-9999"
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Website</Label>
+                    <div className="relative">
+                      <Globe className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        className="pl-10"
+                        {...register("socialLinks.website")}
+                        placeholder="https://seusite.com.br"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* COLUNA DIREITA: Configurações & Financeiro */}
+          <div className="xl:col-span-1 space-y-8">
+            {/* Regras */}
+            <Card className="bg-gray-900/50 border-gray-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Clock size={18} className="text-primary" /> Regras de
+                  Cancelamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Label>Antecedência Mínima (Horas)</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input
+                      type="number"
+                      className="pl-10"
+                      {...register("cancellationMinHours")}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Define quantas horas antes do agendamento o cliente ainda
+                    pode cancelar pelo app. "0" permite sempre.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Financeiro / Pix */}
+            <Card className="bg-gray-900/50 border-gray-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <QrCode size={18} className="text-green-500" /> Recebimento
+                  via Pix
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Tipo da Chave</Label>
+                  <Controller
+                    name="pixKeyType"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">CPF</SelectItem>
+                          <SelectItem value="cnpj">CNPJ</SelectItem>
+                          <SelectItem value="email">E-mail</SelectItem>
+                          <SelectItem value="phone">Celular</SelectItem>
+                          <SelectItem value="random">Aleatória</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   />
                 </div>
-                <p className="text-xs text-gray-500">
-                  Ex: Se colocar <strong>2</strong>, o cliente só pode cancelar
-                  se faltar mais de 2 horas para o serviço. Coloque{" "}
-                  <strong>0</strong> para permitir sempre.
-                </p>
-                {errors.cancellationMinHours && (
-                  <span className="text-red-500 text-xs">
-                    {errors.cancellationMinHours.message}
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pix - Com Labels */}
-        <Card className="bg-gray-900/40 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-amber-500 flex items-center gap-2">
-              <QrCode size={20} /> Dados Bancários (Pix)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="col-span-1 space-y-2">
-              <Label>Tipo da Chave</Label>
-              <Controller
-                name="pixKeyType"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    value={field.value}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cpf">CPF</SelectItem>
-                      <SelectItem value="cnpj">CNPJ</SelectItem>
-                      <SelectItem value="email">E-mail</SelectItem>
-                      <SelectItem value="phone">Celular</SelectItem>
-                      <SelectItem value="random">Aleatória</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="pixKey">Chave Pix</Label>
-              <div className="relative">
-                <QrCode className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="pixKey"
-                  className="pl-10"
-                  {...register("pixKey")}
-                  placeholder="Digite sua chave pix"
-                  error={errors.pixKey?.message}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Endereço - Com Labels */}
-        <Card className="bg-gray-900/40 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-amber-500 flex items-center gap-2">
-              <MapPin size={20} /> Localização
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="zipCode">CEP</Label>
-              <div className="relative">
-                <Controller
-                  name="businessAddress.zipCode"
-                  control={control}
-                  render={({ field }) => (
-                    <IMaskInput
-                      {...field}
-                      id="zipCode"
-                      mask="00000-000"
-                      className={inputBaseClasses}
-                      placeholder="00000-000"
-                      onBlur={handleCepSearch}
-                    />
-                  )}
-                />
-                {cepLoading && (
-                  <span className="text-xs text-primary ml-1 absolute right-0 -bottom-5">
-                    Buscando...
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="md:col-span-4 space-y-2">
-              <Label htmlFor="street">Rua / Logradouro</Label>
-              <Input
-                id="street"
-                {...register("businessAddress.street")}
-                placeholder="Nome da rua"
-                error={errors.businessAddress?.street?.message}
-              />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="number">Número</Label>
-              <Input
-                id="number"
-                {...register("businessAddress.number")}
-                placeholder="Nº"
-                error={errors.businessAddress?.number?.message}
-              />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="neighborhood">Bairro</Label>
-              <Input
-                id="neighborhood"
-                {...register("businessAddress.neighborhood")}
-                placeholder="Bairro"
-                error={errors.businessAddress?.neighborhood?.message}
-              />
-            </div>
-            <div className="md:col-span-1 space-y-2">
-              <Label htmlFor="city">Cidade</Label>
-              <Input
-                id="city"
-                {...register("businessAddress.city")}
-                placeholder="Cidade"
-                error={errors.businessAddress?.city?.message}
-              />
-            </div>
-            <div className="md:col-span-1 space-y-2">
-              <Label htmlFor="state">UF</Label>
-              <Input
-                id="state"
-                {...register("businessAddress.state")}
-                placeholder="UF"
-                error={errors.businessAddress?.state?.message}
-              />
-            </div>
-
-            <div className="md:col-span-6 h-80 rounded-lg overflow-hidden border border-gray-700 mt-4 relative z-0">
-              <MapContainer
-                center={mapCenter}
-                zoom={mapZoom}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <ChangeView center={mapCenter} zoom={mapZoom} />
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <MapEvents onLocationSelect={handleMapClick} />
-                {position && <Marker position={position}></Marker>}
-              </MapContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Redes Sociais - Com Labels */}
-        <Card className="bg-gray-900/40 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-amber-500 flex items-center gap-2">
-              <Instagram size={20} /> Redes Sociais
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="instagram">Instagram</Label>
-              <div className="relative">
-                <Instagram className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="instagram"
-                  className="pl-10"
-                  {...register("socialLinks.instagram")}
-                  placeholder="https://instagram.com/..."
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="facebook">Facebook</Label>
-              <div className="relative">
-                <Facebook className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="facebook"
-                  className="pl-10"
-                  {...register("socialLinks.facebook")}
-                  placeholder="https://facebook.com/..."
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp">WhatsApp (Link)</Label>
-              <Controller
-                name="socialLinks.whatsapp"
-                control={control}
-                render={({ field }) => (
+                <div className="space-y-2">
+                  <Label>Chave Pix</Label>
                   <div className="relative">
-                    <FaWhatsapp className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
-                    <IMaskInput
-                      {...field}
-                      id="whatsapp"
-                      mask="(00) 00000-0000"
-                      className={inputBaseClasses}
-                      placeholder="(99) 99999-9999"
+                    <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input
+                      className="pl-10"
+                      {...register("pixKey")}
+                      placeholder="Sua chave aqui"
                     />
                   </div>
-                )}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="website">Website / Outro Link</Label>
-              <div className="relative">
-                <LinkIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                <Input
-                  id="website"
-                  className="pl-10"
-                  {...register("socialLinks.website")}
-                  placeholder="https://seusite.com.br"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
 
-        <div className="sticky bottom-4 z-20 flex justify-end">
-          <Button
-            type="submit"
-            disabled={isSaving || !isDirty}
-            className="shadow-lg shadow-black/50 font-bold px-8"
-          >
-            {isSaving ? (
-              <Loader2 className="animate-spin mr-2" />
-            ) : (
-              <Save className="mr-2" />
-            )}{" "}
-            Salvar Alterações
-          </Button>
+            {/* Dados do Responsável */}
+            <Card className="bg-gray-900/50 border-gray-800 opacity-80 hover:opacity-100 transition-opacity">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <User size={18} className="text-gray-400" /> Responsável
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome Completo</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input className="pl-10" {...register("name")} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>E-mail de Acesso</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input className="pl-10" {...register("email")} disabled />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Botão de Salvar Fixo Mobile / Normal Desktop */}
+            <div className="sticky bottom-4 z-10 pt-4">
+              <Button
+                type="submit"
+                disabled={isSaving || !isDirty}
+                className={cn(
+                  "w-full h-12 text-lg font-bold shadow-xl transition-all",
+                  isDirty
+                    ? "bg-primary hover:bg-primary/90 text-black shadow-primary/20 scale-105"
+                    : "bg-gray-800 text-gray-500"
+                )}
+              >
+                {isSaving ? (
+                  <Loader2 className="animate-spin mr-2" />
+                ) : (
+                  <Save className="mr-2" />
+                )}
+                {isSaving ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </div>
+          </div>
         </div>
       </form>
     </motion.div>

@@ -121,7 +121,7 @@ const PublicBookingPage = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="absolute top-4 left-4 z-30 bg-black/20 hover:bg-black/40 text-white backdrop-blur-md rounded-full border border-white/10 transition-all hover:scale-105"
           >
             <ArrowLeft size={20} />

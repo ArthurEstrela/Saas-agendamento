@@ -20,7 +20,7 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
   const { client, startTime, services, professionalName } = appointment;
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Isso já estava correto
     if (!client?.phoneNumber) return;
     const cleanPhone = client.phoneNumber.replace(/\D/g, '');
     const dateString = format(startTime, "dd/MM", { locale: ptBR });
@@ -96,13 +96,21 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
       <CardFooter className="p-2 bg-black/20 grid grid-cols-2 gap-3 border-t border-gray-800">
         <Button 
           variant="ghost"
-          onClick={() => onReject(appointment.id, 'cancelled')} 
+          // ADICIONADO: e.stopPropagation()
+          onClick={(e) => {
+            e.stopPropagation();
+            onReject(appointment.id, 'cancelled');
+          }} 
           className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
         >
           <X size={16} className="mr-2" /> Recusar
         </Button>
         <Button 
-          onClick={() => onAccept(appointment.id, 'scheduled')} 
+          // ADICIONADO: e.stopPropagation()
+          onClick={(e) => {
+            e.stopPropagation();
+            onAccept(appointment.id, 'scheduled');
+          }} 
           className="w-full bg-green-600 hover:bg-green-500 text-white"
         >
           <Check size={16} className="mr-2" /> Aceitar

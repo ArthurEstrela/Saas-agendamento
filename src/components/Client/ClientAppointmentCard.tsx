@@ -142,6 +142,8 @@ export const ClientAppointmentCard = ({
   // Motion Wrapper para o Card
   const MotionCard = motion(Card);
 
+  const hasReview = appointment.review || (appointment as any).reviewId;
+
   return (
     <>
       <MotionCard
@@ -238,9 +240,9 @@ export const ClientAppointmentCard = ({
             </span>
           </div>
 
-          {(status === "completed" && !appointment.review) || canCancel ? (
+          {(status === "completed" && !hasReview) || canCancel ? (
             <div className="flex gap-3 w-full">
-              {status === "completed" && !appointment.review && (
+              {status === "completed" && !hasReview && (
                 <Button
                   onClick={() => setReviewModalOpen(true)}
                   className="flex-1 gap-2 bg-amber-500 text-black hover:bg-amber-600"

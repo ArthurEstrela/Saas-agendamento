@@ -110,6 +110,7 @@ export interface Appointment {
   totalDuration: number; // in minutes
   notes?: string;
   review?: Review;
+  reviewId?: string;
   rejectionReason?: string;
   completedAt?: Date | FieldValue;
   createdAt: Date | FieldValue;

@@ -14,6 +14,7 @@ import {
   Trophy,
   PartyPopper,
   X,
+  Users, // Importação do novo ícone
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -30,10 +31,11 @@ interface OnboardingChecklistProps {
 export const OnboardingChecklist = ({
   onChangeView,
 }: OnboardingChecklistProps) => {
-  // Pegamos também a função updateUserProfile para salvar a alteração
   const { userProfile, updateUserProfile } = useProfileStore();
 
+  // Estados de verificação
   const [hasAvailability, setHasAvailability] = useState(false);
+  const [hasProfessionals, setHasProfessionals] = useState(false); // Novo estado
   const [isLoadingCheck, setIsLoadingCheck] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
 
@@ -47,10 +49,11 @@ export const OnboardingChecklist = ({
     }
   }, [userProfile]);
 
-  // 2. Verificações de Perfil e Serviços
+  // 2. Verificações de Perfil e Serviços (Síncronas / Memória)
   const isProfileComplete = useMemo(() => {
     if (!userProfile || userProfile.role !== "serviceProvider") return false;
     const profile = userProfile as ServiceProviderProfile;
+    // Consideramos completo se tiver logo E endereço
     return !!(profile.logoUrl && profile.businessAddress?.street);
   }, [userProfile]);
 
@@ -60,10 +63,11 @@ export const OnboardingChecklist = ({
     return profile.services && profile.services.length > 0;
   }, [userProfile]);
 
-  // 3. Verificação de Disponibilidade (Async)
+  // 3. Verificação de Profissionais e Disponibilidade (Assíncrona / Firestore)
   useEffect(() => {
-    const checkAvailability = async () => {
+    const checkData = async () => {
       if (!userProfile) return;
+      
       try {
         const professionalsRef = collection(
           db,
@@ -71,26 +75,38 @@ export const OnboardingChecklist = ({
           userProfile.id,
           "professionals"
         );
+        
+        // Buscamos os profissionais
         const q = query(professionalsRef);
         const snap = await getDocs(q);
+
+        // A. Verifica se tem profissionais (equipe)
+        const hasTeam = !snap.empty;
+        setHasProfessionals(hasTeam);
+
+        // B. Verifica se algum deles tem disponibilidade configurada
         let availabilityConfigured = false;
-        snap.forEach((doc) => {
-          const prof = doc.data() as Professional;
-          if (
-            prof.availability &&
-            prof.availability.some((d) => d.isAvailable)
-          ) {
-            availabilityConfigured = true;
-          }
-        });
+        if (hasTeam) {
+            snap.forEach((doc) => {
+            const prof = doc.data() as Professional;
+            if (
+                prof.availability &&
+                prof.availability.some((d) => d.isAvailable)
+            ) {
+                availabilityConfigured = true;
+            }
+            });
+        }
         setHasAvailability(availabilityConfigured);
+
       } catch (error) {
-        console.error("Erro ao verificar disponibilidade:", error);
+        console.error("Erro ao verificar dados do onboarding:", error);
       } finally {
         setIsLoadingCheck(false);
       }
     };
-    checkAvailability();
+
+    checkData();
   }, [userProfile]);
 
   // 4. Definição dos Passos
@@ -114,9 +130,18 @@ export const OnboardingChecklist = ({
       buttonText: "Serviços",
     },
     {
+      id: "professionals",
+      title: "Cadastrar Equipe",
+      description: "Crie ao menos um profissional.",
+      isCompleted: hasProfessionals,
+      icon: Users,
+      actionView: "professionals" as ProviderDashboardView,
+      buttonText: "Equipe",
+    },
+    {
       id: "availability",
       title: "Definir Horários",
-      description: "Configure seus dias de trabalho.",
+      description: "Configure a agenda da equipe.",
       isCompleted: hasAvailability,
       icon: CalendarClock,
       actionView: "availability" as ProviderDashboardView,
@@ -130,19 +155,15 @@ export const OnboardingChecklist = ({
 
   // 5. Função para fechar e salvar no banco
   const handleDismiss = async () => {
-    // UI Otimista: esconde imediatamente
     setIsDismissed(true);
 
     if (userProfile && userProfile.role === "serviceProvider") {
       try {
-        // Salva a flag no Firestore
         await updateUserProfile(userProfile.id, {
           onboardingDismissed: true,
         } as Partial<ServiceProviderProfile>);
       } catch (error) {
         console.error("Erro ao salvar status do onboarding:", error);
-        // Não revertemos o estado visual para não frustrar o usuário,
-        // mas o erro é logado.
       }
     }
   };
@@ -151,15 +172,14 @@ export const OnboardingChecklist = ({
   useEffect(() => {
     if (isAllDone && !isDismissed) {
       if (typeof confetti === "function") {
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
       }
     }
   }, [isAllDone, isDismissed]);
 
-  // Se já dispensou, não renderiza nada
+  // Renderizações Condicionais
   if (isDismissed) return null;
 
-  // Loading state (skeleton)
   if (isLoadingCheck && !isAllDone)
     return (
       <div className="w-full h-32 mb-8 bg-gray-900/50 rounded-xl animate-pulse border border-gray-800" />
@@ -178,7 +198,7 @@ export const OnboardingChecklist = ({
           <Card className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 border-green-500/30 overflow-hidden relative">
             <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
               <div className="flex items-center gap-4">
-                <div className="p-4 bg-green-500/20 rounded-full text-green-400">
+                <div className="p-4 bg-green-500/20 rounded-full text-green-400 animate-bounce-slow">
                   <PartyPopper size={32} />
                 </div>
                 <div>
@@ -193,7 +213,7 @@ export const OnboardingChecklist = ({
               </div>
               <Button
                 onClick={handleDismiss}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 shadow-lg shadow-green-900/20"
+                className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 shadow-lg shadow-green-900/20 transition-all hover:scale-105"
               >
                 Fechar e Começar
               </Button>
@@ -223,17 +243,18 @@ export const OnboardingChecklist = ({
                     Complete {steps.length} passos para ativar sua agenda.
                   </p>
                 </div>
-                {/* Botão de Fechar com a nova função de persistência */}
+                
                 <button
                   onClick={handleDismiss}
-                  className="text-gray-600 hover:text-gray-300 transition-colors"
+                  className="text-gray-600 hover:text-gray-300 transition-colors p-1 hover:bg-gray-800 rounded-full"
                   title="Ignorar configuração"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Grid Ajustado para 4 colunas em telas grandes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {steps.map((step) => (
                   <div
                     key={step.id}
@@ -241,17 +262,17 @@ export const OnboardingChecklist = ({
                       "relative p-4 rounded-xl border transition-all duration-300 flex flex-col justify-between h-full group",
                       step.isCompleted
                         ? "bg-green-900/10 border-green-500/20"
-                        : "bg-gray-800/40 border-gray-700"
+                        : "bg-gray-800/40 border-gray-700 hover:border-gray-600"
                     )}
                   >
                     <div>
                       <div className="flex justify-between items-center mb-3">
                         <div
                           className={cn(
-                            "p-2 rounded-lg",
+                            "p-2 rounded-lg transition-colors",
                             step.isCompleted
                               ? "bg-green-500/20 text-green-400"
-                              : "bg-gray-700 text-gray-400"
+                              : "bg-gray-700 text-gray-400 group-hover:bg-gray-600 group-hover:text-gray-200"
                           )}
                         >
                           <step.icon size={18} />
@@ -259,7 +280,7 @@ export const OnboardingChecklist = ({
                         {step.isCompleted ? (
                           <CheckCircle2 className="text-green-500" size={20} />
                         ) : (
-                          <Circle className="text-gray-600" size={20} />
+                          <Circle className="text-gray-600 group-hover:text-gray-500" size={20} />
                         )}
                       </div>
                       <h3
@@ -270,7 +291,7 @@ export const OnboardingChecklist = ({
                       >
                         {step.title}
                       </h3>
-                      <p className="text-xs text-gray-400 mt-1 mb-4 h-8">
+                      <p className="text-xs text-gray-400 mt-1 mb-4 h-8 line-clamp-2">
                         {step.description}
                       </p>
                     </div>
@@ -279,7 +300,7 @@ export const OnboardingChecklist = ({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="w-full bg-transparent border-gray-600 hover:bg-amber-500 hover:text-black hover:border-amber-500 text-xs h-8"
+                        className="w-full bg-transparent border-gray-600 hover:bg-amber-500 hover:text-black hover:border-amber-500 text-xs h-8 transition-colors"
                         onClick={() => onChangeView(step.actionView)}
                       >
                         {step.buttonText}

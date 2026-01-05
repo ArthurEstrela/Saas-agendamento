@@ -1,3 +1,4 @@
+// src/components/ServiceProvider/ProfileManagement.tsx
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { ServiceProviderProfile } from "../../types";
@@ -47,6 +48,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import L, { LatLng } from "leaflet";
 import { FaWhatsapp } from "react-icons/fa";
+import { toast } from "react-hot-toast"; // <--- ADICIONADO: Importação do toast
 
 // UI Components
 import { Input } from "../ui/input";
@@ -181,7 +183,7 @@ export const ProfileManagement = () => {
       socialLinks: { instagram: "", facebook: "", website: "" },
       pixKeyType: "cpf",
       cancellationMinHours: 2,
-      documentType: "cpf", // <--- CORREÇÃO AQUI: Valor padrão para evitar undefined
+      documentType: "cpf",
     },
   });
 
@@ -197,7 +199,6 @@ export const ProfileManagement = () => {
   const numberValue = watch("businessAddress.number");
   const cityValue = watch("businessAddress.city");
 
-  // CORREÇÃO: Fallback para evitar crash se watch retornar undefined
   const documentType = watch("documentType") || "cpf";
 
   const { address, loading: cepLoading, fetchAddress } = useViaCep();
@@ -215,7 +216,6 @@ export const ProfileManagement = () => {
         cancellationMinHours: profile.cancellationMinHours ?? 2,
       };
 
-      // @ts-ignore
       reset(defaultValues);
 
       setLogoPreview(profile.logoUrl || null);
@@ -293,9 +293,11 @@ export const ProfileManagement = () => {
       try {
         const photoURL = await uploadProviderLogo(userProfile.id, file);
         await updateUserProfile(userProfile.id, { logoUrl: photoURL });
+        toast.success("Logo atualizada!");
       } catch (error) {
         console.error(error);
         setLogoPreview(userProfile.logoUrl || null);
+        toast.error("Erro ao carregar logo.");
       } finally {
         setIsUploadingLogo(false);
       }
@@ -310,20 +312,30 @@ export const ProfileManagement = () => {
   const showCroppedImage = useCallback(async () => {
     if (!bannerToCrop || !croppedAreaPixels || !userProfile) return;
     setIsUploadingBanner(true);
-    setBannerToCrop(null);
+    
+    const loadingToast = toast.loading("Processando imagem..."); // <--- MELHORIA: Feedback visual
+    
     try {
       const croppedImageFile = await getCroppedImg(
         bannerToCrop,
         croppedAreaPixels
       );
+      
       const bannerUrl = await uploadProviderBanner(
         userProfile.id,
         croppedImageFile
       );
-      setBannerPreview(URL.createObjectURL(croppedImageFile));
+      
       await updateUserProfile(userProfile.id, { bannerUrl });
+      setBannerPreview(bannerUrl); 
+      setBannerToCrop(null); 
+      
+      toast.dismiss(loadingToast); // <--- Limpa o loading
+      toast.success("Banner atualizado com sucesso! 🖼️");
     } catch (e) {
-      console.error(e);
+      console.error("Erro ao processar imagem:", e);
+      toast.dismiss(loadingToast);
+      toast.error("Erro ao guardar o banner.");
     } finally {
       setIsUploadingBanner(false);
     }
@@ -332,23 +344,27 @@ export const ProfileManagement = () => {
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
     if (!userProfile || !isDirty) return;
     setIsSaving(true);
-    const updatedData = {
-      ...data,
-      cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
-      cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
-      businessAddress: {
-        ...data.businessAddress,
-        lat: position?.lat,
-        lng: position?.lng,
-      },
-    };
-    await updateUserProfile(userProfile.id, updatedData);
-    setIsSaving(false);
-    // @ts-ignore
-    reset(updatedData);
+    try {
+      const updatedData = {
+        ...data,
+        cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
+        cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
+        businessAddress: {
+          ...data.businessAddress,
+          lat: position?.lat,
+          lng: position?.lng,
+        },
+      };
+      await updateUserProfile(userProfile.id, updatedData);
+      toast.success("Perfil salvo com sucesso!");
+      reset(updatedData);
+    } catch (error) {
+      toast.error("Erro ao salvar alterações.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Classe padrão para inputs simulados com IMask
   const imaskClass = cn(
     "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors",
     "placeholder:text-gray-500",
@@ -377,10 +393,10 @@ export const ProfileManagement = () => {
               image={bannerToCrop}
               crop={crop}
               zoom={zoom}
-              aspect={3 / 1}
+              aspect={3 / 1} 
               onCropChange={setCrop}
               onZoomChange={setZoom}
-              onCropComplete={setCroppedAreaPixels}
+              onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
             />
           </div>
           <div className="mt-6 flex items-center justify-center gap-4">
@@ -416,7 +432,6 @@ export const ProfileManagement = () => {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* --- HERO HEADER (Banner + Avatar) --- */}
         <div className="relative mb-32 group">
-          {/* Banner Container */}
           <div className="relative w-full h-60 md:h-80 rounded-b-[2.5rem] bg-gray-900 overflow-hidden shadow-2xl border-b border-gray-800">
             {isUploadingBanner && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -424,7 +439,7 @@ export const ProfileManagement = () => {
               </div>
             )}
 
-            {bannerPreview ? (
+           {bannerPreview ? (
               <img
                 src={bannerPreview}
                 alt="Banner"
@@ -439,10 +454,8 @@ export const ProfileManagement = () => {
               </div>
             )}
 
-            {/* Banner Overlay Gradient */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
 
-            {/* Banner Upload Button */}
             <label className="absolute top-4 right-4 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full cursor-pointer transition-all border border-white/10 shadow-lg group-hover:opacity-100 md:opacity-0 opacity-100">
               <Camera size={20} />
               <input
@@ -454,10 +467,8 @@ export const ProfileManagement = () => {
             </label>
           </div>
 
-          {/* Logo & Info Overlay */}
           <div className="absolute -bottom-24 left-0 w-full flex flex-col items-center px-4">
             <div className="relative">
-              {/* Avatar Container */}
               <div className="relative w-40 h-40 md:w-48 md:h-48 rounded-full bg-gray-950 border-[6px] border-gray-950 shadow-2xl flex items-center justify-center overflow-hidden group/avatar">
                 {isUploadingLogo ? (
                   <Loader2 className="animate-spin text-primary" size={32} />
@@ -471,7 +482,6 @@ export const ProfileManagement = () => {
                   <Building size={64} className="text-gray-700" />
                 )}
 
-                {/* Avatar Upload Overlay */}
                 <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-all cursor-pointer">
                   <Camera size={32} className="text-white drop-shadow-lg" />
                   <input
@@ -484,7 +494,6 @@ export const ProfileManagement = () => {
                 </label>
               </div>
 
-              {/* Status Badge (Opcional) */}
               <div
                 className="absolute bottom-4 right-2 bg-green-500 h-6 w-6 rounded-full border-4 border-gray-950"
                 title="Perfil Ativo"
@@ -513,11 +522,8 @@ export const ProfileManagement = () => {
           </div>
         </div>
 
-        {/* --- CONTEÚDO PRINCIPAL --- */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 max-w-7xl mx-auto px-4">
-          {/* COLUNA ESQUERDA: Dados Principais */}
           <div className="xl:col-span-2 space-y-8">
-            {/* Seção Dados Básicos */}
             <Card className="bg-gray-900/50 border-gray-800 shadow-sm overflow-hidden">
               <CardHeader className="bg-gray-900/50 border-b border-gray-800/50 pb-4">
                 <CardTitle className="flex items-center gap-2 text-xl">
@@ -620,7 +626,6 @@ export const ProfileManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Seção Endereço */}
             <Card className="bg-gray-900/50 border-gray-800 shadow-sm overflow-hidden">
               <CardHeader className="bg-gray-900/50 border-b border-gray-800/50 pb-4">
                 <CardTitle className="flex items-center gap-2 text-xl">
@@ -722,7 +727,6 @@ export const ProfileManagement = () => {
                   </div>
                 </div>
 
-                {/* Mapa */}
                 <div className="h-64 md:h-80 w-full rounded-xl overflow-hidden border border-gray-700 shadow-inner relative z-0">
                   <MapContainer
                     center={mapCenter}
@@ -741,7 +745,6 @@ export const ProfileManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Seção Redes Sociais */}
             <Card className="bg-gray-900/50 border-gray-800 shadow-sm overflow-hidden">
               <CardHeader className="bg-gray-900/50 border-b border-gray-800/50 pb-4">
                 <CardTitle className="flex items-center gap-2 text-xl">
@@ -809,9 +812,7 @@ export const ProfileManagement = () => {
             </Card>
           </div>
 
-          {/* COLUNA DIREITA: Configurações & Financeiro */}
           <div className="xl:col-span-1 space-y-8">
-            {/* Regras */}
             <Card className="bg-gray-900/50 border-gray-800">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -838,7 +839,6 @@ export const ProfileManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Financeiro / Pix */}
             <Card className="bg-gray-900/50 border-gray-800">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -886,7 +886,6 @@ export const ProfileManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Dados do Responsável */}
             <Card className="bg-gray-900/50 border-gray-800 opacity-80 hover:opacity-100 transition-opacity">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -911,7 +910,6 @@ export const ProfileManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Botão de Salvar Fixo Mobile / Normal Desktop */}
             <div className="sticky bottom-4 z-10 pt-4">
               <Button
                 type="submit"

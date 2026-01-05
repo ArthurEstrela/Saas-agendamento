@@ -4,7 +4,7 @@ import { useProfessionalsManagementStore } from "../../store/professionalsManage
 import { ProfessionalModal } from "./ProfessionalModal";
 import { ProfessionalCard } from "./ProfessionalCard";
 import { ConfirmationModal } from "../Common/ConfirmationModal";
-import { Loader2, Users, UserPlus, AlertCircle } from "lucide-react"; // Adicionei AlertCircle
+import { Loader2, Users, UserPlus, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { Professional, ServiceProviderProfile } from "../../types";
 
 // UI
@@ -20,7 +20,6 @@ type ProfessionalFormData = {
 
 export const ProfessionalsManagement = () => {
   const userProfile = useProfileStore((state) => state.userProfile);
-
   const professionalsState = useProfileStore((state) => state.professionals);
 
   const {
@@ -29,7 +28,7 @@ export const ProfessionalsManagement = () => {
     updateProfessional,
     removeProfessional,
     fetchProfessionals,
-    registerOwnerAsProfessional, // <--- Destructure da nova função
+    registerOwnerAsProfessional,
   } = useProfessionalsManagementStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +39,7 @@ export const ProfessionalsManagement = () => {
     prof: Professional | null;
   }>({ isOpen: false, prof: null });
 
+  // Busca inicial
   useEffect(() => {
     if (userProfile?.role === "serviceProvider" && userProfile.id) {
       fetchProfessionals(userProfile.id);
@@ -49,6 +49,7 @@ export const ProfessionalsManagement = () => {
   const providerProfile = userProfile as ServiceProviderProfile;
   const services = providerProfile?.services || [];
 
+  // Ordena: Dono primeiro, depois alfabético ou por criação
   const sortedProfessionals = useMemo(() => {
     if (!professionalsState) return [];
     return [...professionalsState].sort((a, b) => {
@@ -56,7 +57,7 @@ export const ProfessionalsManagement = () => {
     });
   }, [professionalsState]);
 
-  // ✅ Verifica se o dono já está na lista
+  // Verifica se o dono já está na lista (para mostrar ou esconder o banner)
   const hasOwnerProfile = useMemo(() => {
     return sortedProfessionals.some((p) => p.isOwner);
   }, [sortedProfessionals]);
@@ -102,18 +103,13 @@ export const ProfessionalsManagement = () => {
     setEditingProfessional(null);
   };
 
-  const confirmDelete = () => {
-    if (confirmState.prof?.isOwner) {
-      setConfirmState({ isOpen: false, prof: null });
-      return;
+  const confirmDelete = async () => {
+    if (confirmState.prof) {
+      await removeProfessional(providerProfile.id, confirmState.prof.id);
     }
-
-    if (confirmState.prof)
-      removeProfessional(providerProfile.id, confirmState.prof.id);
     setConfirmState({ isOpen: false, prof: null });
   };
 
-  // Handler para criar o perfil do dono
   const handleActivateOwner = async () => {
     await registerOwnerAsProfessional(
       providerProfile.id,
@@ -136,42 +132,61 @@ export const ProfessionalsManagement = () => {
         </div>
         <Button
           onClick={() => handleOpenModal()}
-          className="gap-2 font-bold shadow-lg shadow-primary/20"
+          disabled={isLoading}
+          className="gap-2 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
         >
           <UserPlus size={18} /> Novo Profissional
         </Button>
       </div>
 
-      {/* ✅ BANNER DE ALERTA SE O DONO NÃO ESTIVER NA LISTA */}
-      {!isLoading && !hasOwnerProfile && professionalsState !== null && (
-        <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-6 mb-8 animate-fade-in shadow-lg shadow-blue-900/5">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-blue-500/20 rounded-full text-blue-400 mt-1">
+      {/* BANNER DE ATIVAÇÃO 
+         - Aparece se o dono NÃO estiver na lista (!hasOwnerProfile)
+         - O botão tem loading state próprio
+      */}
+      {!hasOwnerProfile && professionalsState !== null && (
+        <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl flex flex-col md:flex-row items-center justify-between gap-6 mb-8 animate-fade-in shadow-lg shadow-blue-900/5 relative overflow-hidden">
+          {/* Efeito visual de fundo */}
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
+          
+          <div className="flex items-start gap-4 z-10">
+            <div className="p-3 bg-blue-500/20 rounded-full text-blue-400 mt-1 shrink-0">
               <AlertCircle size={24} />
             </div>
             <div>
               <h4 className="text-lg font-bold text-blue-100 mb-1">
-                Você não está aparecendo na agenda!
+                Ative seu perfil na agenda
               </h4>
               <p className="text-sm text-blue-300 leading-relaxed max-w-xl">
-                Seu perfil de administrador existe, mas você ainda não está
-                listado como um profissional que realiza atendimentos. Clique no
-                botão ao lado para ativar seu perfil na equipe.
+                Você é o administrador, mas ainda não aparece para os clientes agendarem. 
+                Ative seu perfil de atendimento para começar a receber agendamentos.
               </p>
             </div>
           </div>
+          
           <Button
             onClick={handleActivateOwner}
-            className="whitespace-nowrap bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-6 h-auto shadow-xl shadow-blue-900/20"
+            disabled={isLoading}
+            className="whitespace-nowrap bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-6 h-auto shadow-xl shadow-blue-900/20 transition-all w-full md:w-auto z-10"
           >
-            Ativar meu Perfil de Atendimento
+            {isLoading ? (
+               <>
+                 <Loader2 className="animate-spin mr-2" size={20} />
+                 Ativando...
+               </>
+            ) : (
+               <>
+                 <CheckCircle2 className="mr-2" size={20} />
+                 Ativar meu Perfil
+               </>
+            )}
           </Button>
         </div>
       )}
 
+      {/* LISTAGEM DE PROFISSIONAIS */}
       {professionalsState === null ? (
-        <div className="flex justify-center p-10">
-          <Loader2 className="animate-spin" />
+        <div className="flex justify-center p-20">
+          <Loader2 className="animate-spin text-primary" size={40} />
         </div>
       ) : sortedProfessionals.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -185,25 +200,27 @@ export const ProfessionalsManagement = () => {
           ))}
         </div>
       ) : (
-        /* Se a lista estiver vazia e não tiver o banner acima (caso raro), mostra empty state */
+        /* Empty State (Só aparece se não tiver ninguém E o banner já estiver lá ou foi dispensado, 
+           mas no nosso caso o banner sempre aparece se não tiver dono) */
         !hasOwnerProfile && (
           <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl animate-fade-in">
-            <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
+            <div className="h-20 w-20 bg-gray-800/80 rounded-full flex items-center justify-center mb-4 text-gray-500 ring-4 ring-gray-900">
               <Users size={32} />
             </div>
             <h3 className="text-xl font-bold text-white mb-2">
               Sua equipe está vazia
             </h3>
             <p className="text-gray-400 mb-6 max-w-sm text-center">
-              Comece adicionando profissionais para distribuir os agendamentos.
+              Comece adicionando profissionais ou ative seu próprio perfil acima.
             </p>
-            <Button variant="outline" onClick={() => handleOpenModal()}>
-              Adicionar Profissional
+            <Button variant="outline" onClick={() => handleOpenModal()} disabled={isLoading}>
+              <UserPlus className="mr-2" size={16}/> Adicionar Profissional
             </Button>
           </div>
         )
       )}
 
+      {/* MODAL DE EDIÇÃO/CRIAÇÃO */}
       <ProfessionalModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -213,13 +230,22 @@ export const ProfessionalsManagement = () => {
         isLoading={isLoading}
       />
 
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (INTELIGENTE) */}
       <ConfirmationModal
         isOpen={confirmState.isOpen}
         onClose={() => setConfirmState({ isOpen: false, prof: null })}
         onConfirm={confirmDelete}
-        title="Remover Profissional?"
-        message={`Tem certeza que deseja remover "${confirmState.prof?.name}"? Esta ação não pode ser desfeita.`}
-        confirmText="Remover"
+        // Título dinâmico
+        title={confirmState.prof?.isOwner ? "Desativar Atendimento?" : "Remover Profissional?"}
+        // Mensagem dinâmica explicativa
+        message={
+            confirmState.prof?.isOwner
+            ? "Ao remover seu perfil da equipe, você deixará de aparecer na agenda para novos agendamentos. Sua conta administrativa (painel) NÃO será excluída e você pode reativar a qualquer momento."
+            : `Tem certeza que deseja remover "${confirmState.prof?.name}"? Esta ação não pode ser desfeita e removerá o profissional da agenda.`
+        }
+        // Botão dinâmico
+        confirmText={confirmState.prof?.isOwner ? "Desativar da Agenda" : "Remover Profissional"}
+        variant="destructive"
       />
     </div>
   );

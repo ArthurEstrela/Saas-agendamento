@@ -1,7 +1,9 @@
+// src/components/ServiceProvider/ReviewsManagement.tsx
 import { useEffect, useState, useMemo } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useProviderReviewsStore } from "../../store/providerReviewsStore";
-import { Star, User, Sliders, Calendar } from "lucide-react";
+import type { UserProfile, ProfessionalProfile } from "../../types"; // Importação dos tipos
+import { Star, User, Sliders, Calendar, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -11,7 +13,11 @@ import { Card, CardContent } from "../ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
-import { Loader2 } from "lucide-react";
+
+// Interface para as propriedades do componente
+interface ReviewsManagementProps {
+  userProfile?: UserProfile;
+}
 
 const StarRating = ({ rating }: { rating: number }) => (
   <div className="flex gap-0.5">
@@ -85,14 +91,27 @@ const ReviewSummary = ({ reviews }: { reviews: { rating: number }[] }) => {
   );
 };
 
-export const ReviewsManagement = () => {
+export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
   const { user } = useAuthStore();
-  const { reviews, isLoading, fetchReviews } = useProviderReviewsStore();
+  // Incluímos fetchProfessionalReviews da store atualizada
+  const { reviews, isLoading, fetchReviews, fetchProfessionalReviews } = useProviderReviewsStore();
   const [filter, setFilter] = useState<string | number>("all");
 
   useEffect(() => {
-    if (user?.uid) fetchReviews(user.uid);
-  }, [user?.uid, fetchReviews]);
+    // Cenário 1: É um Profissional visualizando sua dashboard
+    if (userProfile?.role === "professional") {
+      const professional = userProfile as ProfessionalProfile;
+      if (professional.professionalId) {
+        fetchProfessionalReviews(professional.professionalId);
+      }
+    }
+    // Cenário 2: É o Dono (Service Provider) ou fallback padrão se não houver userProfile
+    else if (user?.uid) {
+      // Se userProfile foi passado e é serviceProvider, usamos o ID dele, senão usamos o user.uid logado
+      const providerId = userProfile?.id || user.uid;
+      fetchReviews(providerId);
+    }
+  }, [user?.uid, userProfile, fetchReviews, fetchProfessionalReviews]);
 
   const filteredReviews = useMemo(() => {
     return filter === "all"

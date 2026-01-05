@@ -70,8 +70,7 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
 
       const slots: string[] = [];
       const serviceDuration = service.duration;
-      const SLOT_INTERVAL_MINUTES = 15;
-
+const SLOT_INTERVAL_MINUTES = professional.slotInterval || 15; 
       if (
         professionalDaySchedule.slots &&
         professionalDaySchedule.slots.length > 0

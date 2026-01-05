@@ -30,9 +30,11 @@ const weekDayMap: { [key: number]: DailyAvailability["dayOfWeek"] } = {
   6: "Saturday",
 };
 
+
+
 export const DateTimeSelection = () => {
   const {
-    provider, // <-- Pegamos o Provider aqui (que tem a config bookingWindowDays)
+    provider, // <-- Pegamos o Provider aqui
     selectedProfessional,
     selectedServices,
     selectedDate,
@@ -41,9 +43,10 @@ export const DateTimeSelection = () => {
     goToPreviousStep,
   } = useBookingProcessStore();
 
-  // Lógica corrigida: usa a config do Provider (Dono)
-  const maxBookingDays = provider?.bookingWindowDays || 30;
+  // 1. Defina o intervalo dentro do componente (com fallback de 15) 🕒
+  const slotInterval = provider?.slotInterval || 15;
 
+  const maxBookingDays = provider?.bookingWindowDays || 30;
   const today = startOfDay(new Date());
   const maxDate = addDays(today, maxBookingDays);
 
@@ -100,26 +103,28 @@ export const DateTimeSelection = () => {
           const potentialSlotEnd = new Date(
             currentTime.getTime() + totalDuration * 60000
           );
+          
           const isPast = isSelectedDateToday && currentTime < now;
           const fitsInWorkSlot = potentialSlotEnd <= endTime;
+          
           const isOverlapping = existingAppointments.some(
             (appt) =>
               (currentTime >= appt.startTime && currentTime < appt.endTime) ||
-              (potentialSlotEnd > appt.startTime &&
-                potentialSlotEnd <= appt.endTime) ||
-              (currentTime <= appt.startTime &&
-                potentialSlotEnd >= appt.endTime)
+              (potentialSlotEnd > appt.startTime && potentialSlotEnd <= appt.endTime) ||
+              (currentTime <= appt.startTime && potentialSlotEnd >= appt.endTime)
           );
 
           if (!isPast && fitsInWorkSlot && !isOverlapping) {
             slots.push(format(currentTime, "HH:mm"));
           }
-          currentTime = new Date(currentTime.getTime() + 15 * 60000); // Intervalo de 15 min
+
+          // 2. USA O INTERVALO DINÂMICO AQUI 🚀
+          currentTime = new Date(currentTime.getTime() + slotInterval * 60000);
         }
       }
       return slots;
     },
-    [selectedProfessional, totalDuration]
+    [selectedProfessional, totalDuration, slotInterval] // Adicionei slotInterval aqui nas dependências
   );
 
   useEffect(() => {

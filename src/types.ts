@@ -71,6 +71,7 @@ export interface Professional {
   photoURL?: string;
   services: Service[]; // Array of Service objects
   availability: DailyAvailability[];
+  slotInterval?: number; // <-- ADICIONE ESTA LINHA AQUI
   isOwner?: boolean; // <--- ADICIONE ISTO
 }
 
@@ -170,6 +171,7 @@ export interface ServiceProviderProfile extends BaseUser {
   };
   paymentMethods?: PaymentMethod[]; // Quais métodos o provider aceita
   bookingWindowDays?: number;
+  slotInterval?: 15 | 30 | 60;
   subscriptionStatus?:
     | "active"
     | "cancelled"

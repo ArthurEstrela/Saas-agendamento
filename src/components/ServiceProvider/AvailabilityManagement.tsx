@@ -65,15 +65,14 @@ export const AvailabilityManagement = () => {
     useAvailabilityStore();
   const { showSuccess, showError } = useToast();
 
-  const [localAvailability, setLocalAvailability] = useState<
-    DailyAvailability[]
-  >([]);
+  const [localAvailability, setLocalAvailability] = useState<DailyAvailability[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedProfId, setSelectedProfId] = useState<string>("");
 
-  // Booking Window State
+  // Estados de Configuração Global (Dono) 🌍
   const [bookingWindow, setBookingWindow] = useState<number>(30);
-  const [isSavingWindow, setIsSavingWindow] = useState(false);
+  const [slotInterval, setSlotInterval] = useState<number>(15);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const isOwner = userProfile?.role === "serviceProvider";
 
@@ -83,8 +82,26 @@ export const AvailabilityManagement = () => {
     if (isOwner && userProfile) {
       const profile = userProfile as ServiceProviderProfile;
       setBookingWindow(profile.bookingWindowDays || 30);
+      setSlotInterval(profile.slotInterval || 15);
     }
   }, [userProfile, isOwner]);
+
+  // Handler para salvar Janela de Dias e Intervalo de Minutos ao mesmo tempo 💾
+  const handleSaveGlobalSettings = async () => {
+    if (!userProfile?.id) return;
+    setIsSavingSettings(true);
+    try {
+      await updateUserProfile(userProfile.id, {
+        bookingWindowDays: bookingWindow,
+        slotInterval: slotInterval,
+      });
+      showSuccess("Configurações globais atualizadas!");
+    } catch (error) {
+      showError("Erro ao salvar configurações.");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   const sortedProfessionals = useMemo(() => {
     if (!professionals) return [];
@@ -107,19 +124,11 @@ export const AvailabilityManagement = () => {
       userProfile?.id
     ) {
       const ownerProfile = sortedProfessionals.find((p) => p.isOwner);
-      const targetId = ownerProfile
-        ? ownerProfile.id
-        : sortedProfessionals[0].id;
+      const targetId = ownerProfile ? ownerProfile.id : sortedProfessionals[0].id;
       setSelectedProfId(targetId);
       fetchAvailability(userProfile.id, targetId);
     }
-  }, [
-    isOwner,
-    selectedProfId,
-    sortedProfessionals,
-    fetchAvailability,
-    userProfile,
-  ]);
+  }, [isOwner, selectedProfId, sortedProfessionals, fetchAvailability, userProfile]);
 
   useEffect(() => {
     if (availability.length > 0) {
@@ -134,22 +143,7 @@ export const AvailabilityManagement = () => {
     }
   }, [availability]);
 
-  // --- HANDLERS ---
-
-  const handleSaveWindow = async () => {
-    if (!userProfile?.id) return;
-    setIsSavingWindow(true);
-    try {
-      await updateUserProfile(userProfile.id, {
-        bookingWindowDays: bookingWindow,
-      });
-      showSuccess("Janela de agendamento atualizada!");
-    } catch (error) {
-      showError("Erro ao atualizar janela.");
-    } finally {
-      setIsSavingWindow(false);
-    }
-  };
+  // --- HANDLERS DE HORÁRIOS ---
 
   const handleProfessionalChange = (profId: string) => {
     if (!userProfile?.id) return;
@@ -188,23 +182,16 @@ export const AvailabilityManagement = () => {
     setLocalAvailability((prev) =>
       prev.map((day) => {
         if (day.dayOfWeek !== dayKey) return day;
-        // Tenta inferir um horário inteligente baseado no último slot
         const lastSlot = day.slots[day.slots.length - 1];
         let newStart = "13:00";
         let newEnd = "17:00";
 
         if (lastSlot && lastSlot.end) {
-          // Se o último termina 12:00, sugere começar 13:00
           const [h, m] = lastSlot.end.split(":").map(Number);
           const nextH = h + 1;
           if (nextH < 23) {
-            newStart = `${String(nextH).padStart(2, "0")}:${String(m).padStart(
-              2,
-              "0"
-            )}`;
-            newEnd = `${String(nextH + 4).padStart(2, "0")}:${String(
-              m
-            ).padStart(2, "0")}`;
+            newStart = `${String(nextH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+            newEnd = `${String(nextH + 4).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
           }
         }
 
@@ -227,59 +214,33 @@ export const AvailabilityManagement = () => {
     setHasChanges(true);
   };
 
-  // 🔥 NOVO: Copiar para dias úteis (Seg-Sex)
   const copyToWeekdays = (sourceDayKey: string) => {
-    const sourceDay = localAvailability.find(
-      (d) => d.dayOfWeek === sourceDayKey
-    );
+    const sourceDay = localAvailability.find((d) => d.dayOfWeek === sourceDayKey);
     if (!sourceDay) return;
 
     setLocalAvailability((prev) =>
       prev.map((day) => {
-        // Se for Sábado ou Domingo, ignora
-        if (day.dayOfWeek === "Saturday" || day.dayOfWeek === "Sunday")
+        if (day.dayOfWeek === "Saturday" || day.dayOfWeek === "Sunday" || day.dayOfWeek === sourceDayKey)
           return day;
-        // Se for o próprio dia, ignora
-        if (day.dayOfWeek === sourceDayKey) return day;
-
-        return {
-          ...day,
-          isAvailable: sourceDay.isAvailable,
-          slots: [...sourceDay.slots], // Deep copy dos slots
-        };
+        return { ...day, isAvailable: sourceDay.isAvailable, slots: [...sourceDay.slots] };
       })
     );
     setHasChanges(true);
-    showSuccess(
-      `Horários de ${
-        DAYS_OF_WEEK.find((d) => d.key === sourceDayKey)?.label
-      } copiados para dias úteis!`
-    );
+    showSuccess(`Copiado para dias úteis!`);
   };
 
-  // 🔥 NOVO: Copiar para TODOS os dias
   const copyToAll = (sourceDayKey: string) => {
-    const sourceDay = localAvailability.find(
-      (d) => d.dayOfWeek === sourceDayKey
-    );
+    const sourceDay = localAvailability.find((d) => d.dayOfWeek === sourceDayKey);
     if (!sourceDay) return;
 
     setLocalAvailability((prev) =>
       prev.map((day) => {
         if (day.dayOfWeek === sourceDayKey) return day;
-        return {
-          ...day,
-          isAvailable: sourceDay.isAvailable,
-          slots: [...sourceDay.slots],
-        };
+        return { ...day, isAvailable: sourceDay.isAvailable, slots: [...sourceDay.slots] };
       })
     );
     setHasChanges(true);
-    showSuccess(
-      `Horários de ${
-        DAYS_OF_WEEK.find((d) => d.key === sourceDayKey)?.label
-      } replicados para a semana toda!`
-    );
+    showSuccess(`Replicado para a semana toda!`);
   };
 
   const handleReset = () => {
@@ -289,30 +250,21 @@ export const AvailabilityManagement = () => {
 
   const handleSave = async () => {
     if (!selectedProfId || !userProfile?.id) return;
-
-    // Validação simples antes de enviar
     const hasErrors = localAvailability.some(
-      (day) =>
-        day.isAvailable && day.slots.some((slot) => slot.start >= slot.end)
+      (day) => day.isAvailable && day.slots.some((slot) => slot.start >= slot.end)
     );
 
     if (hasErrors) {
-      showError(
-        "Existem horários inválidos (Início maior que Fim). Corrija antes de salvar."
-      );
+      showError("Corrija os horários inválidos antes de salvar.");
       return;
     }
 
     try {
-      await updateAvailability(
-        userProfile.id,
-        selectedProfId,
-        localAvailability
-      );
-      showSuccess("Horários atualizados com sucesso!");
+      await updateAvailability(userProfile.id, selectedProfId, localAvailability);
+      showSuccess("Horários salvos!");
       setHasChanges(false);
     } catch (error) {
-      showError("Erro ao salvar horários.");
+      showError("Erro ao salvar.");
     }
   };
 
@@ -323,72 +275,72 @@ export const AvailabilityManagement = () => {
       </div>
     );
 
-  const initials =
-    currentProfessional?.name?.substring(0, 2).toUpperCase() || "US";
+  const initials = currentProfessional?.name?.substring(0, 2).toUpperCase() || "US";
   const photoUrl = currentProfessional?.photoURL || "";
 
   return (
     <div className="space-y-8 pb-20">
-      {/* --- JANELA DE AGENDAMENTO --- */}
+      {/* --- BLOCO DE CONFIGURAÇÕES GLOBAIS (Janela + Intervalo) --- */}
       {isOwner && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row items-end gap-6 shadow-sm"
         >
-          <div className="flex items-start gap-4 flex-1">
+          <div className="flex flex-wrap items-start gap-8 flex-1">
             <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-400">
               <CalendarRange size={24} />
             </div>
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-white leading-none mt-1">
-                Janela de Agendamento
-              </h3>
-              <p className="text-sm text-gray-400 max-w-xl">
-                Defina com quanta antecedência os clientes podem ver sua agenda.
-              </p>
 
-              <div className="flex items-center gap-3 pt-2">
-                <div className="relative">
-                  <Input
-                    type="number"
-                    min="1"
-                    max="365"
-                    value={bookingWindow}
-                    onChange={(e) => setBookingWindow(Number(e.target.value))}
-                    className="w-24 bg-gray-950 border-gray-700 text-white pl-4 pr-2 font-mono text-center focus:ring-blue-500/50 focus:border-blue-500"
-                  />
-                </div>
-                <span className="text-sm font-medium text-gray-500">dias</span>
+            {/* Janela de Agendamento (Dias) 🗓️ */}
+            <div className="space-y-2">
+              <Label className="text-white">Janela de Agendamento</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={bookingWindow}
+                  onChange={(e) => setBookingWindow(Number(e.target.value))}
+                  className="w-20 bg-gray-950 border-gray-700 text-white pl-4"
+                />
+                <span className="text-xs text-gray-400">dias de antecedência</span>
               </div>
             </div>
+
+            {/* Intervalo entre slots (Minutos) 🕒 */}
+            <div className="space-y-2">
+              <Label className="text-white">Intervalo entre horários</Label>
+              <Select 
+                value={slotInterval.toString()} 
+                onValueChange={(v) => setSlotInterval(Number(v))}
+              >
+                <SelectTrigger className="w-40 bg-gray-950 border-gray-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="60">1 hora</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
           <Button
-            onClick={handleSaveWindow}
-            disabled={
-              isSavingWindow ||
-              bookingWindow ===
-                (userProfile as ServiceProviderProfile).bookingWindowDays
-            }
-            className={cn(
-              "w-full md:w-auto min-w-[140px]",
-              bookingWindow !==
-                (userProfile as ServiceProviderProfile).bookingWindowDays
-                ? "bg-blue-600 hover:bg-blue-500 text-white"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-            )}
+            onClick={handleSaveGlobalSettings}
+            disabled={isSavingSettings}
+            className="w-full md:w-auto min-w-[140px] bg-blue-600 hover:bg-blue-500 text-white font-bold"
           >
-            {isSavingWindow ? (
+            {isSavingSettings ? (
               <Loader2 className="animate-spin mr-2" size={16} />
             ) : (
               <Save size={16} className="mr-2" />
             )}
-            {isSavingWindow ? "Salvando..." : "Salvar Config"}
+            {isSavingSettings ? "Salvando..." : "Salvar Configs"}
           </Button>
         </motion.div>
       )}
 
-      {/* --- SELETOR DE PROFISSIONAL E AÇÕES --- */}
+      {/* --- SELETOR DE PROFISSIONAL E BOTÃO DE SALVAR HORÁRIOS --- */}
       <div className="sticky top-4 z-20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-900/90 backdrop-blur-md p-4 rounded-2xl border border-gray-800 shadow-xl">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <Avatar className="h-14 w-14 border-2 border-primary">
@@ -404,10 +356,7 @@ export const AvailabilityManagement = () => {
             </p>
             {isOwner && sortedProfessionals.length > 0 ? (
               <div className="w-full md:w-64">
-                <Select
-                  value={selectedProfId}
-                  onValueChange={handleProfessionalChange}
-                >
+                <Select value={selectedProfId} onValueChange={handleProfessionalChange}>
                   <SelectTrigger className="bg-gray-950 border-gray-700 h-9 font-bold text-white">
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
@@ -444,15 +393,10 @@ export const AvailabilityManagement = () => {
             disabled={!hasChanges || isLoading}
             className={cn(
               "gap-2 font-bold px-6 h-10 transition-all shadow-lg flex-1 md:flex-none",
-              hasChanges &&
-                "shadow-primary/20 bg-primary text-black hover:bg-primary/90"
+              hasChanges && "shadow-primary/20 bg-primary text-black hover:bg-primary/90"
             )}
           >
-            {isLoading ? (
-              <Loader2 className="animate-spin" size={18} />
-            ) : (
-              <Save size={18} />
-            )}
+            {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
             Salvar Alterações
           </Button>
         </div>
@@ -466,9 +410,7 @@ export const AvailabilityManagement = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {DAYS_OF_WEEK.map(({ key, label }) => {
-            const dayData = localAvailability.find(
-              (d) => d.dayOfWeek === key
-            ) || { isAvailable: false, slots: [] };
+            const dayData = localAvailability.find((d) => d.dayOfWeek === key) || { isAvailable: false, slots: [] };
 
             return (
               <Card
@@ -484,9 +426,7 @@ export const AvailabilityManagement = () => {
                   <div className="flex items-center gap-3">
                     <Switch
                       checked={dayData.isAvailable}
-                      onCheckedChange={(checked) =>
-                        handleDayToggle(key, checked)
-                      }
+                      onCheckedChange={(checked) => handleDayToggle(key, checked)}
                     />
                     <div>
                       <Label
@@ -497,16 +437,10 @@ export const AvailabilityManagement = () => {
                       >
                         {label}
                       </Label>
-                      {!dayData.isAvailable && (
-                        <span className="text-xs text-gray-600">Fechado</span>
-                      )}
-                      {/* Badge de Resumo quando ativo */}
+                      {!dayData.isAvailable && <span className="text-xs text-gray-600">Fechado</span>}
                       {dayData.isAvailable && (
                         <div className="flex gap-2 mt-1">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 px-1 bg-gray-800 border-gray-700 text-gray-400 font-normal"
-                          >
+                          <Badge variant="outline" className="text-[10px] h-5 px-1 bg-gray-800 border-gray-700 text-gray-400 font-normal">
                             {dayData.slots.length} turnos
                           </Badge>
                         </div>
@@ -514,33 +448,19 @@ export const AvailabilityManagement = () => {
                     </div>
                   </div>
 
-                  {/* MENU DE AÇÕES (Copiar) */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-white"
-                      >
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-white">
                         <MoreVertical size={16} />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="bg-gray-900 border-gray-800 text-gray-200"
-                    >
-                      <DropdownMenuLabel>Ações para {label}</DropdownMenuLabel>
+                    <DropdownMenuContent align="end" className="bg-gray-900 border-gray-800 text-gray-200">
+                      <DropdownMenuLabel>Ações</DropdownMenuLabel>
                       <DropdownMenuSeparator className="bg-gray-800" />
-                      <DropdownMenuItem
-                        onClick={() => copyToWeekdays(key)}
-                        className="gap-2 cursor-pointer focus:bg-gray-800"
-                      >
+                      <DropdownMenuItem onClick={() => copyToWeekdays(key)} className="gap-2 cursor-pointer focus:bg-gray-800">
                         <Copy size={14} /> Copiar para Dias Úteis
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => copyToAll(key)}
-                        className="gap-2 cursor-pointer focus:bg-gray-800"
-                      >
+                      <DropdownMenuItem onClick={() => copyToAll(key)} className="gap-2 cursor-pointer focus:bg-gray-800">
                         <Copy size={14} /> Copiar para Todos os Dias
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -563,65 +483,35 @@ export const AvailabilityManagement = () => {
                               key={idx}
                               className={cn(
                                 "flex items-center gap-2 bg-black/20 p-2 rounded-lg border transition-colors",
-                                isInvalid
-                                  ? "border-red-500/50 bg-red-900/10"
-                                  : "border-gray-800/50"
+                                isInvalid ? "border-red-500/50 bg-red-900/10" : "border-gray-800/50"
                               )}
                             >
                               <div className="relative flex-1">
                                 <Input
                                   type="time"
                                   value={slot.start}
-                                  onChange={(e) =>
-                                    handleSlotChange(
-                                      key,
-                                      idx,
-                                      "start",
-                                      e.target.value
-                                    )
-                                  }
+                                  onChange={(e) => handleSlotChange(key, idx, "start", e.target.value)}
                                   className="h-9 text-center bg-gray-800 border-gray-700 text-sm font-mono p-0 focus-visible:ring-1 focus-visible:ring-primary"
                                 />
                               </div>
-                              <span className="text-gray-500 text-xs font-medium">
-                                até
-                              </span>
+                              <span className="text-gray-500 text-xs font-medium">até</span>
                               <div className="relative flex-1">
                                 <Input
                                   type="time"
                                   value={slot.end}
-                                  onChange={(e) =>
-                                    handleSlotChange(
-                                      key,
-                                      idx,
-                                      "end",
-                                      e.target.value
-                                    )
-                                  }
+                                  onChange={(e) => handleSlotChange(key, idx, "end", e.target.value)}
                                   className={cn(
                                     "h-9 text-center bg-gray-800 border-gray-700 text-sm font-mono p-0 focus-visible:ring-1 focus-visible:ring-primary",
-                                    isInvalid &&
-                                      "text-red-400 border-red-500/30"
+                                    isInvalid && "text-red-400 border-red-500/30"
                                   )}
                                 />
                               </div>
-
-                              {isInvalid && (
-                                <div
-                                  className="text-red-500"
-                                  title="Horário final deve ser maior que inicial"
-                                >
-                                  <AlertCircle size={16} />
-                                </div>
-                              )}
-
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => removeSlot(key, idx)}
                                 className="h-8 w-8 text-gray-600 hover:text-red-500 hover:bg-red-500/10 shrink-0 rounded-full"
                                 disabled={dayData.slots.length === 1}
-                                title="Remover intervalo"
                               >
                                 <Trash2 size={14} />
                               </Button>

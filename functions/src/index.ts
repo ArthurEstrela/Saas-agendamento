@@ -780,7 +780,7 @@ export const cancelAppointmentByClient = onCall(
     const { appointmentId, reason } = request.data;
     const uid = request.auth.uid;
 
-    if (!appointmentId || !reason) {
+    if (!appointmentId) {
       throw new HttpsError("invalid-argument", "ID e motivo são obrigatórios.");
     }
 
@@ -843,7 +843,7 @@ export const cancelAppointmentByClient = onCall(
         // 5. Executar cancelamento
         transaction.update(appointmentRef, {
           status: "cancelled",
-          rejectionReason: reason, // Reutilizando campo ou crie 'cancellationReason'
+          rejectionReason: reason || "Cancelado pelo cliente (sem motivo informado)",
           cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
           cancelledBy: "client",
         });

@@ -3,7 +3,7 @@ import React from "react";
 
 const CheckIcon = () => (
   <svg
-    className="w-5 h-5 text-green-400 mr-2 flex-shrink-0"
+    className="w-5 h-5 text-amber-500- mr-2 flex-shrink-0"
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
@@ -70,21 +70,21 @@ const Pricing = () => {
             </button>
           </div>
 
-          {/* Plano 2: Semestral (DESTAQUE) */}
+          {/* Plano 2: Trimestral (DESTAQUE) */}
           <div className="bg-gray-800 rounded-2xl p-8 flex flex-col h-full relative border-2 border-amber-500 shadow-2xl shadow-amber-500/10 transform scale-105 z-10">
             <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-gray-900 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
               Mais Popular
             </span>
-            <h3 className="text-xl font-semibold text-white mb-2">Semestral</h3>
+            <h3 className="text-xl font-semibold text-white mb-2">Trimestral</h3>
             <p className="text-amber-300 mb-6">
               O equilíbrio perfeito para crescer.
             </p>
             <div className="mb-6">
-              <span className="text-5xl font-extrabold text-white">R$39</span>
-              <span className="text-xl font-medium text-gray-300">,90/mês</span>
+              <span className="text-5xl font-extrabold text-white">R$45</span>
+              <span className="text-xl font-medium text-gray-300">,00/mês</span>
             </div>
             <p className="text-xs text-gray-500 mb-8">
-              R$ 239,40 a cada 6 meses
+              R$ 135,00 a cada 3 meses
             </p>
 
             <ul className="space-y-4 text-gray-300 mb-8 flex-grow">
@@ -123,15 +123,15 @@ const Pricing = () => {
               Para quem pensa no longo prazo.
             </p>
             <div className="mb-6">
-              <span className="text-4xl font-extrabold text-white">R$34</span>
-              <span className="text-lg font-medium text-gray-300">,90/mês</span>
+              <span className="text-4xl font-extrabold text-white">R$39</span>
+              <span className="text-lg font-medium text-gray-300">,00/mês</span>
             </div>
-            <p className="text-xs text-gray-500 mb-8">R$ 418,80 anualmente</p>
+            <p className="text-xs text-gray-500 mb-8">R$ 468,00 anualmente</p>
 
             <ul className="space-y-4 text-gray-300 mb-8 flex-grow">
               <li className="flex items-center">
                 <CheckIcon />
-                <strong>Tudo do Semestral</strong>
+                <strong>Tudo do Trimestral</strong>
               </li>
               <li className="flex items-center">
                 <CheckIcon />

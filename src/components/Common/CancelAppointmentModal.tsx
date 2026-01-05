@@ -3,7 +3,14 @@ import { AlertTriangle, Send, Loader2 } from "lucide-react";
 
 // UI Components
 import { Button } from "../ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
 
 interface CancelAppointmentModalProps {
@@ -32,10 +39,14 @@ export const CancelAppointmentModal = ({
   const isDecline = intent === "decline";
 
   const title = isDecline ? "Confirmar Recusa" : "Confirmar Cancelamento";
-  const confirmButtonText = isDecline ? "Recusar Agendamento" : "Confirmar Cancelamento";
+  const confirmButtonText = isDecline
+    ? "Recusar Agendamento"
+    : "Confirmar Cancelamento";
 
   const description = isProvider
-    ? `Informe ao cliente o motivo da ${isDecline ? "recusa" : "cancelamento"} (obrigatório).`
+    ? `Informe ao cliente o motivo da ${
+        isDecline ? "recusa" : "cancelamento"
+      } (obrigatório).`
     : "Você tem certeza que deseja cancelar? Essa ação não pode ser desfeita.";
 
   const placeholder = isProvider
@@ -50,12 +61,19 @@ export const CancelAppointmentModal = ({
   }, [isOpen, appointmentId]);
 
   const handleConfirm = () => {
-    if (isProvider && reason.trim().length < 10) {
-      setError("Por favor, detalhe um pouco mais o motivo (mín. 10 caracteres).");
+    const trimmedReason = reason.trim();
+
+    // Validação apenas para prestadores
+    if (isProvider && trimmedReason.length < 10) {
+      setError(
+        "Por favor, detalhe um pouco mais o motivo (mín. 10 caracteres)."
+      );
       return;
     }
+
     setError("");
-    onConfirm(reason);
+    // Envia o texto "limpo" (sem espaços extras nas pontas) ou undefined se vazio
+    onConfirm(trimmedReason);
   };
 
   return (
@@ -73,27 +91,39 @@ export const CancelAppointmentModal = ({
 
         <div className="py-4 space-y-4">
           <Textarea
+            autoFocus // [!code highlight] UX: Foco automático ao abrir
             value={reason}
             onChange={(e) => {
-                setReason(e.target.value);
-                if(error) setError("");
+              setReason(e.target.value);
+              if (error) setError("");
             }}
             placeholder={placeholder}
             className="min-h-[120px] bg-gray-800 border-gray-700 focus-visible:ring-red-500 resize-none"
           />
-          
+
+          {/* [!code highlight] UX: Contador de caracteres apenas para quem tem obrigação */}
+          {isProvider && (
+            <div
+              className={`text-xs text-right ${
+                reason.trim().length < 10 ? "text-gray-500" : "text-green-500"
+              }`}
+            >
+              {reason.trim().length}/10 caracteres
+            </div>
+          )}
+
           {error && (
             <p className="text-xs text-red-400 font-medium bg-red-500/10 p-2 rounded border border-red-500/20 animate-fade-in-down">
-                {error}
+              {error}
             </p>
           )}
         </div>
-        
+
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             Voltar
           </Button>
-          
+
           <Button
             variant="destructive"
             onClick={handleConfirm}

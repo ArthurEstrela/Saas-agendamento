@@ -96,18 +96,17 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
       </CardContent>
       
       <CardFooter className="p-3 bg-black/20 border-t border-gray-800/50 flex justify-end gap-2">
-        {/* Lógica de Proteção: Não mostrar botão de deletar se for o Dono */}
-        {!isOwner && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={onDelete} 
-            className="text-gray-500 hover:text-destructive hover:bg-destructive/10"
-            title="Remover Profissional"
-          >
-            <Trash2 size={16} />
-          </Button>
-        )}
+        {/* CORREÇÃO: Removida a condicional !isOwner. Agora o botão aparece para todos. */}
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onDelete} 
+          className="text-gray-500 hover:text-destructive hover:bg-destructive/10"
+          // O título muda dinamicamente para fazer mais sentido
+          title={isOwner ? "Desativar Perfil" : "Remover Profissional"}
+        >
+          <Trash2 size={16} />
+        </Button>
         
         <Button 
           variant="ghost" 

@@ -17,6 +17,7 @@ import type {
   DailyAvailability,
   TimeSlot,
   ServiceProviderProfile,
+  ProfessionalProfile, // Importado para tipagem segura
   Professional,
 } from "../../types";
 
@@ -50,7 +51,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../ui/dialog"; // Adicionei imports do Dialog
+} from "../ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { cn } from "../../lib/utils/cn";
 import { motion, AnimatePresence } from "framer-motion";
@@ -89,6 +90,15 @@ export const AvailabilityManagement = () => {
 
   const isOwner = userProfile?.role === "serviceProvider";
 
+  // --- Helpers para ID de Provider ---
+  // Função segura para pegar o ID do Dono (Provider)
+  const getProviderId = () => {
+    if (!userProfile) return null;
+    if (isOwner) return userProfile.id;
+    // Se for profissional, retorna o serviceProviderId vinculado
+    return (userProfile as ProfessionalProfile).serviceProviderId;
+  };
+
   // --- INICIALIZAÇÃO E DADOS DO PROFISSIONAL ---
 
   useEffect(() => {
@@ -125,7 +135,7 @@ export const AvailabilityManagement = () => {
     });
   }, [professionals]);
 
-  // Lógica Robusta para Identificar o Profissional Atual
+  // Lógica Robusta para Identificar o Profissional Atual (Visualização)
   const currentProfessional = useMemo(() => {
     // 1. Tenta achar na lista de profissionais carregada
     const found = sortedProfessionals.find((p) => p.id === selectedProfId);
@@ -133,46 +143,53 @@ export const AvailabilityManagement = () => {
 
     // 2. Se não achou e o ID selecionado é o do próprio usuário logado
     if (userProfile && userProfile.id === selectedProfId) {
-      // Retorna o próprio perfil adaptado para o tipo Professional
       return {
         id: userProfile.id,
         name: userProfile.name,
         email: userProfile.email,
-        photoURL: userProfile.profilePictureUrl, // Usa o campo correto do UserProfile
+        photoURL: userProfile.profilePictureUrl,
         role: userProfile.role,
         isOwner: isOwner,
-      } as any; // Cast forçado seguro para UI
+      } as any; // Cast UI safe
     }
     return null;
   }, [selectedProfId, sortedProfessionals, userProfile, isOwner]);
 
-  // Inicialização Inteligente da Seleção
+  // Inicialização Inteligente da Seleção e Busca
   useEffect(() => {
     if (!userProfile?.id) return;
 
-    if (!selectedProfId) {
-      if (isOwner) {
-        // Se for dono, tenta pegar o primeiro da lista (geralmente ele mesmo)
-        if (sortedProfessionals.length > 0) {
-          const ownerProfile = sortedProfessionals.find((p) => p.isOwner);
-          const targetId = ownerProfile
-            ? ownerProfile.id
-            : sortedProfessionals[0].id;
-          setSelectedProfId(targetId);
-          fetchAvailability(userProfile.id, targetId);
-        } else {
-          // Fallback se a lista ainda não carregou mas temos o ID
-          setSelectedProfId(userProfile.id);
-          fetchAvailability(userProfile.id, userProfile.id);
-        }
+    // Se já temos um selecionado, não faz nada (evita loop)
+    if (selectedProfId) return;
+
+    const providerId = getProviderId();
+
+    if (isOwner) {
+      // CENÁRIO DONO: Seleciona o primeiro da lista ou ele mesmo
+      if (sortedProfessionals.length > 0) {
+        const ownerProfile = sortedProfessionals.find((p) => p.isOwner);
+        const targetId = ownerProfile
+          ? ownerProfile.id
+          : sortedProfessionals[0].id;
+
+        setSelectedProfId(targetId);
+        if (providerId) fetchAvailability(providerId, targetId);
       } else {
-        // Se NÃO for dono (Profissional Comum), seleciona a si mesmo e carrega
+        // Fallback: seleciona a si mesmo se a lista estiver vazia
         setSelectedProfId(userProfile.id);
-        // Assume que serviceProviderId existe no perfil do profissional
-        const providerId = (userProfile as any).serviceProviderId;
-        if (providerId) {
-          fetchAvailability(providerId, userProfile.id);
-        }
+        if (providerId) fetchAvailability(providerId, userProfile.id);
+      }
+    } else {
+      // CENÁRIO PROFISSIONAL: Seleciona a si mesmo obrigatoriamente
+      // Mas o ID do "resource" professional pode ser diferente do ID de usuário
+      // Aqui assumimos que professionalId no perfil é o ID do documento, ou fallback para user.id
+      const profUser = userProfile as ProfessionalProfile;
+      const targetDocId = profUser.professionalId || profUser.id;
+
+      setSelectedProfId(targetDocId);
+
+      if (providerId) {
+        fetchAvailability(providerId, targetDocId);
       }
     }
   }, [
@@ -199,10 +216,12 @@ export const AvailabilityManagement = () => {
   // --- HANDLERS ---
 
   const handleProfessionalChange = (profId: string) => {
-    if (!userProfile?.id) return;
+    const providerId = getProviderId();
+    if (!providerId) return;
+
     setSelectedProfId(profId);
     setHasChanges(false);
-    fetchAvailability(userProfile.id, profId);
+    fetchAvailability(providerId, profId);
   };
 
   const handleDayToggle = (dayKey: string, checked: boolean) => {
@@ -320,6 +339,13 @@ export const AvailabilityManagement = () => {
 
   const handleSave = async () => {
     if (!selectedProfId || !userProfile?.id) return;
+    const providerId = getProviderId();
+
+    if (!providerId) {
+      showError("Erro: ID do provedor não encontrado.");
+      return;
+    }
+
     const hasErrors = localAvailability.some(
       (day) =>
         day.isAvailable && day.slots.some((slot) => slot.start >= slot.end)
@@ -331,10 +357,6 @@ export const AvailabilityManagement = () => {
     }
 
     try {
-      // Se não for dono, providerId vem do perfil, senão é o próprio ID
-      const providerId = isOwner
-        ? userProfile.id
-        : (userProfile as any).serviceProviderId;
       await updateAvailability(providerId, selectedProfId, localAvailability);
       showSuccess("Horários salvos com sucesso!");
       setHasChanges(false);

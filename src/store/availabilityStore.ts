@@ -70,7 +70,9 @@ export const useAvailabilityStore = create<AvailabilityState>((set) => ({
 
       const slots: string[] = [];
       const serviceDuration = service.duration;
-const SLOT_INTERVAL_MINUTES = professional.slotInterval || 15; 
+      // Garante intervalo padrão se não definido
+      const SLOT_INTERVAL_MINUTES = professional.slotInterval || 15;
+
       if (
         professionalDaySchedule.slots &&
         professionalDaySchedule.slots.length > 0
@@ -117,12 +119,17 @@ const SLOT_INTERVAL_MINUTES = professional.slotInterval || 15;
     }
   },
 
-  // --- Lógica de Gerenciamento Corrigida ---
+  // --- Lógica de Gerenciamento Unificada ---
 
   fetchAvailability: async (providerId: string, professionalId: string) => {
+    if (!providerId || !professionalId) {
+       console.error("IDs inválidos para buscar disponibilidade");
+       return;
+    }
+    
     set({ isLoading: true, error: null });
     try {
-      // Agora busca na subcoleção correta: serviceProviders/{providerId}/professionals/{professionalId}
+      // Busca na subcoleção do Provider -> Professionals
       const docRef = doc(db, "serviceProviders", providerId, "professionals", professionalId);
       const docSnap = await getDoc(docRef);
 
@@ -133,8 +140,7 @@ const SLOT_INTERVAL_MINUTES = professional.slotInterval || 15;
           : [];
         set({ availability: availabilityData });
       } else {
-        // Se não achar, tenta buscar do perfil do usuário como fallback (legado)
-        console.warn("Profissional não encontrado na subcoleção, verificando legado...");
+        console.warn("Documento de disponibilidade não encontrado. Iniciando vazio.");
         set({ availability: [] }); 
       }
       set({ isLoading: false });
@@ -150,9 +156,12 @@ const SLOT_INTERVAL_MINUTES = professional.slotInterval || 15;
     professionalId: string,
     availability: DailyAvailability[]
   ) => {
+    if (!providerId || !professionalId) {
+        throw new Error("IDs inválidos para salvar disponibilidade");
+    }
+
     set({ isLoading: true, error: null });
     try {
-      // Agora atualiza na subcoleção correta
       const docRef = doc(db, "serviceProviders", providerId, "professionals", professionalId);
       
       await updateDoc(docRef, { availability });

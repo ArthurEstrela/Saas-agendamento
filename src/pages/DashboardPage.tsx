@@ -1,36 +1,43 @@
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useProfileStore } from "../store/profileStore";
-import  ServiceProviderDashboard  from "../components/ServiceProviderDashboard";
+import ServiceProviderDashboard from "../components/ServiceProviderDashboard";
 import { DashboardSkeleton } from "../components/Common/LoadingSpinner";
 import { ClientDashboard } from "../components/ClientDashboard";
 import ProfessionalDashboard from "../components/Professional/ProfessionalDashboard";
 
 const DashboardPage = () => {
   const { userProfile, isLoadingProfile, error } = useProfileStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // 1. Estado de Carregamento Inicial
-  // Mostra o esqueleto APENAS se estiver carregando E o perfil ainda não existir.
-  // Esta é a mudança principal que resolve o problema.
+  // Redirect root "/dashboard" to the correct default sub-route (English)
+  useEffect(() => {
+    if (userProfile && location.pathname === "/dashboard") {
+      if (userProfile.role === "client") {
+        navigate("/dashboard/explore", { replace: true });
+      } else if (userProfile.role === "serviceProvider") {
+        navigate("/dashboard/agenda", { replace: true });
+      } else if (userProfile.role === "professional") {
+        navigate("/dashboard/home", { replace: true });
+      }
+    }
+  }, [userProfile, location.pathname, navigate]);
+
   if (isLoadingProfile && !userProfile) {
     return <DashboardSkeleton />;
   }
 
-  // 2. Estado de Erro
-  // Se houver um erro, exibe a mensagem de erro.
   if (error) {
     return (
-      <div className="flex justify-center items-center h-screen bg-red-50">
-        <div className="text-center text-red-700">
-          <h2 className="text-2xl font-bold mb-2">Erro ao Carregar o Perfil</h2>
-          <p>{error}</p>
-        </div>
+      <div className="flex justify-center items-center h-screen bg-red-50 text-red-700">
+        <h2 className="text-2xl font-bold">Error Loading Profile</h2>
+        <p>{error}</p>
       </div>
     );
   }
 
-  // 3. Estado de Perfil Carregado (ou Atualizando em Background)
-  // Se o perfil já existe (userProfile não é null), renderiza o dashboard.
-  // Mesmo que isLoadingProfile seja true (indicando um refresh), o dashboard
-  // não será desmontado, preservando o estado da aba ativa.
+  // Render the Layout Wrapper based on User Role
   if (userProfile) {
     if (userProfile.role === "client") {
       return <ClientDashboard />;
@@ -41,16 +48,13 @@ const DashboardPage = () => {
     if (userProfile.role === "professional") {
       return <ProfessionalDashboard />;
     }
-    // Caso tenha perfil, mas um 'role' desconhecido
-    return <div>Tipo de usuário desconhecido.</div>;
+    return <div>Unknown user role.</div>;
   }
 
-  // 4. Estado de Fallback
-  // Se não está carregando, não deu erro, mas o perfil é null.
   return (
     <div className="flex justify-center items-center h-screen">
       <div className="text-center">
-        <h2 className="text-2xl font-bold">Perfil não encontrado.</h2>
+        <h2 className="text-2xl font-bold">Profile not found.</h2>
       </div>
     </div>
   );

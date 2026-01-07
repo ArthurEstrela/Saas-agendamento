@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useProfileStore } from "../../store/profileStore";
-import type { UserProfile, ProfessionalProfile } from "../../types";
+import type { ProfessionalProfile } from "../../types";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -23,14 +23,10 @@ const professionalSchema = z.object({
 });
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
 
-interface ProfessionalProfileProps {
-  userProfile: UserProfile | null;
-}
+export const ProfessionalProfileManagement = () => {
+  // 1. Uso da Store
+  const { userProfile, updateUserProfile, setUserProfile } = useProfileStore();
 
-export const ProfessionalProfileManagement = ({
-  userProfile,
-}: ProfessionalProfileProps) => {
-  const { updateUserProfile, setUserProfile } = useProfileStore();
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -80,6 +76,8 @@ export const ProfessionalProfileManagement = ({
       setIsSaving(false);
     }
   };
+
+  if (!userProfile) return <Loader2 className="animate-spin text-primary" />;
 
   return (
     <motion.div

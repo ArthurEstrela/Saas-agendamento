@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import logo from "../../assets/stylo-logo.png";
 import {
   Search,
@@ -13,7 +13,6 @@ import {
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
 import { useNotificationStore } from "../../store/notificationsStore";
-import type { Section } from "../ClientDashboard"; // Ajuste o caminho se necessário
 import { motion } from "framer-motion";
 
 // UI Components
@@ -23,20 +22,13 @@ import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
 
 interface ClientSideNavProps {
-  activeSection: Section;
-  setActiveSection: (section: Section) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
 }
 
-export const ClientSideNav = ({
-  activeSection,
-  setActiveSection,
-  isOpen,
-  setIsOpen,
-}: ClientSideNavProps) => {
+export const ClientSideNav = ({ isOpen, setIsOpen }: ClientSideNavProps) => {
   const { logout, user } = useAuthStore();
-  const navigate = useNavigate();
+  const location = useLocation();
   const { userProfile } = useProfileStore();
   const { unreadCount, fetchNotifications } = useNotificationStore();
 
@@ -44,21 +36,15 @@ export const ClientSideNav = ({
     if (user?.uid) fetchNotifications(user.uid);
   }, [user, fetchNotifications]);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/");
-  };
-
-  const handleNavClick = (section: Section) => {
-    setActiveSection(section);
-    setIsOpen(false);
-  };
-
-  const navItems: { id: Section; label: string; icon: React.ElementType }[] = [
-    { id: "search", label: "Explorar", icon: Search },
-    { id: "appointments", label: "Meus Agendamentos", icon: Calendar },
-    { id: "favorites", label: "Favoritos", icon: Heart },
-    { id: "notifications", label: "Notificações", icon: Bell },
+  const navItems = [
+    { path: "/dashboard/explore", label: "Explorar", icon: Search },
+    {
+      path: "/dashboard/appointments",
+      label: "Meus Agendamentos",
+      icon: Calendar,
+    },
+    { path: "/dashboard/favorites", label: "Favoritos", icon: Heart },
+    { path: "/dashboard/notifications", label: "Notificações", icon: Bell },
   ];
 
   return (
@@ -67,7 +53,9 @@ export const ClientSideNav = ({
       <div
         className={cn(
           "fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300",
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          isOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
         )}
         onClick={() => setIsOpen(false)}
       />
@@ -80,7 +68,11 @@ export const ClientSideNav = ({
         )}
       >
         <div className="flex items-center justify-between p-6 h-20">
-          <Link to="/dashboard" onClick={() => setIsOpen(false)} className="px-2">
+          <Link
+            to="/dashboard"
+            onClick={() => setIsOpen(false)}
+            className="px-2"
+          >
             <img
               className="h-9 w-auto hover:scale-105 transition-transform duration-300"
               src={logo}
@@ -99,70 +91,76 @@ export const ClientSideNav = ({
 
         <nav className="flex-grow flex flex-col px-4 py-4 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
-            const isActive = activeSection === item.id;
+            const isActive = location.pathname === item.path;
             const Icon = item.icon;
 
             return (
-              <Button
-                key={item.id}
-                variant="ghost"
-                onClick={() => handleNavClick(item.id)}
-                className={cn(
-                  "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group overflow-hidden mb-1",
-                  isActive
-                    ? "bg-primary/10 text-primary hover:bg-primary/15"
-                    : "text-gray-400 hover:text-white hover:bg-white/5"
-                )}
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => setIsOpen(false)}
               >
-                {/* Indicador lateral iluminado */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeIndicatorClient"
-                    className="absolute left-0 w-1 bg-primary rounded-r-full shadow-[0_0_15px_#daa520]"
-                    initial={{ height: 0, top: "50%" }}
-                    animate={{ height: "24px", top: "calc(50% - 12px)" }}
-                    transition={{ duration: 0.2 }}
-                  />
-                )}
-
-                <Icon
-                  size={20}
+                <Button
+                  variant="ghost"
                   className={cn(
-                    "mr-3 transition-all duration-300",
+                    "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group overflow-hidden mb-1",
                     isActive
-                      ? "text-primary scale-110"
-                      : "text-gray-500 group-hover:text-white group-hover:scale-110"
-                  )}
-                />
-                <span
-                  className={cn(
-                    "transition-transform duration-300",
-                    isActive ? "font-bold" : "group-hover:translate-x-1"
+                      ? "bg-primary/10 text-primary hover:bg-primary/15"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
                   )}
                 >
-                  {item.label}
-                </span>
+                  {/* Indicador lateral iluminado */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeIndicatorClient"
+                      className="absolute left-0 w-1 bg-primary rounded-r-full shadow-[0_0_15px_#daa520]"
+                      initial={{ height: 0, top: "50%" }}
+                      animate={{ height: "24px", top: "calc(50% - 12px)" }}
+                      transition={{ duration: 0.2 }}
+                    />
+                  )}
 
-                {item.id === "notifications" && unreadCount > 0 && (
-                  <Badge
-                    variant="destructive"
-                    className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                  <Icon
+                    size={20}
+                    className={cn(
+                      "mr-3 transition-all duration-300",
+                      isActive
+                        ? "text-primary scale-110"
+                        : "text-gray-500 group-hover:text-white group-hover:scale-110"
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "transition-transform duration-300",
+                      isActive ? "font-bold" : "group-hover:translate-x-1"
+                    )}
                   >
-                    {unreadCount}
-                  </Badge>
-                )}
-              </Button>
+                    {item.label}
+                  </span>
+
+                  {item.path === "/dashboard/notifications" &&
+                    unreadCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                      >
+                        {unreadCount}
+                      </Badge>
+                    )}
+                </Button>
+              </Link>
             );
           })}
         </nav>
 
         {/* Rodapé do Perfil */}
         <div className="p-4 border-t border-white/5 bg-black/20 space-y-2">
-          <button
-            onClick={() => handleNavClick("profile")}
+          <Link
+            to="/dashboard/profile"
+            onClick={() => setIsOpen(false)}
             className={cn(
               "flex items-center w-full p-2.5 text-left rounded-xl transition-all duration-200 group outline-none",
-              activeSection === "profile"
+              location.pathname === "/dashboard/profile"
                 ? "bg-white/10 border border-white/10"
                 : "hover:bg-white/5 border border-transparent"
             )}
@@ -170,7 +168,7 @@ export const ClientSideNav = ({
             <Avatar
               className={cn(
                 "h-10 w-10 border transition-all duration-300",
-                activeSection === "profile"
+                location.pathname === "/dashboard/profile"
                   ? "border-primary"
                   : "border-gray-700 group-hover:border-gray-500"
               )}
@@ -189,7 +187,7 @@ export const ClientSideNav = ({
               <p
                 className={cn(
                   "font-bold text-sm truncate transition-colors",
-                  activeSection === "profile"
+                  location.pathname === "/dashboard/profile"
                     ? "text-primary"
                     : "text-gray-200 group-hover:text-white"
                 )}
@@ -200,11 +198,11 @@ export const ClientSideNav = ({
                 Ver Perfil
               </p>
             </div>
-          </button>
+          </Link>
 
           <Button
             variant="ghost"
-            onClick={handleLogout}
+            onClick={logout}
             className="w-full justify-start h-10 px-4 text-red-400/80 hover:text-red-400 hover:bg-red-500/10 gap-3"
           >
             <LogOut size={18} />

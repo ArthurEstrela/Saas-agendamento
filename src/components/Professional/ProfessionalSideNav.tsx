@@ -1,8 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import logo from "../../assets/stylo-logo.png";
 import {
   LayoutDashboard,
-  User,
   Clock,
   Bell,
   Star,
@@ -14,7 +13,6 @@ import {
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
 import type { ProfessionalProfile } from "../../types";
-import type { ProfessionalDashboardView } from "./ProfessionalDashboard";
 import { useNotificationStore } from "../../store/notificationsStore";
 import { motion } from "framer-motion";
 
@@ -25,116 +23,29 @@ import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
 
 interface SideNavProps {
-  activeView: ProfessionalDashboardView;
-  setActiveView: (view: ProfessionalDashboardView) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
 }
 
-export const ProfessionalSideNav = ({
-  activeView,
-  setActiveView,
-  isOpen,
-  setIsOpen,
-}: SideNavProps) => {
+export const ProfessionalSideNav = ({ isOpen, setIsOpen }: SideNavProps) => {
   const { userProfile } = useProfileStore();
   const { logout } = useAuthStore();
   const { unreadCount } = useNotificationStore();
+  const location = useLocation();
 
   const professionalProfile = userProfile as ProfessionalProfile;
 
-  const handleNavClick = (view: ProfessionalDashboardView) => {
-    setActiveView(view);
-    setIsOpen(false);
-  };
-
-  const navItems: {
-    id: ProfessionalDashboardView;
-    label: string;
-    icon: React.ElementType;
-    section?: string;
-  }[] = [
-    { id: "home", label: "Início", icon: Home, section: "Principal" },
+  const navItems = [
+    { path: "/dashboard/home", label: "Início", icon: Home },
     {
-      id: "agenda",
+      path: "/dashboard/my-agenda",
       label: "Minha Agenda",
       icon: LayoutDashboard,
-      section: "Principal",
     },
-    {
-      id: "availability",
-      label: "Horários",
-      icon: Clock,
-      section: "Gestão",
-    },
-    { id: "reviews", label: "Avaliações", icon: Star, section: "Gestão" },
-    {
-      id: "notifications",
-      label: "Notificações",
-      icon: Bell,
-      section: "Geral",
-    },
+    { path: "/dashboard/my-availability", label: "Horários", icon: Clock },
+    { path: "/dashboard/my-reviews", label: "Avaliações", icon: Star },
+    { path: "/dashboard/notifications", label: "Notificações", icon: Bell },
   ];
-
-  // Agrupa itens por seção para manter a organização visual antiga, mas com o estilo novo
-  const renderNavItems = () => {
-    return navItems.map((item) => {
-      const isActive = activeView === item.id;
-      const Icon = item.icon;
-
-      return (
-        <Button
-          key={item.id}
-          variant="ghost"
-          onClick={() => handleNavClick(item.id)}
-          className={cn(
-            "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group overflow-hidden mb-1",
-            isActive
-              ? "bg-primary/10 text-primary hover:bg-primary/15"
-              : "text-gray-400 hover:text-white hover:bg-white/5"
-          )}
-        >
-          {/* Indicador lateral iluminado */}
-          {isActive && (
-            <motion.div
-              layoutId="activeIndicator"
-              className="absolute left-0 w-1 bg-primary rounded-r-full shadow-[0_0_15px_#daa520]"
-              initial={{ height: 0, top: "50%" }}
-              animate={{ height: "24px", top: "calc(50% - 12px)" }}
-              transition={{ duration: 0.2 }}
-            />
-          )}
-
-          <Icon
-            size={20}
-            className={cn(
-              "mr-3 transition-all duration-300",
-              isActive
-                ? "text-primary scale-110"
-                : "text-gray-500 group-hover:text-white group-hover:scale-110"
-            )}
-          />
-          <span
-            className={cn(
-              "transition-transform duration-300",
-              isActive ? "font-bold" : "group-hover:translate-x-1"
-            )}
-          >
-            {item.label}
-          </span>
-
-          {item.id === "notifications" && unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
-            >
-              {unreadCount}
-            </Badge>
-          )}
-        </Button>
-      );
-    });
-  };
 
   return (
     <>
@@ -142,7 +53,9 @@ export const ProfessionalSideNav = ({
       <div
         className={cn(
           "fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300",
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          isOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
         )}
         onClick={() => setIsOpen(false)}
       />
@@ -173,16 +86,77 @@ export const ProfessionalSideNav = ({
         </div>
 
         <nav className="flex-grow flex flex-col px-4 py-4 overflow-y-auto custom-scrollbar">
-          {renderNavItems()}
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => setIsOpen(false)}
+              >
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group overflow-hidden mb-1",
+                    isActive
+                      ? "bg-primary/10 text-primary hover:bg-primary/15"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  )}
+                >
+                  {/* Indicador lateral iluminado */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeIndicator"
+                      className="absolute left-0 w-1 bg-primary rounded-r-full shadow-[0_0_15px_#daa520]"
+                      initial={{ height: 0, top: "50%" }}
+                      animate={{ height: "24px", top: "calc(50% - 12px)" }}
+                      transition={{ duration: 0.2 }}
+                    />
+                  )}
+
+                  <Icon
+                    size={20}
+                    className={cn(
+                      "mr-3 transition-all duration-300",
+                      isActive
+                        ? "text-primary scale-110"
+                        : "text-gray-500 group-hover:text-white group-hover:scale-110"
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "transition-transform duration-300",
+                      isActive ? "font-bold" : "group-hover:translate-x-1"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+
+                  {item.path === "/dashboard/notifications" &&
+                    unreadCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                      >
+                        {unreadCount}
+                      </Badge>
+                    )}
+                </Button>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Rodapé do Perfil */}
         <div className="p-4 border-t border-white/5 bg-black/20 space-y-2">
-          <button
-            onClick={() => handleNavClick("profile")}
+          <Link
+            to="/dashboard/my-profile"
+            onClick={() => setIsOpen(false)}
             className={cn(
               "flex items-center w-full p-2.5 text-left rounded-xl transition-all duration-200 group outline-none",
-              activeView === "profile"
+              location.pathname === "/dashboard/my-profile"
                 ? "bg-white/10 border border-white/10"
                 : "hover:bg-white/5 border border-transparent"
             )}
@@ -190,7 +164,7 @@ export const ProfessionalSideNav = ({
             <Avatar
               className={cn(
                 "h-10 w-10 border transition-all duration-300",
-                activeView === "profile"
+                location.pathname === "/dashboard/my-profile"
                   ? "border-primary"
                   : "border-gray-700 group-hover:border-gray-500"
               )}
@@ -209,7 +183,7 @@ export const ProfessionalSideNav = ({
               <p
                 className={cn(
                   "font-bold text-sm truncate transition-colors",
-                  activeView === "profile"
+                  location.pathname === "/dashboard/my-profile"
                     ? "text-primary"
                     : "text-gray-200 group-hover:text-white"
                 )}
@@ -220,7 +194,7 @@ export const ProfessionalSideNav = ({
                 Ver Perfil
               </p>
             </div>
-          </button>
+          </Link>
 
           <Button
             variant="ghost"

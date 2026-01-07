@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useProfileStore } from "../../store/profileStore"; // Adicionado
 import {
   useProviderAppointmentsStore,
   type EnrichedProviderAppointment,
@@ -12,6 +13,7 @@ import {
   CheckCircle2,
   DollarSign,
   Clock,
+  Loader2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { format, isSameDay, addDays } from "date-fns";
@@ -23,19 +25,19 @@ import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
-interface ProfessionalHomeProps {
-  userProfile: ProfessionalProfile;
-}
-
-export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
+export const ProfessionalHome = () => {
+  const { userProfile } = useProfileStore(); // Hook da Store
   const { appointments } = useProviderAppointmentsStore();
 
+  const profile = userProfile as ProfessionalProfile | null;
+
   const tomorrowAppointments = useMemo(() => {
+    if (!profile) return [];
     const tomorrow = addDays(new Date(), 1);
     return appointments
       .filter(
         (app) =>
-          app.professionalId === userProfile.professionalId &&
+          app.professionalId === profile.professionalId &&
           app.status === "scheduled" &&
           isSameDay(new Date(app.startTime), tomorrow)
       )
@@ -43,7 +45,7 @@ export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
         (a, b) =>
           new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       );
-  }, [appointments, userProfile.professionalId]);
+  }, [appointments, profile]);
 
   const generateWhatsAppLink = (appointment: Appointment) => {
     const phone =
@@ -58,8 +60,17 @@ export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
   };
 
   const metrics = useMemo(() => {
+    if (!profile)
+      return {
+        todayCount: 0,
+        completedCount: 0,
+        revenue: 0,
+        rating: 0,
+        nextAppointment: null,
+      };
+
     const myAppointments = appointments.filter(
-      (a) => a.professionalId === userProfile.professionalId
+      (a) => a.professionalId === profile.professionalId
     );
     const today = new Date();
     const todayAppointments = myAppointments.filter(
@@ -89,16 +100,24 @@ export const ProfessionalHome = ({ userProfile }: ProfessionalHomeProps) => {
           new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       )[0],
     };
-  }, [appointments, userProfile.professionalId]);
+  }, [appointments, profile]);
 
   const MotionCard = motion(Card);
+
+  if (!profile) {
+    return (
+      <div className="flex justify-center p-10">
+        <Loader2 className="animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">
-            Olá, <span className="text-primary">{userProfile.name}</span>! 👋
+            Olá, <span className="text-primary">{profile.name}</span>! 👋
           </h1>
           <p className="text-gray-400 mt-1">
             Resumo da sua performance e agenda.

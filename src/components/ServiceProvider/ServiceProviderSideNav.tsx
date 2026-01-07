@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import logo from "../../assets/stylo-logo.png";
 import {
   LayoutDashboard,
@@ -15,12 +15,9 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
-import type {
-  ServiceProviderProfile,
-  ProviderDashboardView,
-} from "../../types";
+import type { ServiceProviderProfile } from "../../types";
 import { useNotificationStore } from "../../store/notificationsStore";
-import { motion } from "framer-motion"; // Adicione esta linha
+import { motion } from "framer-motion";
 
 // UI Components
 import { Button } from "../ui/button";
@@ -29,16 +26,12 @@ import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
 
 interface SideNavProps {
-  activeView: ProviderDashboardView;
-  setActiveView: (view: ProviderDashboardView) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   disableNav: boolean;
 }
 
 export const ServiceProviderSideNav = ({
-  activeView,
-  setActiveView,
   isOpen,
   setIsOpen,
   disableNav,
@@ -46,33 +39,24 @@ export const ServiceProviderSideNav = ({
   const { userProfile } = useProfileStore();
   const { logout } = useAuthStore();
   const { unreadCount } = useNotificationStore();
+  const location = useLocation();
 
   const providerProfile = userProfile as ServiceProviderProfile;
 
-  const handleNavClick = (view: ProviderDashboardView) => {
-    if (disableNav && view !== "subscription") return;
-    setActiveView(view);
-    setIsOpen(false);
-  };
-
-  const navItems: {
-    id: ProviderDashboardView;
-    label: string;
-    icon: React.ElementType;
-  }[] = [
-    { id: "agenda", label: "Agenda", icon: LayoutDashboard },
-    { id: "services", label: "Serviços", icon: Scissors },
-    { id: "professionals", label: "Profissionais", icon: Users },
-    { id: "availability", label: "Disponibilidade", icon: Clock },
-    { id: "financial", label: "Financeiro", icon: DollarSign },
-    { id: "reviews", label: "Avaliações", icon: Star },
-    { id: "subscription", label: "Assinatura", icon: CreditCard },
-    { id: "notifications", label: "Notificações", icon: Bell },
+  const navItems = [
+    { path: "/dashboard/agenda", label: "Agenda", icon: LayoutDashboard },
+    { path: "/dashboard/services", label: "Serviços", icon: Scissors },
+    { path: "/dashboard/professionals", label: "Profissionais", icon: Users },
+    { path: "/dashboard/availability", label: "Disponibilidade", icon: Clock },
+    { path: "/dashboard/financial", label: "Financeiro", icon: DollarSign },
+    { path: "/dashboard/reviews", label: "Avaliações", icon: Star },
+    { path: "/dashboard/subscription", label: "Assinatura", icon: CreditCard },
+    { path: "/dashboard/notifications", label: "Notificações", icon: Bell },
   ];
 
   return (
     <>
-      {/* Overlay Mobile - Agora com desfoque suave */}
+      {/* Overlay Mobile */}
       <div
         className={cn(
           "fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300",
@@ -83,7 +67,7 @@ export const ServiceProviderSideNav = ({
         onClick={() => setIsOpen(false)}
       />
 
-      {/* Sidebar - Corrigido para 'bg-surface' e bordas mais sutis */}
+      {/* Sidebar */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-72 bg-surface border-r border-white/5 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] md:translate-x-0",
@@ -110,74 +94,85 @@ export const ServiceProviderSideNav = ({
 
         <nav className="flex-grow flex flex-col gap-1 px-4 py-4 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
-            const isActive = activeView === item.id;
-            const isDisabled = disableNav && item.id !== "subscription";
+            const isActive = location.pathname === item.path;
+            const isDisabled = disableNav && item.path !== "/dashboard/subscription";
             const Icon = item.icon;
 
             return (
-              <Button
-                key={item.id}
-                variant="ghost"
-                onClick={() => handleNavClick(item.id)}
-                disabled={isDisabled}
-                className={cn(
-                  "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group overflow-hidden",
-                  isActive
-                    ? "bg-primary/10 text-primary hover:bg-primary/15"
-                    : "text-gray-400 hover:text-white hover:bg-white/5",
-                  isDisabled && "opacity-50 cursor-not-allowed"
-                )}
+              <Link
+                key={item.path}
+                to={isDisabled ? "#" : item.path}
+                onClick={(e) => {
+                  if (isDisabled) e.preventDefault();
+                  else setIsOpen(false);
+                }}
+                className={cn(isDisabled ? "cursor-not-allowed" : "")}
               >
-                {/* Indicador lateral iluminado (similar ao Client Dashboard) */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeIndicator"
-                    className="absolute left-0 w-1 bg-primary rounded-r-full shadow-[0_0_15px_#daa520]"
-                    initial={{ height: 0, top: "50%" }}
-                    animate={{ height: "24px", top: "calc(50% - 12px)" }} // Força a centralização manual
-                    transition={{ duration: 0.2 }}
-                  />
-                )}
-
-                <Icon
-                  size={20}
+                <Button
+                  variant="ghost"
+                  disabled={isDisabled}
                   className={cn(
-                    "mr-3 transition-all duration-300",
+                    "w-full justify-start h-12 px-4 text-base font-medium transition-all duration-200 relative group overflow-hidden",
                     isActive
-                      ? "text-primary scale-110"
-                      : "text-gray-500 group-hover:text-white group-hover:scale-110"
-                  )}
-                />
-                <span
-                  className={cn(
-                    "transition-transform duration-300",
-                    isActive ? "font-bold" : "group-hover:translate-x-1"
+                      ? "bg-primary/10 text-primary hover:bg-primary/15"
+                      : "text-gray-400 hover:text-white hover:bg-white/5",
+                    isDisabled && "opacity-50"
                   )}
                 >
-                  {item.label}
-                </span>
+                  {/* Indicador lateral iluminado */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeIndicator"
+                      className="absolute left-0 w-1 bg-primary rounded-r-full shadow-[0_0_15px_#daa520]"
+                      initial={{ height: 0, top: "50%" }}
+                      animate={{ height: "24px", top: "calc(50% - 12px)" }}
+                      transition={{ duration: 0.2 }}
+                    />
+                  )}
 
-                {item.id === "notifications" && unreadCount > 0 && (
-                  <Badge
-                    variant="destructive"
-                    className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                  <Icon
+                    size={20}
+                    className={cn(
+                      "mr-3 transition-all duration-300",
+                      isActive
+                        ? "text-primary scale-110"
+                        : "text-gray-500 group-hover:text-white group-hover:scale-110"
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "transition-transform duration-300",
+                      isActive ? "font-bold" : "group-hover:translate-x-1"
+                    )}
                   >
-                    {unreadCount}
-                  </Badge>
-                )}
-              </Button>
+                    {item.label}
+                  </span>
+
+                  {item.path === "/dashboard/notifications" && unreadCount > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full animate-pulse text-[10px]"
+                    >
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
             );
           })}
         </nav>
 
-        {/* Rodapé do Perfil - Cores harmonizadas com o novo Background */}
+        {/* Rodapé do Perfil */}
         <div className="p-4 border-t border-white/5 bg-black/20 space-y-2">
-          <button
-            onClick={() => handleNavClick("profile")}
-            disabled={disableNav}
+          <Link
+            to={disableNav ? "#" : "/dashboard/business-profile"}
+            onClick={(e) => {
+               if (disableNav) e.preventDefault();
+               else setIsOpen(false);
+            }}
             className={cn(
               "flex items-center w-full p-2.5 text-left rounded-xl transition-all duration-200 group outline-none",
-              activeView === "profile"
+              location.pathname === "/dashboard/business-profile"
                 ? "bg-white/10 border border-white/10"
                 : "hover:bg-white/5 border border-transparent",
               disableNav && "opacity-50 cursor-not-allowed pointer-events-none"
@@ -186,7 +181,7 @@ export const ServiceProviderSideNav = ({
             <Avatar
               className={cn(
                 "h-10 w-10 border transition-all duration-300",
-                activeView === "profile"
+                location.pathname === "/dashboard/business-profile"
                   ? "border-primary"
                   : "border-gray-700 group-hover:border-gray-500"
               )}
@@ -205,7 +200,7 @@ export const ServiceProviderSideNav = ({
               <p
                 className={cn(
                   "font-bold text-sm truncate transition-colors",
-                  activeView === "profile"
+                  location.pathname === "/dashboard/business-profile"
                     ? "text-primary"
                     : "text-gray-200 group-hover:text-white"
                 )}
@@ -216,7 +211,7 @@ export const ServiceProviderSideNav = ({
                 Ver Perfil
               </p>
             </div>
-          </button>
+          </Link>
 
           <Button
             variant="ghost"

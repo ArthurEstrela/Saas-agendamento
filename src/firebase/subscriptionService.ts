@@ -1,4 +1,3 @@
-// src/firebase/subscriptionService.ts
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./config"; // Importa a instância do functions
 

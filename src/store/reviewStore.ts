@@ -1,4 +1,3 @@
-// src/store/reviewStore.ts
 import { create } from "zustand";
 import { toast } from "react-hot-toast";
 import { addReview, getReviewsForProvider } from "../firebase/reviewService";

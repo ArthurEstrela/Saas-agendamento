@@ -1,4 +1,3 @@
-// src/store/favoritesStore.ts
 import { create } from 'zustand';
 import type { ServiceProviderProfile } from '../types';
 import { getProfessionalsByIds } from '../firebase/userService';

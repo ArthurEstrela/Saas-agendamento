@@ -1,5 +1,3 @@
-// src/firebase/financeService.ts
-
 import {
   collection,
   query,
@@ -8,9 +6,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './config';
-// Importei 'Service' para a nova lógica
 import type { Appointment, FinancialData, Service } from '../types'; 
-// Importei a função corrigida de buscar despesas
 import { getExpensesByDateRange } from './expenseService';
 
 export const getFinancialData = async (
@@ -32,14 +28,12 @@ export const getFinancialData = async (
   );
 
   const appointmentsSnapshot = await getDocs(appointmentsQuery);
-  // Convertendo Timestamps para Dates IMEDIATAMENTE
   const appointments = appointmentsSnapshot.docs.map((doc) => {
     const data = doc.data();
     
-    // Pega o completedAt e já converte
     const completedAt = data.completedAt 
       ? (data.completedAt as Timestamp).toDate() 
-      : undefined; // Embora a query filtre, é bom ter o fallback
+      : undefined;
 
     return {
       id: doc.id,
@@ -47,7 +41,7 @@ export const getFinancialData = async (
       startTime: (data.startTime as Timestamp).toDate(),
       endTime: (data.endTime as Timestamp).toDate(),
       createdAt: (data.createdAt as Timestamp).toDate(),
-      completedAt: completedAt, // Agora é Date ou undefined
+      completedAt: completedAt,
     } as Appointment;
   });
 
@@ -66,7 +60,6 @@ export const getFinancialData = async (
   const monthlyRevenue: Record<string, number> = {};
   appointments.forEach((appt) => { 
     
-    // --- ****** AQUI ESTÁ A CORREÇÃO DO ERRO ****** ---
     // Checa se completedAt existe e é um objeto Date antes de usar
     if (appt.completedAt && appt.completedAt instanceof Date) {
       const monthYear = appt.completedAt.toISOString().slice(0, 7); // "YYYY-MM"
@@ -75,7 +68,6 @@ export const getFinancialData = async (
       }
       monthlyRevenue[monthYear] += appt.finalPrice ?? appt.totalPrice;
     }
-    // --- FIM DA CORREÇÃO ---
   });
 
   // --- Lógica de Receita Proporcional ---
@@ -85,7 +77,7 @@ export const getFinancialData = async (
   appointments.forEach((appt) => { 
     const pricePaid = appt.finalPrice ?? appt.totalPrice;
 
-    // --- LÓGICA DE SERVIÇOS (CORRIGIDA) ---
+    // --- LÓGICA DE SERVIÇOS ---
     const originalTotalPrice = appt.totalPrice;
 
     if (appt.services && appt.services.length > 0 && originalTotalPrice > 0) {
@@ -103,7 +95,7 @@ export const getFinancialData = async (
       serviceRevenue[serviceKey] = (serviceRevenue[serviceKey] || 0) + pricePaid;
     }
 
-    // --- LÓGICA DE PROFISSIONAIS (Já estava ok) ---
+    // --- LÓGICA DE PROFISSIONAIS ---
     if (appt.professionalName) {
       professionalRevenue[appt.professionalName] =
         (professionalRevenue[appt.professionalName] || 0) + pricePaid;
@@ -127,7 +119,7 @@ export const getFinancialData = async (
     totalRevenue,
     totalExpenses,
     netIncome,
-    monthlyRevenue, // Agora retorna o objeto calculado
+    monthlyRevenue,
     expenses,
     appointments,
     topServices,

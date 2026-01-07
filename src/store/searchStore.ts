@@ -5,7 +5,7 @@ import {
   query,
   where,
   QueryConstraint,
-} from "firebase/firestore"; // Import 'and' and 'QueryConstraint'
+} from "firebase/firestore"; 
 import { db } from "../firebase/config";
 import type { Review, ServiceProviderProfile } from "../types";
 

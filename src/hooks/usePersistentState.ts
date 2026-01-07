@@ -1,4 +1,3 @@
-// src/hooks/usePersistentState.ts
 import { useState, useEffect } from 'react';
 
 // Função para obter o valor do localStorage de forma segura

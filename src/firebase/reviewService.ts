@@ -1,4 +1,3 @@
-// src/firebase/reviewService.ts
 import {
   collection,
   addDoc,
@@ -48,7 +47,6 @@ export const getReviewsForProvider = async (
 ): Promise<Review[]> => {
   const reviewsCollection = collection(db, "reviews");
   
-  // CORREÇÃO: Usar 'serviceProviderId' para ser consistente com o objeto Review e a Cloud Function
   const q = query(
     reviewsCollection,
     where("serviceProviderId", "==", providerId), 

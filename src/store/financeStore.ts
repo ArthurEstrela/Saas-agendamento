@@ -1,16 +1,14 @@
-// src/store/financeStore.ts
-
 import { create } from "zustand";
 import { getFinancialData } from "../firebase/financeService";
-import type { FinancialData, Expense } from "../types"; // 1. Importei o tipo Expense
+import type { FinancialData, Expense } from "../types";
 import {
   addExpense,
   deleteExpense,
   updateExpense,
-} from "../firebase/expenseService"; // 2. Importei as funções de despesa
+} from "../firebase/expenseService";
 import { toast } from "react-hot-toast";
 import { startOfMonth, endOfMonth } from "date-fns";
-import { useProfileStore } from "./profileStore"; // Para pegar o ID do provider
+import { useProfileStore } from "./profileStore";
 
 interface FinanceStore {
   financialData: FinancialData | null;

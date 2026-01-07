@@ -1,7 +1,7 @@
 // src/components/Contact.tsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, MapPin, MessageSquare, Send, Phone, ArrowRight } from 'lucide-react';
+import { Mail, MapPin, MessageSquare, Send, ArrowRight } from 'lucide-react';
 
 const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);

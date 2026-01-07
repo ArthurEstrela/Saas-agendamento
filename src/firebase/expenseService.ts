@@ -7,14 +7,12 @@ import {
   deleteDoc,
   Timestamp,
   updateDoc,
-  where, // Importei o 'where'
+  where,
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Expense } from '../types';
 
-// Helper centralizado para garantir o caminho CORRETO
 const getExpensesCollection = (providerId: string) => {
-  // O caminho correto é uma subcoleção dentro de 'users'
   return collection(db, 'users', providerId, 'expenses');
 };
 
@@ -28,7 +26,6 @@ export const addExpense = async (
   const expensesCollection = getExpensesCollection(providerId);
   await addDoc(expensesCollection, {
     ...expenseData,
-    // Garante que a data seja salva como Timestamp
     date: expenseData.date instanceof Date 
       ? Timestamp.fromDate(expenseData.date) 
       : expenseData.date,
@@ -41,7 +38,7 @@ export const addExpense = async (
 export const getExpensesByProviderId = async (
   providerId: string
 ): Promise<Expense[]> => {
-  const expensesCollection = getExpensesCollection(providerId); // Caminho corrigido
+  const expensesCollection = getExpensesCollection(providerId); 
   const q = query(expensesCollection);
   const querySnapshot = await getDocs(q);
 
@@ -81,7 +78,6 @@ export const getExpensesByDateRange = async (
   
   return expensesSnapshot.docs.map((doc) => {
     const data = doc.data();
-    // Converte Timestamp para Date
     const date = data.date instanceof Timestamp ? data.date.toDate() : new Date();
     
     return { 
@@ -100,7 +96,6 @@ export const deleteExpense = async (
   providerId: string,
   expenseId: string
 ) => {
-  // Caminho corrigido para 'users'
   const expenseDoc = doc(getExpensesCollection(providerId), expenseId);
   await deleteDoc(expenseDoc);
 };
@@ -113,10 +108,8 @@ export const updateExpense = async (
   expenseId: string,
   expenseData: Partial<Omit<Expense, 'id'>>
 ) => {
-  // Caminho corrigido para 'users'
   const expenseDoc = doc(getExpensesCollection(providerId), expenseId);
   
-  // Se a data for atualizada, converte para Timestamp
   if (expenseData.date && expenseData.date instanceof Date) {
     expenseData.date = Timestamp.fromDate(expenseData.date);
   }

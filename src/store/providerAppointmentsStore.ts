@@ -1,4 +1,3 @@
-// src/store/providerAppointmentsStore.ts
 import { create } from "zustand";
 import {
   collection,

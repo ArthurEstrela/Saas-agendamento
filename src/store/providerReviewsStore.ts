@@ -1,4 +1,3 @@
-// src/store/providerReviewsStore.ts
 import { create } from 'zustand';
 import { 
   collection, 
@@ -6,8 +5,8 @@ import {
   where, 
   onSnapshot, 
   orderBy, 
-  type QuerySnapshot, // Adicionado 'type' aqui
-  type DocumentData   // Adicionado 'type' aqui
+  type QuerySnapshot, 
+  type DocumentData
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import type { Review, ClientProfile } from '../types';

@@ -1,5 +1,3 @@
-// Em src/hooks/useFilteredAppointments.ts
-
 import { useMemo } from "react";
 import type { Appointment, UserProfile, ProfessionalProfile } from "../types";
 // Importe este tipo do seu AgendaView (terá de o exportar de lá)

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ServiceProviderProfile } from '../types';
-import { getUserProfile } from '../firebase/userService'; // Reutilizamos a função que já temos
+import { getUserProfile } from '../firebase/userService';
 
 interface ProviderProfileState {
   providerProfile: ServiceProviderProfile | null;

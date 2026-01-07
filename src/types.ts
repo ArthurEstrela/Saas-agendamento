@@ -19,11 +19,9 @@ export interface BaseUser {
   profilePictureUrl?: string;
 }
 
-// Disponibilidade
-
 export interface TimeSlot {
-  start: string; // "HH:mm"
-  end: string; // "HH:mm"
+  start: string;
+  end: string; 
 }
 
 export interface ProviderAdditionalData {
@@ -54,13 +52,11 @@ export interface DailyAvailability {
   slots: TimeSlot[];
 }
 
-// Entidades Principais
-
 export interface Service {
   id: string;
   name: string;
   description: string;
-  duration: number; // in minutes
+  duration: number; 
   price: number;
 }
 
@@ -69,10 +65,10 @@ export interface Professional {
   name: string;
   email?: string;
   photoURL?: string;
-  services: Service[]; // Array of Service objects
+  services: Service[]; 
   availability: DailyAvailability[];
-  slotInterval?: number; // <-- ADICIONE ESTA LINHA AQUI
-  isOwner?: boolean; // <--- ADICIONE ISTO
+  slotInterval?: number; 
+  isOwner?: boolean; 
 }
 
 export interface Review {
@@ -88,7 +84,7 @@ export interface Review {
   createdAt: Date;
 }
 
-export type PaymentMethod = "pix" | "credit_card" | "cash"; // <-- Usado no agendamento
+export type PaymentMethod = "pix" | "credit_card" | "cash"; 
 
 export interface Appointment {
   id: string;
@@ -105,10 +101,10 @@ export interface Appointment {
   startTime: Date;
   endTime: Date;
   status: "pending" | "scheduled" | "completed" | "cancelled";
-  paymentMethod?: PaymentMethod; // <-- ADICIONADO: Método escolhido pelo cliente
+  paymentMethod?: PaymentMethod;
   totalPrice: number;
   finalPrice?: number;
-  totalDuration: number; // in minutes
+  totalDuration: number;
   notes?: string;
   review?: Review;
   reviewId?: string;
@@ -126,8 +122,6 @@ export interface Notification {
   createdAt: Date | FieldValue;
   link?: string;
 }
-
-// Perfis de Usuário
 
 export interface ClientProfile extends BaseUser {
   role: "client";
@@ -169,7 +163,7 @@ export interface ServiceProviderProfile extends BaseUser {
     website?: string;
     whatsapp?: string;
   };
-  paymentMethods?: PaymentMethod[]; // Quais métodos o provider aceita
+  paymentMethods?: PaymentMethod[];
   bookingWindowDays?: number;
   slotInterval?: 15 | 30 | 60;
   subscriptionStatus?:
@@ -183,13 +177,10 @@ export interface ServiceProviderProfile extends BaseUser {
   onboardingDismissed?: boolean;
 }
 
-// Union Type para o perfil do usuário logado
 export type UserProfile =
   | ClientProfile
   | ServiceProviderProfile
   | ProfessionalProfile;
-
-// Tipos para a área Financeira
 
 export interface Expense {
   id: string;
@@ -214,8 +205,8 @@ export interface FinancialData {
 
 export interface ProfessionalProfile extends BaseUser {
   role: "professional";
-  serviceProviderId: string; // ID do ServiceProvider (dono) ao qual pertence
-  professionalId: string; // ID do recurso "Professional" (que contém serviços/horários)
+  serviceProviderId: string;
+  professionalId: string;
   avatarUrl?: string;
   bio?: string;
 }

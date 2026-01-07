@@ -1,5 +1,3 @@
-// src/firebase/professionalsManagementService.ts
-
 import {
   doc,
   collection,
@@ -7,7 +5,7 @@ import {
   getDocs,
   query,
   updateDoc,
-  setDoc, // <--- ADICIONADO
+  setDoc,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";

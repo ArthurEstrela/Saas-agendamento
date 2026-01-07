@@ -1,4 +1,3 @@
-// src/firebase/bookingService.ts
 import {
   collection,
   doc,

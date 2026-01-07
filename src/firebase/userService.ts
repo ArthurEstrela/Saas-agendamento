@@ -1,5 +1,3 @@
-// src/firebase/userService.ts
-
 import {
   doc,
   getDoc,

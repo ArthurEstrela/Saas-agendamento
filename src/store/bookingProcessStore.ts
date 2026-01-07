@@ -1,4 +1,3 @@
-// src/store/bookingProcessStore.ts
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { toast } from "react-hot-toast";
@@ -8,7 +7,7 @@ import type {
   ServiceProviderProfile,
   Appointment,
   ClientProfile,
-  PaymentMethod, // <-- Importar
+  PaymentMethod,
 } from "../types";
 import { createAppointment } from "../firebase/bookingService";
 import { getUserProfile } from "../firebase/userService";

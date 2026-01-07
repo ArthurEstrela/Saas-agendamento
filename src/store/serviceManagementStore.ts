@@ -1,5 +1,3 @@
-// src/store/serviceManagementStore.ts
-
 import { create } from "zustand";
 import { useProfileStore } from "./profileStore";
 import {

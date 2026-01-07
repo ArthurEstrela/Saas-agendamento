@@ -1,4 +1,3 @@
-// Em src/store/useAgendaModalStore.ts
 import { create } from "zustand";
 import type { Appointment } from "../types";
 

@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock,
@@ -11,13 +10,11 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  MapPin,
 } from "lucide-react";
 import { cn } from "../../../lib/utils/cn";
 
 // UI
 import { Button } from "../../ui/button";
-import { Badge } from "../../ui/badge";
 
 const ITEMS_PER_PAGE = 10;
 

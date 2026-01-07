@@ -10,7 +10,8 @@ import {
   Cookie, 
   RefreshCcw, 
   Mail,
-  CheckCircle2
+  CheckCircle2,
+  type LucideIcon
 } from 'lucide-react';
 
 const Section = ({ 
@@ -20,7 +21,7 @@ const Section = ({
   delay 
 }: { 
   title: string; 
-  icon: any; 
+  icon: LucideIcon; // Substituído 'any' por 'LucideIcon'
   children: React.ReactNode; 
   delay: number;
 }) => (

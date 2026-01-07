@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Mail,
   FileSignature,
+  type LucideIcon
 } from "lucide-react";
 
 const TermSection = ({
@@ -22,7 +23,7 @@ const TermSection = ({
   delay,
 }: {
   title: string;
-  icon: any;
+  icon: LucideIcon;
   children: React.ReactNode;
   delay: number;
 }) => (

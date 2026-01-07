@@ -52,8 +52,9 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
   const initials = provider.businessName.substring(0, 2).toUpperCase();
 
   return (
+    // CORREÇÃO: Link ajustado para o padrão em inglês definido no App.tsx (/schedule)
     <Link
-      to={`/agendar/${provider.publicProfileSlug || provider.id}`}
+      to={`/schedule/${provider.publicProfileSlug || provider.id}`}
       className="block h-full group"
     >
       <Card className="h-full overflow-hidden border-gray-800 bg-gray-900/40 backdrop-blur-md transition-all duration-300 hover:border-primary/50 hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] relative">

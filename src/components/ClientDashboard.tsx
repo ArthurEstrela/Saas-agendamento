@@ -1,53 +1,22 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu } from "lucide-react";
 import logo from "../assets/stylo-logo.png";
 
 // Componentes
 import { ClientSideNav } from "./Client/ClientSideNav";
-import { ClientProfileSection } from "./Client/ClientProfileSection";
-import { ClientMyAppointmentsSection } from "./Client/ClientMyAppointmentsSection";
-import { ClientFavoritesSection } from "./Client/ClientFavoritesSection";
-import { ClientSearchSection } from "./Client/ClientSearchSection";
-import { Notifications } from "./Common/Notifications";
 
 // UI
 import { Button } from "./ui/button";
 
-export type ClientDashboardSection =
-  | "search"
-  | "appointments"
-  | "favorites"
-  | "profile"
-  | "notifications";
-
 export const ClientDashboard = () => {
-  const [activeSection, setActiveSection] =
-    useState<ClientDashboardSection>("search");
+  // Controle apenas do menu mobile.
+  // O conteúdo agora é controlado pela URL (React Router).
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const renderSection = () => {
-    switch (activeSection) {
-      case "search":
-        return <ClientSearchSection />;
-      case "appointments":
-        return <ClientMyAppointmentsSection />;
-      case "favorites":
-        return <ClientFavoritesSection />;
-      case "profile":
-        return <ClientProfileSection />;
-      case "notifications":
-        return <Notifications />;
-      default:
-        return <ClientSearchSection />;
-    }
-  };
-
-  const handleNavClick = (section: ClientDashboardSection) => {
-    setActiveSection(section);
-    setIsMobileNavOpen(false);
-  };
+  // Hook necessário para identificar mudança de rota e disparar a animação
+  const location = useLocation();
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative overflow-x-hidden">
@@ -59,12 +28,8 @@ export const ClientDashboard = () => {
       </div>
 
       {/* --- SIDENAV --- */}
-      <ClientSideNav
-        activeSection={activeSection}
-        setActiveSection={handleNavClick}
-        isOpen={isMobileNavOpen}
-        setIsOpen={setIsMobileNavOpen}
-      />
+      {/* Não passamos mais activeSection, pois o SideNav agora usa Link e useLocation */}
+      <ClientSideNav isOpen={isMobileNavOpen} setIsOpen={setIsMobileNavOpen} />
 
       {/* --- CONTEÚDO PRINCIPAL --- */}
       <main className="flex-1 flex flex-col min-h-screen md:ml-72 transition-all duration-300 relative z-10">
@@ -83,22 +48,19 @@ export const ClientDashboard = () => {
           </Button>
         </header>
 
-        {/* CORREÇÃO DE ESPAÇAMENTO:
-           1. Reduzi o padding para 'p-4 lg:p-6' (era p-8/10)
-           2. Removi 'mx-auto' e 'max-w-7xl' para o conteúdo não centralizar longe da sidebar.
-        */}
         <div className="flex-1 p-4 lg:p-6">
           <div className="w-full min-h-full space-y-6">
             <AnimatePresence mode="wait">
               <motion.div
-                key={activeSection}
+                key={location.pathname} // A chave única força a animação na troca de rota
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
                 transition={{ duration: 0.2 }}
                 className="w-full"
               >
-                {renderSection()}
+                {/* O Outlet renderiza o componente filho definido no App.tsx */}
+                <Outlet />
               </motion.div>
             </AnimatePresence>
           </div>

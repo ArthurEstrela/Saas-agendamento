@@ -23,11 +23,13 @@ const LoginPage: React.FC = () => {
     // Se não há intenção de redirecionamento, fluxo padrão.
     switch (user.role) {
       case "serviceProvider":
+        navigate("/dashboard/agenda");
+        break;
       case "client":
-        navigate("/dashboard/");
+        navigate("/dashboard/explore");
         break;
       default:
-        navigate("/dashboard");
+        navigate("/dashboard/home");
         break;
     }
   };

@@ -111,8 +111,8 @@ const PlanCard = ({
           priceId !== PLANOS.MENSAL && "Relatórios Avançados",
           priceId === PLANOS.ANUAL && "2 Meses Grátis", // Destaque extra pro anual
         ]
-          .filter(Boolean)
-          .map((f: any, i) => (
+          .filter((f): f is string => !!f) // Tipagem correta: Garante que é string e remove booleanos
+          .map((f, i) => (
             <div
               key={i}
               className="flex items-center gap-2 text-sm text-gray-300"

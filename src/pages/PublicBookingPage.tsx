@@ -175,8 +175,7 @@ const PublicBookingPage = () => {
                       {provider.businessName}
                     </h1>
                     <p className="text-zinc-400 text-sm mt-1 max-w-lg mx-auto sm:mx-0 line-clamp-2">
-                      {provider.bio ||
-                        "Bem-vindo ao nosso espaço de agendamento online."}
+                      Bem-vindo ao nosso espaço de agendamento online.
                     </p>
                   </div>
 

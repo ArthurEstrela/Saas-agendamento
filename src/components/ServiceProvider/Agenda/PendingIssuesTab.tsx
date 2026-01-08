@@ -1,10 +1,8 @@
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
-import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { PendingIssueCard } from "./PendingIssueCard";
 
-// UI
-import { Card, CardContent } from "../../ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface PendingIssuesTabProps {

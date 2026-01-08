@@ -58,6 +58,10 @@ interface ProviderAppointmentsActions {
     appointmentId: string,
     finalPrice: number
   ) => Promise<void>;
+  cancelAppointment: (
+    appointmentId: string,
+    reason: string
+  ) => Promise<void>;
 }
 
 const today = new Date();
@@ -171,6 +175,23 @@ export const useProviderAppointmentsStore = create<
       }
     } catch (error) {
       console.error("Erro ao concluir agendamento:", error);
+    }
+  },
+
+  // Nova função adicionada
+  cancelAppointment: async (appointmentId, reason) => {
+    const promise = updateAppointmentStatus(appointmentId, "cancelled", reason);
+
+    toast.promise(promise, {
+      loading: "Cancelando agendamento...",
+      success: "Agendamento cancelado.",
+      error: "Erro ao cancelar agendamento.",
+    });
+
+    try {
+      await promise;
+    } catch (error) {
+      console.error("Erro ao cancelar agendamento:", error);
     }
   },
 

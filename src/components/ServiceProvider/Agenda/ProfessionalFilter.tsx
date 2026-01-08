@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useProfileStore } from "../../../store/profileStore";
-import { Users, ChevronDown } from "lucide-react";
+import { Users } from "lucide-react";
 
 // UI
 import {

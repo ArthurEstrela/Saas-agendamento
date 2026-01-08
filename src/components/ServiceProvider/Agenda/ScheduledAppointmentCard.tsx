@@ -4,7 +4,6 @@ import { User } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
-import { cn } from "../../../lib/utils/cn";
 import { motion } from "framer-motion";
 
 // Componentes Primitivos

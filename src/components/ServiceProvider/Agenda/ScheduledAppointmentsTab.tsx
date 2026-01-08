@@ -4,9 +4,6 @@ import { ScheduledAppointmentCard } from "./ScheduledAppointmentCard";
 import { CalendarX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// UI
-import { Card, CardContent } from "../../ui/card";
-
 interface ScheduledAppointmentsTabProps {
   appointments: EnrichedProviderAppointment[];
   onAppointmentSelect: (appointment: Appointment) => void;

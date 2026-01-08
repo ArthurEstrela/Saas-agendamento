@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from "react";
 import { format, isToday, addDays, startOfWeek, isFuture } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Clock, User, CheckCircle, MoreHorizontal } from "lucide-react";
+import { User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../../lib/utils/cn";
 import type { Appointment } from "../../../types";

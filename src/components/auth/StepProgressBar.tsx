@@ -9,7 +9,6 @@ interface StepProgressBarProps {
 
 export const StepProgressBar = ({
   currentStep,
-  totalSteps,
   stepLabels,
 }: StepProgressBarProps) => {
   return (

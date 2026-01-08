@@ -14,6 +14,7 @@ import { cn } from "../../lib/utils/cn";
 // Interface estendida
 interface EnrichedProviderProfile extends ServiceProviderProfile {
   distance?: number;
+  categories?: string[];
 }
 
 interface Props {

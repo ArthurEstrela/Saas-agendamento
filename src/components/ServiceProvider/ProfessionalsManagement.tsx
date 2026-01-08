@@ -140,8 +140,8 @@ export const ProfessionalsManagement = () => {
       </div>
 
       {/* BANNER DE ATIVAÇÃO 
-         - Aparece se o dono NÃO estiver na lista (!hasOwnerProfile)
-         - O botão tem loading state próprio
+          - Aparece se o dono NÃO estiver na lista (!hasOwnerProfile)
+          - O botão tem loading state próprio
       */}
       {!hasOwnerProfile && professionalsState !== null && (
         <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl flex flex-col md:flex-row items-center justify-between gap-6 mb-8 animate-fade-in shadow-lg shadow-blue-900/5 relative overflow-hidden">
@@ -245,7 +245,7 @@ export const ProfessionalsManagement = () => {
         }
         // Botão dinâmico
         confirmText={confirmState.prof?.isOwner ? "Desativar da Agenda" : "Remover Profissional"}
-        variant="destructive"
+        variant="danger"
       />
     </div>
   );

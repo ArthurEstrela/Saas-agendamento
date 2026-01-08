@@ -1,3 +1,4 @@
+// src/components/ServiceProvider/Agenda/AppointmentDetailsModal.tsx
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,6 @@ import {
   Clock,
   User,
   Scissors,
-  DollarSign,
   CheckCircle2,
   XCircle,
   Phone,
@@ -107,7 +107,7 @@ export const AppointmentDetailsModal = ({
               </p>
             </div>
             <Badge
-              variant={statusVariantMap[appointment.status] as any}
+              variant={statusVariantMap[appointment.status]}
               className="uppercase text-[10px] tracking-wide px-2 h-6"
             >
               {statusLabels[appointment.status]}

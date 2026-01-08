@@ -31,7 +31,12 @@ import {
   uploadProviderLogo,
   uploadProviderBanner,
 } from "../../firebase/userService";
-import { useForm, type SubmitHandler, Controller } from "react-hook-form";
+import { 
+  useForm, 
+  type SubmitHandler, 
+  Controller, 
+  type Resolver 
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useViaCep } from "../../hooks/useViaCep";
@@ -48,7 +53,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import L, { LatLng } from "leaflet";
 import { FaWhatsapp } from "react-icons/fa";
-import { toast } from "react-hot-toast"; // <--- ADICIONADO: Importação do toast
+import { toast } from "react-hot-toast";
 
 // UI Components
 import { Input } from "../ui/input";
@@ -78,7 +83,7 @@ import {
 import { Badge } from "../ui/badge";
 
 // Leaflet Fix
-// @ts-ignore
+// @ts-expect-error - Fix for Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -178,7 +183,7 @@ export const ProfileManagement = () => {
     reset,
     formState: { errors, isDirty },
   } = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(profileSchema) as Resolver<ProfileFormData>,
     defaultValues: {
       socialLinks: { instagram: "", facebook: "", website: "" },
       pixKeyType: "cpf",
@@ -226,7 +231,9 @@ export const ProfileManagement = () => {
         setPosition(initialPos);
         setMapCenter([lat, lng]);
         setMapZoom(17);
-        lastSearchedAddressRef.current = `${profile.businessAddress.street}, ${profile.businessAddress.number}, ${profile.businessAddress.city}`;
+        // Utilizando asserção de tipo estrutural em vez de 'any'
+        const addrNumber = (profile.businessAddress as { number?: string }).number || "";
+        lastSearchedAddressRef.current = `${profile.businessAddress.street}, ${addrNumber}, ${profile.businessAddress.city}`;
       }
     }
   }, [userProfile, reset]);
@@ -312,25 +319,25 @@ export const ProfileManagement = () => {
   const showCroppedImage = useCallback(async () => {
     if (!bannerToCrop || !croppedAreaPixels || !userProfile) return;
     setIsUploadingBanner(true);
-    
-    const loadingToast = toast.loading("Processando imagem..."); // <--- MELHORIA: Feedback visual
-    
+
+    const loadingToast = toast.loading("Processando imagem...");
+
     try {
       const croppedImageFile = await getCroppedImg(
         bannerToCrop,
         croppedAreaPixels
       );
-      
+
       const bannerUrl = await uploadProviderBanner(
         userProfile.id,
         croppedImageFile
       );
-      
+
       await updateUserProfile(userProfile.id, { bannerUrl });
-      setBannerPreview(bannerUrl); 
-      setBannerToCrop(null); 
-      
-      toast.dismiss(loadingToast); // <--- Limpa o loading
+      setBannerPreview(bannerUrl);
+      setBannerToCrop(null);
+
+      toast.dismiss(loadingToast);
       toast.success("Banner atualizado com sucesso! 🖼️");
     } catch (e) {
       console.error("Erro ao processar imagem:", e);
@@ -359,6 +366,7 @@ export const ProfileManagement = () => {
       toast.success("Perfil salvo com sucesso!");
       reset(updatedData);
     } catch (error) {
+      console.error(error);
       toast.error("Erro ao salvar alterações.");
     } finally {
       setIsSaving(false);
@@ -393,7 +401,7 @@ export const ProfileManagement = () => {
               image={bannerToCrop}
               crop={crop}
               zoom={zoom}
-              aspect={3 / 1} 
+              aspect={3 / 1}
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
@@ -439,7 +447,7 @@ export const ProfileManagement = () => {
               </div>
             )}
 
-           {bannerPreview ? (
+            {bannerPreview ? (
               <img
                 src={bannerPreview}
                 alt="Banner"
@@ -560,7 +568,8 @@ export const ProfileManagement = () => {
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>
-                            Seu link será: agendai.com/<strong>seu-slug</strong>
+                            Seu link será: agendai.com/
+                            <strong>seu-slug</strong>
                           </p>
                         </TooltipContent>
                       </Tooltip>

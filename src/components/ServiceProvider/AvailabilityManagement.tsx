@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+// src/components/ServiceProvider/AvailabilityManagement.tsx
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import { useAvailabilityStore } from "../../store/availabilityStore";
 import {
@@ -17,7 +18,7 @@ import type {
   DailyAvailability,
   TimeSlot,
   ServiceProviderProfile,
-  ProfessionalProfile, // Importado para tipagem segura
+  ProfessionalProfile,
   Professional,
 } from "../../types";
 
@@ -92,12 +93,13 @@ export const AvailabilityManagement = () => {
 
   // --- Helpers para ID de Provider ---
   // Função segura para pegar o ID do Dono (Provider)
-  const getProviderId = () => {
+  // Envolvido em useCallback para ser usado como dependência
+  const getProviderId = useCallback(() => {
     if (!userProfile) return null;
     if (isOwner) return userProfile.id;
     // Se for profissional, retorna o serviceProviderId vinculado
     return (userProfile as ProfessionalProfile).serviceProviderId;
-  };
+  }, [userProfile, isOwner]);
 
   // --- INICIALIZAÇÃO E DADOS DO PROFISSIONAL ---
 
@@ -115,11 +117,12 @@ export const AvailabilityManagement = () => {
     try {
       await updateUserProfile(userProfile.id, {
         bookingWindowDays: bookingWindow,
-        slotInterval: slotInterval,
+        slotInterval: slotInterval as 15 | 30 | 60, // Cast explícito para tipos literais
       });
       showSuccess("Configurações atualizadas!");
       setIsSettingsOpen(false);
     } catch (error) {
+      console.error(error); // Log do erro
       showError("Erro ao salvar configurações.");
     } finally {
       setIsSavingSettings(false);
@@ -136,7 +139,7 @@ export const AvailabilityManagement = () => {
   }, [professionals]);
 
   // Lógica Robusta para Identificar o Profissional Atual (Visualização)
-  const currentProfessional = useMemo(() => {
+  const currentProfessional = useMemo((): Professional | null => {
     // 1. Tenta achar na lista de profissionais carregada
     const found = sortedProfessionals.find((p) => p.id === selectedProfId);
     if (found) return found;
@@ -148,9 +151,11 @@ export const AvailabilityManagement = () => {
         name: userProfile.name,
         email: userProfile.email,
         photoURL: userProfile.profilePictureUrl,
-        role: userProfile.role,
         isOwner: isOwner,
-      } as any; // Cast UI safe
+        // Preenchendo campos obrigatórios do Professional com valores dummy ou derivados
+        serviceIds: [],
+        phone: "",
+      } as unknown as Professional;
     }
     return null;
   }, [selectedProfId, sortedProfessionals, userProfile, isOwner]);
@@ -198,6 +203,7 @@ export const AvailabilityManagement = () => {
     sortedProfessionals,
     fetchAvailability,
     userProfile,
+    getProviderId, // Adicionado às dependências
   ]);
 
   useEffect(() => {
@@ -361,6 +367,7 @@ export const AvailabilityManagement = () => {
       showSuccess("Horários salvos com sucesso!");
       setHasChanges(false);
     } catch (error) {
+      console.error(error);
       showError("Erro ao salvar.");
     }
   };
@@ -377,10 +384,7 @@ export const AvailabilityManagement = () => {
     currentProfessional?.name || userProfile.name || "Profissional";
   // Tenta photoURL (Professional) ou profilePictureUrl (UserProfile)
   const displayPhoto =
-    currentProfessional?.photoURL ||
-    (currentProfessional as any)?.profilePictureUrl ||
-    userProfile.profilePictureUrl ||
-    "";
+    currentProfessional?.photoURL || userProfile.profilePictureUrl || "";
   const displayInitials = displayName.substring(0, 2).toUpperCase();
 
   return (

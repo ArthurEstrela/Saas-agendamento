@@ -113,6 +113,7 @@ export const ClientProfileSection = () => {
       showSuccess("Perfil atualizado!");
       setIsEditing(false);
     } catch (error) {
+      console.error("Erro ao atualizar perfil:", error);
       showError("Erro ao atualizar perfil.");
     } finally {
       setIsSubmitting(false);
@@ -231,7 +232,11 @@ export const ClientProfileSection = () => {
                 <Label>E-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                  <Input value={userProfile.email} disabled className="pl-10" />
+                  <Input
+                    value={userProfile.email}
+                    disabled
+                    className="pl-10"
+                  />
                 </div>
               </div>
 

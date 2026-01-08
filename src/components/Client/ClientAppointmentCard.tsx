@@ -42,7 +42,6 @@ const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
   };
   const Icon = config.icon;
 
-  // @ts-ignore - Variant string mapping is correct based on your badge.tsx
   return (
     <Badge variant={config.variant} className="gap-1.5">
       <Icon size={12} /> {config.label}
@@ -79,10 +78,10 @@ export const ClientAppointmentCard = ({
   const handleNavigation = () => {
     if (provider?.businessAddress) {
       const { street, city, state } = provider.businessAddress;
+      // CORREÇÃO EXTRA: Sintaxe da URL do Google Maps corrigida
+      const query = encodeURIComponent(`${street}, ${city}, ${state}`);
       window.open(
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          `${street}, ${city}, ${state}`
-        )}`,
+        `https://www.google.com/maps/search/?api=1&query=${query}`,
         "_blank"
       );
     }
@@ -108,27 +107,20 @@ export const ClientAppointmentCard = ({
   };
 
   // --- LÓGICA DE CANCELAMENTO MELHORADA ---
-  // Obtém a regra do prestador ou usa 2h como padrão
   const minHoursNotice = provider?.cancellationMinHours ?? 2;
-
-  // Calcula o tempo limite baseado na regra
   const cancellationDeadline = subHours(appointment.startTime, minHoursNotice);
-
   const now = new Date();
 
-  // Pode cancelar se: Status válido E Agora < Prazo Limite
   const canCancel =
     (status === "scheduled" || status === "pending") &&
     isBefore(now, cancellationDeadline);
 
-  // Expirou se: Status válido E Agora > Prazo Limite E Ainda não aconteceu o serviço
   const hasCancellationTimeExpired =
     (status === "scheduled" || status === "pending") &&
     !isBefore(now, cancellationDeadline) &&
     isBefore(now, appointment.startTime);
   // -----------------------------------------
 
-  // Lógica de Imagem
   const displayImage =
     professionalAvatarUrl || providerAvatarUrl || provider?.logoUrl;
   const initials = professionalName
@@ -138,10 +130,11 @@ export const ClientAppointmentCard = ({
     .join("")
     .toUpperCase();
 
-  // Motion Wrapper para o Card
   const MotionCard = motion(Card);
 
-  const hasReview = appointment.review || (appointment as any).reviewId;
+  // CORREÇÃO 2: Substituição do 'any' por uma tipagem parcial segura
+  const hasReview =
+    appointment.review || (appointment as { reviewId?: string }).reviewId;
 
   return (
     <>

@@ -14,14 +14,59 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../ui/button";
-import { Card, CardContent } from "../ui/card"; // Usando o componente Card padrão
+import { Card, CardContent } from "../ui/card";
 import { cn } from "../../lib/utils/cn";
+import { type Notification } from "../../types";
+
+// --- Interface para as Props do Card ---
+interface NotificationCardProps {
+  notification: Notification;
+  onMarkAsRead: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}
+
+// --- Type Guard Auxiliar ---
+function hasToDateMethod(value: unknown): value is { toDate: () => Date } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: unknown }).toDate === "function"
+  );
+}
 
 // --- Card Individual de Notificação ---
-const NotificationCard = ({ notification, onMarkAsRead, onDelete }: any) => {
-  const dateObj = notification.createdAt?.toDate
-    ? notification.createdAt.toDate()
-    : new Date(notification.createdAt);
+const NotificationCard = ({
+  notification,
+  onMarkAsRead,
+  onDelete,
+}: NotificationCardProps) => {
+  // CORREÇÃO: Desestruturamos 'createdAt' AQUI fora, antes do useMemo.
+  // Isso satisfaz o ESLint e deixa o código mais limpo.
+  const { createdAt } = notification;
+
+  const dateObj = useMemo(() => {
+    // Se não houver data, assume "agora"
+    if (!createdAt) return new Date();
+
+    // 1. Verifica se é um Timestamp do Firebase
+    if (hasToDateMethod(createdAt)) {
+      return createdAt.toDate();
+    }
+
+    // 2. Se for uma instância de Date nativa
+    if (createdAt instanceof Date) {
+      return createdAt;
+    }
+
+    // 3. Se for string ou number
+    if (typeof createdAt === "string" || typeof createdAt === "number") {
+      return new Date(createdAt);
+    }
+
+    // 4. Fallback
+    return new Date();
+  }, [createdAt]); // A dependência agora é direta e única.
 
   return (
     <motion.div
@@ -39,15 +84,13 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: any) => {
             : "bg-gray-900/80 border-primary/40 shadow-[0_0_20px_-10px_rgba(218,165,32,0.15)]"
         )}
       >
-        {/* Indicador de não lido (Barra lateral) */}
+        {/* Indicador de não lido */}
         {!notification.isRead && (
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_8px_#daa520]" />
         )}
 
         <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
-          {/* Ícone e Conteúdo */}
           <div className="flex gap-4 flex-1">
-            {/* Ícone Redondo */}
             <div
               className={cn(
                 "flex-shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center border transition-colors",
@@ -62,7 +105,6 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: any) => {
               />
             </div>
 
-            {/* Textos */}
             <div className="flex-grow min-w-0 pt-0.5">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 mb-1">
                 <h4
@@ -87,8 +129,6 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: any) => {
             </div>
           </div>
 
-          {/* Ações (Responsivo) */}
-          {/* Mobile: Linha separada abaixo / Desktop: Coluna lateral */}
           <div className="flex sm:flex-col items-center sm:justify-center gap-2 pt-2 sm:pt-0 mt-2 sm:mt-0 border-t sm:border-t-0 sm:border-l border-white/5 sm:pl-4">
             {!notification.isRead && (
               <Button
@@ -157,9 +197,7 @@ export const Notifications = () => {
   };
 
   return (
-    // Removido max-w fixo para alinhar com o design fluido do dashboard
     <div className="space-y-8 pb-10 w-full animate-in fade-in duration-500">
-      {/* Header Padrão Stylo */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -183,7 +221,6 @@ export const Notifications = () => {
         )}
       </div>
 
-      {/* Conteúdo */}
       {isLoading ? (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="animate-spin text-primary" size={48} />
@@ -202,7 +239,6 @@ export const Notifications = () => {
           </AnimatePresence>
         </div>
       ) : (
-        /* Empty State Padrão Stylo (Card Dashed) */
         <Card className="bg-gray-900/30 border-dashed border-gray-800">
           <CardContent className="flex flex-col items-center justify-center py-20 text-center px-4">
             <div className="bg-gray-800/50 p-4 rounded-full mb-4 ring-1 ring-white/5">

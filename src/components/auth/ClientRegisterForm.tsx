@@ -34,14 +34,50 @@ import {
 const inputBaseClasses =
   "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50";
 
+// --- Função de Validação Forte de CPF ---
+// Verifica o algoritmo matemático oficial (dígitos verificadores)
+const validateCPF = (cpf: string) => {
+  // Remove caracteres não numéricos
+  cpf = cpf.replace(/[^\d]+/g, "");
+
+  // Verifica tamanho padrão e se todos os dígitos são iguais (ex: 111.111.111-11)
+  if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
+
+  let soma = 0;
+  let resto;
+
+  // Validação do 1º Dígito Verificador
+  for (let i = 1; i <= 9; i++)
+    soma = soma + parseInt(cpf.substring(i - 1, i)) * (11 - i);
+
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf.substring(9, 10))) return false;
+
+  // Validação do 2º Dígito Verificador
+  soma = 0;
+  for (let i = 1; i <= 10; i++)
+    soma = soma + parseInt(cpf.substring(i - 1, i)) * (12 - i);
+
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf.substring(10, 11))) return false;
+
+  return true;
+};
+
+// --- Schema Zod Atualizado ---
 const schema = z.object({
   name: z.string().min(3, "Nome completo é obrigatório"),
   email: z.string().email("Por favor, insira um email válido"),
   password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
   phoneNumber: z.string().min(14, "O telefone/WhatsApp é obrigatório"),
+  
+  // Aqui aplicamos a validação forte
   cpf: z
     .string()
-    .refine((cpf) => cpf.replace(/\D/g, "").length === 11, "CPF inválido"),
+    .refine((val) => validateCPF(val), "CPF inválido"),
+
   dateOfBirth: z.string().min(10, "Data de nascimento é obrigatória"),
   gender: z.string().min(1, "Selecione um gênero"),
 });

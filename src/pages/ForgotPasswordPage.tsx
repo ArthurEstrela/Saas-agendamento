@@ -20,6 +20,12 @@ const schema = z.object({
 
 type ForgotPasswordFormData = z.infer<typeof schema>;
 
+// Interface auxiliar para o erro do Firebase
+interface FirebaseError {
+  code: string;
+  message: string;
+}
+
 const ForgotPasswordPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -41,9 +47,14 @@ const ForgotPasswordPage = () => {
     try {
       await sendPasswordResetEmail(auth, data.email);
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err) {
+      // Correção: Removemos o 'any' e tipamos o erro
+      const firebaseError = err as FirebaseError;
+      
       let msg = "Falha no envio. Tente novamente.";
-      if (err.code === "auth/user-not-found") msg = "Usuário não encontrado.";
+      if (firebaseError.code === "auth/user-not-found") {
+        msg = "Usuário não encontrado.";
+      }
       setError(msg);
     } finally {
       setIsSubmitting(false);

@@ -31,8 +31,8 @@ const Header = () => {
   };
 
   const navLinks = [
-    { name: "Sobre Nós", path: "/sobre-nos" },
-    { name: "Contato", path: "/contato" },
+    { name: "Sobre Nós", path: "/about-us" },
+    { name: "Contato", path: "/contact" },
     { name: "FAQ", path: "/faq" },
   ];
 

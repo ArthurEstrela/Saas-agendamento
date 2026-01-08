@@ -60,15 +60,15 @@ const Footer = () => {
             <div>
               <h3 className="text-sm font-semibold text-white tracking-wider uppercase">Empresa</h3>
               <ul className="mt-4 space-y-3">
-                <li><Link to="/sobre-nos" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Sobre Nós</Link></li>
-                <li><Link to="/contato" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Contato</Link></li>
+                <li><Link to="/about-us" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Sobre Nós</Link></li>
+                <li><Link to="/contact" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Contato</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white tracking-wider uppercase">Legal</h3>
               <ul className="mt-4 space-y-3">
-                <li><Link to="/termos-de-uso" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Termos de Uso</Link></li>
-                <li><Link to="/privacidade" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Privacidade</Link></li>
+                <li><Link to="/terms" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Termos de Uso</Link></li>
+                <li><Link to="/privacy" className="text-base text-gray-400 hover:text-[#daa520] transition-colors">Privacidade</Link></li>
               </ul>
             </div>
             <div>

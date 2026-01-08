@@ -53,7 +53,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 
 // --- Correção do Ícone Padrão do Leaflet ---
-// @ts-ignore
+// @ts-expect-error - Leaflet icon fix involves accessing private property not typed in @types/leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -115,6 +115,67 @@ const workAreas = [
   "Outro",
 ];
 
+// --- FUNÇÕES DE VALIDAÇÃO FORTE ---
+
+const validateCPF = (cpf: string) => {
+  cpf = cpf.replace(/[^\d]+/g, "");
+  if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
+  
+  let soma = 0;
+  let resto;
+  
+  for (let i = 1; i <= 9; i++) 
+    soma = soma + parseInt(cpf.substring(i - 1, i)) * (11 - i);
+  
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf.substring(9, 10))) return false;
+  
+  soma = 0;
+  for (let i = 1; i <= 10; i++) 
+    soma = soma + parseInt(cpf.substring(i - 1, i)) * (12 - i);
+  
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf.substring(10, 11))) return false;
+  
+  return true;
+};
+
+const validateCNPJ = (cnpj: string) => {
+  cnpj = cnpj.replace(/[^\d]+/g, "");
+  if (cnpj.length !== 14 || !!cnpj.match(/(\d)\1{13}/)) return false;
+
+  let tamanho = cnpj.length - 2;
+  let numeros = cnpj.substring(0, tamanho);
+  const digitos = cnpj.substring(tamanho);
+  let soma = 0;
+  let pos = tamanho - 7;
+
+  for (let i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+
+  let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if (resultado !== parseInt(digitos.charAt(0))) return false;
+
+  tamanho = tamanho + 1;
+  numeros = cnpj.substring(0, tamanho);
+  soma = 0;
+  pos = tamanho - 7;
+
+  for (let i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+
+  resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if (resultado !== parseInt(digitos.charAt(1))) return false;
+
+  return true;
+};
+
 // --- VALIDAÇÃO COM ZOD ---
 const schema = z
   .object({
@@ -124,14 +185,10 @@ const schema = z
 
     businessName: z.string().min(2, "O nome do negócio é obrigatório"),
 
-    documentType: z.enum(["cpf", "cnpj"], {
-      required_error: "Selecione o tipo de documento",
-    }),
+    documentType: z.enum(["cpf", "cnpj"]),
 
-    documentNumber: z.string().refine((val) => {
-      const clean = val.replace(/\D/g, "");
-      return clean.length === 11 || clean.length === 14;
-    }, "Documento inválido"),
+    // Validação básica de string aqui, a validação forte ocorre no superRefine
+    documentNumber: z.string().min(1, "Documento é obrigatório"),
 
     businessPhone: z.string().min(14, "O telefone/WhatsApp é obrigatório"),
     areaOfWork: z.string().min(1, "Selecione uma área de atuação"),
@@ -154,19 +211,23 @@ const schema = z
   })
   .superRefine((data, ctx) => {
     const cleanDoc = data.documentNumber.replace(/\D/g, "");
-    if (data.documentType === "cpf" && cleanDoc.length !== 11) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "CPF deve ter 11 dígitos",
-        path: ["documentNumber"],
-      });
-    }
-    if (data.documentType === "cnpj" && cleanDoc.length !== 14) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "CNPJ deve ter 14 dígitos",
-        path: ["documentNumber"],
-      });
+    
+    if (data.documentType === "cpf") {
+      if (!validateCPF(cleanDoc)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "CPF inválido",
+          path: ["documentNumber"],
+        });
+      }
+    } else if (data.documentType === "cnpj") {
+      if (!validateCNPJ(cleanDoc)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "CNPJ inválido",
+          path: ["documentNumber"],
+        });
+      }
     }
   });
 
@@ -212,7 +273,8 @@ export const ServiceProviderRegisterForm = () => {
 
   const [position, setPosition] = useState<L.LatLng | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([
-    -15.79, -47.88,
+    -15.79,
+    -47.88,
   ]);
   const [mapZoom, setMapZoom] = useState(4);
 
@@ -222,11 +284,8 @@ export const ServiceProviderRegisterForm = () => {
   const cityValue = watch("city");
   const documentType = watch("documentType");
 
-  // --- Efeito para limpar erros ao mudar de etapa ---
-  // Isso garante que ao entrar na etapa 4, os campos não estejam vermelhos
   useEffect(() => {
     if (currentStep === 4) {
-      // Pequeno timeout para garantir que o render aconteceu
       const timer = setTimeout(() => {
         clearErrors([
           "zipCode",
@@ -241,10 +300,8 @@ export const ServiceProviderRegisterForm = () => {
     }
   }, [currentStep, clearErrors]);
 
-  // --- Efeito do ViaCEP ---
   useEffect(() => {
     if (address && !cepError) {
-      // Só preenche se vierem dados válidos
       if (address.logradouro)
         setValue("street", address.logradouro, { shouldValidate: true });
       if (address.bairro)
@@ -291,7 +348,6 @@ export const ServiceProviderRegisterForm = () => {
 
   const handleCepBlur = () => {
     const cleanedZip = zipCodeValue?.replace(/\D/g, "") || "";
-    // Só busca se tiver 8 dígitos para evitar busca com campo vazio
     if (cleanedZip.length === 8) {
       fetchAddress(cleanedZip);
     }
@@ -311,7 +367,6 @@ export const ServiceProviderRegisterForm = () => {
   };
 
   const nextStep = async (e?: React.MouseEvent | React.KeyboardEvent) => {
-    // Se foi acionado por evento, previne comportamento padrão
     if (e) e.preventDefault();
 
     const fieldsToValidate = stepsFields[currentStep];
@@ -324,23 +379,18 @@ export const ServiceProviderRegisterForm = () => {
 
   const prevStep = () => setCurrentStep((prev) => prev - 1);
 
-  // Manipulador de tecla Enter
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      e.preventDefault(); // SEMPRE previne o submit padrão do HTML
+      e.preventDefault();
       if (currentStep < 4) {
-        nextStep(); // Se não for a última etapa, avança
+        nextStep();
       } else {
-        // Se for a última etapa, dispara o submit do react-hook-form manualmente
         handleSubmit(onSubmit)();
       }
     }
   };
 
   const onSubmit: SubmitHandler<ProviderFormData> = async (data) => {
-    // GUARDA DE SEGURANÇA:
-    // Se por algum motivo o submit for disparado antes da etapa 4, cancela.
-    // Isso evita que o formulário tente validar tudo se o usuário der Enter na etapa 1.
     if (currentStep !== 4) return;
 
     const additionalData: Partial<ServiceProviderProfile> = {
@@ -359,6 +409,7 @@ export const ServiceProviderRegisterForm = () => {
       businessAddress: {
         zipCode: data.zipCode,
         street: data.street,
+        // Assumindo que você já atualizou o types.ts conforme a mensagem anterior
         number: data.number,
         neighborhood: data.neighborhood,
         city: data.city,
@@ -686,8 +737,8 @@ export const ServiceProviderRegisterForm = () => {
                           inputBaseClasses,
                           errors.zipCode ? "border-destructive" : ""
                         )}
-                        onBlur={(e) => {
-                          field.onBlur(e);
+                        onBlur={() => {
+                          field.onBlur();
                           handleCepBlur();
                         }}
                       />
@@ -784,7 +835,6 @@ export const ServiceProviderRegisterForm = () => {
           <Button
             type={currentStep === 4 ? "submit" : "button"}
             disabled={isSubmitting}
-            // Importante: onClick só para navegação, o submit do step 4 é pelo form
             onClick={currentStep === 4 ? undefined : nextStep}
             className={currentStep === 1 ? "w-full" : "w-2/3"}
           >

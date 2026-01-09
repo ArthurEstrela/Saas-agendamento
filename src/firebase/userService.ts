@@ -115,6 +115,8 @@ export const createUserProfile = async (
       areaOfWork: providerData?.areaOfWork || "",
       socialLinks: providerData?.socialLinks || {},
       paymentMethods: providerData?.paymentMethods || [],
+      pixKey: providerData?.pixKey || "",
+      pixKeyType: providerData?.pixKeyType || "cpf",
       publicProfileSlug: createSlug(businessName),
       logoUrl: "",
       services: [],

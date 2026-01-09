@@ -120,25 +120,25 @@ const workAreas = [
 const validateCPF = (cpf: string) => {
   cpf = cpf.replace(/[^\d]+/g, "");
   if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
-  
+
   let soma = 0;
   let resto;
-  
-  for (let i = 1; i <= 9; i++) 
+
+  for (let i = 1; i <= 9; i++)
     soma = soma + parseInt(cpf.substring(i - 1, i)) * (11 - i);
-  
+
   resto = (soma * 10) % 11;
   if (resto === 10 || resto === 11) resto = 0;
   if (resto !== parseInt(cpf.substring(9, 10))) return false;
-  
+
   soma = 0;
-  for (let i = 1; i <= 10; i++) 
+  for (let i = 1; i <= 10; i++)
     soma = soma + parseInt(cpf.substring(i - 1, i)) * (12 - i);
-  
+
   resto = (soma * 10) % 11;
   if (resto === 10 || resto === 11) resto = 0;
   if (resto !== parseInt(cpf.substring(10, 11))) return false;
-  
+
   return true;
 };
 
@@ -211,7 +211,7 @@ const schema = z
   })
   .superRefine((data, ctx) => {
     const cleanDoc = data.documentNumber.replace(/\D/g, "");
-    
+
     if (data.documentType === "cpf") {
       if (!validateCPF(cleanDoc)) {
         ctx.addIssue({
@@ -263,6 +263,8 @@ export const ServiceProviderRegisterForm = () => {
     setValue,
     control,
     clearErrors,
+    getValues,
+    setError,
   } = useForm<ProviderFormData>({
     resolver: zodResolver(schema),
     mode: "onTouched",
@@ -273,8 +275,7 @@ export const ServiceProviderRegisterForm = () => {
 
   const [position, setPosition] = useState<L.LatLng | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([
-    -15.79,
-    -47.88,
+    -15.79, -47.88,
   ]);
   const [mapZoom, setMapZoom] = useState(4);
 
@@ -370,8 +371,39 @@ export const ServiceProviderRegisterForm = () => {
     if (e) e.preventDefault();
 
     const fieldsToValidate = stepsFields[currentStep];
+
+    // 1. Roda as validações básicas (campos obrigatórios, email, etc)
     const isValid = await trigger(fieldsToValidate);
 
+    // 2. Validação Manual do CPF/CNPJ (Correção do problema do superRefine)
+    if (currentStep === 2 && isValid) {
+      const { documentType, documentNumber } = getValues();
+      const cleanDoc = documentNumber.replace(/\D/g, "");
+      let isDocValid = true;
+
+      if (documentType === "cpf") {
+        if (!validateCPF(cleanDoc)) {
+          isDocValid = false;
+          setError("documentNumber", {
+            type: "custom",
+            message: "CPF inválido",
+          });
+        }
+      } else if (documentType === "cnpj") {
+        if (!validateCNPJ(cleanDoc)) {
+          isDocValid = false;
+          setError("documentNumber", {
+            type: "custom",
+            message: "CNPJ inválido",
+          });
+        }
+      }
+
+      // Se o documento não for válido, impedimos o avanço
+      if (!isDocValid) return;
+    }
+
+    // Se tudo estiver ok, avança
     if (isValid) {
       setCurrentStep((prev) => prev + 1);
     }

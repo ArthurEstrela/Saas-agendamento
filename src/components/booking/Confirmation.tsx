@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
@@ -52,8 +52,38 @@ export const Confirmation = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { userProfile } = useProfileStore();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+
+  // 1. Determina quais métodos estão REAIS disponíveis
+  const availableMethods = useMemo(() => {
+    const methods = provider?.paymentMethods || [];
+    // Pix só aparece se estiver habilitado E tiver chave configurada
+    const hasPix = methods.includes("pix") && !!provider?.pixKey;
+    // Pagamento local (dinheiro ou cartão)
+    const hasOnSite =
+      methods.includes("cash") || methods.includes("credit_card");
+
+    return { hasPix, hasOnSite };
+  }, [provider]);
+
+  // 2. Inicializa com um método válido (não força Pix se não tiver Pix)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => {
+    if (availableMethods.hasPix) return "pix";
+    if (availableMethods.hasOnSite) return "cash"; // 'cash' usamos como flag para pagamento local genérico
+    return "cash"; // Fallback seguro
+  });
+
   const [showPixModal, setShowPixModal] = useState(false);
+
+  // 3. Efeito de segurança: se o método selecionado sumir (ex: troca de provider), reseta
+  useEffect(() => {
+    if (
+      paymentMethod === "pix" &&
+      !availableMethods.hasPix &&
+      availableMethods.hasOnSite
+    ) {
+      setPaymentMethod("cash");
+    }
+  }, [availableMethods, paymentMethod]);
 
   const { totalPrice } = useMemo(
     () =>
@@ -232,79 +262,103 @@ export const Confirmation = () => {
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 Forma de Pagamento
               </h3>
+
+              {/* Mensagem se NENHUM método estiver disponível */}
+              {!availableMethods.hasPix && !availableMethods.hasOnSite && (
+                <div className="text-red-400 text-sm bg-red-400/10 p-4 rounded-lg border border-red-400/20">
+                  Este prestador não configurou métodos de pagamento. Entre em
+                  contato para combinar.
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "h-auto p-5 justify-start border-2 relative hover:bg-gray-800 transition-all",
-                    paymentMethod === "pix"
-                      ? "border-primary bg-primary/10"
-                      : "border-gray-700 bg-gray-900/50"
-                  )}
-                  onClick={() => setPaymentMethod("pix")}
-                >
-                  <div className="flex items-center gap-4 w-full">
-                    <div
-                      className={cn(
-                        "p-3 rounded-full transition-colors",
-                        paymentMethod === "pix"
-                          ? "bg-primary text-black"
-                          : "bg-gray-800 text-gray-400"
-                      )}
-                    >
-                      <QrCode size={24} />
-                    </div>
-                    <div className="text-left flex-1">
-                      <div className="font-bold text-white text-base">Pix</div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Aprovação imediata
+                {/* Botão Pix - Só renderiza se tiver Pix */}
+                {availableMethods.hasPix && (
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-auto p-5 justify-start border-2 relative hover:bg-gray-800 transition-all",
+                      paymentMethod === "pix"
+                        ? "border-primary bg-primary/10"
+                        : "border-gray-700 bg-gray-900/50"
+                    )}
+                    onClick={() => setPaymentMethod("pix")}
+                  >
+                    <div className="flex items-center gap-4 w-full">
+                      <div
+                        className={cn(
+                          "p-3 rounded-full transition-colors",
+                          paymentMethod === "pix"
+                            ? "bg-primary text-black"
+                            : "bg-gray-800 text-gray-400"
+                        )}
+                      >
+                        <QrCode size={24} />
                       </div>
+                      <div className="text-left flex-1">
+                        <div className="font-bold text-white text-base">
+                          Pix
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Aprovação imediata
+                        </div>
+                      </div>
+                      {paymentMethod === "pix" && (
+                        <CheckCircle2 className="text-primary" size={24} />
+                      )}
                     </div>
                     {paymentMethod === "pix" && (
-                      <CheckCircle2 className="text-primary" size={24} />
+                      <span className="absolute -top-3 -right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
+                        RECOMENDADO
+                      </span>
                     )}
-                  </div>
-                  {paymentMethod === "pix" && (
-                    <span className="absolute -top-3 -right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
-                      RECOMENDADO
-                    </span>
-                  )}
-                </Button>
+                  </Button>
+                )}
 
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "h-auto p-5 justify-start border-2 hover:bg-gray-800 transition-all",
-                    paymentMethod === "cash"
-                      ? "border-primary bg-primary/10"
-                      : "border-gray-700 bg-gray-900/50"
-                  )}
-                  onClick={() => setPaymentMethod("cash")}
-                >
-                  <div className="flex items-center gap-4 w-full">
-                    <div
-                      className={cn(
-                        "p-3 rounded-full transition-colors",
-                        paymentMethod === "cash"
-                          ? "bg-primary text-black"
-                          : "bg-gray-800 text-gray-400"
-                      )}
-                    >
-                      <CreditCard size={24} />
-                    </div>
-                    <div className="text-left flex-1">
-                      <div className="font-bold text-white text-base">
-                        Pagar no Local
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Dinheiro ou Cartão
-                      </div>
-                    </div>
-                    {paymentMethod === "cash" && (
-                      <CheckCircle2 className="text-primary" size={24} />
+                {/* Botão Pagar no Local - Só renderiza se tiver Cash ou Credit Card */}
+                {availableMethods.hasOnSite && (
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-auto p-5 justify-start border-2 hover:bg-gray-800 transition-all",
+                      paymentMethod === "cash"
+                        ? "border-primary bg-primary/10"
+                        : "border-gray-700 bg-gray-900/50"
                     )}
-                  </div>
-                </Button>
+                    onClick={() => setPaymentMethod("cash")}
+                  >
+                    <div className="flex items-center gap-4 w-full">
+                      <div
+                        className={cn(
+                          "p-3 rounded-full transition-colors",
+                          paymentMethod === "cash"
+                            ? "bg-primary text-black"
+                            : "bg-gray-800 text-gray-400"
+                        )}
+                      >
+                        <CreditCard size={24} />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-bold text-white text-base">
+                          Pagar no Local
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {[
+                            provider?.paymentMethods?.includes("cash") &&
+                              "Dinheiro",
+                            provider?.paymentMethods?.includes("credit_card") &&
+                              "Cartão",
+                          ]
+                            .filter(Boolean)
+                            .join(" ou ") || "No balcão"}
+                        </div>
+                      </div>
+                      {paymentMethod === "cash" && (
+                        <CheckCircle2 className="text-primary" size={24} />
+                      )}
+                    </div>
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -320,7 +374,10 @@ export const Confirmation = () => {
               <Button
                 onClick={handleConfirm}
                 className="flex-[2] font-bold text-base h-12 shadow-lg shadow-primary/20"
-                disabled={status.isConfirming}
+                disabled={
+                  status.isConfirming ||
+                  (!availableMethods.hasPix && !availableMethods.hasOnSite)
+                }
               >
                 {status.isConfirming ? (
                   <Loader2 className="animate-spin mr-2" />

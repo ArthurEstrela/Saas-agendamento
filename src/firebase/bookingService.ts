@@ -110,8 +110,8 @@ export const getAppointmentsByProviderId = async (
 ): Promise<Appointment[]> => {
   const appointmentsCollection = collection(db, "appointments");
   const q = query(
-    appointmentsCollection,
-    where("professionalId", "==", providerId),
+    appointmentsCollection,    
+    where("providerId", "==", providerId), 
     orderBy("startTime", "asc")
   );
   const querySnapshot = await getDocs(q);

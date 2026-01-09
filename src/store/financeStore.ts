@@ -1,13 +1,19 @@
 import { create } from "zustand";
-import { getFinancialData } from "../firebase/financeService";
-import type { FinancialData, Expense } from "../types";
+import { toast } from "react-hot-toast";
+import { startOfMonth, endOfMonth } from "date-fns";
+
+// Serviços e Tipos
+import { getFinancialData } from "../firebase/financeService"; 
+// ^ ATENÇÃO: Verifique se essa função 'getFinancialData' também foi atualizada 
+// para ler da coleção 'expenses' raiz, senão os totais não baterão.
+
 import {
   addExpense,
   deleteExpense,
   updateExpense,
 } from "../firebase/expenseService";
-import { toast } from "react-hot-toast";
-import { startOfMonth, endOfMonth } from "date-fns";
+
+import type { FinancialData, Expense } from "../types";
 import { useProfileStore } from "./profileStore";
 
 interface FinanceStore {
@@ -15,10 +21,12 @@ interface FinanceStore {
   isLoading: boolean;
   error: string | null;
   currentDate: Date;
+  
+  // Actions
   setCurrentDate: (date: Date) => void;
   fetchFinancialData: (providerId: string, date: Date) => Promise<void>;
   
-  // --- 3. ADICIONEI AS NOVAS FUNÇÕES AQUI ---
+  // CRUD Actions
   addNewExpense: (expenseData: Omit<Expense, "id">) => Promise<void>;
   removeExpense: (expenseId: string) => Promise<void>;
   editExpense: (
@@ -36,99 +44,91 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
   setCurrentDate: (date) => set({ currentDate: date }),
 
   fetchFinancialData: async (providerId, date) => {
+    // Evita chamadas desnecessárias
+    if (!providerId) return;
+
     set({ isLoading: true, error: null });
     try {
       const startDate = startOfMonth(date);
       const endDate = endOfMonth(date);
+      
+      // Aqui assume-se que getFinancialData já busca da nova coleção 'expenses'
       const data = await getFinancialData(providerId, startDate, endDate);
+      
       set({ financialData: data, isLoading: false });
     } catch (err) {
       console.error("Erro ao buscar dados financeiros:", err);
-      const errorMsg =
-        err instanceof Error ? err.message : "Falha ao buscar dados.";
+      const errorMsg = err instanceof Error ? err.message : "Falha ao buscar dados.";
       set({ error: errorMsg, isLoading: false });
+      toast.error("Erro ao carregar finanças.");
     }
   },
 
-  // --- 4. IMPLEMENTAÇÃO DAS NOVAS FUNÇÕES ---
-
-  /**
-   * Adiciona uma nova despesa e recarrega os dados financeiros.
-   */
   addNewExpense: async (expenseData) => {
     const providerId = useProfileStore.getState().userProfile?.id;
     if (!providerId) {
-      toast.error("Erro: Usuário não autenticado.");
+      toast.error("Erro de permissão: Usuário não identificado.");
       return;
     }
     
-    // Pega a data atual da store para saber qual mês recarregar
     const currentDate = get().currentDate;
 
-    const promise = async () => {
-      // 1. Adiciona no Firebase
-      await addExpense(providerId, expenseData);
-      // 2. Refaz o fetch dos dados financeiros do mês atual
-      await get().fetchFinancialData(providerId, currentDate);
-    };
-
-    // Usamos toast.promise para mostrar o loading
-    await toast.promise(promise(), {
-      loading: "Adicionando despesa...",
-      success: "Despesa adicionada com sucesso!",
-      error: "Falha ao adicionar despesa.",
-    });
+    await toast.promise(
+      (async () => {
+        // 1. Adiciona no Firestore
+        await addExpense(providerId, expenseData);
+        // 2. Recarrega os dados para atualizar a tela (Dashboard/Gráficos)
+        await get().fetchFinancialData(providerId, currentDate);
+      })(),
+      {
+        loading: "Salvando despesa...",
+        success: "Despesa adicionada!",
+        error: "Erro ao adicionar despesa.",
+      }
+    );
   },
 
-  /**
-   * Remove uma despesa e recarrega os dados financeiros.
-   */
   removeExpense: async (expenseId) => {
     const providerId = useProfileStore.getState().userProfile?.id;
     if (!providerId) {
-      toast.error("Erro: Usuário não autenticado.");
+      toast.error("Erro: Usuário não identificado.");
       return;
     }
     
     const currentDate = get().currentDate;
 
-    const promise = async () => {
-      // 1. Remove do Firebase
-      await deleteExpense(providerId, expenseId);
-      // 2. Refaz o fetch
-      await get().fetchFinancialData(providerId, currentDate);
-    };
-
-    await toast.promise(promise(), {
-      loading: "Removendo despesa...",
-      success: "Despesa removida com sucesso!",
-      error: "Falha ao remover despesa.",
-    });
+    await toast.promise(
+      (async () => {
+        await deleteExpense(providerId, expenseId);
+        await get().fetchFinancialData(providerId, currentDate);
+      })(),
+      {
+        loading: "Removendo...",
+        success: "Despesa removida!",
+        error: "Erro ao remover despesa.",
+      }
+    );
   },
 
-  /**
-   * Edita uma despesa e recarrega os dados financeiros.
-   */
   editExpense: async (expenseId, expenseData) => {
     const providerId = useProfileStore.getState().userProfile?.id;
     if (!providerId) {
-      toast.error("Erro: Usuário não autenticado.");
+      toast.error("Erro: Usuário não identificado.");
       return;
     }
     
     const currentDate = get().currentDate;
 
-    const promise = async () => {
-      // 1. Atualiza no Firebase
-      await updateExpense(providerId, expenseId, expenseData);
-      // 2. Refaz o fetch
-      await get().fetchFinancialData(providerId, currentDate);
-    };
-
-    await toast.promise(promise(), {
-      loading: "Atualizando despesa...",
-      success: "Despesa atualizada com sucesso!",
-      error: "Falha ao atualizar despesa.",
-    });
+    await toast.promise(
+      (async () => {
+        await updateExpense(providerId, expenseId, expenseData);
+        await get().fetchFinancialData(providerId, currentDate);
+      })(),
+      {
+        loading: "Atualizando...",
+        success: "Despesa atualizada!",
+        error: "Erro ao atualizar despesa.",
+      }
+    );
   },
 }));

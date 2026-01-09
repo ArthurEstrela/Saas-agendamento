@@ -8,43 +8,59 @@ import {
   Timestamp,
   updateDoc,
   where,
+  orderBy
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Expense } from '../types';
 
-const getExpensesCollection = (providerId: string) => {
-  return collection(db, 'users', providerId, 'expenses');
-};
+// Referência constante para a coleção raiz
+const EXPENSES_COLLECTION = 'expenses';
+
+const getExpensesRef = () => collection(db, EXPENSES_COLLECTION);
 
 /**
- * Adiciona uma nova despesa para um prestador de serviço.
+ * Adiciona uma nova despesa na coleção raiz.
  */
 export const addExpense = async (
   providerId: string,
   expenseData: Omit<Expense, 'id'>
-) => {
-  const expensesCollection = getExpensesCollection(providerId);
-  await addDoc(expensesCollection, {
+): Promise<void> => {
+  if (!providerId) throw new Error("ProviderID é obrigatório para criar despesa.");
+
+  const expensesRef = getExpensesRef();
+  
+  // Garante que a data seja salva como Timestamp do Firestore
+  const dateToSave = expenseData.date instanceof Date 
+    ? Timestamp.fromDate(expenseData.date) 
+    : expenseData.date;
+
+  await addDoc(expensesRef, {
     ...expenseData,
-    date: expenseData.date instanceof Date 
-      ? Timestamp.fromDate(expenseData.date) 
-      : expenseData.date,
+    providerId, // Vínculo crucial para as regras de segurança
+    date: dateToSave,
+    createdAt: Timestamp.now() // Útil para ordenação interna
   });
 };
 
 /**
- * Busca todas as despesas de um prestador de serviço (geral).
+ * Busca todas as despesas de um prestador.
  */
 export const getExpensesByProviderId = async (
   providerId: string
 ): Promise<Expense[]> => {
-  const expensesCollection = getExpensesCollection(providerId); 
-  const q = query(expensesCollection);
+  const expensesRef = getExpensesRef();
+  
+  const q = query(
+    expensesRef, 
+    where('providerId', '==', providerId),
+    orderBy('date', 'desc')
+  );
+
   const querySnapshot = await getDocs(q);
 
   return querySnapshot.docs.map((doc) => {
     const data = doc.data();
-    // Converte Timestamp para Date
+    // Converte Timestamp de volta para Date do JS para o frontend usar
     const date = data.date instanceof Timestamp ? data.date.toDate() : new Date();
     
     return { 
@@ -56,27 +72,30 @@ export const getExpensesByProviderId = async (
 };
 
 /**
- * Busca despesas de um prestador dentro de um intervalo de datas.
- * (Função nova, usada pelo financeService)
+ * Busca despesas por intervalo de datas (Essencial para o Dashboard Financeiro).
  */
 export const getExpensesByDateRange = async (
   providerId: string,
   startDate: Date,
   endDate: Date
 ): Promise<Expense[]> => {
-  const expensesCollection = getExpensesCollection(providerId);
+  const expensesRef = getExpensesRef();
+  
+  // Converter para Timestamp para a query do Firestore
   const startTimestamp = Timestamp.fromDate(startDate);
   const endTimestamp = Timestamp.fromDate(endDate);
 
-  const expensesQuery = query(
-    expensesCollection,
+  const q = query(
+    expensesRef,
+    where('providerId', '==', providerId),
     where('date', '>=', startTimestamp),
-    where('date', '<=', endTimestamp)
+    where('date', '<=', endTimestamp),
+    orderBy('date', 'desc') // Ordenação importante para a UI
   );
   
-  const expensesSnapshot = await getDocs(expensesQuery);
+  const snapshot = await getDocs(q);
   
-  return expensesSnapshot.docs.map((doc) => {
+  return snapshot.docs.map((doc) => {
     const data = doc.data();
     const date = data.date instanceof Timestamp ? data.date.toDate() : new Date();
     
@@ -88,15 +107,16 @@ export const getExpensesByDateRange = async (
   });
 };
 
-
 /**
  * Deleta uma despesa.
+ * Nota: providerId mantido para consistência da API, mesmo que deleteDoc use apenas o ID.
  */
 export const deleteExpense = async (
-  providerId: string,
+  providerId: string, 
   expenseId: string
-) => {
-  const expenseDoc = doc(getExpensesCollection(providerId), expenseId);
+): Promise<void> => {
+  // Aponta direto para o documento na coleção raiz
+  const expenseDoc = doc(db, EXPENSES_COLLECTION, expenseId);
   await deleteDoc(expenseDoc);
 };
 
@@ -107,12 +127,15 @@ export const updateExpense = async (
   providerId: string,
   expenseId: string,
   expenseData: Partial<Omit<Expense, 'id'>>
-) => {
-  const expenseDoc = doc(getExpensesCollection(providerId), expenseId);
+): Promise<void> => {
+  const expenseDoc = doc(db, EXPENSES_COLLECTION, expenseId);
   
+  const dataToUpdate: any = { ...expenseData };
+
+  // Se houver data na atualização, converte para Timestamp
   if (expenseData.date && expenseData.date instanceof Date) {
-    expenseData.date = Timestamp.fromDate(expenseData.date);
+    dataToUpdate.date = Timestamp.fromDate(expenseData.date);
   }
   
-  await updateDoc(expenseDoc, expenseData);
+  await updateDoc(expenseDoc, dataToUpdate);
 };

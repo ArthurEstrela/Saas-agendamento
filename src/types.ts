@@ -186,6 +186,7 @@ export type UserProfile =
 
 export interface Expense {
   id: string;
+  providerId: string;
   description: string;
   amount: number;
   date: Date | FieldValue;

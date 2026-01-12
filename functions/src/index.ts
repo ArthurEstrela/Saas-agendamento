@@ -882,3 +882,60 @@ const checkSubscription = async (uid: string) => {
     );
   }
 };
+
+export const checkExpiredTrials = onSchedule(
+  { schedule: "every day 00:00", timeZone: TIME_ZONE, region: REGION },
+  async () => {
+    logger.info("Verificando trials expirados...");
+
+    const now = admin.firestore.Timestamp.now();
+    const usersRef = db.collection("users");
+
+    // Busca usuários 'trial' vencidos
+    const snapshot = await usersRef
+      .where("role", "==", "serviceProvider")
+      .where("subscriptionStatus", "==", "trial")
+      .where("trialEndsAt", "<", now)
+      .get();
+
+    if (snapshot.empty) {
+      logger.info("Nenhum trial expirado encontrado hoje.");
+      return;
+    }
+
+    const batch = db.batch();
+    const notificationPromises: Promise<any>[] = []; // Array para disparar notificações em paralelo
+    let count = 0;
+
+    // Nota: O Batch do Firestore suporta até 500 operações. 
+    // Se seu app crescer muito (milhares de expirações/dia), precisará dividir em chunks.
+    // Para o início, isso atende perfeitamente.
+    
+    snapshot.forEach((doc) => {
+      // 1. Atualiza o status no Banco
+      batch.update(doc.ref, { 
+        subscriptionStatus: "expired" 
+      });
+
+      // 2. Prepara a notificação (Push + Email)
+      // Usando sua função sendNotification existente
+      notificationPromises.push(
+        sendNotification(
+          doc.id,
+          "Seu período de teste acabou 🔒",
+          "Seus agendamentos públicos foram pausados. Assine um plano agora para continuar usando o Stylo sem interrupções."
+        )
+      );
+
+      count++;
+    });
+
+    // Executa as atualizações no banco
+    await batch.commit();
+
+    // Envia todas as notificações
+    await Promise.all(notificationPromises);
+
+    logger.info(`${count} contas de trial foram expiradas e notificadas.`);
+  }
+);

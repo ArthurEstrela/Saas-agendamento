@@ -97,6 +97,10 @@ export const createUserProfile = async (
     const providerData = additionalData as Partial<ServiceProviderProfile>;
     const businessName = providerData?.businessName || `${name}'s Business`;
 
+    const trialDays = 15;
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+
     specificProfile = {
       ...baseProfile,
       role: "serviceProvider",
@@ -115,6 +119,7 @@ export const createUserProfile = async (
       areaOfWork: providerData?.areaOfWork || "",
       socialLinks: providerData?.socialLinks || {},
       paymentMethods: providerData?.paymentMethods || [],
+      // Pix incluído corretamente
       pixKey: providerData?.pixKey || "",
       pixKeyType: providerData?.pixKeyType || "cpf",
       publicProfileSlug: createSlug(businessName),
@@ -122,13 +127,13 @@ export const createUserProfile = async (
       services: [],
       professionals: [], // Começa vazio
       reviews: [],
+      // Define status padrão como 'trial' se não informado
+      trialEndsAt: Timestamp.fromDate(trialEndsAt),
+      subscriptionStatus: providerData?.subscriptionStatus || "trial",
     } as ServiceProviderProfile;
 
     // 1. Adiciona o perfil principal ao batch
     batch.set(userRef, specificProfile);
-
-    // REMOVIDO: Lógica que criava o "Profissional Espelho" automaticamente.
-    // Agora o usuário deve criar profissionais (ou a si mesmo) via Dashboard/Onboarding.
   }
 
   // Executa todas as operações de uma vez
@@ -247,7 +252,14 @@ export const searchServiceProviders = async (
   searchTerm: string = ""
 ): Promise<ServiceProviderProfile[]> => {
   const usersCollection = collection(db, "users");
-  const q = query(usersCollection, where("role", "==", "serviceProvider"));
+
+  // MELHORIA: Filtra apenas prestadores ativos, em teste ou vitalícios.
+  // Isso esconde prestadores com 'cancelled' ou 'past_due' da busca pública.
+  const q = query(
+    usersCollection,
+    where("role", "==", "serviceProvider"),
+    where("subscriptionStatus", "in", ["active", "trial", "lifetime"])
+  );
 
   try {
     const querySnapshot = await getDocs(q);
@@ -276,6 +288,8 @@ export const getProviderProfileBySlug = async (
   slug: string
 ): Promise<ServiceProviderProfile | null> => {
   const usersCollection = collection(db, "users");
+  // NOTA: Aqui NÃO filtramos por status, pois a página pública deve carregar
+  // para mostrar a mensagem de "Conta Indisponível" em vez de um erro 404 genérico.
   const q = query(
     usersCollection,
     where("publicProfileSlug", "==", slug),

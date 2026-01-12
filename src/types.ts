@@ -21,7 +21,7 @@ export interface BaseUser {
 
 export interface TimeSlot {
   start: string;
-  end: string; 
+  end: string;
 }
 
 export interface ProviderAdditionalData {
@@ -56,7 +56,7 @@ export interface Service {
   id: string;
   name: string;
   description: string;
-  duration: number; 
+  duration: number;
   price: number;
 }
 
@@ -65,10 +65,10 @@ export interface Professional {
   name: string;
   email?: string;
   photoURL?: string;
-  services: Service[]; 
+  services: Service[];
   availability: DailyAvailability[];
-  slotInterval?: number; 
-  isOwner?: boolean; 
+  slotInterval?: number;
+  isOwner?: boolean;
 }
 
 export interface Review {
@@ -84,7 +84,7 @@ export interface Review {
   createdAt: Date;
 }
 
-export type PaymentMethod = "pix" | "credit_card" | "cash"; 
+export type PaymentMethod = "pix" | "credit_card" | "cash";
 
 export interface Appointment {
   id: string;
@@ -133,8 +133,8 @@ export interface ClientProfile extends BaseUser {
 
 export interface Address {
   street: string;
-  number: string;       
-  neighborhood: string; 
+  number: string;
+  neighborhood: string;
   city: string;
   state: string;
   zipCode: string;
@@ -173,9 +173,11 @@ export interface ServiceProviderProfile extends BaseUser {
     | "cancelled"
     | "past_due"
     | "trial"
+    | "expired"
     | "free"
     | string;
   stripeSubscriptionId?: string;
+  trialEndsAt?: Date | FieldValue;
   onboardingDismissed?: boolean;
 }
 

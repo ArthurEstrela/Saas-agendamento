@@ -14,6 +14,8 @@ import {
   Globe,
   Clock,
   ArrowLeft,
+  AlertTriangle,
+  Lock,
 } from "lucide-react";
 import { PublicReviewsSection } from "../components/Public/PublicReviewsSection";
 import { FaWhatsapp } from "react-icons/fa";
@@ -56,7 +58,14 @@ const PublicBookingPage = () => {
     fetchProvider();
   }, [slug]);
 
+  // Lógica de verificação da assinatura
+  const isSubscriptionActive =
+    provider?.subscriptionStatus === "active" ||
+    provider?.subscriptionStatus === "trial" ||
+    provider?.subscriptionStatus === "lifetime";
+
   const handleGoToBooking = () => {
+    if (!isSubscriptionActive) return; // Bloqueio de segurança extra
     if (provider?.id) navigate(`/book/${provider.id}`);
     else setError("ID inválido.");
   };
@@ -102,21 +111,35 @@ const PublicBookingPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 relative overflow-x-hidden selection:bg-primary/30 font-sans">
-      {/* --- BACKGROUND AURORA (Igual aos Dashboards) --- */}
+      {/* --- BACKGROUND AURORA --- */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        {/* Spot Dourado (Primary) */}
         <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-primary/10 rounded-full blur-[120px] opacity-40" />
-        {/* Spot Azulado */}
         <div className="absolute top-[20%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] opacity-30" />
-        {/* Spot Roxo na base */}
         <div className="absolute bottom-[-20%] left-[20%] w-[70vw] h-[70vw] bg-purple-900/5 rounded-full blur-[150px] opacity-30" />
-        {/* Textura Granulada Opcional */}
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.02] mix-blend-overlay" />
       </div>
 
       <div className="max-w-5xl mx-auto md:p-6 p-0 relative z-10">
+        
+        {/* --- ALERTA DE SERVIÇO INDISPONÍVEL (Se a assinatura expirou) --- */}
+        {!isSubscriptionActive && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-amber-500/10 border border-amber-500/20 text-amber-200 px-4 py-3 rounded-lg mb-6 flex items-center gap-3 backdrop-blur-md mx-4 sm:mx-0 mt-4 sm:mt-0 shadow-lg"
+          >
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
+            <div>
+              <p className="font-bold text-amber-400">Agendamento Temporariamente Indisponível</p>
+              <p className="text-sm opacity-80 text-amber-200/80">
+                Este estabelecimento não está recebendo novos agendamentos pelo app no momento. Entre em contato por telefone ou WhatsApp.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         {/* --- HEADER / BANNER --- */}
-        <header className="relative h-64 md:h-80 md:rounded-3xl overflow-hidden bg-zinc-900 shadow-2xl group">
+        <header className="relative h-64 md:h-80 md:rounded-3xl overflow-hidden bg-zinc-900 shadow-2xl group border border-white/5">
           {/* Botão Voltar */}
           <Button
             variant="ghost"
@@ -162,10 +185,17 @@ const PublicBookingPage = () => {
                     </AvatarFallback>
                   </Avatar>
                   {/* Status Indicator */}
-                  <div
-                    className="absolute bottom-4 right-4 sm:bottom-3 sm:right-3 bg-green-500 w-5 h-5 rounded-full border-4 border-[#121214]"
-                    title="Disponível"
-                  />
+                  {isSubscriptionActive ? (
+                    <div
+                      className="absolute bottom-4 right-4 sm:bottom-3 sm:right-3 bg-green-500 w-5 h-5 rounded-full border-4 border-[#121214]"
+                      title="Aberto para Agendamentos"
+                    />
+                  ) : (
+                    <div
+                      className="absolute bottom-4 right-4 sm:bottom-3 sm:right-3 bg-amber-500 w-5 h-5 rounded-full border-4 border-[#121214]"
+                      title="Indisponível"
+                    />
+                  )}
                 </div>
 
                 {/* Textos e Info */}
@@ -237,10 +267,24 @@ const PublicBookingPage = () => {
                 <div className="w-full sm:w-auto pb-2">
                   <Button
                     onClick={handleGoToBooking}
+                    disabled={!isSubscriptionActive}
                     size="lg"
-                    className="w-full sm:w-auto font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(218,165,32,0.2)] hover:shadow-[0_0_30px_rgba(218,165,32,0.4)] transition-all h-12 px-8 text-base rounded-xl"
+                    className={cn(
+                      "w-full sm:w-auto font-bold transition-all h-12 px-8 text-base rounded-xl",
+                      isSubscriptionActive
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(218,165,32,0.2)] hover:shadow-[0_0_30px_rgba(218,165,32,0.4)]"
+                        : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
+                    )}
                   >
-                    <Calendar size={18} className="mr-2" /> Agendar Horário
+                    {!isSubscriptionActive ? (
+                      <>
+                        <Lock size={18} className="mr-2" /> Indisponível
+                      </>
+                    ) : (
+                      <>
+                        <Calendar size={18} className="mr-2" /> Agendar Horário
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -332,10 +376,16 @@ const PublicBookingPage = () => {
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                className="h-9 text-xs bg-white/5 text-white border border-white/10 hover:bg-primary hover:text-black hover:border-primary transition-all w-full"
+                                disabled={!isSubscriptionActive}
+                                className={cn(
+                                  "h-9 text-xs transition-all w-full",
+                                  isSubscriptionActive
+                                    ? "bg-white/5 text-white border border-white/10 hover:bg-primary hover:text-black hover:border-primary"
+                                    : "bg-zinc-800 text-zinc-600 border border-zinc-700 cursor-not-allowed"
+                                )}
                                 onClick={handleGoToBooking}
                               >
-                                Reservar
+                                {isSubscriptionActive ? "Reservar" : "Fechado"}
                               </Button>
                             </div>
                           </CardContent>

@@ -124,11 +124,10 @@ export const Confirmation = () => {
     if (useBookingProcessStore.getState().status.isSuccess) {
       if (paymentMethod === "pix") setShowPixModal(true);
       else {
-        toast.success("Agendado com sucesso!");
         setTimeout(() => {
           resetBookingState(true);
           navigate("/dashboard");
-        }, 2000);
+        }, 1000);
       }
     }
   };

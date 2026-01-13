@@ -43,6 +43,7 @@ import { Notifications } from "./components/Common/Notifications";
 import { SubscriptionManagement } from "./components/ServiceProvider/SubscriptionManagement";
 import { ProfessionalHome } from "./components/Professional/ProfessionalHome";
 import { ProfessionalProfileManagement } from "./components/Professional/ProfessionalProfileManagement";
+import Features from "./components/Features";
 
 function App() {
   const location = useLocation();
@@ -61,6 +62,7 @@ function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/about-us" element={<AboutUs />} />
           <Route path="/faq" element={<FAQ />} />
+          <Route path="/features" element={<Features />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfUse />} />

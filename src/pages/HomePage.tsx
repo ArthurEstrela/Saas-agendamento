@@ -1,13 +1,23 @@
 // src/pages/HomePage.tsx
 
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { TrendingUp } from "lucide-react";
+import { 
+  Calendar, 
+  Globe, 
+  TrendingUp, 
+  Check, 
+  ShieldCheck, 
+  Sparkles, 
+  ArrowRight,
+  Zap
+} from "lucide-react";
 import { httpsCallable } from "@firebase/functions";
 import { useAuthStore } from "../store/authStore";
 import { useProfileStore } from "../store/profileStore";
 import { toast } from "react-hot-toast";
 import { functions } from "../firebase/config";
+import { Button } from "../components/ui/button"; // Certifique-se de ter este componente ou use HTML button
 import type { ServiceProviderProfile } from "../types";
 
 // --- Interfaces ---
@@ -17,14 +27,7 @@ interface AnimateOnScrollProps {
   className?: string;
 }
 
-interface FeatureCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}
-
-// --- Componentes Auxiliares ---
-
+// --- Componente de Animação (Mantido e Otimizado) ---
 const AnimateOnScroll = ({
   children,
   delay = 0,
@@ -57,84 +60,17 @@ const AnimateOnScroll = ({
   return (
     <div
       ref={ref}
-      className={`${className} transition-all ease-out duration-1000`}
+      className={`${className} transition-all duration-1000 ease-out`}
       style={{
         transitionDelay: `${delay}ms`,
         opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(20px)",
+        transform: isVisible ? "translateY(0)" : "translateY(30px)",
       }}
     >
       {children}
     </div>
   );
 };
-
-const CalendarIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-10 w-10 sm:h-12 sm:w-12 mb-4 text-[#daa520]"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={1.5}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-    />
-  </svg>
-);
-const GlobeIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-10 w-10 sm:h-12 sm:w-12 mb-4 text-[#daa520]"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={1.5}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={1.5}
-      d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h1a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.881 4.002l.023.023a1.5 1.5 0 002.121 2.121l.023.023M16.119 4.002l-.023.023a1.5 1.5 0 01-2.121 2.121l-.023.023M12 21a9 9 0 100-18 9 9 0 000 18z"
-    />
-  </svg>
-);
-const TrendingUpSvgIcon = () => (
-  <TrendingUp className="h-10 w-10 sm:h-12 sm:w-12 mb-4 text-[#daa520]" />
-);
-
-// MUDANÇA: Aceita prop 'color' para não sumir no fundo dourado
-const CheckIcon = ({ color = "text-[#daa520]" }: { color?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className={`h-5 w-5 ${color} flex-shrink-0`}
-    viewBox="0 0 20 20"
-    fill="currentColor"
-  >
-    <path
-      fillRule="evenodd"
-      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-      clipRule="evenodd"
-    />
-  </svg>
-);
-
-const FeatureCard = ({ icon, title, description }: FeatureCardProps) => (
-  <div className="group [perspective:1000px] h-full">
-    <div className="relative bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl shadow-lg h-full p-6 sm:p-8 transition-all duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(15deg)_rotateX(5deg)]">
-      <div className="absolute inset-0 bg-gradient-to-br from-[#daa520]/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl"></div>
-      <div className="relative z-10 flex flex-col items-center text-center">
-        {icon}
-        <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">{title}</h3>
-        <p className="text-sm sm:text-base text-gray-400 leading-relaxed">{description}</p>
-      </div>
-    </div>
-  </div>
-);
 
 // --- Componente Principal ---
 
@@ -152,10 +88,11 @@ const Home = () => {
 
   const isSubscribed = isProvider && subscriptionStatus === "active";
 
+  // --- Lógica de Pagamento ---
   const handleCheckout = async (priceId: string) => {
     if (!user || !userProfile) {
-      toast.error("Você precisa estar logado para assinar.");
-      navigate("/login?type=register", { state: { from: location } });
+      toast.error("Crie uma conta para começar seus 15 dias grátis.");
+      navigate("/register-type", { state: { from: location } }); // Mudei para register-type que é melhor
       return;
     }
 
@@ -171,7 +108,7 @@ const Home = () => {
     }
 
     setIsLoading(true);
-    toast.loading("Redirecionando para o pagamento...");
+    toast.loading("Preparando seu período de teste...");
 
     try {
       const createStripeCheckout = httpsCallable(functions, "createStripeCheckout");
@@ -184,198 +121,258 @@ const Home = () => {
     } catch (error) {
       console.error("Erro ao iniciar pagamento:", error);
       toast.dismiss();
-      toast.error("Erro ao iniciar pagamento. Tente novamente.");
+      toast.error("Erro ao conectar. Tente novamente.");
       setIsLoading(false);
     }
   };
 
-  const renderPlanButton = (priceId: string, text: string, popular: boolean = false) => {
-    const baseClasses = "mt-auto w-full block text-center font-bold py-3 px-6 rounded-lg transition-colors duration-300";
+  // --- Renderização dos Botões de Plano ---
+  const renderPlanButton = (priceId: string, text: string, isPopular: boolean = false) => {
+    const isClient = userProfile && userProfile.role === "client";
     
-    if (userProfile && userProfile.role === "client") {
+    if (isClient) {
       return (
-        <button disabled className={`${baseClasses} bg-gray-800 text-white opacity-50 cursor-not-allowed`}>
-          Exclusivo para Prestadores
-        </button>
+        <Button disabled variant="outline" className="w-full border-gray-800 text-gray-500 cursor-not-allowed">
+          Exclusivo para Profissionais
+        </Button>
       );
     }
 
     if (isSubscribed) {
       return (
-        <button
+        <Button
           onClick={() => navigate("/dashboard")}
-          className={`${baseClasses} ${popular ? "bg-black text-[#daa520] hover:bg-gray-900" : "bg-gray-800 text-white group-hover:bg-[#daa520] group-hover:text-black"}`}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-900/20"
         >
-          Ver meu Dashboard
-        </button>
+          Acessar Dashboard
+        </Button>
+      );
+    }
+
+    // Botão Principal (Trimestral) vs Botões Secundários
+    if (isPopular) {
+      return (
+        <Button
+          onClick={() => handleCheckout(priceId)}
+          disabled={isLoading}
+          className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-lg shadow-primary/25 relative transition-all hover:scale-[1.02]"
+        >
+          {isLoading ? "Processando..." : "Começar 15 Dias Grátis"}
+        </Button>
       );
     }
 
     return (
-      <button
+      <Button
         onClick={() => handleCheckout(priceId)}
         disabled={isLoading}
-        className={`${baseClasses} disabled:opacity-50 ${popular ? "bg-black text-[#daa520] hover:bg-gray-900 shadow-lg" : "bg-gray-800 text-white group-hover:bg-[#daa520] group-hover:text-black"}`}
+        variant="outline"
+        className="w-full h-12 border-gray-700 bg-transparent text-white hover:bg-white/5 hover:text-white rounded-xl"
       >
-        {isLoading ? "Aguarde..." : text}
-      </button>
+        {isLoading ? "Processando..." : text}
+      </Button>
     );
   };
 
   return (
-    <div className="bg-black text-white overflow-x-hidden">
-      {/* SEÇÃO HERO */}
-      <section className="relative min-h-[100dvh] flex items-center justify-center px-4 py-16 sm:py-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-black via-black to-gray-950"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 sm:w-96 sm:h-96 bg-[#daa520]/10 rounded-full blur-3xl animate-pulse"></div>
-        
-        <div className="relative z-10 text-center w-full max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#030712] text-gray-100 font-sans selection:bg-primary/30 selection:text-white overflow-x-hidden">
+      
+      {/* --- BACKGROUND EFFECTS (Igual ao Pricing) --- */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none opacity-40"></div>
+      </div>
+
+      {/* --- HERO SECTION --- */}
+      <section className="relative z-10 min-h-[90vh] flex items-center justify-center pt-20 px-4">
+        <div className="text-center max-w-5xl mx-auto space-y-8">
+          
           <AnimateOnScroll>
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter mb-6 leading-tight">
-              O seu negócio,{" "}
-              <span className="text-[#daa520] block sm:inline">sempre agendado.</span>
+            {/* Badge de Teste Grátis */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm font-bold text-emerald-400 mb-6 hover:bg-emerald-500/20 transition-colors cursor-default animate-fade-in">
+              <ShieldCheck size={16} />
+              <span>Teste Grátis de 15 Dias</span>
+            </div>
+
+            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight mb-6">
+              O seu negócio, <br className="hidden md:block" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+                sempre agendado.
+              </span>
             </h1>
           </AnimateOnScroll>
           
           <AnimateOnScroll delay={200}>
-            <p className="max-w-xl mx-auto text-base sm:text-lg md:text-xl text-gray-300 mb-8 sm:mb-10 px-2">
-              Simplifique a gestão do seu tempo, automatize seus agendamentos e
-              ofereça a melhor experiência para seus clientes.
+            <p className="max-w-2xl mx-auto text-lg md:text-xl text-gray-400 font-light leading-relaxed">
+              Simplifique a gestão do seu tempo e automatize seus agendamentos. 
+              <span className="text-gray-200 font-medium"> Elegância e eficiência</span> para você e seus clientes.
             </p>
           </AnimateOnScroll>
           
           <AnimateOnScroll delay={400}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto px-4 sm:px-0">
-              <Link
-                to="/dashboard"
-                className="w-full sm:w-auto bg-[#daa520] text-black font-bold py-3.5 px-8 rounded-lg text-base sm:text-lg hover:bg-[#c8961e] transition-transform duration-300 hover:scale-105 active:scale-95 text-center"
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+              {/* Botão Principal Hero */}
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-purple-600 rounded-lg blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
+                <Button 
+                  size="lg" 
+                  className="relative h-14 px-8 bg-gray-900 ring-1 ring-white/10 hover:bg-gray-800 text-white font-semibold rounded-xl flex items-center gap-2 transition-all text-lg"
+                  onClick={() => navigate("/register-type")}
+                >
+                  Começar Agora
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </div>
+              
+              <Button 
+                variant="ghost" 
+                size="lg" 
+                className="h-14 px-8 text-gray-400 hover:text-white border border-transparent hover:bg-white/5 rounded-xl text-lg"
+                onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
               >
-                Agendar Horário
-              </Link>
-              <Link
-                to="/login?type=register"
-                className="w-full sm:w-auto bg-transparent border-2 border-[#daa520] text-[#daa520] font-bold py-3.5 px-8 rounded-lg text-base sm:text-lg hover:bg-[#daa520] hover:text-black transition-all duration-300 active:scale-95 text-center"
-              >
-                Trabalhe Conosco
-              </Link>
+                Ver Planos
+              </Button>
+            </div>
+            <p className="mt-4 text-xs text-gray-500 uppercase tracking-widest">Sem cartão necessário para cadastro</p>
+          </AnimateOnScroll>
+        </div>
+      </section>
+
+      {/* --- FEATURES SECTION --- */}
+      <section className="relative z-10 py-24 bg-gray-950/50 border-t border-white/5 backdrop-blur-sm">
+        <div className="container mx-auto px-4">
+          <AnimateOnScroll className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">Tudo o que você precisa</h2>
+            <p className="text-gray-400 max-w-xl mx-auto">
+              Ferramentas desenhadas para alavancar seu negócio sem complicar sua vida.
+            </p>
+          </AnimateOnScroll>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <AnimateOnScroll>
+              <div className="group p-8 rounded-3xl bg-gray-900/40 border border-white/5 hover:border-primary/30 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5 h-full">
+                <div className="mb-6 p-3 rounded-xl bg-gray-800/50 w-fit group-hover:bg-primary/10 transition-colors">
+                  <Calendar className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-3">Agenda Inteligente</h3>
+                <p className="text-gray-400 leading-relaxed">Visualize e gerencie todos os seus compromissos com uma interface simples e intuitiva.</p>
+              </div>
+            </AnimateOnScroll>
+
+            <AnimateOnScroll delay={200}>
+              <div className="group p-8 rounded-3xl bg-gray-900/40 border border-white/5 hover:border-primary/30 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5 h-full">
+                <div className="mb-6 p-3 rounded-xl bg-gray-800/50 w-fit group-hover:bg-blue-500/10 transition-colors">
+                  <Globe className="w-8 h-8 text-blue-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-3">Página Pública</h3>
+                <p className="text-gray-400 leading-relaxed">Link exclusivo para seus clientes agendarem 24/7, totalmente integrado à sua agenda.</p>
+              </div>
+            </AnimateOnScroll>
+
+            <AnimateOnScroll delay={400}>
+              <div className="group p-8 rounded-3xl bg-gray-900/40 border border-white/5 hover:border-primary/30 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5 h-full">
+                <div className="mb-6 p-3 rounded-xl bg-gray-800/50 w-fit group-hover:bg-emerald-500/10 transition-colors">
+                  <TrendingUp className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-3">Gestão Financeira</h3>
+                <p className="text-gray-400 leading-relaxed">Acompanhe ganhos, controle despesas e tenha clareza total sobre seu lucro.</p>
+              </div>
+            </AnimateOnScroll>
+          </div>
+        </div>
+      </section>
+
+      {/* --- PRICING SECTION (Integrada e Refinada) --- */}
+      <section id="pricing" className="relative z-10 py-32 container mx-auto px-4">
+        <AnimateOnScroll className="text-center mb-20 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-medium text-primary mb-4">
+            <Sparkles size={14} />
+            <span>Investimento Inteligente</span>
+          </div>
+          <h2 className="text-4xl md:text-5xl font-bold text-white">Planos Transparentes</h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            Escolha seu plano. <span className="text-white font-medium">Você só paga depois de 15 dias</span> se decidir continuar.
+          </p>
+        </AnimateOnScroll>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start max-w-6xl mx-auto">
+          
+          {/* MENSAL */}
+          <AnimateOnScroll>
+            <div className="relative p-8 rounded-3xl bg-gray-900/40 border border-white/5 hover:border-white/10 transition-all hover:-translate-y-1">
+              <h3 className="text-xl font-semibold text-white mb-2">Mensal</h3>
+              <div className="mb-6 flex items-baseline gap-1">
+                <span className="text-sm text-gray-400">R$</span>
+                <span className="text-4xl font-bold text-white">49,90</span>
+                <span className="text-gray-400">/mês</span>
+              </div>
+              <ul className="space-y-4 mb-8 text-sm text-gray-300">
+                <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Agendamentos ilimitados</li>
+                <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Gestão de Clientes</li>
+                <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Página Pública</li>
+              </ul>
+              {renderPlanButton("price_1SMeWT3zDQy3p6yeWl0LC4wi", "Testar Mensal", false)}
+              <p className="text-[10px] text-center text-gray-600 mt-3 uppercase tracking-wide">15 dias grátis</p>
+            </div>
+          </AnimateOnScroll>
+
+          {/* TRIMESTRAL (Destaque) */}
+          <AnimateOnScroll delay={200}>
+            <div className="relative p-8 rounded-3xl bg-gray-900/80 border border-primary/50 shadow-2xl shadow-primary/10 transform lg:-translate-y-6 z-10">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1">
+                <Zap size={12} fill="currentColor" />
+                Mais Popular
+              </div>
+              
+              <h3 className="text-xl font-semibold text-white mb-2">Trimestral</h3>
+              <div className="mb-1 flex items-baseline gap-1">
+                <span className="text-sm text-gray-400">R$</span>
+                <span className="text-5xl font-extrabold text-white">45,00</span>
+                <span className="text-gray-400">/mês</span>
+              </div>
+              <p className="text-xs text-gray-500 mb-8">Cobrado R$ 135,00 a cada 3 meses</p>
+
+              <ul className="space-y-4 mb-8 text-sm text-white font-medium">
+                <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Tudo do Plano Mensal</li>
+                <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Notificações WhatsApp</li>
+                <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Relatórios Avançados</li>
+              </ul>
+              {renderPlanButton("price_1SMeWT3zDQy3p6yezkMmrByP", "Assinar Trimestral", true)}
+              <p className="text-xs text-center text-gray-400 mt-3 font-medium">Cancele quando quiser</p>
+            </div>
+          </AnimateOnScroll>
+
+          {/* ANUAL */}
+          <AnimateOnScroll delay={400}>
+            <div className="relative p-8 rounded-3xl bg-gray-900/40 border border-white/5 hover:border-white/10 transition-all hover:-translate-y-1">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xl font-semibold text-white">Anual</h3>
+                <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-full border border-emerald-500/20">Economize 22%</span>
+              </div>
+              <div className="mb-1 flex items-baseline gap-1">
+                <span className="text-sm text-gray-400">R$</span>
+                <span className="text-4xl font-bold text-white">39,00</span>
+                <span className="text-gray-400">/mês</span>
+              </div>
+              <p className="text-xs text-gray-500 mb-8">R$ 468,00 anualmente</p>
+
+              <ul className="space-y-4 mb-8 text-sm text-gray-300">
+                <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Tudo do Trimestral</li>
+                <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Domínio Personalizado</li>
+                <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Suporte Prioritário</li>
+              </ul>
+              {renderPlanButton("price_1SO7sB3zDQy3p6yevNXLXO8v", "Testar Anual", false)}
+              <p className="text-[10px] text-center text-gray-600 mt-3 uppercase tracking-wide">15 dias grátis</p>
             </div>
           </AnimateOnScroll>
         </div>
-      </section>
 
-      {/* SEÇÃO FEATURES */}
-      <section className="py-16 sm:py-24 md:py-32 bg-black/50">
-        <div className="container mx-auto px-4">
-          <AnimateOnScroll className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
-              Tudo que você precisa
-            </h2>
-            <p className="text-base sm:text-lg text-gray-400 mt-2">
-              Ferramentas poderosas para alavancar seu negócio.
-            </p>
-          </AnimateOnScroll>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-            <AnimateOnScroll>
-              <FeatureCard
-                icon={<CalendarIcon />}
-                title="Agenda Inteligente"
-                description="Visualize e gerencie todos os seus compromissos com uma interface simples e intuitiva."
-              />
-            </AnimateOnScroll>
-            <AnimateOnScroll delay={200}>
-              <FeatureCard
-                icon={<GlobeIcon />}
-                title="Página Pública"
-                description="Seus clientes podem agendar horários diretamente pela sua página personalizada, disponível 24/7."
-              />
-            </AnimateOnScroll>
-            <AnimateOnScroll delay={400}>
-              <FeatureCard
-                icon={<TrendingUpSvgIcon />}
-                title="Gestão Financeira"
-                description="Acompanhe seus ganhos, controle suas despesas e tenha uma visão clara da saúde financeira."
-              />
-            </AnimateOnScroll>
-          </div>
-        </div>
-      </section>
-
-      {/* SEÇÃO PLANOS - ATUALIZADA */}
-      <section className="py-16 sm:py-24 md:py-32 bg-black">
-        <div className="container mx-auto px-4">
-          <AnimateOnScroll className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
-              Planos transparentes
-            </h2>
-            <p className="text-base sm:text-lg text-gray-400 mt-2">
-              Escolha o plano perfeito para o tamanho do seu negócio.
-            </p>
-          </AnimateOnScroll>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto items-center">
-            
-            {/* PLANO MENSAL */}
-            <AnimateOnScroll>
-              <div className="group relative bg-black border border-white/10 rounded-2xl p-6 sm:p-8 flex flex-col h-full transition-all duration-300 hover:border-[#daa520]/50">
-                <div className="relative z-10 flex flex-col flex-grow text-left">
-                  <h3 className="text-xl font-bold text-[#daa520] mb-2">Mensal</h3>
-                  <p className="text-3xl sm:text-4xl font-extrabold mb-1">
-                    R$49<span className="text-lg sm:text-xl font-medium text-gray-400">,90/mês</span>
-                  </p>
-                  <p className="text-sm text-gray-400 mb-6">Flexibilidade total.</p>
-                  <ul className="space-y-4 mb-8 text-sm sm:text-base">
-                    <li className="flex items-center gap-3"><CheckIcon /> Agendamentos ilimitados</li>
-                    <li className="flex items-center gap-3"><CheckIcon /> Gestão de Clientes</li>
-                    <li className="flex items-center gap-3"><CheckIcon /> Página Pública</li>
-                  </ul>
-                  {renderPlanButton("price_1SMeWT3zDQy3p6yeWl0LC4wi", "Escolher Plano", false)}
-                </div>
-              </div>
-            </AnimateOnScroll>
-
-            {/* PLANO TRIMESTRAL (DESTAQUE - ATUALIZADO) */}
-            <AnimateOnScroll delay={200}>
-              <div className="group relative bg-[#daa520] border-2 border-[#c8961e] rounded-2xl p-6 sm:p-8 flex flex-col h-full scale-100 lg:scale-110 shadow-2xl shadow-[#daa520]/20 z-10">
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-black text-[#daa520] text-[10px] font-black px-4 py-1.5 rounded-full tracking-widest uppercase">
-                  MAIS ESCOLHIDO
-                </div>
-                <div className="relative z-10 flex flex-col flex-grow text-left">
-                  <h3 className="text-xl font-bold text-black mb-2">Trimestral</h3>
-                  <p className="text-3xl sm:text-4xl font-extrabold text-black mb-1">
-                    R$45<span className="text-lg sm:text-xl font-medium text-black/60">,00/mês</span>
-                  </p>
-                  <p className="text-[10px] font-black text-black/40 mb-6 uppercase tracking-tighter">Cobrado a cada 3 meses (R$ 135,00)</p>
-                  <ul className="space-y-4 mb-8 text-black font-bold text-sm sm:text-base">
-                    <li className="flex items-center gap-3"><CheckIcon color="text-black/50" /> Tudo do Plano Mensal</li>
-                    <li className="flex items-center gap-3"><CheckIcon color="text-black/50" /> Gestão Financeira</li>
-                    <li className="flex items-center gap-3"><CheckIcon color="text-black/50" /> Relatórios Avançados</li>
-                  </ul>
-                  {renderPlanButton("price_1SMeWT3zDQy3p6yezkMmrByP", "Assinar Agora", true)}
-                </div>
-              </div>
-            </AnimateOnScroll>
-
-            {/* PLANO ANUAL */}
-            <AnimateOnScroll delay={400}>
-              <div className="group relative bg-black border border-white/10 rounded-2xl p-6 sm:p-8 flex flex-col h-full transition-all duration-300 hover:border-[#daa520]/50">
-                <div className="relative z-10 flex flex-col flex-grow text-left">
-                  <h3 className="text-xl font-bold text-[#daa520] mb-2">Anual</h3>
-                  <p className="text-3xl sm:text-4xl font-extrabold mb-1">
-                    R$39<span className="text-lg sm:text-xl font-medium text-gray-400">,00/mês</span>
-                  </p>
-                  <p className="text-sm text-gray-400 mb-1">Melhor economia.</p>
-                  <p className="text-[10px] font-bold text-gray-500 mb-6 uppercase">R$ 468,00 anualmente</p>
-                  <ul className="space-y-4 mb-8 text-sm sm:text-base">
-                    <li className="flex items-center gap-3"><CheckIcon /> Tudo do Trimestral</li>
-                    <li className="flex items-center gap-3"><CheckIcon /> 2 Meses Grátis</li>
-                    <li className="flex items-center gap-3"><CheckIcon /> Suporte Prioritário</li>
-                  </ul>
-                  {renderPlanButton("price_1SO7sB3zDQy3p6yevNXLXO8v", "Economizar 30%", false)}
-                </div>
-              </div>
-            </AnimateOnScroll>
-          </div>
+        {/* Garantia Footer */}
+        <div className="mt-16 text-center border-t border-white/5 pt-8">
+          <p className="text-gray-500 text-sm flex items-center justify-center gap-2">
+            <ShieldCheck size={16} className="text-primary" />
+            <span>Garantia total. Não cobramos nada se cancelar durante o teste.</span>
+          </p>
         </div>
       </section>
     </div>

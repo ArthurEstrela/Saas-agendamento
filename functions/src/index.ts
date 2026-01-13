@@ -29,7 +29,7 @@ const PLANOS_PERMITIDOS = {
   ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
 };
 
-const YOUR_APP_URL = "http://localhost:5173"; // Altere para a URL de produção quando lançar
+const YOUR_APP_URL = "https://stylo-28128.web.app/"; // Altere para a URL de produção quando lançar
 
 let stripeInstance: Stripe;
 
@@ -322,7 +322,7 @@ export const sendAppointmentReminders = onSchedule(
 export const createStripeCheckout = onCall(
   {
     region: REGION,
-    cors: ["http://localhost:5173"],
+    cors: ["https://stylo-28128.web.app/"],
     secrets: ["STRIPE_API_SECRET"],
   },
   async (request) => {
@@ -383,7 +383,7 @@ export const createStripeCheckout = onCall(
 export const createStripeCustomerPortal = onCall(
   {
     region: REGION,
-    cors: ["http://localhost:5173"],
+    cors: ["https://stylo-28128.web.app/"],
     secrets: ["STRIPE_API_SECRET"],
   },
   async (request) => {
@@ -415,7 +415,7 @@ export const createStripeCustomerPortal = onCall(
 export const stripeWebhook = onRequest(
   {
     region: REGION,
-    cors: ["http://localhost:5173"],
+    cors: ["https://stylo-28128.web.app/"],
     secrets: ["STRIPE_API_SECRET", "STRIPE_WEBHOOK_KEY"],
   },
   async (request, response) => {
@@ -499,7 +499,7 @@ export const stripeWebhook = onRequest(
 );
 
 export const createProfessionalUser = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] },
+  { region: REGION, cors: ["https://stylo-28128.web.app/"] },
   async (request) => {
     if (!request.auth)
       throw new HttpsError("unauthenticated", "Autenticação necessária.");
@@ -573,7 +573,7 @@ export const createProfessionalUser = onCall(
 );
 
 export const createAppointment = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] },
+  { region: REGION, cors: ["https://stylo-28128.web.app/"] },
   async (request) => {
     if (!request.auth)
       throw new HttpsError("unauthenticated", "Autenticação necessária.");
@@ -681,7 +681,7 @@ export const createAppointment = onCall(
 );
 
 export const completeAppointment = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] }, // Ajuste o CORS conforme prod
+  { region: REGION, cors: ["https://stylo-28128.web.app/"] }, // Ajuste o CORS conforme prod
   async (request) => {
     if (!request.auth)
       throw new HttpsError("unauthenticated", "Autenticação necessária.");
@@ -762,7 +762,7 @@ export const completeAppointment = onCall(
 );
 
 export const cancelAppointmentByClient = onCall(
-  { region: REGION, cors: ["http://localhost:5173"] }, // Ajuste o CORS conforme prod
+  { region: REGION, cors: ["https://stylo-28128.web.app/"] }, // Ajuste o CORS conforme prod
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Autenticação necessária.");

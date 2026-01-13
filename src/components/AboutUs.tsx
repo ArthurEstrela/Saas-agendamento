@@ -1,5 +1,7 @@
-import { motion } from "framer-motion";
-import { Users, Target, Sparkles, Quote, Linkedin, Github } from "lucide-react";
+import { motion, type Variants } from "framer-motion"; // 1. Adicione Variants aqui
+import { Target, Sparkles, Quote, Linkedin, Github, ArrowRight } from "lucide-react";
+import { Button } from "../components/ui/button"; 
+import { Link } from "react-router-dom";
 
 const teamMembers = [
   {
@@ -7,161 +9,155 @@ const teamMembers = [
     role: "CEO & Fundador",
     imageUrl:
       "https://firebasestorage.googleapis.com/v0/b/stylo-28128.firebasestorage.app/o/fotos_criadores%2FArthur.jpeg?alt=media&token=8611e096-56b6-4dd2-903a-802ce5babe62",
-    bio: "Apaixonado por tecnologia e beleza, Arthur fundou a Stylo para revolucionar a gestão de negócios no setor, trazendo eficiência e modernidade.",
+    bio: "Visionário apaixonado por tecnologia e estética. Fundou a Stylo para trazer a revolução digital para o mercado de beleza.",
+    linkedin: "#",
+    github: "#"
   },
   {
     name: "Sávio Issa",
     role: "Diretor de Tecnologia (CTO)",
     imageUrl:
       "https://firebasestorage.googleapis.com/v0/b/stylo-28128.firebasestorage.app/o/fotos_criadores%2FSavio.jpeg?alt=media&token=e539c859-1a04-4f09-a145-e9f7604d29c0",
-    bio: "Comanda a nossa equipa de engenharia, garantindo que a plataforma seja robusta, segura e inovadora, sempre na vanguarda tecnológica.",
+    bio: "Arquiteto de software e líder técnico. Garante que cada linha de código da Stylo seja segura, rápida e escalável.",
+    linkedin: "#",
+    github: "#"
   },
 ];
 
-const fadeInUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-};
-
-const staggerContainer = {
+// 2. Tipagem explícita com ': Variants' resolve o erro do TypeScript
+const containerVar: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.2,
-    },
+    transition: { staggerChildren: 0.2, delayChildren: 0.3 },
+  },
+};
+
+const itemVar: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } 
   },
 };
 
 const AboutUs = () => {
   return (
-    <div className="bg-gray-950 text-gray-100 min-h-screen font-sans selection:bg-amber-500/30">
-      {/* --- HERO SECTION --- */}
-      <div className="relative overflow-hidden py-24 sm:py-32">
-        {/* Background Effects */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px]" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[100px]" />
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
-          <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
-            <span className="inline-block py-1 px-3 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-sm font-semibold tracking-wide uppercase mb-6">
-              Sobre a Stylo
-            </span>
-            <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl">
-              A nossa missão é <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-600">
-                o seu sucesso.
-              </span>
-            </h1>
-            <p className="mt-8 max-w-3xl mx-auto text-xl text-gray-400 leading-relaxed">
-              Nascemos da paixão por simplificar. Acreditamos que, com as
-              ferramentas certas, todo o profissional de beleza pode prosperar,
-              focando no que realmente importa:{" "}
-              <span className="text-gray-100 font-medium">
-                a arte de transformar e cuidar.
-              </span>
-            </p>
-          </motion.div>
-        </div>
+    <div className="min-h-screen bg-[#030712] text-gray-100 font-sans selection:bg-amber-500/30 selection:text-amber-100 overflow-x-hidden">
+      
+      {/* --- BACKGROUND EFFECTS --- */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-amber-500/10 blur-[120px] rounded-full pointer-events-none opacity-30"></div>
       </div>
 
-      {/* --- STORY & VALUES SECTION --- */}
-      <div className="py-16 bg-gray-900/30 border-y border-gray-800/50 backdrop-blur-sm">
+      {/* --- HERO SECTION --- */}
+      <section className="relative z-10 py-24 sm:py-32 flex flex-col items-center justify-center text-center px-4">
+        <motion.div 
+          initial="hidden" 
+          animate="visible" 
+          variants={containerVar}
+          className="max-w-4xl mx-auto"
+        >
+          <motion.div variants={itemVar}>
+            <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold tracking-widest uppercase mb-8 hover:bg-amber-500/20 transition-colors cursor-default">
+              <Sparkles size={12} />
+              Sobre a Stylo
+            </span>
+          </motion.div>
+          
+          <motion.h1 variants={itemVar} className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight">
+            A nossa missão é <br className="hidden md:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-500 to-amber-700 drop-shadow-sm">
+              o seu sucesso.
+            </span>
+          </motion.h1>
+          
+          <motion.p variants={itemVar} className="max-w-2xl mx-auto text-lg md:text-xl text-gray-400 leading-relaxed font-light">
+            Acreditamos que, com as ferramentas certas, todo profissional de beleza pode prosperar.
+            Nós cuidamos da complexidade para você focar na <span className="text-gray-100 font-medium border-b border-amber-500/30">arte de transformar</span>.
+          </motion.p>
+        </motion.div>
+      </section>
+
+      {/* --- MANIFESTO / VALUES SECTION --- */}
+      <section className="relative z-10 py-20 border-y border-white/5 bg-gray-950/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            {/* Texto */}
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={staggerContainer}
-              className="space-y-8"
-            >
-              <motion.div variants={fadeInUp}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-gray-800 rounded-lg text-amber-500">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={containerVar}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start"
+          >
+            {/* Texto Esquerda */}
+            <div className="space-y-12">
+              <motion.div variants={itemVar} className="group">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="p-3 bg-gray-900 rounded-xl text-amber-500 border border-gray-800 group-hover:border-amber-500/30 transition-colors">
                     <Sparkles size={24} />
                   </div>
-                  <h2 className="text-3xl font-bold text-white">
-                    A nossa história
-                  </h2>
+                  <h2 className="text-2xl md:text-3xl font-bold text-white">Nossa História</h2>
                 </div>
-                <p className="text-gray-400 text-lg leading-relaxed">
-                  A Stylo começou com uma observação simples: profissionais
-                  talentosos da área da beleza gastavam demasiado tempo com
-                  tarefas administrativas e perdiam clientes por falta de um
-                  sistema de agendamento eficiente. Decidimos mudar essa
-                  realidade.
+                <p className="text-gray-400 text-lg leading-relaxed pl-16 border-l border-gray-800 group-hover:border-amber-500/20 transition-colors">
+                  A Stylo nasceu de uma observação simples: profissionais talentosos perdiam
+                  muito tempo com papelada. Decidimos criar um ecossistema onde a gestão é invisível e o talento é o protagonista.
                 </p>
               </motion.div>
 
-              <motion.div variants={fadeInUp}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-gray-800 rounded-lg text-amber-500">
+              <motion.div variants={itemVar} className="group">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="p-3 bg-gray-900 rounded-xl text-amber-500 border border-gray-800 group-hover:border-amber-500/30 transition-colors">
                     <Target size={24} />
                   </div>
-                  <h2 className="text-3xl font-bold text-white">
-                    Nosso Propósito
-                  </h2>
+                  <h2 className="text-2xl md:text-3xl font-bold text-white">Nosso Propósito</h2>
                 </div>
-                <p className="text-gray-400 text-lg leading-relaxed">
-                  Reunimos uma equipa de especialistas em tecnologia e design, e
-                  trabalhámos lado a lado com donos de salões e barbearias.
-                  Hoje, orgulhamo-nos de oferecer uma plataforma que não só
-                  organiza a agenda, mas impulsiona o crescimento.
+                <p className="text-gray-400 text-lg leading-relaxed pl-16 border-l border-gray-800 group-hover:border-amber-500/20 transition-colors">
+                  Unimos tecnologia de ponta com design intuitivo. Não somos apenas um software; somos o parceiro estratégico que impulsiona o crescimento do seu salão ou barbearia.
                 </p>
               </motion.div>
-            </motion.div>
+            </div>
 
-            {/* Quote Card */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="relative"
-            >
-              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl blur opacity-20"></div>
-              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl p-8 sm:p-12 shadow-2xl">
-                <Quote className="text-amber-500/40 w-12 h-12 mb-6" />
-                <blockquote className="text-2xl font-medium text-gray-200 leading-snug">
-                  "Queremos ser mais do que um software. Queremos ser o parceiro
-                  estratégico que ajuda cada negócio de beleza a atingir o seu
-                  máximo potencial."
+            {/* Quote Card (Direita) */}
+            <motion.div variants={itemVar} className="relative mt-8 lg:mt-0">
+              <div className="absolute -inset-1 bg-gradient-to-br from-amber-500/20 to-purple-500/20 rounded-3xl blur-2xl opacity-50"></div>
+              
+              <div className="relative bg-[#0A0A0A] border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl">
+                <Quote className="text-amber-500 w-12 h-12 mb-8 opacity-80" />
+                <blockquote className="text-2xl md:text-3xl font-medium text-gray-200 leading-snug tracking-tight">
+                  "Queremos ser mais do que um software. Queremos ser a base sólida onde os sonhos dos empreendedores são construídos."
                 </blockquote>
-                <div className="mt-6 flex items-center gap-4">
-                  <div className="h-px flex-1 bg-gray-800"></div>
-                  <span className="text-amber-500 font-bold tracking-widest text-sm uppercase">
-                    Manifesto Stylo
-                  </span>
+                
+                <div className="mt-8 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-white font-bold text-lg">Manifesto Stylo</span>
+                    <span className="text-gray-500 text-sm">Desde 2025</span>
+                  </div>
+                  <div className="h-px w-24 bg-gradient-to-r from-amber-500 to-transparent"></div>
                 </div>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </section>
 
       {/* --- TEAM SECTION --- */}
-      <div className="py-24 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <section className="relative z-10 py-32 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-20"
           >
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white flex items-center justify-center gap-3">
-              <Users className="text-amber-500" /> Quem faz acontecer
-            </h2>
-            <p className="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">
-              Pessoas dedicadas a construir o futuro da gestão de beleza com
-              inovação e empatia.
+            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">Mentes Brilhantes</h2>
+            <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+              Os líderes dedicados a construir o futuro da gestão de beleza.
             </p>
           </motion.div>
 
-          <div className="grid gap-8 md:grid-cols-2 lg:max-w-4xl lg:mx-auto">
+          <div className="grid gap-8 md:grid-cols-2 lg:max-w-5xl lg:mx-auto">
             {teamMembers.map((person, index) => (
               <motion.div
                 key={person.name}
@@ -169,41 +165,38 @@ const AboutUs = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.2 }}
-                className="group relative bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-amber-500/30 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.1)]"
+                className="group relative h-full"
               >
-                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-                  {/* Avatar com Anel */}
+                <div className="absolute inset-0 bg-gray-900/40 rounded-3xl border border-white/5 group-hover:border-amber-500/30 transition-all duration-500"></div>
+                
+                <div className="relative p-8 flex flex-col sm:flex-row gap-8 items-center sm:items-start h-full">
                   <div className="relative shrink-0">
-                    <div className="absolute inset-0 bg-amber-500 rounded-full blur opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                    <div className="absolute -inset-2 bg-gradient-to-br from-amber-500 to-purple-600 rounded-full blur opacity-0 group-hover:opacity-30 transition-opacity duration-500"></div>
                     <img
-                      className="relative object-cover w-24 h-24 rounded-full border-2 border-gray-800 group-hover:border-amber-500 transition-colors"
+                      className="relative object-cover w-32 h-32 rounded-full border-4 border-gray-900 group-hover:scale-105 transition-transform duration-500 shadow-xl"
                       src={person.imageUrl}
-                      alt={`Foto de ${person.name}`}
+                      alt={person.name}
                     />
                   </div>
 
-                  {/* Info */}
-                  <div className="text-center sm:text-left">
-                    <h3 className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors">
+                  <div className="flex flex-col items-center sm:items-start text-center sm:text-left flex-1">
+                    <h3 className="text-2xl font-bold text-white mb-1 group-hover:text-amber-400 transition-colors">
                       {person.name}
                     </h3>
-                    <p className="text-sm font-semibold text-amber-500 uppercase tracking-wider mb-3">
+                    <p className="text-sm font-bold text-amber-600 uppercase tracking-widest mb-4">
                       {person.role}
                     </p>
-                    <p className="text-gray-400 text-sm leading-relaxed">
+                    <p className="text-gray-400 leading-relaxed text-sm mb-6 flex-grow">
                       {person.bio}
                     </p>
 
-                    {/* Social Icons (Decorativos) */}
-                    <div className="flex items-center justify-center sm:justify-start gap-3 mt-4 text-gray-500">
-                      <Github
-                        size={18}
-                        className="hover:text-white cursor-pointer transition-colors"
-                      />
-                      <Linkedin
-                        size={18}
-                        className="hover:text-white cursor-pointer transition-colors"
-                      />
+                    <div className="flex gap-4 mt-auto">
+                      <a href={person.github} className="p-2 bg-gray-800 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all">
+                        <Github size={18} />
+                      </a>
+                      <a href={person.linkedin} className="p-2 bg-gray-800 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-gray-700 transition-all">
+                        <Linkedin size={18} />
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -211,14 +204,34 @@ const AboutUs = () => {
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* --- FOOTER CTA --- */}
-      <div className="pb-20 text-center">
-        <p className="text-gray-500 text-sm">
-          Feito com <span className="text-red-500">❤</span> para empreendedores.
-        </p>
-      </div>
+      {/* --- CTA FINAL --- */}
+      <section className="relative z-10 py-24 text-center border-t border-white/5 bg-gray-950">
+        <div className="max-w-3xl mx-auto px-4">
+          <h2 className="text-3xl font-bold text-white mb-6">Faça parte dessa revolução</h2>
+          <p className="text-gray-400 mb-10">
+            Estamos sempre em busca de parceiros e clientes que queiram crescer conosco.
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            {/* Correção de HTML: Link fora do Button para evitar tag <a> dentro de <button> */}
+            <Link to="/register-type">
+              <Button size="lg" className="bg-amber-500 hover:bg-amber-600 text-black font-bold h-12 px-8 rounded-full w-full sm:w-auto">
+                Começar Agora
+              </Button>
+            </Link>
+            
+            <Link to="/contact">
+              <Button variant="outline" size="lg" className="border-gray-700 text-gray-300 hover:text-white hover:bg-white/5 h-12 px-8 rounded-full flex items-center gap-2 w-full sm:w-auto">
+                Fale Conosco <ArrowRight size={16} />
+              </Button>
+            </Link>
+          </div>
+          <p className="mt-16 text-gray-600 text-sm">
+            Feito com <span className="text-red-500 animate-pulse">❤</span> para o mundo.
+          </p>
+        </div>
+      </section>
     </div>
   );
 };

@@ -4,9 +4,6 @@ import { startOfMonth, endOfMonth } from "date-fns";
 
 // Serviços e Tipos
 import { getFinancialData } from "../firebase/financeService"; 
-// ^ ATENÇÃO: Verifique se essa função 'getFinancialData' também foi atualizada 
-// para ler da coleção 'expenses' raiz, senão os totais não baterão.
-
 import {
   addExpense,
   deleteExpense,
@@ -26,12 +23,12 @@ interface FinanceStore {
   setCurrentDate: (date: Date) => void;
   fetchFinancialData: (providerId: string, date: Date) => Promise<void>;
   
-  // CRUD Actions
-  addNewExpense: (expenseData: Omit<Expense, "id">) => Promise<void>;
+  // ✨ CRUD Actions CORRIGIDAS: Omitindo providerId pois a store já o fornece
+  addNewExpense: (expenseData: Omit<Expense, "id" | "providerId">) => Promise<void>;
   removeExpense: (expenseId: string) => Promise<void>;
   editExpense: (
     expenseId: string,
-    expenseData: Partial<Omit<Expense, "id">>
+    expenseData: Partial<Omit<Expense, "id" | "providerId">>
   ) => Promise<void>;
 }
 
@@ -44,7 +41,6 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
   setCurrentDate: (date) => set({ currentDate: date }),
 
   fetchFinancialData: async (providerId, date) => {
-    // Evita chamadas desnecessárias
     if (!providerId) return;
 
     set({ isLoading: true, error: null });
@@ -52,7 +48,6 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
       const startDate = startOfMonth(date);
       const endDate = endOfMonth(date);
       
-      // Aqui assume-se que getFinancialData já busca da nova coleção 'expenses'
       const data = await getFinancialData(providerId, startDate, endDate);
       
       set({ financialData: data, isLoading: false });
@@ -75,9 +70,9 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
 
     await toast.promise(
       (async () => {
-        // 1. Adiciona no Firestore
-        await addExpense(providerId, expenseData);
-        // 2. Recarrega os dados para atualizar a tela (Dashboard/Gráficos)
+        const payload = { ...expenseData, providerId } as Omit<Expense, "id">;
+        
+        await addExpense(providerId, payload);
         await get().fetchFinancialData(providerId, currentDate);
       })(),
       {

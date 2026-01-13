@@ -183,6 +183,8 @@ const profileSchema = z.object({
     })
     .optional(),
 });
+
+
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export const ProfileManagement = () => {
@@ -569,17 +571,19 @@ export const ProfileManagement = () => {
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
                 <div className="space-y-2">
-                  <Label>Nome Fantasia</Label>
-                  <div className="relative">
-                    <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                    <Input
-                      className="pl-10"
-                      {...register("businessName")}
-                      placeholder="Ex: Barbearia Estilo"
-                      error={errors.businessName?.message}
-                    />
-                  </div>
-                </div>
+  <Label>Nome Fantasia</Label>
+  <div className="relative">
+    <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+    <Input
+      className="pl-10"
+      {...register("businessName")}
+      placeholder="Ex: Barbearia Estilo"
+    />
+  </div>
+  {errors.businessName && (
+    <span className="text-xs text-red-500">{errors.businessName.message}</span>
+  )}
+</div>
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1">
@@ -904,30 +908,37 @@ export const ProfileManagement = () => {
                     )}
                   />
                 </div>
-               <div className="space-y-2">
+              <div className="space-y-2">
   <Label>Chave Pix</Label>
   <div className="relative">
     <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
-    <Controller
-      name="pixKey"
-      control={control}
-      render={({ field: { onChange, value, ...field } }) => {
-        // Pegamos o tipo selecionado no momento
-        const currentType = watch("pixKeyType") || "cpf";
-        const config = pixConfig[currentType as keyof typeof pixConfig];
+   <Controller
+  name="pixKey"
+  control={control}
+  render={({ field: { onChange, value, ref } }) => {
+    // 1. Pegamos a configuração baseada no tipo selecionado
+    const currentType = watch("pixKeyType") || "cpf";
+    const config = pixConfig[currentType as keyof typeof pixConfig];
 
-        return (
-          <IMaskInput
-            {...field}
-            value={value || ""}
-            mask={config.mask}
-            placeholder={config.placeholder}
-            onAccept={(val: string) => onChange(val)}
-            className={imaskClass} // Usa a classe que você já definiu no arquivo
-          />
-        );
-      }}
-    />
+    return (
+      <IMaskInput
+        // ✅ Em vez de ref={ref}, o IMask usa inputRef
+        inputRef={ref} 
+        className={imaskClass}
+        value={value || ""}
+        // ✅ Definimos explicitamente o tipo da máscara para evitar conflitos
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mask={config.mask as any} 
+        placeholder={config.placeholder}
+        // ✅ unmask={true} garante que você salve no banco apenas os números (ex: 00011122233)
+        // Se preferir salvar com pontuação, mude para false.
+        unmask={true} 
+        // ✅ O RHF precisa ser avisado da mudança através do onAccept
+        onAccept={(val: string) => onChange(val)}
+      />
+    );
+  }}
+/>
     {errors.pixKey && (
       <span className="text-xs text-red-500 mt-1">{errors.pixKey.message}</span>
     )}

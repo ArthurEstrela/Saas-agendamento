@@ -1,6 +1,6 @@
 // src/components/AppLayout.tsx
 
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom"; // Importe useLocation
 import Header from "./Header";
 import Footer from "./Footer";

@@ -69,6 +69,7 @@ interface AuthState {
   ) => Promise<void>;
   logout: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
+  clearError: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -204,4 +205,5 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ isSubmitting: false });
     }
   },
+  clearError: () => set({ error: null }),
 }));

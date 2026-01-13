@@ -1,6 +1,3 @@
-// src/components/Pricing.tsx
-import React from "react";
-
 const CheckIcon = () => (
   <svg
     className="w-5 h-5 text-amber-500- mr-2 flex-shrink-0"

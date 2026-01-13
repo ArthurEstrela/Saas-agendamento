@@ -1,3 +1,4 @@
+import React, { useEffect } from "react"; // Importe useEffect
 import { useAuthStore } from "../store/authStore";
 import { LoginForm } from "../components/auth/LoginForm";
 import { Link, useNavigate } from "react-router-dom";
@@ -7,9 +8,14 @@ import type { UserProfile } from "../types";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { error: authError } = useAuthStore();
-  const { redirectUrlAfterLogin, setRedirectUrlAfterLogin } =
-    useBookingProcessStore();
+  // Pegamos o erro e a função para limpar o erro
+  const { error: authError, clearError } = useAuthStore();
+  const { redirectUrlAfterLogin, setRedirectUrlAfterLogin } = useBookingProcessStore();
+
+  // ✨ CORREÇÃO: Limpa qualquer erro residual ao entrar na página
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
   const handleLoginSuccess = (user: UserProfile) => {
     // ✨ LÓGICA DE REDIRECIONAMENTO SIMPLIFICADA E ROBUSTA
@@ -49,12 +55,11 @@ const LoginPage: React.FC = () => {
 
         {/* O erro de autenticação (ex: "senha inválida") é exibido aqui */}
         {authError && (
-          <div className="bg-red-500/10 text-red-400 p-3 rounded-lg mb-6 text-center border border-red-500/30">
+          <div className="bg-red-500/10 text-red-400 p-3 rounded-lg mb-6 text-center border border-red-500/30 animate-fade-in">
             {authError}
           </div>
         )}
 
-        {/* O LoginForm não precisa mais da prop `setAuthError` */}
         <LoginForm onLoginSuccess={handleLoginSuccess} />
 
         <div className="mt-6 text-center text-gray-400">
@@ -62,7 +67,7 @@ const LoginPage: React.FC = () => {
             Não tem uma conta?{" "}
             <Link
               to="/register-type"
-              className="font-semibold text-[#daa520] hover:text-yellow-400"
+              className="font-semibold text-[#daa520] hover:text-yellow-400 transition-colors"
             >
               Cadastre-se agora!
             </Link>

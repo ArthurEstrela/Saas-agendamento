@@ -96,13 +96,22 @@ export const ExpenseModal = ({
   }, [expenseToEdit, isOpen, reset]);
 
   const onSubmit = async (data: ExpenseFormData) => {
-    const expenseData: Omit<Expense, "id"> = { ...data, date: data.date };
-    if (data.type !== "recurring") delete expenseData.frequency;
-    else expenseData.frequency = "monthly";
+    // ✨ CORREÇÃO AQUI: Tipamos corretamente ignorando o 'providerId', pois a store injeta ele.
+    const expenseData: Omit<Expense, "id" | "providerId"> = { ...data, date: data.date };
+    
+    if (data.type !== "recurring") {
+     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       delete (expenseData as any).frequency; 
+    } else {
+       expenseData.frequency = "monthly";
+    }
 
     try {
-      if (expenseToEdit?.id) await editExpense(expenseToEdit.id, expenseData);
-      else await addNewExpense(expenseData);
+      if (expenseToEdit?.id) {
+        await editExpense(expenseToEdit.id, expenseData);
+      } else {
+        await addNewExpense(expenseData);
+      }
       onClose();
     } catch (error) {
       console.error("Erro ao salvar:", error);

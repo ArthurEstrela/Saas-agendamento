@@ -124,6 +124,9 @@ export const getAppointmentsByProviderId = async (
 /**
  * Atualiza status do agendamento.
  */
+/**
+ * Atualiza status do agendamento.
+ */
 export const updateAppointmentStatus = async (
   appointmentId: string,
   status: Appointment["status"],
@@ -135,16 +138,16 @@ export const updateAppointmentStatus = async (
 
   const appointmentRef = doc(db, "appointments", appointmentId);
 
-  // FIX: Removido 'any', tipado explicitamente como Record genérico
-  // Isso permite adicionar propriedades dinamicamente de forma segura para o Firestore
   const updateData: Record<string, unknown> = {
     status,
-    updatedAt: new Date(), // Marca timestamp da alteração
+    updatedAt: new Date(),
   };
 
   if (rejectionReason) updateData.rejectionReason = rejectionReason;
 
-  await updateDoc(appointmentRef, updateData);
+  // ✅ Fazemos o cast para 'any' apenas no argumento e desativamos o lint para esta linha
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await updateDoc(appointmentRef, updateData as any);
 };
 
 /**

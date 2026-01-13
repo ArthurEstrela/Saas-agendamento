@@ -112,7 +112,7 @@ export const getExpensesByDateRange = async (
  * Nota: providerId mantido para consistência da API, mesmo que deleteDoc use apenas o ID.
  */
 export const deleteExpense = async (
-  providerId: string, 
+  _providerId: string, 
   expenseId: string
 ): Promise<void> => {
   // Aponta direto para o documento na coleção raiz
@@ -124,12 +124,13 @@ export const deleteExpense = async (
  * Atualiza uma despesa.
  */
 export const updateExpense = async (
-  providerId: string,
+  _providerId: string,
   expenseId: string,
   expenseData: Partial<Omit<Expense, 'id'>>
 ): Promise<void> => {
   const expenseDoc = doc(db, EXPENSES_COLLECTION, expenseId);
   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const dataToUpdate: any = { ...expenseData };
 
   // Se houver data na atualização, converte para Timestamp

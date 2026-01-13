@@ -1,11 +1,18 @@
-// src/pages/RegisterPage.tsx
+import { useEffect } from 'react'; // Importe useEffect
 import { useParams, Link } from 'react-router-dom';
 import logo from '../assets/stylo-logo.png';
 import { ClientRegisterForm } from '../components/auth/ClientRegisterForm';
 import { ServiceProviderRegisterForm } from '../components/auth/ServiceProviderRegisterForm';
+import { useAuthStore } from '../store/authStore'; // Importe o store
 
 const RegisterPage = () => {
   const { userType } = useParams<{ userType: 'client' | 'provider' }>();
+  const { clearError } = useAuthStore(); // Pegue a função clearError
+
+  // ✨ CORREÇÃO: Garante que a tela de registro comece limpa, sem erros de login anteriores
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
   const title = userType === 'client' ? 'Crie sua Conta de Cliente' : 'Cadastre seu Negócio';
   const subtitle = userType === 'client'
@@ -28,7 +35,7 @@ const RegisterPage = () => {
          <div className="mt-6 text-center text-gray-400">
           <p>
             Já tem uma conta?{' '}
-            <Link to="/login" className="font-semibold text-[#daa520] hover:text-yellow-400">
+            <Link to="/login" className="font-semibold text-[#daa520] hover:text-yellow-400 transition-colors">
               Faça login!
             </Link>
           </p>

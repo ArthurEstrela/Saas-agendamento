@@ -7,7 +7,7 @@ import { AnimatePresence } from "framer-motion";
 import AppLayout from "./components/AppLayout";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage"; 
+import DashboardPage from "./pages/DashboardPage";
 import { ProtectedRoute } from "./components/Common/ProtectedRoute";
 import RegisterTypeSelection from "./pages/RegisterTypeSelection";
 import RegisterPage from "./pages/RegisterPage";
@@ -49,6 +49,10 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  useEffect(() => {
     const unsubscribe = useAuthStore.getState().initializeAuth();
     return () => unsubscribe();
   }, []);
@@ -79,13 +83,15 @@ function App() {
         {/* --- DASHBOARD ROUTES (Standardized in English) --- */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />}>
-            
             {/* Common */}
             <Route path="notifications" element={<Notifications />} />
 
             {/* Client Routes */}
             <Route path="explore" element={<ClientSearchSection />} />
-            <Route path="appointments" element={<ClientMyAppointmentsSection />} />
+            <Route
+              path="appointments"
+              element={<ClientMyAppointmentsSection />}
+            />
             <Route path="favorites" element={<ClientFavoritesSection />} />
             <Route path="profile" element={<ClientProfileSection />} />
 
@@ -102,10 +108,15 @@ function App() {
             {/* Professional Routes */}
             <Route path="home" element={<ProfessionalHome />} />
             <Route path="my-agenda" element={<AgendaView />} />
-            <Route path="my-availability" element={<AvailabilityManagement />} />
+            <Route
+              path="my-availability"
+              element={<AvailabilityManagement />}
+            />
             <Route path="my-reviews" element={<ReviewsManagement />} />
-            <Route path="my-profile" element={<ProfessionalProfileManagement />} />
-
+            <Route
+              path="my-profile"
+              element={<ProfessionalProfileManagement />}
+            />
           </Route>
         </Route>
 

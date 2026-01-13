@@ -124,11 +124,11 @@ const ServiceProviderDashboard = () => {
                     Período de Teste Gratuito
                   </h3>
                   <p className="text-indigo-200 text-sm">
-                    Você tem
+                    Você tem{" "}
                     <strong className="text-white text-base">
                       {daysLeft} {daysLeft === 1 ? "dia" : "dias"}
                     </strong>
-                    restantes para testar todas as funcionalidades Premium.
+                    {" "}restantes para testar todas as funcionalidades Premium.
                   </p>
                 </div>
               </div>

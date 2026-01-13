@@ -121,6 +121,29 @@ const MapEvents = ({
   return position === null ? null : <Marker position={position}></Marker>;
 };
 
+const pixConfig = {
+  cpf: {
+    mask: "000.000.000-00",
+    placeholder: "000.000.000-00",
+  },
+  cnpj: {
+    mask: "00.000.000/0000-00",
+    placeholder: "00.000.000/0000-00",
+  },
+  phone: {
+    mask: "(00) 00000-0000",
+    placeholder: "(64) 99999-9999",
+  },
+  email: {
+    mask: /^\S*@?\S*$/, 
+    placeholder: "seu@email.com",
+  },
+  random: {
+    mask: /.*/, 
+    placeholder: "Chave aleatória do banco",
+  },
+};
+
 // --- SCHEMA ---
 const profileSchema = z.object({
   businessName: z.string().min(3, "O nome do negócio é obrigatório"),
@@ -881,17 +904,35 @@ export const ProfileManagement = () => {
                     )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Chave Pix</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                    <Input
-                      className="pl-10"
-                      {...register("pixKey")}
-                      placeholder="Sua chave aqui"
-                    />
-                  </div>
-                </div>
+               <div className="space-y-2">
+  <Label>Chave Pix</Label>
+  <div className="relative">
+    <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
+    <Controller
+      name="pixKey"
+      control={control}
+      render={({ field: { onChange, value, ...field } }) => {
+        // Pegamos o tipo selecionado no momento
+        const currentType = watch("pixKeyType") || "cpf";
+        const config = pixConfig[currentType as keyof typeof pixConfig];
+
+        return (
+          <IMaskInput
+            {...field}
+            value={value || ""}
+            mask={config.mask}
+            placeholder={config.placeholder}
+            onAccept={(val: string) => onChange(val)}
+            className={imaskClass} // Usa a classe que você já definiu no arquivo
+          />
+        );
+      }}
+    />
+    {errors.pixKey && (
+      <span className="text-xs text-red-500 mt-1">{errors.pixKey.message}</span>
+    )}
+  </div>
+</div>
               </CardContent>
             </Card>
 

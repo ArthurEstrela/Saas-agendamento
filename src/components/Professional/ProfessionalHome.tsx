@@ -59,7 +59,7 @@ export const ProfessionalHome = () => {
     return `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
-  const metrics = useMemo(() => {
+const metrics = useMemo(() => {
     if (!profile)
       return {
         todayCount: 0,
@@ -72,15 +72,22 @@ export const ProfessionalHome = () => {
     const myAppointments = appointments.filter(
       (a) => a.professionalId === profile.professionalId
     );
-    const today = new Date();
-    const todayAppointments = myAppointments.filter(
-      (a) => isSameDay(new Date(a.startTime), today) && a.status === "scheduled"
+    
+    const today = new Date(); // Hora atual exata 🕒
+    const upcomingToday = myAppointments.filter(
+      (a) => 
+        isSameDay(new Date(a.startTime), today) && 
+        a.status === "scheduled" &&
+        new Date(a.startTime).getTime() > today.getTime() // Garante que só mostra os próximos
     );
+
     const completed = myAppointments.filter((a) => a.status === "completed");
+    
     const estimatedRevenue = completed.reduce(
       (acc, curr) => acc + (curr.totalPrice || 0),
       0
     );
+
     const reviewedAppts = myAppointments.filter((a) => a.review);
     const avgRating =
       reviewedAppts.length > 0
@@ -91,11 +98,12 @@ export const ProfessionalHome = () => {
         : 5.0;
 
     return {
-      todayCount: todayAppointments.length,
+      todayCount: upcomingToday.length, // Agora conta apenas os que faltam
       completedCount: completed.length,
       revenue: estimatedRevenue,
       rating: avgRating,
-      nextAppointment: todayAppointments.sort(
+      // Pega o primeiro da lista dos que ainda vão acontecer
+      nextAppointment: upcomingToday.sort(
         (a, b) =>
           new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       )[0],

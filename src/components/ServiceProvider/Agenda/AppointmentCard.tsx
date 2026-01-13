@@ -14,22 +14,27 @@ export const AppointmentCard = ({
   appointment: EnrichedProviderAppointment;
 }) => {
   const { setSelectedAppointment } = useProviderAppointmentsStore();
-  const { client, startTime, services } = appointment;
+
+  const { client, startTime, services, clientPhone } = appointment;
 
   const handleCardClick = () => setSelectedAppointment(appointment);
 
+  const phoneToUse = clientPhone || client?.phoneNumber;
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!client?.phoneNumber) return;
-    const cleanPhone = client.phoneNumber.replace(/\D/g, "");
+
+    if (!phoneToUse) return;
+
+    const cleanPhone = phoneToUse.replace(/\D/g, "");
     const serviceName = services[0]?.name || "serviço";
 
     let message = "";
     if (isPast(startTime)) {
-      message = `Olá ${client.name}, faz tempo que não te vejo! Bora marcar aquele ${serviceName}?`;
+      message = `Olá ${client?.name || "cliente"}, faz tempo que não te vejo! Bora marcar aquele ${serviceName}?`;
     } else {
       const timeString = format(startTime, "HH:mm");
-      message = `Olá ${client.name}, passando para confirmar nosso agendamento de ${serviceName} às ${timeString}.`;
+      message = `Olá ${client?.name || "cliente"}, passando para confirmar nosso agendamento de ${serviceName} às ${timeString}.`;
     }
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
@@ -49,7 +54,7 @@ export const AppointmentCard = ({
       onClick={handleCardClick}
       className="relative p-4 bg-gray-900/60 border-gray-800/60 backdrop-blur-sm cursor-pointer hover:border-primary/30 hover:bg-gray-800/80 transition-all h-full flex flex-col justify-between group rounded-xl overflow-hidden"
     >
-      {/* Efeito de borda lateral colorida baseada no status (opcional, mas ajuda visualmente) */}
+      {/* Efeito de borda lateral colorida baseada no status */}
       <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
       <div>
@@ -91,7 +96,8 @@ export const AppointmentCard = ({
 
       {/* Footer: Preço e Ação */}
       <div className="flex justify-between items-center mt-4 pt-2 border-t border-gray-800/50">
-        {client?.phoneNumber ? (
+        {/* ✅ LÓGICA CORRIGIDA: Usa phoneToUse para decidir se exibe o botão */}
+        {phoneToUse ? (
           <button
             onClick={handleWhatsAppClick}
             className="text-gray-400 hover:text-green-400 hover:bg-green-500/10 transition-all p-2 -ml-2 rounded-full flex items-center gap-2 active:scale-95"

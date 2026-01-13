@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; 
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Menu } from "lucide-react";
 import logo from "../../assets/stylo-logo.png";
 
 import { useProfileStore } from "../../store/profileStore";
+import { useAuthStore } from "../../store/authStore"; 
+import { useProviderAppointmentsStore } from "../../store/providerAppointmentsStore"; 
 import type { ProfessionalProfile } from "../../types";
 
 // UI
@@ -12,15 +14,32 @@ import { Button } from "../ui/button";
 import { ProfessionalSideNav } from "./ProfessionalSideNav";
 
 const ProfessionalDashboard = () => {
-  const { userProfile } = useProfileStore();
+  const { user } = useAuthStore(); // Pega o usuário logado
+  const { userProfile, fetchUserProfile, isLoadingProfile } = useProfileStore();
+  const { fetchAppointments } = useProviderAppointmentsStore(); // Pega a função de buscar agendamentos
+  
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const location = useLocation();
 
   const profile = userProfile as ProfessionalProfile | null;
 
-  // Mantivemos a verificação de perfil, pois o dashboard profissional
-  // geralmente depende estritamente dos dados do prestador carregados.
-  if (!profile) {
+  // ✅ 1. Busca o perfil do profissional ao carregar o dashboard
+  useEffect(() => {
+    if (user?.uid && !userProfile) {
+      fetchUserProfile(user.uid);
+    }
+  }, [user, userProfile, fetchUserProfile]);
+
+  // ✅ 2. Busca os agendamentos assim que o perfil estiver disponível
+  useEffect(() => {
+    if (profile?.serviceProviderId) {
+      // Aqui usamos o ID do estabelecimento vinculado ao profissional
+      fetchAppointments(profile.serviceProviderId);
+    }
+  }, [profile, fetchAppointments]);
+
+  // Enquanto estiver carregando o perfil essencial, mostra o loader
+  if (isLoadingProfile || !profile) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <Loader2 className="animate-spin text-primary" size={64} />

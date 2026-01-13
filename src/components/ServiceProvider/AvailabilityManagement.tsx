@@ -364,11 +364,9 @@ export const AvailabilityManagement = () => {
 
     try {
       await updateAvailability(providerId, selectedProfId, localAvailability);
-      showSuccess("Horários salvos com sucesso!");
       setHasChanges(false);
     } catch (error) {
       console.error(error);
-      showError("Erro ao salvar.");
     }
   };
 

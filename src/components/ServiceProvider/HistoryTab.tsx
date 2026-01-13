@@ -36,52 +36,57 @@ const HistoryCard = ({
 }: {
   appt: EnrichedProviderAppointment;
   onClick: () => void;
-}) => (
-  <Card
-    onClick={onClick}
-    className="group hover:border-primary/40 transition-all cursor-pointer bg-gray-900/40 border-gray-800"
-  >
-    <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <User size={16} className="text-primary" />
-          <p className="font-bold text-gray-200 group-hover:text-primary transition-colors">
-            {appt.client?.name || "Cliente desconhecido"}
+}) => {
+  // ✅ LÓGICA CORRIGIDA: Prioriza o nome salvo no agendamento (blindagem)
+  const clientName = appt.clientName || appt.client?.name || "Cliente desconhecido";
+
+  return (
+    <Card
+      onClick={onClick}
+      className="group hover:border-primary/40 transition-all cursor-pointer bg-gray-900/40 border-gray-800"
+    >
+      <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <User size={16} className="text-primary" />
+            <p className="font-bold text-gray-200 group-hover:text-primary transition-colors">
+              {clientName}
+            </p>
+          </div>
+          <p className="text-sm text-gray-400 pl-6">
+            {appt.services.map((s) => s.name).join(", ")}
+          </p>
+          <p className="text-xs text-gray-500 pl-6 mt-0.5">
+            com {appt.professionalName}
           </p>
         </div>
-        <p className="text-sm text-gray-400 pl-6">
-          {appt.services.map((s) => s.name).join(", ")}
-        </p>
-        <p className="text-xs text-gray-500 pl-6 mt-0.5">
-          com {appt.professionalName}
-        </p>
-      </div>
 
-      <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end gap-2 sm:gap-1 border-t sm:border-none border-gray-800 pt-3 sm:pt-0">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-300">
-          <Calendar size={14} className="text-gray-500" />
-          {format(appt.startTime, "dd MMM, HH:mm", { locale: ptBR })}
+        <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end gap-2 sm:gap-1 border-t sm:border-none border-gray-800 pt-3 sm:pt-0">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-gray-300">
+            <Calendar size={14} className="text-gray-500" />
+            {format(appt.startTime, "dd MMM, HH:mm", { locale: ptBR })}
+          </div>
+
+          {appt.status === "completed" ? (
+            <Badge
+              variant="success"
+              className="gap-1.5 bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20"
+            >
+              <CheckCircle size={12} /> Concluído
+            </Badge>
+          ) : (
+            <Badge
+              variant="destructive"
+              className="gap-1.5 bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20"
+            >
+              <XCircle size={12} /> Cancelado
+            </Badge>
+          )}
         </div>
-
-        {appt.status === "completed" ? (
-          <Badge
-            variant="success"
-            className="gap-1.5 bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20"
-          >
-            <CheckCircle size={12} /> Concluído
-          </Badge>
-        ) : (
-          <Badge
-            variant="destructive"
-            className="gap-1.5 bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20"
-          >
-            <XCircle size={12} /> Cancelado
-          </Badge>
-        )}
-      </div>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 interface HistoryTabProps {
   appointments: EnrichedProviderAppointment[];
@@ -100,11 +105,11 @@ export const HistoryTab = ({
 
   const filteredAppointments = useMemo(() => {
     return appointments
-      .filter((appt) =>
-        (appt.client?.name?.toLowerCase() || "").includes(
-          searchTerm.toLowerCase()
-        )
-      )
+      .filter((appt) => {
+        // ✅ BUSCA CORRIGIDA: Usa a mesma lógica do card para filtrar
+        const nameToSearch = appt.clientName || appt.client?.name || "";
+        return nameToSearch.toLowerCase().includes(searchTerm.toLowerCase());
+      })
       .filter((appt) =>
         statusFilter === "all" ? true : appt.status === statusFilter
       )

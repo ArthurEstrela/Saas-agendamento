@@ -30,11 +30,6 @@ const PLANOS_PERMITIDOS = {
 
 const YOUR_APP_URL = "http://localhost:5173"; // Altere para a URL de produção quando lançar
 
-// Inicialização segura do Resend
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
-
 let stripeInstance: Stripe;
 
 const getStripe = (): Stripe => {
@@ -70,15 +65,18 @@ const formatDate = (timestamp: admin.firestore.Timestamp) => {
 const sendNotification = async (
   recipientId: string,
   title: string,
-  body: string
+  body: string,
+  options?: { skipEmail?: boolean } // <--- NOVO PARÂMETRO OPCIONAL
 ) => {
   if (!recipientId) return;
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
   try {
     const userRef = db.collection("users").doc(recipientId);
     const userDoc = await userRef.get();
 
-    // Se o usuário não existir, não faz nada
     if (!userDoc.exists) {
       logger.warn(`Usuário ${recipientId} não encontrado para notificação.`);
       return;
@@ -89,10 +87,9 @@ const sendNotification = async (
     const email = userData?.email;
     const userName = userData?.name || "Usuário";
 
-    // Array de promessas para execução paralela
     const tasks: Promise<any>[] = [];
 
-    // 1. Enviar Push Notification (FCM)
+    // 1. Enviar Push Notification (FCM) - MANTIDO
     if (fcmToken) {
       const pushTask = admin
         .messaging()
@@ -100,45 +97,36 @@ const sendNotification = async (
           notification: { title, body },
           token: fcmToken,
         })
-        .then(() => logger.info(`Push enviado para ${recipientId}`))
-        .catch((e) =>
-          logger.error(`Erro ao enviar Push para ${recipientId}:`, e)
-        );
+        .catch((e) => logger.error(`Erro Push:`, e));
       tasks.push(pushTask);
     }
 
-    // 2. Enviar E-mail (Resend)
-    if (email && resend) {
-      
+    // 2. Enviar E-mail (Resend) - SÓ ENVIA SE NÃO TIVER A FLAG skipEmail
+    if (email && resend && !options?.skipEmail) { // <--- VERIFICAÇÃO AQUI
       const emailTask = resend.emails
         .send({
-          from: "Agendamento <contato@stylo.app.br>", // Em produção: contato@seudominio.com
+          from: "Agendamento <contato@stylo.app.br>",
           to: email,
           subject: title,
-          // AQUI ESTÁ A TROCA: Sai HTML string, entra React Component
           react: React.createElement(StyloNotification, {
             userName: userName,
             title: title,
             body: body,
-            actionLink: `${YOUR_APP_URL}/dashboard`
+            actionLink: `${YOUR_APP_URL}/dashboard`,
           }),
         })
-        .then(() => logger.info(`E-mail enviado para ${email}`))
-        .catch((e) => logger.error(`Erro ao enviar E-mail para ${email}:`, e));
-        
+        .catch((e) => logger.error(`Erro Email:`, e));
+
       tasks.push(emailTask);
     }
 
-    // 3. Salvar Notificação Interna (Firestore)
+    // 3. Salvar Notificação Interna (Firestore/Sininho) - MANTIDO
     const firestoreTask = createFirestoreNotification(recipientId, title, body);
     tasks.push(firestoreTask);
 
     await Promise.all(tasks);
   } catch (error) {
-    logger.error(
-      `Erro crítico ao processar notificações para ${recipientId}:`,
-      error
-    );
+    logger.error(`Erro ao processar notificações:`, error);
   }
 };
 
@@ -170,7 +158,7 @@ const createFirestoreNotification = async (
 // --- GATILHOS DO FIRESTORE (TRIGGERS) ---
 
 export const onAppointmentCreate = onDocumentCreated(
-  { document: "appointments/{appointmentId}", region: REGION },
+  { document: "appointments/{appointmentId}", region: REGION},
   async (event) => {
     const appointmentData = event.data?.data();
     if (!appointmentData) return;
@@ -185,12 +173,12 @@ export const onAppointmentCreate = onDocumentCreated(
       serviceName || "um serviço"
     }" para ${formattedDate} às ${formattedTime}.`;
 
-    await sendNotification(professionalId, title, body);
+    await sendNotification(professionalId, title, body, { skipEmail: true });
   }
 );
 
 export const onAppointmentUpdate = onDocumentUpdated(
-  { document: "appointments/{appointmentId}", region: REGION },
+  { document: "appointments/{appointmentId}", region: REGION, secrets: ["RESEND_API_KEY"] },
   async (event) => {
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
@@ -240,7 +228,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
 );
 
 export const onReviewCreate = onDocumentCreated(
-  { document: "reviews/{reviewId}", region: REGION },
+  { document: "reviews/{reviewId}", region: REGION }, // Sem secrets, pois não manda email
   async (event) => {
     const reviewData = event.data?.data();
     if (!reviewData) return;
@@ -250,6 +238,7 @@ export const onReviewCreate = onDocumentCreated(
 
     const providerRef = db.collection("users").doc(serviceProviderId);
 
+    // 1. Atualiza a média de notas (Lógica original)
     await db.runTransaction(async (transaction) => {
       const providerDoc = await transaction.get(providerRef);
       if (!providerDoc.exists) return;
@@ -268,11 +257,12 @@ export const onReviewCreate = onDocumentCreated(
       });
     });
 
-    // Opcional: Notificar o prestador sobre a nova avaliação
+    // 2. Envia Notificação SOMENTE NO APP (Sem E-mail)
     await sendNotification(
       serviceProviderId,
       "⭐ Nova Avaliação Recebida",
-      `Você recebeu uma nota ${rating}. Parabéns!`
+      `Você recebeu uma nota ${rating}. Parabéns!`,
+      { skipEmail: true } // <--- A MÁGICA ACONTECE AQUI
     );
   }
 );
@@ -280,7 +270,7 @@ export const onReviewCreate = onDocumentCreated(
 // --- FUNÇÕES AGENDADAS ---
 
 export const sendAppointmentReminders = onSchedule(
-  { schedule: "every day 09:00", timeZone: TIME_ZONE, region: REGION },
+  { schedule: "every day 09:00", timeZone: TIME_ZONE, region: REGION, secrets: ["RESEND_API_KEY"] },
   async () => {
     logger.info("Executando envio de lembretes de agendamento.");
 
@@ -595,6 +585,7 @@ export const createAppointment = onCall(
       endTime,
       serviceName,
       clientName,
+      clientPhone,
       professionalName,
       services,
       totalPrice,
@@ -655,6 +646,7 @@ export const createAppointment = onCall(
         transaction.set(newRef, {
           clientId,
           clientName,
+          clientPhone,
           professionalId,
           professionalName,
           providerId,
@@ -713,16 +705,17 @@ export const completeAppointment = onCall(
           throw new HttpsError("not-found", "Agendamento não encontrado.");
 
         const data = docSnap.data()!;
-        
+
         const isOwner = data.providerId === uid;
 
-        const isLinkedProfessional = userData?.professionalId === data.professionalId;
+        const isLinkedProfessional =
+          userData?.professionalId === data.professionalId;
 
         const isDirectMatch = data.professionalId === uid;
 
         if (!isOwner && !isLinkedProfessional && !isDirectMatch) {
           throw new HttpsError(
-            "permission-denied", 
+            "permission-denied",
             "Você não tem permissão para finalizar este agendamento."
           );
         }
@@ -840,7 +833,8 @@ export const cancelAppointmentByClient = onCall(
         // 5. Executar cancelamento
         transaction.update(appointmentRef, {
           status: "cancelled",
-          rejectionReason: reason || "Cancelado pelo cliente (sem motivo informado)",
+          rejectionReason:
+            reason || "Cancelado pelo cliente (sem motivo informado)",
           cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
           cancelledBy: "client",
         });
@@ -881,7 +875,7 @@ const checkSubscription = async (uid: string) => {
 };
 
 export const checkExpiredTrials = onSchedule(
-  { schedule: "every day 00:00", timeZone: TIME_ZONE, region: REGION },
+  { schedule: "every day 00:00", timeZone: TIME_ZONE, region: REGION, secrets: ["RESEND_API_KEY"] },
   async () => {
     logger.info("Verificando trials expirados...");
 
@@ -904,14 +898,14 @@ export const checkExpiredTrials = onSchedule(
     const notificationPromises: Promise<any>[] = []; // Array para disparar notificações em paralelo
     let count = 0;
 
-    // Nota: O Batch do Firestore suporta até 500 operações. 
+    // Nota: O Batch do Firestore suporta até 500 operações.
     // Se seu app crescer muito (milhares de expirações/dia), precisará dividir em chunks.
     // Para o início, isso atende perfeitamente.
-    
+
     snapshot.forEach((doc) => {
       // 1. Atualiza o status no Banco
-      batch.update(doc.ref, { 
-        subscriptionStatus: "expired" 
+      batch.update(doc.ref, {
+        subscriptionStatus: "expired",
       });
 
       // 2. Prepara a notificação (Push + Email)

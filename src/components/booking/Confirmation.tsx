@@ -97,16 +97,39 @@ export const Confirmation = () => {
     [selectedServices]
   );
 
-  const pixPayload = useMemo(() => {
-    if (!provider?.pixKey) return "";
-    return generatePixPayload({
-      key: provider.pixKey,
-      name: provider.businessName || provider.name,
-      city: provider.businessAddress?.city || "Brasil",
-      amount: totalPrice,
-      txid: "SAAS" + Math.floor(Math.random() * 1000),
-    });
-  }, [provider, totalPrice]);
+const pixPayload = useMemo(() => {
+  if (!provider?.pixKey) return "";
+
+  let key = provider.pixKey.trim();
+
+  // 1. Tratamento para Telefone
+  if (provider.pixKeyType === "phone") {
+    const numbersOnly = key.replace(/\D/g, "");
+    if (numbersOnly.length === 11) {
+      key = `+55${numbersOnly}`;
+    } else if (numbersOnly.length === 13 && !key.startsWith("+")) {
+      key = `+${numbersOnly}`;
+    }
+  } 
+  // 2. NOVO: Tratamento para CPF e CNPJ 🛡️
+  else if (provider.pixKeyType === "cpf" || provider.pixKeyType === "cnpj") {
+    // Remove tudo que não for número (tira pontos, traços e barras)
+    key = key.replace(/\D/g, "");
+  } 
+  // 3. Tratamento para E-mail ou Chave Aleatória
+  else {
+    // Apenas remove espaços que possam ter ido por erro
+    key = key.replace(/\s+/g, "");
+  }
+
+  return generatePixPayload({
+    key: key,
+    name: provider.businessName || provider.name,
+    city: provider.businessAddress?.city || "Brasil",
+    amount: totalPrice,
+    txid: "SAAS" + Math.floor(Math.random() * 1000),
+  });
+}, [provider, totalPrice]);
 
   const handleConfirm = async () => {
     if (!isAuthenticated) {
@@ -511,9 +534,13 @@ function calculateCRC16(payload: string): string {
   for (let i = 0; i < payload.length; i++) {
     crc ^= payload.charCodeAt(i) << 8;
     for (let j = 0; j < 8; j++) {
-      if ((crc & 0x8000) !== 0) crc = (crc << 1) ^ polynomial;
-      else crc = crc << 1;
+      if ((crc & 0x8000) !== 0) {
+        // Aplique o & 0xFFFF aqui para manter o valor em 16 bits
+        crc = ((crc << 1) ^ polynomial) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
     }
   }
-  return (crc & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+  return crc.toString(16).toUpperCase().padStart(4, "0");
 }

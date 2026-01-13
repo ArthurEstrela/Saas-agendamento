@@ -14,6 +14,7 @@ import Stripe from "stripe";
 import { Resend } from "resend";
 import * as React from "react";
 import { StyloNotification } from "./emails/StyloNotification";
+import { WelcomeStylo } from "./emails/WelcomeStylo";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -853,6 +854,54 @@ export const cancelAppointmentByClient = onCall(
   }
 );
 
+// functions/src/index.ts
+
+export const deleteProfessionalAccount = onCall(
+  { 
+    region: REGION, 
+    cors: true // 👈 Mude para true para evitar bloqueios de domínio durante os testes
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Acesso negado.");
+
+    const { professionalId, providerId } = request.data;
+    
+    if (request.auth.uid !== providerId) {
+      throw new HttpsError("permission-denied", "Apenas o dono pode excluir.");
+    }
+
+    try {
+      const userQuery = await db.collection("users")
+        .where("professionalId", "==", professionalId)
+        .limit(1).get();
+
+      const batch = db.batch();
+      
+      const profRef = db.collection("serviceProviders").doc(providerId)
+        .collection("professionals").doc(professionalId);
+      batch.delete(profRef);
+
+      if (!userQuery.empty) {
+        const userDoc = userQuery.docs[0];
+        batch.delete(userDoc.ref);
+        await batch.commit();
+        
+        // Deleta o login permanentemente
+        await admin.auth().deleteUser(userDoc.id);
+        logger.info(`Conta ${userDoc.id} removida com sucesso.`);
+      } else {
+        await batch.commit();
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      logger.error("Erro na Cloud Function:", error);
+      // Retorna o erro real para o seu console.log do front-end
+      throw new HttpsError("internal", error.message || "Erro ao excluir conta.");
+    }
+  }
+);
+
 const checkSubscription = async (uid: string) => {
   if (!uid) return;
 
@@ -928,5 +977,48 @@ export const checkExpiredTrials = onSchedule(
     await Promise.all(notificationPromises);
 
     logger.info(`${count} contas de trial foram expiradas e notificadas.`);
+  }
+);
+
+export const onUserCreate = onDocumentCreated(
+  { 
+    document: "users/{userId}", 
+    region: REGION, 
+    secrets: ["RESEND_API_KEY"] // Necessário para acessar o Resend
+  },
+  async (event) => {
+    const userData = event.data?.data();
+    
+    // Validações básicas
+    if (!userData || !userData.email) {
+      logger.info("Usuário criado sem e-mail ou dados inválidos.");
+      return;
+    }
+
+    const { email, name } = userData;
+    
+    // Inicializa o Resend aqui dentro (Seguro)
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      logger.error("RESEND_API_KEY não configurada.");
+      return;
+    }
+    const resend = new Resend(resendApiKey);
+
+    try {
+      await resend.emails.send({
+        from: "Stylo <boasvindas@stylo.app.br>", // Dica: Use um remetente amigável
+        to: email,
+        subject: `Bem-vindo ao Stylo, ${name || "Membro"}! 🚀`,
+        react: React.createElement(WelcomeStylo, {
+          userName: name || "Novo Membro",
+          actionLink: `${YOUR_APP_URL}/dashboard`, // Leva direto pro painel
+        }),
+      });
+      
+      logger.info(`E-mail de boas-vindas enviado para: ${email}`);
+    } catch (error) {
+      logger.error(`Erro ao enviar boas-vindas para ${email}:`, error);
+    }
   }
 );

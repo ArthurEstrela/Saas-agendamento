@@ -179,3 +179,11 @@ export const uploadProfessionalPhoto = async (
 
   return downloadURL;
 };
+
+export const deleteProfessionalComplete = async (
+  providerId: string,
+  professionalId: string
+): Promise<void> => {
+  const deleteAccountCallable = httpsCallable(functions, "deleteProfessionalAccount");
+  await deleteAccountCallable({ providerId, professionalId });
+};

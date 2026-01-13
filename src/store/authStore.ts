@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
   type AuthError,
 } from "firebase/auth";
 import { toast } from "react-hot-toast";
@@ -126,13 +127,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   signup: async (email, password, fullName, userType, additionalData) => {
     set({ isSubmitting: true, error: null });
 
-    // Envolve a criação do usuário e do perfil em uma única promise
+    // Envolve a criação do usuário, perfil e envio do e-mail em uma única promise
     const promise = (async () => {
+      // 1. Cria o usuário na autenticação
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
         password
       );
+
+      // 2. [NOVO] Envia o e-mail de verificação do Google
+      await sendEmailVerification(userCredential.user);
+
+      // 3. Cria o perfil no Firestore
       await createUserProfile(
         userCredential.user.uid,
         email,
@@ -144,7 +151,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     toast.promise(promise, {
       loading: "Criando sua conta...",
-      success: "Conta criada com sucesso! Bem-vindo(a).",
+      // [SUGESTÃO] Mudei a mensagem para lembrar o usuário de verificar
+      success: "Conta criada! Verifique seu e-mail para ativar o acesso.",
       error: (err) => getAuthErrorMessage(err),
     });
 

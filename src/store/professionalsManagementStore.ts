@@ -4,11 +4,12 @@ import { create } from "zustand";
 import { useProfileStore } from "./profileStore";
 import {
   createProfessionalAccount,
-  createOwnerAsProfessional, // <--- ADICIONADO
+  createOwnerAsProfessional,
   updateProfessionalPhotoUrls,
-  removeProfessionalFromProvider,
+  removeProfessionalFromProvider, // Para o dono
   updateProfessionalInProvider,
   uploadProfessionalPhoto,
+  deleteProfessionalComplete, // 👈 ADICIONE ISSO AQUI!
 } from "../firebase/professionalsManagementService";
 import type { Professional } from "../types";
 import { toast } from "react-hot-toast";
@@ -191,27 +192,33 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    removeProfessional: async (providerId, professionalId) => {
-      set({ isSubmitting: true, error: null });
 
-      const removeAndRefetchPromise = async () => {
-        await removeProfessionalFromProvider(providerId, professionalId);
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      };
+removeProfessional: async (providerId: string, professionalId: string) => {
+  set({ isSubmitting: true, error: null });
+  
+  try {
+    console.log("🚀 Iniciando exclusão do profissional:", professionalId);
 
-      try {
-        await toast.promise(removeAndRefetchPromise(), {
-          loading: "Removendo profissional...",
-          success: "Profissional removido com sucesso!",
-          error: "Falha ao remover o profissional.",
-        });
-      } catch (err) {
-        console.error("Erro em removeProfessional:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-        set({ error: errorMessage });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
+    // 1. Chamamos o serviço (agora devidamente importado)
+    await deleteProfessionalComplete(providerId, professionalId);
+    
+    // 2. IMPORTANTE: Pegamos a lista da ProfileStore, pois ela não existe nesta store
+    const profileStore = useProfileStore.getState();
+    const currentProfessionals = profileStore.professionals || [];
+    
+    // 3. Filtramos para remover da tela instantaneamente
+    const updatedList = currentProfessionals.filter(p => p.id !== professionalId);
+    
+    // 4. Atualizamos o estado global do perfil
+    profileStore.updateProfessionalsInProfile(updatedList);
+    
+    toast.success("Profissional removido com sucesso! ✨");
+  } catch (error: any) {
+    console.error("❌ Erro detalhado na exclusão:", error);
+    toast.error("Falha ao remover profissional. Verifique o console.");
+    set({ error: error.message });
+  } finally {
+    set({ isSubmitting: false });
+  }
+},
   }));

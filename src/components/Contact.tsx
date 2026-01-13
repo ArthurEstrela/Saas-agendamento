@@ -22,7 +22,7 @@ const Contact = () => {
     {
       icon: Mail,
       title: "Email",
-      value: "suporte@stylo.com",
+      value: "contato@stylo.app.br",
       description: "Nossa equipe responde em até 24h."
     },
     {

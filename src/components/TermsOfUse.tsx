@@ -240,10 +240,10 @@ const TermsOfUse = () => {
               </p>
               <div className="mt-4 p-4 bg-gray-800 rounded-lg inline-block border border-gray-700">
                 <a
-                  href="mailto:suporte@stylo.com"
+                  href="mailto:contato@stylo.app.br"
                   className="text-amber-500 font-bold hover:text-amber-400 hover:underline flex items-center gap-2"
                 >
-                  <Mail size={18} /> suporte@stylo.com
+                  <Mail size={18} /> contato@stylo.app.br
                 </a>
               </div>
             </TermSection>

@@ -11,7 +11,9 @@ import { formatInTimeZone } from "date-fns-tz";
 import { startOfTomorrow, endOfTomorrow } from "date-fns";
 import { onRequest } from "firebase-functions/v2/https";
 import Stripe from "stripe";
-import { Resend } from "resend"; // Importação do serviço de e-mail
+import { Resend } from "resend";
+import * as React from "react";
+import { StyloNotification } from "./emails/StyloNotification";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -107,28 +109,23 @@ const sendNotification = async (
 
     // 2. Enviar E-mail (Resend)
     if (email && resend) {
-      const emailHtml = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #1a1a1a; margin-top: 0;">Olá, ${userName}!</h2>
-          <p style="font-size: 16px; color: #4a4a4a; line-height: 1.5;">${body}</p>
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-             <a href="${YOUR_APP_URL}/dashboard" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Acessar Painel</a>
-          </div>
-          <p style="font-size: 12px; color: #888; text-align: center; margin-top: 20px;">
-            Stylo Agendamentos - Gerencie seus horários com estilo.
-          </p>
-        </div>
-      `;
-
+      
       const emailTask = resend.emails
         .send({
-          from: "Agendamento <onboarding@resend.dev>", // Mude para seu domínio verificado em produção (ex: contato@stylo.com)
+          from: "Agendamento <contato@stylo.app.br>", // Em produção: contato@seudominio.com
           to: email,
           subject: title,
-          html: emailHtml,
+          // AQUI ESTÁ A TROCA: Sai HTML string, entra React Component
+          react: React.createElement(StyloNotification, {
+            userName: userName,
+            title: title,
+            body: body,
+            actionLink: `${YOUR_APP_URL}/dashboard`
+          }),
         })
         .then(() => logger.info(`E-mail enviado para ${email}`))
         .catch((e) => logger.error(`Erro ao enviar E-mail para ${email}:`, e));
+        
       tasks.push(emailTask);
     }
 

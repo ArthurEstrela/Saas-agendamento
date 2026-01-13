@@ -168,7 +168,7 @@ const FAQ = () => {
           <p className="text-gray-400 flex items-center justify-center gap-2">
             Ainda tem dúvidas? 
             <a 
-              href="mailto:suporte@stylo.com" 
+              href="mailto:contato@stylo.app.br" 
               className="font-bold text-amber-500 hover:text-amber-400 transition-colors flex items-center gap-1 hover:underline"
             >
               <MessageCircle size={18} /> Falar com o suporte

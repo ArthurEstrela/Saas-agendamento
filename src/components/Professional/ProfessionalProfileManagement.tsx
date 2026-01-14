@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useProfileStore } from "../../store/profileStore";
 import type { ProfessionalProfile } from "../../types";
 import { useForm, type SubmitHandler } from "react-hook-form";
@@ -16,6 +16,15 @@ import { Textarea } from "../ui/textarea";
 import { Card, CardContent } from "../ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Label } from "../ui/label";
+// Adicione nos seus imports
+import Cropper, { type Area } from "react-easy-crop";
+import getCroppedImg from "../../lib/utils/cropImage";
+
+// Dentro do componente ProfessionalProfileManagement, adicione os estados:
+const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
+const [crop, setCrop] = useState({ x: 0, y: 0 });
+const [zoom, setZoom] = useState(1);
+const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
 const professionalSchema = z.object({
   name: z.string().min(3, "O nome é obrigatório"),
@@ -43,25 +52,45 @@ export const ProfessionalProfileManagement = () => {
     defaultValues: { name: profile?.name || "", bio: profile?.bio || "" },
   });
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !userProfile) return;
-    setIsUploading(true);
-    try {
-      const avatarUrl = await uploadProfilePicture(userProfile.id, file);
-      if (avatarUrl) {
-        await updateUserProfile(userProfile.id, {
-          profilePictureUrl: avatarUrl,
-        });
-        setUserProfile({ ...userProfile, profilePictureUrl: avatarUrl });
-        toast.success("Foto atualizada!");
-      }
-    } catch {
-      toast.error("Erro ao enviar foto.");
-    } finally {
-      setIsUploading(false);
+const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande! Escolha uma de até 5MB.");
+      return;
     }
-  };
+    setAvatarToCrop(URL.createObjectURL(file));
+  }
+};
+
+const saveCroppedAvatar = useCallback(async () => {
+  if (!avatarToCrop || !croppedAreaPixels || !userProfile) return;
+  setIsUploading(true);
+  const loadingToast = toast.loading("Processando foto...");
+
+  try {
+    const croppedFile = await getCroppedImg(
+      avatarToCrop,
+      croppedAreaPixels,
+      0.8,
+      512, // Tamanho ideal para foto de perfil
+      512
+    );
+
+    const avatarUrl = await uploadProfilePicture(userProfile.id, croppedFile);
+    await updateUserProfile(userProfile.id, { profilePictureUrl: avatarUrl });
+    setUserProfile({ ...userProfile, profilePictureUrl: avatarUrl });
+    
+    setAvatarToCrop(null);
+    toast.success("Foto atualizada com sucesso! 👨‍🎨");
+  } catch (error) {
+    console.error(error);
+    toast.error("Erro ao carregar foto.");
+  } finally {
+    setIsUploading(false);
+    toast.dismiss(loadingToast);
+  }
+}, [avatarToCrop, croppedAreaPixels, userProfile, updateUserProfile, setUserProfile]);
 
   const onSubmit: SubmitHandler<ProfessionalFormData> = async (data) => {
     if (!userProfile) return;
@@ -80,11 +109,44 @@ export const ProfessionalProfileManagement = () => {
   if (!userProfile) return <Loader2 className="animate-spin text-primary" />;
 
   return (
+    
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="max-w-3xl mx-auto"
     >
+      {/* --- AVATAR CROPPER MODAL --- */}
+{avatarToCrop && (
+  <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
+    <div className="relative w-full max-w-xl h-[50vh] bg-gray-900 rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
+      <Cropper
+        image={avatarToCrop}
+        crop={crop}
+        zoom={zoom}
+        aspect={1 / 1}
+        onCropChange={setCrop}
+        onZoomChange={setZoom}
+        onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
+      />
+    </div>
+    <div className="mt-6 flex gap-4">
+      <Button variant="secondary" onClick={() => setAvatarToCrop(null)} className="px-8">
+        Cancelar
+      </Button>
+      <Button onClick={saveCroppedAvatar} className="font-bold px-8">
+        Salvar Foto
+      </Button>
+    </div>
+    <div className="mt-4 w-full max-w-md px-4">
+      <input
+        type="range"
+        value={zoom} min={1} max={3} step={0.1}
+        onChange={(e) => setZoom(Number(e.target.value))}
+        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+      />
+    </div>
+  </div>
+)}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">
           Meu Perfil Profissional

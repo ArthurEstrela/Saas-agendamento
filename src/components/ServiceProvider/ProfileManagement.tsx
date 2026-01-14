@@ -198,6 +198,10 @@ export const ProfileManagement = () => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+const [logoToCrop, setLogoToCrop] = useState<string | null>(null);
+const [logoCrop, setLogoCrop] = useState({ x: 0, y: 0 });
+const [logoZoom, setLogoZoom] = useState(1);
+const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(null);
 
   const {
     register,
@@ -316,25 +320,46 @@ export const ProfileManagement = () => {
     }
   }, [address, setValue]);
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && userProfile && userProfile.role === "serviceProvider") {
-      setIsUploadingLogo(true);
-      const tempUrl = URL.createObjectURL(file);
-      setLogoPreview(tempUrl);
-      try {
-        const photoURL = await uploadProviderLogo(userProfile.id, file);
-        await updateUserProfile(userProfile.id, { logoUrl: photoURL });
-        toast.success("Logo atualizada!");
-      } catch (error) {
-        console.error(error);
-        setLogoPreview(userProfile.logoUrl || null);
-        toast.error("Erro ao carregar logo.");
-      } finally {
-        setIsUploadingLogo(false);
-      }
+const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    // Opcional: Adicionar limite de tamanho aqui (Ex: 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande! Escolha uma de até 5MB.");
+      return;
     }
-  };
+    setLogoToCrop(URL.createObjectURL(file));
+  }
+};
+
+const saveCroppedLogo = useCallback(async () => {
+  if (!logoToCrop || !logoCroppedAreaPixels || !userProfile) return;
+  setIsUploadingLogo(true);
+  const loadingToast = toast.loading("Processando logo...");
+
+  try {
+    // Aqui já aplicamos o PASSO 3: Resolução de 512x512 para a logo
+    const croppedFile = await getCroppedImg(
+      logoToCrop,
+      logoCroppedAreaPixels,
+      0.8,   // qualidade
+      512,   // targetWidth
+      512    // targetHeight
+    );
+
+    const photoURL = await uploadProviderLogo(userProfile.id, croppedFile);
+    await updateUserProfile(userProfile.id, { logoUrl: photoURL });
+    setLogoPreview(photoURL);
+    setLogoToCrop(null);
+    toast.success("Logo atualizada com sucesso! 🎯");
+  } catch (error) {
+    console.error(error);
+    toast.error("Erro ao carregar logo.");
+  } finally {
+    setIsUploadingLogo(false);
+    toast.dismiss(loadingToast);
+  }
+}, [logoToCrop, logoCroppedAreaPixels, userProfile, updateUserProfile]);
 
   const onBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0)
@@ -348,10 +373,13 @@ export const ProfileManagement = () => {
     const loadingToast = toast.loading("Processando imagem...");
 
     try {
-      const croppedImageFile = await getCroppedImg(
-        bannerToCrop,
-        croppedAreaPixels
-      );
+  const croppedImageFile = await getCroppedImg(
+  bannerToCrop,
+  croppedAreaPixels,
+  0.8,
+  1200, // Largura ideal para banners web
+  400   // Altura proporcional
+);
 
       const bannerUrl = await uploadProviderBanner(
         userProfile.id,
@@ -461,6 +489,27 @@ export const ProfileManagement = () => {
           </div>
         </div>
       )}
+
+      {/* --- LOGO CROPPER MODAL --- */}
+{logoToCrop && (
+  <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
+    <div className="relative w-full max-w-xl h-[50vh] bg-gray-900 rounded-lg overflow-hidden border border-gray-800">
+      <Cropper
+        image={logoToCrop}
+        crop={logoCrop}
+        zoom={logoZoom}
+        aspect={1 / 1} // Logo é sempre quadrada
+        onCropChange={setLogoCrop}
+        onZoomChange={setLogoZoom}
+        onCropComplete={(_, pixels) => setLogoCroppedAreaPixels(pixels)}
+      />
+    </div>
+    <div className="mt-6 flex gap-4">
+      <Button variant="secondary" onClick={() => setLogoToCrop(null)}>Cancelar</Button>
+      <Button onClick={saveCroppedLogo} className="font-bold">Salvar Logo</Button>
+    </div>
+  </div>
+)}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* --- HERO HEADER (Banner + Avatar) --- */}

@@ -50,20 +50,22 @@ export default async function getCroppedImg(
     targetHeight
   );
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error("Canvas vazio"));
-          return;
-        }
-        const file = new File([blob], "banner-cropped.jpg", {
-          type: "image/jpeg",
-        });
-        resolve(file);
-      },
-      "image/jpeg",
-      quality
-    );
-  });
+ // Altere no final do getCroppedImg
+return new Promise((resolve, reject) => {
+  canvas.toBlob(
+    (blob) => {
+      if (!blob) {
+        reject(new Error("Canvas vazio"));
+        return;
+      }
+      // Mude o nome para .webp e o type para image/webp
+      const file = new File([blob], "image-optimized.webp", {
+        type: "image/webp",
+      });
+      resolve(file);
+    },
+    "image/webp", // Alterado de image/jpeg para image/webp
+    0.8 // 0.8 no WebP costuma ser melhor que 0.9 no JPEG
+  );
+});
 }

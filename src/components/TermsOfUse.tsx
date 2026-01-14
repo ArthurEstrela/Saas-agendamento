@@ -12,9 +12,10 @@ import {
   Mail,
   FileSignature,
   type LucideIcon,
+  Check,
 } from "lucide-react";
 
-// Mesmo componente de seção reutilizável para consistência
+// Componente de Seção Reutilizável Otimizado
 const TermSection = ({
   title,
   icon: Icon,
@@ -29,19 +30,20 @@ const TermSection = ({
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: "-50px" }}
-    transition={{ duration: 0.5, delay: index * 0.1 }}
+    viewport={{ once: true, margin: "-50px" }} // Anima apenas uma vez para performance
+    transition={{ duration: 0.5, delay: Math.min(index * 0.1, 0.3) }} // Limita o delay acumulado
     className="mb-12 last:mb-0 group"
   >
-    <div className="flex items-center gap-4 mb-6">
-      <div className="p-3 rounded-xl bg-gray-900/50 text-amber-500 border border-white/5 group-hover:border-amber-500/30 group-hover:bg-amber-500/10 transition-all duration-300 shadow-lg shadow-black/20">
+    <div className="flex items-center gap-4 mb-4 md:mb-6">
+      {/* Ícone: Fundo sólido no mobile, vidro no desktop */}
+      <div className="p-3 rounded-xl bg-[#27272a] md:bg-gray-900/50 text-amber-500 border border-white/5 md:group-hover:border-amber-500/30 transition-all duration-300 md:shadow-lg md:shadow-black/20 shrink-0">
         <Icon size={24} />
       </div>
-      <h2 className="text-2xl font-bold text-gray-100 group-hover:text-white transition-colors">
+      <h2 className="text-xl md:text-2xl font-bold text-gray-100 md:group-hover:text-white transition-colors">
         {title}
       </h2>
     </div>
-    <div className="pl-0 md:pl-[4.5rem] text-gray-400 leading-relaxed space-y-4 text-lg font-light">
+    <div className="pl-0 md:pl-[4.5rem] text-gray-400 leading-relaxed space-y-4 text-base md:text-lg font-light">
       {children}
     </div>
   </motion.div>
@@ -49,44 +51,54 @@ const TermSection = ({
 
 const ListDot = ({ children }: { children: React.ReactNode }) => (
   <li className="flex items-start gap-3 mb-3">
-    <div className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
-    <span className="text-gray-300">{children}</span>
+    <div className="mt-1.5 p-0.5 rounded-full bg-amber-500/20 text-amber-500 shrink-0">
+       <Check size={10} strokeWidth={4} />
+    </div>
+    <span className="text-gray-300 text-sm md:text-base">{children}</span>
   </li>
 );
 
 const TermsOfUse = () => {
   return (
-    <div className="min-h-screen bg-[#030712] text-gray-100 font-sans selection:bg-amber-500/30 selection:text-amber-100 overflow-x-hidden">
-      {/* --- BACKGROUND EFFECTS --- */}
+    // Fundo base consistente
+    <div className="min-h-screen bg-[#09090b] text-gray-100 font-sans selection:bg-amber-500/30 selection:text-amber-100 overflow-x-hidden">
+      
+      {/* --- BACKGROUND OTIMIZADO --- */}
       <div className="fixed inset-0 z-0 pointer-events-none">
+        {/* Padrão de Grade (Leve) */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-amber-500/5 blur-[120px] rounded-full pointer-events-none opacity-40"></div>
-        <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-primary/5 blur-[100px] rounded-full pointer-events-none opacity-30"></div>
+        
+        {/* Mobile: Gradiente Estático (Rápido) */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#121214] via-[#09090b] to-black md:hidden opacity-90" />
+        
+        {/* Desktop: Blurs Ricos */}
+        <div className="hidden md:block absolute top-0 left-1/4 w-[600px] h-[600px] bg-amber-500/5 blur-[120px] rounded-full pointer-events-none opacity-40"></div>
+        <div className="hidden md:block absolute bottom-0 right-0 w-[600px] h-[600px] bg-primary/5 blur-[100px] rounded-full pointer-events-none opacity-30"></div>
       </div>
 
       {/* --- HEADER --- */}
-      <div className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8 border-b border-white/5 bg-gray-950/50 backdrop-blur-sm z-10">
+      <div className="relative pt-24 pb-16 md:pt-32 md:pb-20 px-4 sm:px-6 lg:px-8 border-b border-white/5 bg-[#0c0c0e] md:bg-gray-950/50 md:backdrop-blur-sm z-10">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold tracking-widest uppercase mb-8 hover:bg-amber-500/20 transition-colors cursor-default">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold tracking-widest uppercase mb-6 md:mb-8 hover:bg-amber-500/20 transition-colors cursor-default">
               <FileSignature size={12} />
               Termos Legais
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 text-white">
+            <h1 className="text-3xl md:text-6xl font-extrabold tracking-tight mb-4 md:mb-6 text-white leading-tight">
               Termos de <br className="hidden md:block" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-500 to-amber-700">
                 Uso
               </span>
             </h1>
 
-            <p className="text-gray-400 text-sm uppercase tracking-widest">
+            <p className="text-gray-500 text-xs md:text-sm uppercase tracking-widest">
               Vigência a partir de:{" "}
-              <span className="text-white font-semibold">
+              <span className="text-gray-300 font-semibold">
                 04 de agosto de 2025
               </span>
             </p>
@@ -95,15 +107,18 @@ const TermsOfUse = () => {
       </div>
 
       {/* --- CONTEÚDO --- */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
-        <div className="bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-3xl p-8 sm:p-16 shadow-2xl">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20 relative z-10">
+        
+        {/* Container Principal: Sólido no Mobile para Scroll Liso */}
+        <div className="bg-[#18181b] border border-white/5 md:bg-gray-900/40 md:backdrop-blur-xl rounded-3xl p-6 md:p-16 shadow-xl md:shadow-2xl">
+          
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="mb-16 p-8 bg-gray-950/50 rounded-2xl border border-white/5"
+            className="mb-12 md:mb-16 p-6 md:p-8 bg-[#27272a] md:bg-gray-950/50 rounded-2xl border border-white/5"
           >
-            <p className="text-xl text-gray-300 leading-relaxed text-center font-light">
+            <p className="text-lg md:text-xl text-gray-300 leading-relaxed text-center font-light">
               Bem-vindo à Stylo! Ao acessar nossa plataforma, você concorda com
               os termos abaixo. Eles existem para proteger tanto o seu negócio
               quanto o nosso.
@@ -217,23 +232,23 @@ const TermsOfUse = () => {
 
           <TermSection title="9. Jurídico" icon={Mail} index={9}>
             <p>Dúvidas legais? Estamos à disposição.</p>
-            <div className="mt-6 inline-block">
+            <div className="mt-6 inline-block w-full sm:w-auto">
               <a
                 href="mailto:juridico@stylo.app.br"
-                className="flex items-center gap-3 px-6 py-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded-xl transition-all group"
+                className="flex items-center justify-center sm:justify-start gap-3 px-6 py-4 bg-[#27272a] md:bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded-xl transition-all group touch-manipulation"
               >
                 <div className="p-2 bg-gray-900 rounded-lg text-amber-500 group-hover:text-white transition-colors">
                   <Mail size={20} />
                 </div>
                 <span className="text-gray-200 font-medium group-hover:text-white">
-                  contato@stylo.app.br
+                  juridico@stylo.app.br
                 </span>
               </a>
             </div>
           </TermSection>
         </div>
 
-        <div className="text-center mt-16 text-gray-600 text-sm">
+        <div className="text-center mt-12 md:mt-16 text-gray-600 text-xs md:text-sm">
           © {new Date().getFullYear()} Stylo Inc. Todos os direitos reservados.
         </div>
       </div>

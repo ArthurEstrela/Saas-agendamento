@@ -11,7 +11,7 @@ import { type EnrichedProviderAppointment } from "../../../store/providerAppoint
 const START_HOUR = 7;
 const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
-const ROW_HEIGHT = 70; // Mantido altura boa para mobile
+const ROW_HEIGHT = 70; 
 
 // --- Hook Mobile ---
 function useMediaQuery(query: string) {
@@ -45,39 +45,34 @@ const AppointmentCard = ({
     (appointment.endTime.getTime() - appointment.startTime.getTime()) /
     (1000 * 60);
 
-  // Altura mínima para clique
+  // Altura mínima para clique e visualização
   const calculatedHeight = (durationInMinutes / 60) * ROW_HEIGHT;
-  const height = Math.max(calculatedHeight, 40);
+  const height = Math.max(calculatedHeight, 40); // Min 40px para conseguir clicar
 
   const isPending = appointment.status === "pending";
   const isCompleted = appointment.status === "completed";
   const isPastTime =
     !isPending && !isCompleted && !isFuture(appointment.endTime);
 
-  // --- CORES CORRIGIDAS (Mais claras e legíveis) ---
   const statusClasses = cn(
-    "border-l-[3px] shadow-sm backdrop-blur-sm transition-all",
+    "border-l-[2px] sm:border-l-[3px] shadow-sm backdrop-blur-sm transition-all",
 
-    // Pendente: Azul vibrante com transparência (Vidro)
     isPending &&
       "bg-blue-600/30 border-blue-400 text-blue-50 hover:bg-blue-600/40",
 
-    // Concluído: Verde vibrante com transparência
     isCompleted &&
       "bg-emerald-600/30 border-emerald-400 text-emerald-50 hover:bg-emerald-600/40",
 
-    // Agendado (Padrão): Cinza mais claro (Gray-800) em vez de preto, com borda dourada
     !isPending &&
       !isCompleted &&
       !isPastTime &&
       "bg-gray-800 border-primary text-white hover:bg-gray-700 shadow-lg shadow-black/20",
 
-    // Passado: Cinza um pouco mais escuro/opaco para não chamar atenção, mas legível
     isPastTime &&
       "bg-gray-800/60 border-gray-600 text-gray-400 grayscale opacity-80"
   );
 
-  const isShort = height < 55;
+  const isShort = height < 50;
 
   return (
     <motion.div
@@ -94,32 +89,32 @@ const AppointmentCard = ({
         height: `${height}px`,
       }}
       className={cn(
-        "absolute left-1 right-1 sm:left-1.5 sm:right-1.5 rounded-lg overflow-hidden cursor-pointer z-10 select-none group",
+        "absolute left-0.5 right-0.5 sm:left-1.5 sm:right-1.5 rounded sm:rounded-lg overflow-hidden cursor-pointer z-10 select-none group",
         statusClasses
       )}
     >
-      <div className="h-full w-full px-2 py-1 flex flex-col justify-center">
+      <div className="h-full w-full px-1.5 sm:px-2 py-0.5 sm:py-1 flex flex-col justify-center">
         {/* Linha Principal */}
-        <div className="flex items-center gap-1.5 overflow-hidden">
-          <span className="text-[10px] font-bold font-mono opacity-90 shrink-0">
+        <div className="flex items-center gap-1 overflow-hidden">
+          <span className="text-[9px] sm:text-[10px] font-bold font-mono opacity-90 shrink-0">
             {format(appointment.startTime, "HH:mm")}
           </span>
-          <span className="text-xs font-bold truncate leading-none">
+          <span className="text-[10px] sm:text-xs font-bold truncate leading-none">
             {appointment.services[0].name}
           </span>
         </div>
 
         {/* Linha Secundária */}
         {!isShort && (
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex items-center gap-1 text-[10px] opacity-80 truncate max-w-[70%]">
+          <div className="flex items-center justify-between mt-0.5 sm:mt-1">
+            <div className="flex items-center gap-1 text-[9px] sm:text-[10px] opacity-80 truncate max-w-[70%]">
               <User size={10} />
               <span className="truncate">
                 {appointment.client?.name || "Cliente"}
               </span>
             </div>
-            {/* Preço com destaque */}
-            <span className="text-[10px] font-bold opacity-100">
+            {/* Preço */}
+            <span className="text-[9px] sm:text-[10px] font-bold opacity-100">
               R${appointment.totalPrice.toFixed(0)}
             </span>
           </div>
@@ -153,7 +148,7 @@ const CurrentTimeIndicator = () => {
       className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
       style={{ top: `${top}px` }}
     >
-      <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] -ml-1.5 ring-2 ring-gray-900" />
+      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] -ml-1 sm:-ml-1.5 ring-2 ring-gray-900" />
       <div className="flex-1 h-[2px] bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.4)]" />
     </div>
   );
@@ -187,7 +182,6 @@ export const TimeGridCalendar = ({
     }
   }, []);
 
-  // Define os dias visíveis (1 no mobile, 7 no desktop)
   const weekDays = useMemo(() => {
     if (!isDesktop) return [currentDate];
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -211,10 +205,11 @@ export const TimeGridCalendar = ({
   }, [appointments, weekDays]);
 
   const gridColsClass = isDesktop ? "grid-cols-7" : "grid-cols-1";
-  const timeColWidthClass = "w-14 sm:w-16";
+  // Coluna de hora mais estreita no mobile (w-10 vs w-16) para ganhar espaço
+  const timeColWidthClass = "w-10 sm:w-16";
 
   return (
-    <div className="flex flex-col h-full bg-gray-950/50 rounded-xl border border-gray-800 shadow-inner overflow-hidden select-none">
+    <div className="flex flex-col h-full bg-gray-950/50 rounded-lg sm:rounded-xl border border-gray-800 shadow-inner overflow-hidden select-none w-full">
       {/* Header dos Dias */}
       <div className="flex flex-shrink-0 bg-gray-900 border-b border-gray-800 z-30">
         <div
@@ -232,19 +227,19 @@ export const TimeGridCalendar = ({
               <div
                 key={day.toISOString()}
                 className={cn(
-                  "py-3 text-center relative transition-colors",
+                  "py-2 sm:py-3 text-center relative transition-colors",
                   isDayToday ? "bg-primary/5" : ""
                 )}
               >
                 {isDayToday && (
                   <div className="absolute top-0 left-0 w-full h-1 bg-primary" />
                 )}
-                <p className="text-[10px] uppercase font-bold text-gray-500">
+                <p className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-500">
                   {format(day, "EEE", { locale: ptBR })}
                 </p>
                 <div
                   className={cn(
-                    "text-xl font-bold font-mono mt-0.5",
+                    "text-base sm:text-xl font-bold font-mono mt-0 sm:mt-0.5",
                     isDayToday ? "text-primary" : "text-white"
                   )}
                 >
@@ -273,7 +268,7 @@ export const TimeGridCalendar = ({
             {timeLabels.map((hour) => (
               <div
                 key={hour}
-                className="absolute w-full text-center text-xs font-medium text-gray-500 transform -translate-y-1/2"
+                className="absolute w-full text-center text-[10px] sm:text-xs font-medium text-gray-500 transform -translate-y-1/2 pr-1"
                 style={{ top: `${(hour - START_HOUR) * ROW_HEIGHT}px` }}
               >
                 {hour}:00

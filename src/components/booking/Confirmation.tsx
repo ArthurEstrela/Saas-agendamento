@@ -11,6 +11,7 @@ import {
   CreditCard,
   Copy,
   CheckCircle2,
+  ChevronLeft,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -53,28 +54,23 @@ export const Confirmation = () => {
   const { isAuthenticated } = useAuthStore();
   const { userProfile } = useProfileStore();
 
-  // 1. Determina quais métodos estão REAIS disponíveis
   const availableMethods = useMemo(() => {
     const methods = provider?.paymentMethods || [];
-    // Pix só aparece se estiver habilitado E tiver chave configurada
     const hasPix = methods.includes("pix") && !!provider?.pixKey;
-    // Pagamento local (dinheiro ou cartão)
     const hasOnSite =
       methods.includes("cash") || methods.includes("credit_card");
 
     return { hasPix, hasOnSite };
   }, [provider]);
 
-  // 2. Inicializa com um método válido (não força Pix se não tiver Pix)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => {
     if (availableMethods.hasPix) return "pix";
-    if (availableMethods.hasOnSite) return "cash"; // 'cash' usamos como flag para pagamento local genérico
-    return "cash"; // Fallback seguro
+    if (availableMethods.hasOnSite) return "cash";
+    return "cash";
   });
 
   const [showPixModal, setShowPixModal] = useState(false);
 
-  // 3. Efeito de segurança: se o método selecionado sumir (ex: troca de provider), reseta
   useEffect(() => {
     if (
       paymentMethod === "pix" &&
@@ -97,39 +93,31 @@ export const Confirmation = () => {
     [selectedServices]
   );
 
-const pixPayload = useMemo(() => {
-  if (!provider?.pixKey) return "";
+  const pixPayload = useMemo(() => {
+    if (!provider?.pixKey) return "";
+    let key = provider.pixKey.trim();
 
-  let key = provider.pixKey.trim();
-
-  // 1. Tratamento para Telefone
-  if (provider.pixKeyType === "phone") {
-    const numbersOnly = key.replace(/\D/g, "");
-    if (numbersOnly.length === 11) {
-      key = `+55${numbersOnly}`;
-    } else if (numbersOnly.length === 13 && !key.startsWith("+")) {
-      key = `+${numbersOnly}`;
+    if (provider.pixKeyType === "phone") {
+      const numbersOnly = key.replace(/\D/g, "");
+      if (numbersOnly.length === 11) {
+        key = `+55${numbersOnly}`;
+      } else if (numbersOnly.length === 13 && !key.startsWith("+")) {
+        key = `+${numbersOnly}`;
+      }
+    } else if (provider.pixKeyType === "cpf" || provider.pixKeyType === "cnpj") {
+      key = key.replace(/\D/g, "");
+    } else {
+      key = key.replace(/\s+/g, "");
     }
-  } 
-  // 2. NOVO: Tratamento para CPF e CNPJ 🛡️
-  else if (provider.pixKeyType === "cpf" || provider.pixKeyType === "cnpj") {
-    // Remove tudo que não for número (tira pontos, traços e barras)
-    key = key.replace(/\D/g, "");
-  } 
-  // 3. Tratamento para E-mail ou Chave Aleatória
-  else {
-    // Apenas remove espaços que possam ter ido por erro
-    key = key.replace(/\s+/g, "");
-  }
 
-  return generatePixPayload({
-    key: key,
-    name: provider.businessName || provider.name,
-    city: provider.businessAddress?.city || "Brasil",
-    amount: totalPrice,
-    txid: "SAAS" + Math.floor(Math.random() * 1000),
-  });
-}, [provider, totalPrice]);
+    return generatePixPayload({
+      key: key,
+      name: provider.businessName || provider.name,
+      city: provider.businessAddress?.city || "Brasil",
+      amount: totalPrice,
+      txid: "SAAS" + Math.floor(Math.random() * 1000),
+    });
+  }, [provider, totalPrice]);
 
   const handleConfirm = async () => {
     if (!isAuthenticated) {
@@ -189,48 +177,49 @@ const pixPayload = useMemo(() => {
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="pb-10"
+      className="pb-24 md:pb-10" // Padding extra no mobile para o footer não cobrir
     >
-      <div className="max-w-3xl mx-auto space-y-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Quase lá!</h2>
-          <p className="text-gray-400">
+      <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 px-2 md:px-0">
+        <div className="text-center mb-4 md:mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Quase lá!</h2>
+          <p className="text-gray-400 text-sm md:text-base">
             Confira os detalhes e escolha como pagar.
           </p>
         </div>
 
-        <Card className="bg-gray-900/60 border-white/5 backdrop-blur-md shadow-2xl overflow-hidden">
+        {/* Card Principal Otimizado */}
+        <Card className="bg-[#18181b] md:bg-gray-900/60 border-white/5 md:backdrop-blur-md md:shadow-2xl overflow-hidden">
           {/* Header do Card (Total) */}
-          <div className="bg-primary/10 p-6 flex justify-between items-center border-b border-white/5">
+          <div className="bg-[#27272a] md:bg-primary/10 p-4 md:p-6 flex justify-between items-center border-b border-white/5">
             <div>
-              <p className="text-xs text-primary font-bold uppercase tracking-wider">
+              <p className="text-[10px] md:text-xs text-primary font-bold uppercase tracking-wider">
                 Valor Total
               </p>
-              <p className="text-3xl font-extrabold text-white">
+              <p className="text-2xl md:text-3xl font-extrabold text-white">
                 R$ {totalPrice.toFixed(2)}
               </p>
             </div>
-            <div className="bg-black/20 p-3 rounded-full">
-              <CreditCard size={24} className="text-primary" />
+            <div className="bg-black/20 p-2 md:p-3 rounded-full">
+              <CreditCard size={20} className="text-primary md:w-6 md:h-6" />
             </div>
           </div>
 
-          <CardContent className="p-6 md:p-8 space-y-8">
+          <CardContent className="p-4 md:p-8 space-y-6 md:space-y-8">
             {/* Resumo do Serviço */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <Scissors size={14} /> Serviços Selecionados
+            <div className="space-y-3 md:space-y-4">
+              <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <Scissors size={12} className="md:w-[14px] md:h-[14px]" /> Serviços Selecionados
               </h3>
-              <div className="bg-black/20 rounded-xl p-4 space-y-3 border border-white/5">
+              <div className="bg-[#27272a] md:bg-black/20 rounded-xl p-3 md:p-4 space-y-3 border border-white/5">
                 {selectedServices.map((s) => (
                   <div
                     key={s.id}
                     className="flex justify-between items-center text-sm group"
                   >
-                    <span className="text-gray-300 group-hover:text-white transition-colors font-medium">
+                    <span className="text-gray-300 group-hover:text-white transition-colors font-medium text-xs md:text-sm">
                       {s.name}
                     </span>
-                    <span className="text-gray-400">
+                    <span className="text-gray-400 text-xs md:text-sm">
                       R$ {s.price.toFixed(2)}
                     </span>
                   </div>
@@ -239,27 +228,27 @@ const pixPayload = useMemo(() => {
             </div>
 
             {/* Data e Profissional (Grid) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div className="space-y-2">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                  <Calendar size={14} /> Quando?
+                <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <Calendar size={12} className="md:w-[14px] md:h-[14px]" /> Quando?
                 </h3>
-                <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-                  <div className="text-white font-bold capitalize text-lg">
+                <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5">
+                  <div className="text-white font-bold capitalize text-base md:text-lg">
                     {formattedDate}
                   </div>
-                  <div className="text-primary font-bold text-xl mt-1">
+                  <div className="text-primary font-bold text-lg md:text-xl mt-1">
                     às {selectedTimeSlot}
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                  <User size={14} /> Com quem?
+                <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <User size={12} className="md:w-[14px] md:h-[14px]" /> Com quem?
                 </h3>
-                <div className="bg-black/20 p-4 rounded-xl border border-white/5 flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
+                <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5 flex items-center gap-3 md:gap-4">
+                  <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
                     {selectedProfessional?.photoURL ? (
                       <img
                         src={selectedProfessional.photoURL}
@@ -267,10 +256,10 @@ const pixPayload = useMemo(() => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <User size={20} />
+                      <User size={18} className="md:w-5 md:h-5" />
                     )}
                   </div>
-                  <span className="text-white font-bold text-lg">
+                  <span className="text-white font-bold text-base md:text-lg">
                     {selectedProfessional?.name}
                   </span>
                 </div>
@@ -281,102 +270,93 @@ const pixPayload = useMemo(() => {
 
             {/* Pagamento */}
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-base md:text-lg font-bold text-white flex items-center gap-2">
                 Forma de Pagamento
               </h3>
 
-              {/* Mensagem se NENHUM método estiver disponível */}
               {!availableMethods.hasPix && !availableMethods.hasOnSite && (
-                <div className="text-red-400 text-sm bg-red-400/10 p-4 rounded-lg border border-red-400/20">
-                  Este prestador não configurou métodos de pagamento. Entre em
-                  contato para combinar.
+                <div className="text-red-400 text-xs md:text-sm bg-red-400/10 p-3 md:p-4 rounded-lg border border-red-400/20">
+                  Este prestador não configurou métodos de pagamento.
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Botão Pix - Só renderiza se tiver Pix */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+                {/* Botão Pix */}
                 {availableMethods.hasPix && (
                   <Button
                     variant="outline"
                     className={cn(
-                      "h-auto p-5 justify-start border-2 relative hover:bg-gray-800 transition-all",
+                      "h-auto p-4 md:p-5 justify-start border-2 relative hover:bg-gray-800 transition-all active:scale-[0.98]",
                       paymentMethod === "pix"
                         ? "border-primary bg-primary/10"
-                        : "border-gray-700 bg-gray-900/50"
+                        : "border-gray-700 bg-[#27272a] md:bg-gray-900/50"
                     )}
                     onClick={() => setPaymentMethod("pix")}
                   >
-                    <div className="flex items-center gap-4 w-full">
+                    <div className="flex items-center gap-3 md:gap-4 w-full">
                       <div
                         className={cn(
-                          "p-3 rounded-full transition-colors",
+                          "p-2 md:p-3 rounded-full transition-colors",
                           paymentMethod === "pix"
                             ? "bg-primary text-black"
                             : "bg-gray-800 text-gray-400"
                         )}
                       >
-                        <QrCode size={24} />
+                        <QrCode size={20} className="md:w-6 md:h-6" />
                       </div>
                       <div className="text-left flex-1">
-                        <div className="font-bold text-white text-base">
+                        <div className="font-bold text-white text-sm md:text-base">
                           Pix
                         </div>
-                        <div className="text-xs text-gray-400 mt-0.5">
+                        <div className="text-[10px] md:text-xs text-gray-400 mt-0.5">
                           Aprovação imediata
                         </div>
                       </div>
                       {paymentMethod === "pix" && (
-                        <CheckCircle2 className="text-primary" size={24} />
+                        <CheckCircle2 className="text-primary md:w-6 md:h-6" size={20} />
                       )}
                     </div>
-                    {paymentMethod === "pix" && (
-                      <span className="absolute -top-3 -right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
-                        RECOMENDADO
-                      </span>
-                    )}
                   </Button>
                 )}
 
-                {/* Botão Pagar no Local - Só renderiza se tiver Cash ou Credit Card */}
+                {/* Botão Pagar no Local */}
                 {availableMethods.hasOnSite && (
                   <Button
                     variant="outline"
                     className={cn(
-                      "h-auto p-5 justify-start border-2 hover:bg-gray-800 transition-all",
+                      "h-auto p-4 md:p-5 justify-start border-2 hover:bg-gray-800 transition-all active:scale-[0.98]",
                       paymentMethod === "cash"
                         ? "border-primary bg-primary/10"
-                        : "border-gray-700 bg-gray-900/50"
+                        : "border-gray-700 bg-[#27272a] md:bg-gray-900/50"
                     )}
                     onClick={() => setPaymentMethod("cash")}
                   >
-                    <div className="flex items-center gap-4 w-full">
+                    <div className="flex items-center gap-3 md:gap-4 w-full">
                       <div
                         className={cn(
-                          "p-3 rounded-full transition-colors",
+                          "p-2 md:p-3 rounded-full transition-colors",
                           paymentMethod === "cash"
                             ? "bg-primary text-black"
                             : "bg-gray-800 text-gray-400"
                         )}
                       >
-                        <CreditCard size={24} />
+                        <CreditCard size={20} className="md:w-6 md:h-6" />
                       </div>
                       <div className="text-left flex-1">
-                        <div className="font-bold text-white text-base">
+                        <div className="font-bold text-white text-sm md:text-base">
                           Pagar no Local
                         </div>
-                        <div className="text-xs text-gray-400 mt-0.5">
+                        <div className="text-[10px] md:text-xs text-gray-400 mt-0.5 truncate max-w-[120px] md:max-w-none">
                           {[
-                            provider?.paymentMethods?.includes("cash") &&
-                              "Dinheiro",
-                            provider?.paymentMethods?.includes("credit_card") &&
-                              "Cartão",
+                            provider?.paymentMethods?.includes("cash") && "Dinheiro",
+                            provider?.paymentMethods?.includes("credit_card") && "Cartão",
                           ]
                             .filter(Boolean)
                             .join(" ou ") || "No balcão"}
                         </div>
                       </div>
                       {paymentMethod === "cash" && (
-                        <CheckCircle2 className="text-primary" size={24} />
+                        <CheckCircle2 className="text-primary md:w-6 md:h-6" size={20} />
                       )}
                     </div>
                   </Button>
@@ -384,7 +364,8 @@ const pixPayload = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex gap-4 pt-6">
+            {/* Botões Desktop (Escondidos no mobile para usar o footer fixo) */}
+            <div className="hidden md:flex gap-4 pt-6">
               <Button
                 variant="ghost"
                 onClick={goToPreviousStep}
@@ -413,59 +394,85 @@ const pixPayload = useMemo(() => {
         </Card>
       </div>
 
+      {/* Footer Fixo Mobile Otimizado */}
+      <div className="md:hidden fixed bottom-0 left-0 w-full z-50 p-2 pointer-events-none">
+        <div className="max-w-4xl mx-auto pointer-events-auto bg-[#121214] border-t border-white/10 shadow-2xl p-3 flex justify-between items-center gap-3 ring-1 ring-white/5 rounded-xl">
+           <Button
+            variant="ghost"
+            onClick={goToPreviousStep}
+            className="hover:bg-white/5 px-2"
+            disabled={status.isConfirming}
+          >
+            <ChevronLeft size={20} />
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            className="flex-1 font-bold text-sm h-10 shadow-lg shadow-primary/10"
+            disabled={
+              status.isConfirming ||
+              (!availableMethods.hasPix && !availableMethods.hasOnSite)
+            }
+          >
+             {status.isConfirming ? (
+                  <Loader2 className="animate-spin mr-2 w-4 h-4" />
+                ) : (
+                  <CheckCircle2 className="mr-2 w-4 h-4" />
+                )}
+            Confirmar
+          </Button>
+        </div>
+      </div>
+
+      {/* Modal Pix Otimizado */}
       <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
-        <DialogContent className="sm:max-w-md bg-gray-950 border-gray-800 shadow-2xl">
+        <DialogContent className="w-[90%] rounded-xl sm:max-w-md bg-[#18181b] border-gray-800 shadow-2xl px-4 py-6">
           <DialogHeader>
-            <DialogTitle className="text-center flex flex-col items-center gap-4 pt-4">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="h-16 w-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center border border-green-500/20 shadow-[0_0_20px_rgba(34,197,94,0.2)]"
-              >
-                <CheckCircle2 size={40} />
-              </motion.div>
-              <span className="text-xl">Agendamento Realizado!</span>
+            <DialogTitle className="text-center flex flex-col items-center gap-4">
+              <div className="h-14 w-14 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center border border-green-500/20">
+                <CheckCircle2 size={32} />
+              </div>
+              <span className="text-lg md:text-xl font-bold text-white">Agendamento Realizado!</span>
             </DialogTitle>
-            <DialogDescription className="text-center text-gray-400">
+            <DialogDescription className="text-center text-gray-400 text-sm">
               Escaneie o QR Code abaixo para pagar.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="bg-white p-6 rounded-2xl flex flex-col items-center justify-center my-4 shadow-inner ring-4 ring-white/5">
+          <div className="bg-white p-4 rounded-xl flex flex-col items-center justify-center my-4">
             {pixPayload ? (
-              <QRCodeCanvas value={pixPayload} size={200} />
+              <QRCodeCanvas value={pixPayload} size={180} />
             ) : (
-              <div className="h-40 w-40 bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
-                Sem chave Pix configurada
+              <div className="h-32 w-32 bg-gray-100 flex items-center justify-center text-gray-400 text-xs text-center p-2">
+                Chave não configurada
               </div>
             )}
-            <div className="mt-6 text-center text-gray-900 border-t border-gray-200 pt-4 w-full">
-              <p className="text-xs font-bold uppercase text-gray-500 tracking-wider">
+            <div className="mt-4 text-center text-gray-900 border-t border-gray-200 pt-3 w-full">
+              <p className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">
                 Valor a Pagar
               </p>
-              <p className="text-3xl font-extrabold text-gray-900 mt-1">
+              <p className="text-2xl font-extrabold text-gray-900 mt-0.5">
                 R$ {totalPrice.toFixed(2)}
               </p>
             </div>
           </div>
 
-          <div className="space-y-3 pb-2">
+          <div className="space-y-2.5">
             <Button
               variant="outline"
-              className="w-full border-gray-700 hover:bg-gray-800 text-gray-300"
+              className="w-full h-10 border-gray-700 hover:bg-gray-800 text-gray-300 text-sm"
               onClick={copyPixCode}
             >
-              <Copy size={16} className="mr-2" /> Copiar Código Pix
+              <Copy size={16} className="mr-2" /> Copiar Código
             </Button>
             <Button
-              className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white border-none font-bold shadow-lg shadow-green-900/20"
+              className="w-full h-10 bg-[#25D366] hover:bg-[#128C7E] text-white border-none font-bold shadow-lg shadow-green-900/10 text-sm"
               onClick={openWhatsApp}
             >
-              <FaWhatsapp size={20} className="mr-2" /> Enviar Comprovante
+              <FaWhatsapp size={18} className="mr-2" /> Enviar Comprovante
             </Button>
             <Button
               variant="ghost"
-              className="w-full text-xs text-gray-500 hover:text-gray-300"
+              className="w-full h-8 text-xs text-gray-500 hover:text-gray-300"
               onClick={() => {
                 resetBookingState(true);
                 navigate("/dashboard");

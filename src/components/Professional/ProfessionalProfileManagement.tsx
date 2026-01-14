@@ -20,11 +20,6 @@ import { Label } from "../ui/label";
 import Cropper, { type Area } from "react-easy-crop";
 import getCroppedImg from "../../lib/utils/cropImage";
 
-// Dentro do componente ProfessionalProfileManagement, adicione os estados:
-const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
-const [crop, setCrop] = useState({ x: 0, y: 0 });
-const [zoom, setZoom] = useState(1);
-const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
 const professionalSchema = z.object({
   name: z.string().min(3, "O nome é obrigatório"),
@@ -33,6 +28,12 @@ const professionalSchema = z.object({
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
 
 export const ProfessionalProfileManagement = () => {
+// Dentro do componente ProfessionalProfileManagement, adicione os estados:
+const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
+const [crop, setCrop] = useState({ x: 0, y: 0 });
+const [zoom, setZoom] = useState(1);
+const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+
   // 1. Uso da Store
   const { userProfile, updateUserProfile, setUserProfile } = useProfileStore();
 

@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
+import { cn } from "../../lib/utils/cn"; // Certifique-se de importar o cn
 
 interface CancelAppointmentModalProps {
   isOpen: boolean;
@@ -72,55 +73,74 @@ export const CancelAppointmentModal = ({
     }
 
     setError("");
-    // Envia o texto "limpo" (sem espaços extras nas pontas) ou undefined se vazio
     onConfirm(trimmedReason);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-gray-900 border-gray-800">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-500">
-            <AlertTriangle size={20} />
+      {/* OTIMIZAÇÃO MOBILE:
+          - w-[95%]: Ocupa quase toda a largura em telas pequenas
+          - rounded-2xl: Visual mais moderno e amigável
+          - bg-[#18181b]: Fundo sólido para performance e contraste com teclado
+          - top-[20%]: Posiciona o modal mais acima para o teclado não cobrir o input
+      */}
+      <DialogContent className="w-[95%] max-w-md rounded-2xl bg-[#18181b] border-gray-800 shadow-2xl p-5 md:p-6 top-[30%] md:top-[50%] translate-y-[-30%] md:translate-y-[-50%]">
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="flex items-center gap-2 text-red-500 text-lg md:text-xl">
+            <AlertTriangle size={22} />
             {title}
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-gray-400 text-sm md:text-base leading-relaxed">
             {description}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-4">
+        <div className="py-4 space-y-3">
           <Textarea
-            autoFocus // [!code highlight] UX: Foco automático ao abrir
+            // autoFocus removido no mobile pode ser melhor para UX (não abrir teclado na cara), 
+            // mas mantive pois é padrão de modal de ação rápida.
+            autoFocus 
             value={reason}
             onChange={(e) => {
               setReason(e.target.value);
               if (error) setError("");
             }}
             placeholder={placeholder}
-            className="min-h-[120px] bg-gray-800 border-gray-700 focus-visible:ring-red-500 resize-none"
+            // text-base impede zoom no iOS
+            className="min-h-[120px] bg-[#09090b] border-gray-700 text-gray-100 focus-visible:ring-red-500 resize-none text-base rounded-xl p-3"
           />
 
-          {/* [!code highlight] UX: Contador de caracteres apenas para quem tem obrigação */}
-          {isProvider && (
-            <div
-              className={`text-xs text-right ${
-                reason.trim().length < 10 ? "text-gray-500" : "text-green-500"
-              }`}
-            >
-              {reason.trim().length}/10 caracteres
-            </div>
-          )}
+          <div className="flex justify-between items-start">
+             {/* Espaço para erro */}
+             <div className="flex-1 mr-2">
+                {error && (
+                  <p className="text-xs text-red-400 font-medium bg-red-500/10 p-2 rounded-lg border border-red-500/20 animate-in fade-in slide-in-from-top-1">
+                    {error}
+                  </p>
+                )}
+             </div>
 
-          {error && (
-            <p className="text-xs text-red-400 font-medium bg-red-500/10 p-2 rounded border border-red-500/20 animate-fade-in-down">
-              {error}
-            </p>
-          )}
+             {/* Contador */}
+             {isProvider && (
+              <div
+                className={cn(
+                  "text-xs text-right mt-1 shrink-0 font-medium",
+                  reason.trim().length < 10 ? "text-gray-500" : "text-green-500"
+                )}
+              >
+                {reason.trim().length}/10
+              </div>
+            )}
+          </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-2">
+          <Button 
+            variant="ghost" 
+            onClick={onClose} 
+            disabled={isLoading}
+            className="w-full sm:w-auto h-12 sm:h-10 text-gray-400 hover:text-white rounded-xl touch-manipulation"
+          >
             Voltar
           </Button>
 
@@ -128,12 +148,12 @@ export const CancelAppointmentModal = ({
             variant="destructive"
             onClick={handleConfirm}
             disabled={isLoading}
-            className="bg-red-600 hover:bg-red-700"
+            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 h-12 sm:h-10 rounded-xl font-bold shadow-lg shadow-red-900/20 touch-manipulation active:scale-[0.98] transition-transform"
           >
             {isLoading ? (
               <Loader2 className="animate-spin mr-2" size={18} />
             ) : (
-              <Send size={16} className="mr-2" />
+              <Send size={18} className="mr-2" />
             )}
             {confirmButtonText}
           </Button>

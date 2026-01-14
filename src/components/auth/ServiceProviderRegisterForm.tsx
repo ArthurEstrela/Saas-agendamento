@@ -22,7 +22,7 @@ import {
   MapPin,
   Home,
   IdCard,
-  Hash, 
+  Hash,
   QrCode,
 } from "lucide-react";
 import type { PaymentMethod, ServiceProviderProfile } from "../../types";
@@ -78,6 +78,38 @@ const ChangeView = ({
   }, [center, zoom, map]);
   return null;
 };
+
+// Configuração de máscaras para o Pix (mesma do ProfileManagement)
+const pixConfig = {
+  cpf: {
+    mask: "000.000.000-00",
+    placeholder: "000.000.000-00",
+  },
+  cnpj: {
+    mask: "00.000.000/0000-00",
+    placeholder: "00.000.000/0000-00",
+  },
+  phone: {
+    mask: "(00) 00000-0000",
+    placeholder: "(64) 99999-9999",
+  },
+  email: {
+    mask: /^\S*@?\S*$/,
+    placeholder: "seu@email.com",
+  },
+  random: {
+    mask: /.*/,
+    placeholder: "Chave aleatória do banco",
+  },
+};
+
+// Classe para manter o estilo consistente com seus outros inputs
+const imaskClass = cn(
+  "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors",
+  "placeholder:text-gray-500",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
+  "disabled:cursor-not-allowed disabled:opacity-50 pl-10"
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MapEvents = ({
@@ -190,7 +222,7 @@ const schema = z
     documentNumber: z.string().min(1, "Documento é obrigatório"),
     businessPhone: z.string().min(14, "O telefone/WhatsApp é obrigatório"),
     areaOfWork: z.string().min(1, "Selecione uma área de atuação"),
-    
+
     // Redes sociais
     instagram: z.string().optional(),
     facebook: z.string().optional(),
@@ -203,7 +235,9 @@ const schema = z
     pixKey: z.string().optional(),
 
     // Endereço (mantenha igual)
-    zipCode: z.string().refine((zip) => zip.replace(/\D/g, "").length === 8, "CEP inválido"),
+    zipCode: z
+      .string()
+      .refine((zip) => zip.replace(/\D/g, "").length === 8, "CEP inválido"),
     street: z.string().min(1, "A rua é obrigatória"),
     number: z.string().min(1, "O número é obrigatório"),
     neighborhood: z.string().min(1, "O bairro é obrigatório"),
@@ -216,9 +250,17 @@ const schema = z
     // Validação de CPF/CNPJ (mantenha a lógica existente)
     const cleanDoc = data.documentNumber.replace(/\D/g, "");
     if (data.documentType === "cpf" && !validateCPF(cleanDoc)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CPF inválido", path: ["documentNumber"] });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CPF inválido",
+        path: ["documentNumber"],
+      });
     } else if (data.documentType === "cnpj" && !validateCNPJ(cleanDoc)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CNPJ inválido", path: ["documentNumber"] });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CNPJ inválido",
+        path: ["documentNumber"],
+      });
     }
 
     // NOVA VALIDAÇÃO: Pix Obrigatório
@@ -231,7 +273,7 @@ const schema = z
         });
       }
       if (!data.pixKeyType) {
-         ctx.addIssue({
+        ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Selecione o tipo da chave.",
           path: ["pixKeyType"],
@@ -722,19 +764,34 @@ export const ServiceProviderRegisterForm = () => {
                             checked={isChecked}
                             onCheckedChange={(checked) => {
                               if (checked) {
-                                field.onChange([...(field.value || []), option.id]);
+                                field.onChange([
+                                  ...(field.value || []),
+                                  option.id,
+                                ]);
                               } else {
-                                field.onChange(field.value?.filter((val) => val !== option.id));
+                                field.onChange(
+                                  field.value?.filter(
+                                    (val) => val !== option.id
+                                  )
+                                );
                                 // Se desmarcar Pix, limpa erro se houver
-                                if (option.id === 'pix') clearErrors("pixKey");
+                                if (option.id === "pix") clearErrors("pixKey");
                               }
                             }}
                             className="sr-only"
                           />
                           <option.icon
-                            className={cn("h-6 w-6", isChecked ? "text-primary" : "text-gray-300")}
+                            className={cn(
+                              "h-6 w-6",
+                              isChecked ? "text-primary" : "text-gray-300"
+                            )}
                           />
-                          <span className={cn("text-sm font-medium", isChecked ? "text-primary" : "text-white")}>
+                          <span
+                            className={cn(
+                              "text-sm font-medium",
+                              isChecked ? "text-primary" : "text-white"
+                            )}
+                          >
                             {option.label}
                           </span>
                         </label>
@@ -743,7 +800,7 @@ export const ServiceProviderRegisterForm = () => {
                   />
                 ))}
               </div>
-              
+
               {/* ÁREA CONDICIONAL DO PIX */}
               {watch("paymentMethods")?.includes("pix") && (
                 <div className="mt-4 p-4 bg-gray-900/50 border border-gray-700 rounded-lg animate-fade-in space-y-4">
@@ -751,15 +808,21 @@ export const ServiceProviderRegisterForm = () => {
                     <QrCode size={16} />
                     <span>Configuração do Pix</span>
                   </div>
-                  
+
                   <div className="space-y-2">
-                     <Label>Tipo de Chave</Label>
-                     <Controller
+                    <Label>Tipo de Chave</Label>
+                    <Controller
                       name="pixKeyType"
                       control={control}
                       defaultValue="cpf"
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={(val) => {
+                            field.onChange(val);
+                            setValue("pixKey", ""); // Limpa a chave ao trocar o tipo
+                          }}
+                          value={field.value}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione o tipo" />
                           </SelectTrigger>
@@ -778,15 +841,39 @@ export const ServiceProviderRegisterForm = () => {
                   <div className="space-y-2">
                     <Label>Sua Chave Pix</Label>
                     <div className="relative">
-                       <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                       <Input 
-                         className="pl-10" 
-                         {...register("pixKey")} 
-                         placeholder="Digite sua chave pix"
-                         error={errors.pixKey?.message}
-                       />
+                      <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
+                      <Controller
+                        name="pixKey"
+                        control={control}
+                        render={({ field: { onChange, value, ref } }) => {
+                          const currentType = watch("pixKeyType") || "cpf";
+                          const config =
+                            pixConfig[currentType as keyof typeof pixConfig];
+
+                          return (
+                            <IMaskInput
+                              inputRef={ref}
+                              className={imaskClass}
+                              value={value || ""}
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              mask={config.mask as any}
+                              placeholder={config.placeholder}
+                              unmask={true} // Salva apenas os números/caracteres puros no banco
+                              onAccept={(val: string) => onChange(val)}
+                            />
+                          );
+                        }}
+                      />
                     </div>
-                    <p className="text-xs text-gray-400">Essa chave será usada para gerar o QR Code para seus clientes.</p>
+                    {errors.pixKey && (
+                      <p className="text-xs text-destructive mt-1">
+                        {errors.pixKey.message}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400">
+                      Essa chave será usada para gerar o QR Code para seus
+                      clientes.
+                    </p>
                   </div>
                 </div>
               )}

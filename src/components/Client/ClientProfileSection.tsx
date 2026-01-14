@@ -361,26 +361,31 @@ export const ClientProfileSection = () => {
 
               <div className="space-y-2">
                 <Label>Gênero</Label>
-                <Controller
-                  name="gender"
-                  control={control}
-                  render={({ field }) => (
-                    <Select disabled={!isEditing} onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger className="w-full pl-3">
-                        <div className="flex items-center gap-2">
-                          <User className="h-5 w-5 text-gray-500" />
-                          <SelectValue placeholder="Selecione" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Masculino">Masculino</SelectItem>
-                        <SelectItem value="Feminino">Feminino</SelectItem>
-                        <SelectItem value="Outro">Outro</SelectItem>
-                        <SelectItem value="Prefiro não dizer">Prefiro não dizer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+<Controller
+  name="gender"
+  control={control}
+  render={({ field }) => (
+    <Select 
+      key={field.value} // ✨ Adicione esta linha!
+      disabled={!isEditing} 
+      onValueChange={field.onChange} 
+      value={field.value}
+    >
+      <SelectTrigger className="w-full pl-3">
+        <div className="flex items-center gap-2">
+          <User className="h-5 w-5 text-gray-500" />
+          <SelectValue placeholder="Selecione" />
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="Masculino">Masculino</SelectItem>
+        <SelectItem value="Feminino">Feminino</SelectItem>
+        <SelectItem value="Outro">Outro</SelectItem>
+        <SelectItem value="Prefiro não dizer">Prefiro não dizer</SelectItem>
+      </SelectContent>
+    </Select>
+  )}
+/>
               </div>
             </div>
 

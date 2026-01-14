@@ -12,20 +12,16 @@ import {
 import { toast } from "react-hot-toast";
 import { auth } from "../firebase/config";
 import { useProfileStore } from "./profileStore";
+import { useNotificationStore } from "./notificationsStore"; // [MELHORIA] Importado para limpeza
+import { useUserAppointmentsStore } from "./userAppointmentsStore";
+import { useProviderAppointmentsStore } from "./providerAppointmentsStore";
 import { createUserProfile } from "../firebase/userService";
 import type {
   ServiceProviderProfile,
   ClientProfile,
   UserProfile,
 } from "../types";
-import { useUserAppointmentsStore } from "./userAppointmentsStore";
-import { useProviderAppointmentsStore } from "./providerAppointmentsStore";
 
-/**
- * Mapeia erros do Firebase Auth para mensagens amigáveis ao usuário.
- * @param error O erro capturado, de tipo `unknown`.
- * @returns Uma string com a mensagem de erro formatada.
- */
 const getAuthErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "code" in error) {
     const authError = error as AuthError;
@@ -46,19 +42,16 @@ const getAuthErrorMessage = (error: unknown): string => {
         return "Ocorreu um erro inesperado. Tente novamente.";
     }
   }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Ocorreu um erro desconhecido.";
+  return error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
 };
 
 interface AuthState {
   user: FirebaseUser | null;
   isAuthenticated: boolean;
-  isLoading: boolean; // Para a verificação inicial de autenticação no carregamento do app
-  isSubmitting: boolean; // Para controlar o estado de envio de formulários
+  isLoading: boolean;
+  isSubmitting: boolean;
   error: string | null;
-  initializeAuth: () => () => void; // Retorna a função de unsubscribe
+  initializeAuth: () => () => void;
   login: (email: string, password: string) => Promise<UserProfile | null>;
   signup: (
     email: string,
@@ -85,7 +78,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         await useProfileStore.getState().fetchUserProfile(user.uid);
         set({ user, isAuthenticated: true, isLoading: false });
       } else {
+        // [MELHORIA] Limpeza centralizada quando não há usuário
         useProfileStore.getState().clearProfile();
+        useNotificationStore.getState().clearNotifications(); 
+        useProviderAppointmentsStore.getState().clearAppointments();
+        useUserAppointmentsStore.getState().clearAppointments();
         set({ user: null, isAuthenticated: false, isLoading: false });
       }
     });
@@ -97,69 +94,41 @@ export const useAuthStore = create<AuthState>((set) => ({
     const loadingToast = toast.loading("Autenticando...");
 
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Busca o perfil do usuário IMEDIATAMENTE após o login
       await useProfileStore.getState().fetchUserProfile(user.uid);
       const userProfile = useProfileStore.getState().userProfile;
 
-      toast.success("Login realizado com sucesso! Bem-vindo(a) de volta.", {
-        id: loadingToast,
-      });
-
-      // O onAuthStateChanged fará isso também, mas setamos aqui para garantir a consistência
+      toast.success("Login realizado com sucesso! Bem-vindo(a) de volta.", { id: loadingToast });
       set({ user, isAuthenticated: true, isSubmitting: false });
 
-      // Retorna o perfil para o componente de login
       return userProfile;
     } catch (err) {
       const errorMessage = getAuthErrorMessage(err);
       toast.error(errorMessage, { id: loadingToast });
       set({ error: errorMessage, isSubmitting: false });
-      return null; // Retorna nulo em caso de erro
+      return null;
     }
   },
 
   signup: async (email, password, fullName, userType, additionalData) => {
     set({ isSubmitting: true, error: null });
 
-    // Envolve a criação do usuário, perfil e envio do e-mail em uma única promise
     const promise = (async () => {
-      // 1. Cria o usuário na autenticação
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      // 2. [NOVO] Envia o e-mail de verificação do Google
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(userCredential.user);
-
-      // 3. Cria o perfil no Firestore
-      await createUserProfile(
-        userCredential.user.uid,
-        email,
-        fullName,
-        userType,
-        additionalData
-      );
+      await createUserProfile(userCredential.user.uid, email, fullName, userType, additionalData);
     })();
 
     toast.promise(promise, {
       loading: "Criando sua conta...",
-      // [SUGESTÃO] Mudei a mensagem para lembrar o usuário de verificar
       success: "Conta criada! Verifique seu e-mail para ativar o acesso.",
       error: (err) => getAuthErrorMessage(err),
     });
 
     try {
       await promise;
-      // O listener `onAuthStateChanged` cuidará do resto.
     } catch (err) {
       set({ error: getAuthErrorMessage(err) });
     } finally {
@@ -178,12 +147,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     try {
       await promise;
-      // O listener `onAuthStateChanged` limpará o estado global.
+      // [PERFEITO] Limpa absolutamente todos os estados globais sensíveis
+      useProfileStore.getState().clearProfile();
+      useNotificationStore.getState().clearNotifications(); 
       useProviderAppointmentsStore.getState().clearAppointments();
       useUserAppointmentsStore.getState().clearAppointments();
     } catch (error) {
       console.error("Logout failed:", error);
-      toast.error("Ocorreu um erro ao tentar sair.");
     }
   },
 
@@ -193,17 +163,18 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     toast.promise(promise, {
       loading: 'Enviando e-mail de recuperação...',
-      success: 'E-mail enviado! Verifique sua caixa de entrada e spam.',
+      success: 'E-mail enviado! Verifique sua caixa de entrada.',
       error: (err) => getAuthErrorMessage(err),
     });
     
     try {
       await promise;
     } catch (err) {
-        set({ error: getAuthErrorMessage(err) });
+      set({ error: getAuthErrorMessage(err) });
     } finally {
       set({ isSubmitting: false });
     }
   },
+
   clearError: () => set({ error: null }),
 }));

@@ -49,7 +49,7 @@ export const DateTimeSelection = () => {
   const initialDate =
     selectedDate && new Date(selectedDate) >= today
       ? new Date(selectedDate)
-      : undefined;
+      : today;
 
   const [date, setDate] = useState<Date | undefined>(initialDate);
   const [timeSlot, setTimeSlot] = useState<string | null>(selectedTimeSlot);

@@ -73,7 +73,7 @@ const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-black border-t border-[#daa520]/10">
+    <footer className="bg-[#18181b] border-t border-[#daa520]/10">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Coluna da Logo e Descrição */}

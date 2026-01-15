@@ -20,6 +20,7 @@ import {
 import { PublicReviewsSection } from "../components/Public/PublicReviewsSection";
 import { FaWhatsapp } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
+import { Helmet } from "react-helmet-async"; // Adicione este import
 
 // UI Components
 import { Button } from "../components/ui/button";
@@ -113,7 +114,19 @@ const PublicBookingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-100 pb-20 relative overflow-x-hidden selection:bg-primary/30 font-sans">
-      
+      {/* SEO DINÂMICO ✨ */}
+    {provider && (
+      <Helmet>
+        <title>{`Agendar na ${provider.businessName} | Stylo`}</title>
+        <meta name="description" content={`Reserve seu horário na ${provider.businessName}. Confira nossos serviços e avaliações.`} />
+        
+        {/* Tags para Redes Sociais (WhatsApp, Instagram) */}
+        <meta property="og:title" content={`Agendar na ${provider.businessName} | Stylo`} />
+        <meta property="og:description" content="Agendamento online rápido e fácil." />
+        <meta property="og:image" content={provider.logoUrl || "/stylo-logo.png"} />
+        <meta property="og:url" content={`https://stylo.app.br/schedule/${provider.publicProfileSlug}`} />
+      </Helmet>
+    )}
       {/* --- BACKGROUND OTIMIZADO --- 
           Removemos o blur excessivo no mobile e usamos gradientes (0 custo GPU).
           Mantemos a beleza (aurora) apenas no desktop.

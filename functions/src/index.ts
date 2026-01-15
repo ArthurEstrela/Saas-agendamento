@@ -43,15 +43,15 @@ export const generateSitemap = functions.https.onRequest(async (req, res) => {
 
     // 3. Adicione o link de cada perfil público ao sitemap
     snapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.publicProfileSlug) {
-        smStream.write({
-          url: `/p/${data.publicProfileSlug}`, // Ajuste conforme sua rota de perfil
-          changefreq: "weekly",
-          priority: 0.8,
-        });
-      }
+  const data = doc.data();
+  if (data.publicProfileSlug) {
+    smStream.write({
+      url: `/schedule/${data.publicProfileSlug}`, // ✨ ALTERADO DE /p/ PARA /schedule/
+      changefreq: "weekly",
+      priority: 0.8,
     });
+  }
+});
     smStream.end();
 
     const sitemapOutput = await streamToPromise(smStream);

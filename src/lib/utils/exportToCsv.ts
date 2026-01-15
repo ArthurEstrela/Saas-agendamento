@@ -10,7 +10,7 @@ const normalizeTimestamp = (dateValue: unknown): Date => {
   return new Date(dateValue as string | number | Date);
 };
 
-// Função para escapar caracteres que podem quebrar o CSV (como vírgulas na descrição)
+// Função para escapar caracteres que podem quebrar o CSV
 const escapeCsvCell = (cellData: string | number) => {
     const stringData = String(cellData);
     if (stringData.includes(',')) {
@@ -20,20 +20,33 @@ const escapeCsvCell = (cellData: string | number) => {
 };
 
 /**
- * Gera e inicia o download de um arquivo CSV a partir de uma lista de transações.
- * @param filename O nome do arquivo a ser baixado.
- * @param data A lista de agendamentos e despesas.
+ * Função interna para gerenciar o download do arquivo
+ */
+const downloadCsv = (filename: string, headers: string[], rows: string[]) => {
+  const csvString = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+/**
+ * Exporta transações financeiras (Receitas e Despesas)
  */
 export const exportTransactionsToCsv = (filename: string, data: (Appointment | Expense)[]) => {
   if (!data || data.length === 0) {
-    alert("Não há dados para exportar."); // Podemos substituir por um toast no futuro
+    alert("Não há dados para exportar.");
     return;
   }
 
-  // Define o cabeçalho do arquivo CSV
   const headers = ['Data', 'Descrição', 'Tipo', 'Categoria', 'Valor (BRL)'];
   
-  // Mapeia cada transação para uma linha do CSV
   const csvRows = data.map(item => {
     const isExpense = 'amount' in item;
     const date = format(normalizeTimestamp(isExpense ? item.date : item.startTime), 'yyyy-MM-dd');
@@ -47,24 +60,52 @@ export const exportTransactionsToCsv = (filename: string, data: (Appointment | E
       escapeCsvCell(description),
       escapeCsvCell(type),
       escapeCsvCell(category),
-      // Formata o número para o padrão brasileiro de planilhas (vírgula decimal)
       escapeCsvCell(value.toFixed(2).replace('.', ','))
     ].join(',');
   });
 
-  // Junta o cabeçalho e as linhas
-  const csvString = [headers.join(','), ...csvRows].join('\n');
-  
-  // Adiciona BOM para garantir a correta interpretação de caracteres especiais no Excel
-  const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+  downloadCsv(filename, headers, csvRows);
+};
 
-  // Cria um link temporário e simula o clique para iniciar o download
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+/**
+ * Exporta a agenda do dia com Dia e Horário na frente e status em Português
+ */
+export const exportDailyAgendaToCsv = (filename: string, data: any[]) => {
+  if (!data || data.length === 0) {
+    alert("Não há agendamentos para exportar.");
+    return;
+  }
+
+  // Colunas: Dia e Horário na frente, sem a parte de pagamento
+  const headers = ['Dia', 'Horário', 'Cliente', 'Serviço', 'Status'];
+  
+  // Mapeamento de traduções para os status do sistema
+  const statusTranslations: Record<string, string> = {
+    pending: 'Pendente',
+    scheduled: 'Agendado',
+    completed: 'Concluído',
+    cancelled: 'Cancelado',
+    free: 'Disponível'
+  };
+
+  const csvRows = data.map(item => {
+    const isVacant = item.isVacant; 
+    const dateObj = normalizeTimestamp(item.startTime);
+    
+    const dia = format(dateObj, 'dd/MM/yyyy');
+    const horario = format(dateObj, 'HH:mm');
+    const cliente = isVacant ? 'LIVRE' : (item.clientName || 'N/A');
+    const servico = isVacant ? '-' : (item.serviceName || 'N/A');
+    const status = isVacant ? 'Disponível' : (statusTranslations[item.status] || item.status);
+
+    return [
+      escapeCsvCell(dia),
+      escapeCsvCell(horario),
+      escapeCsvCell(cliente),
+      escapeCsvCell(servico),
+      escapeCsvCell(status)
+    ].join(',');
+  });
+
+  downloadCsv(filename, headers, csvRows);
 };

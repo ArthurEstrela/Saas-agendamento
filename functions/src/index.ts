@@ -1,6 +1,8 @@
 // functions/src/index.ts
-import * as logger from "firebase-functions/logger";
+import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { SitemapStream, streamToPromise } from "sitemap";
+import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   onDocumentCreated,
@@ -18,6 +20,51 @@ import { WelcomeStylo } from "./emails/WelcomeStylo";
 
 admin.initializeApp();
 const db = admin.firestore();
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+export const generateSitemap = functions.https.onRequest(async (req, res) => {
+  try {
+    const smStream = new SitemapStream({
+      hostname: "https://stylo.app.br", // ⚠️ Troque pelo domínio real do Stylo
+    });
+
+    // 1. Adicione as páginas estáticas principais
+    smStream.write({ url: "/", changefreq: "daily", priority: 1.0 });
+    smStream.write({ url: "/login", changefreq: "monthly", priority: 0.5 });
+
+    // 2. Busque todos os profissionais no Firestore
+    const snapshot = await admin.firestore()
+      .collection("users")
+      .where("role", "==", "serviceProvider") // Filtra apenas prestadores
+      .get();
+
+    // 3. Adicione o link de cada perfil público ao sitemap
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.publicProfileSlug) {
+        smStream.write({
+          url: `/p/${data.publicProfileSlug}`, // Ajuste conforme sua rota de perfil
+          changefreq: "weekly",
+          priority: 0.8,
+        });
+      }
+    });
+    smStream.end();
+
+    const sitemapOutput = await streamToPromise(smStream);
+
+    // Configura o cabeçalho para XML e envia
+    res.header("Content-Type", "application/xml");
+    res.send(sitemapOutput);
+
+  } catch (error) {
+    console.error("Erro ao gerar sitemap:", error);
+    res.status(500).send("Erro interno");
+  }
+});
 
 // --- CONFIGURAÇÕES GLOBAIS ---
 const REGION = "southamerica-east1";

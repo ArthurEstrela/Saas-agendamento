@@ -7,21 +7,21 @@ import { cn } from "../lib/utils/cn"; // Utilitário para classes condicionais
 const teamMembers = [
   {
     name: "Arthur Estrela",
-    role: "CEO & Fundador",
+    role: "Sócio & Desenvolvedor",
     imageUrl:
       "https://firebasestorage.googleapis.com/v0/b/stylo-28128.firebasestorage.app/o/fotos_criadores%2FArthur.jpeg?alt=media&token=8611e096-56b6-4dd2-903a-802ce5babe62",
-    bio: "Visionário apaixonado por tecnologia e estética. Fundou a Stylo para trazer a revolução digital para o mercado de beleza.",
-    linkedin: "#",
-    github: "#"
+    bio: "Sócio cofundador focado na arquitetura e desenvolvimento técnico da Stylo, transformando tecnologia em soluções reais para o mercado de beleza.",
+    linkedin: "https://www.linkedin.com/in/arthurestrela/",
+    github: "https://github.com/ArthurEstrela"
   },
   {
     name: "Sávio Issa",
-    role: "Diretor de Tecnologia (CTO)",
+    role: "Sócio & Gestor de Marketing e Financeiro",
     imageUrl:
       "https://firebasestorage.googleapis.com/v0/b/stylo-28128.firebasestorage.app/o/fotos_criadores%2FSavio.jpeg?alt=media&token=e539c859-1a04-4f09-a145-e9f7604d29c0",
-    bio: "Arquiteto de software e líder técnico. Garante que cada linha de código da Stylo seja segura, rápida e escalável.",
-    linkedin: "#",
-    github: "#"
+    bio: "Sócio cofundador responsável pela estratégia de marketing e gestão financeira, garantindo o crescimento sustentável e o sucesso do negócio.",
+    linkedin: "https://www.linkedin.com/in/s%C3%A1vio-issa-207517265/",
+    github: "https://github.com/savioissa21"
   },
 ];
 

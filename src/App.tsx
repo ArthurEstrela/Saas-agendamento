@@ -1,12 +1,13 @@
 import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
-import { useNotificationStore } from "./store/notificationsStore"; // Importado
+import { useNotificationStore } from "./store/notificationsStore";
 import { AnimatePresence, motion } from "framer-motion";
 
 import AppLayout from "./components/AppLayout";
 import { ProtectedRoute } from "./components/Common/ProtectedRoute";
 
+// --- Loader de Página ---
 const PageLoader = () => (
   <motion.div 
     initial={{ opacity: 0 }} 
@@ -18,16 +19,9 @@ const PageLoader = () => (
   </motion.div>
 );
 
-// Lazy imports mantidos...
+// --- Lazy Imports ---
+// Páginas Públicas
 const HomePage = lazy(() => import("./pages/HomePage"));
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const RegisterTypeSelection = lazy(() => import("./pages/RegisterTypeSelection"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
-const BookingPage = lazy(() => import("./pages/BookingPage").then(module => ({ default: module.BookingPage })));
-const PublicBookingPage = lazy(() => import("./pages/PublicBookingPage"));
-const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
-const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const AboutUs = lazy(() => import("./components/AboutUs"));
 const Pricing = lazy(() => import("./components/Pricing"));
 const FAQ = lazy(() => import("./components/FAQ"));
@@ -35,10 +29,30 @@ const Contact = lazy(() => import("./components/Contact"));
 const PrivacyPolicy = lazy(() => import("./components/PrivacyPolicy"));
 const TermsOfUse = lazy(() => import("./components/TermsOfUse"));
 const Features = lazy(() => import("./components/Features"));
+
+// Auth & Onboarding
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterTypeSelection = lazy(() => import("./pages/RegisterTypeSelection"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+
+// Agendamento Público e Misto
+const PublicBookingPage = lazy(() => import("./pages/PublicBookingPage"));
+const BookingPage = lazy(() => import("./pages/BookingPage").then(module => ({ default: module.BookingPage })));
+
+// Funcionalidade Híbrida (Pública/Privada)
 const ClientSearchSection = lazy(() => import("./components/Client/ClientSearchSection").then(m => ({ default: m.ClientSearchSection })));
+
+// Dashboard & Privado
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+
+// Componentes do Dashboard (Client)
 const ClientMyAppointmentsSection = lazy(() => import("./components/Client/ClientMyAppointmentsSection").then(m => ({ default: m.ClientMyAppointmentsSection })));
 const ClientFavoritesSection = lazy(() => import("./components/Client/ClientFavoritesSection").then(m => ({ default: m.ClientFavoritesSection })));
 const ClientProfileSection = lazy(() => import("./components/Client/ClientProfileSection").then(m => ({ default: m.ClientProfileSection })));
+
+// Componentes do Dashboard (Service Provider / Professional)
 const AgendaView = lazy(() => import("./components/ServiceProvider/Agenda/AgendaView").then(m => ({ default: m.AgendaView })));
 const FinancialManagement = lazy(() => import("./components/ServiceProvider/FinancialManagement").then(m => ({ default: m.FinancialManagement })));
 const ProfessionalsManagement = lazy(() => import("./components/ServiceProvider/ProfessionalsManagement").then(m => ({ default: m.ProfessionalsManagement })));
@@ -46,8 +60,10 @@ const AvailabilityManagement = lazy(() => import("./components/ServiceProvider/A
 const ProfileManagement = lazy(() => import("./components/ServiceProvider/ProfileManagement").then(m => ({ default: m.ProfileManagement })));
 const ServicesManagement = lazy(() => import("./components/ServiceProvider/ServicesManagement").then(m => ({ default: m.ServicesManagement })));
 const ReviewsManagement = lazy(() => import("./components/ServiceProvider/ReviewsManagement").then(m => ({ default: m.ReviewsManagement })));
-const Notifications = lazy(() => import("./components/Common/Notifications").then(m => ({ default: m.Notifications })));
 const SubscriptionManagement = lazy(() => import("./components/ServiceProvider/SubscriptionManagement").then(m => ({ default: m.SubscriptionManagement })));
+const Notifications = lazy(() => import("./components/Common/Notifications").then(m => ({ default: m.Notifications })));
+
+// Componentes do Dashboard (Professional Employee)
 const ProfessionalHome = lazy(() => import("./components/Professional/ProfessionalHome").then(m => ({ default: m.ProfessionalHome })));
 const ProfessionalProfileManagement = lazy(() => import("./components/Professional/ProfessionalProfileManagement").then(m => ({ default: m.ProfessionalProfileManagement })));
 
@@ -56,16 +72,18 @@ function App() {
   const { user } = useAuthStore(); // Pega o usuário logado
   const fetchNotifications = useNotificationStore(state => state.fetchNotifications);
 
+  // Scroll to top on route change
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
+  // Auth Initialization
   useEffect(() => {
     const unsubscribe = useAuthStore.getState().initializeAuth();
     return () => unsubscribe();
   }, []);
 
-  // NOVO: Monitora notificações globalmente
+  // Monitoramento de Notificações Global
   useEffect(() => {
     if (user?.uid) {
       fetchNotifications(user.uid);
@@ -76,8 +94,14 @@ function App() {
     <Suspense fallback={<PageLoader />}>
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
+          
+          {/* --- ROTAS PÚBLICAS (Com Header/Footer padrão) --- */}
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomePage />} />
+            
+            {/* NOVO: Rota de exploração pública (Sem barreira de entrada) */}
+            <Route path="/explore" element={<ClientSearchSection />} />
+            
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/about-us" element={<AboutUs />} />
             <Route path="/faq" element={<FAQ />} />
@@ -87,20 +111,30 @@ function App() {
             <Route path="/terms" element={<TermsOfUse />} />
           </Route>
 
+          {/* --- ROTAS DE AUTH & FUNIL --- */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/register-type" element={<RegisterTypeSelection />} />
           <Route path="/register/:userType" element={<RegisterPage />} />
+          
+          {/* Rotas de Agendamento (Públicas/Híbridas) */}
           <Route path="/schedule/:slug" element={<PublicBookingPage />} />
           <Route path="/book/:providerId" element={<BookingPage />} />
 
+          {/* --- ROTAS PROTEGIDAS (DASHBOARD) --- */}
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />}>
               <Route path="notifications" element={<Notifications />} />
+              
+              {/* Mantido no Dashboard para usuários logados usarem a Sidebar */}
               <Route path="explore" element={<ClientSearchSection />} />
+              
+              {/* Cliente */}
               <Route path="appointments" element={<ClientMyAppointmentsSection />} />
               <Route path="favorites" element={<ClientFavoritesSection />} />
               <Route path="profile" element={<ClientProfileSection />} />
+              
+              {/* Service Provider (Dono) */}
               <Route path="agenda" element={<AgendaView />} />
               <Route path="services" element={<ServicesManagement />} />
               <Route path="professionals" element={<ProfessionalsManagement />} />
@@ -109,6 +143,8 @@ function App() {
               <Route path="reviews" element={<ReviewsManagement />} />
               <Route path="subscription" element={<SubscriptionManagement />} />
               <Route path="business-profile" element={<ProfileManagement />} />
+              
+              {/* Professional (Funcionário) */}
               <Route path="home" element={<ProfessionalHome />} />
               <Route path="my-agenda" element={<AgendaView />} />
               <Route path="my-availability" element={<AvailabilityManagement />} />
@@ -117,6 +153,7 @@ function App() {
             </Route>
           </Route>
 
+          {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AnimatePresence>

@@ -10,7 +10,9 @@ import {
   ShieldCheck, 
   Sparkles, 
   ArrowRight,
-  Zap
+  Zap,
+  Search, // Importado
+  BriefcaseBusiness // Importado
 } from "lucide-react";
 import { httpsCallable } from "@firebase/functions";
 import { useAuthStore } from "../store/authStore";
@@ -201,7 +203,7 @@ const Home = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm font-bold text-emerald-400 mb-6 hover:bg-emerald-500/20 transition-colors cursor-default">
               <ShieldCheck size={16} />
-              <span>Teste Grátis de 15 Dias</span>
+              <span>Plataforma completa para o seu negócio</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight leading-tight mb-6 text-white">
@@ -214,36 +216,49 @@ const Home = () => {
           
           <AnimateOnScroll delay={200}>
             <p className="max-w-2xl mx-auto text-base sm:text-lg md:text-xl text-gray-400 font-light leading-relaxed px-2">
-              Simplifique a gestão do seu tempo e automatize seus agendamentos. 
-              <span className="text-gray-200 font-medium"> Elegância e eficiência</span> para você e seus clientes.
+              A solução definitiva para <span className="text-gray-200 font-medium">Profissionais</span> organizarem sua agenda e para <span className="text-gray-200 font-medium">Clientes</span> encontrarem os melhores serviços.
             </p>
           </AnimateOnScroll>
           
           <AnimateOnScroll delay={400}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 px-4">
-              {/* Botão Principal Hero */}
+              
+              {/* BOTÃO 1: PARA PROFISSIONAIS (Cadastro) */}
               <div className="relative group w-full sm:w-auto">
                 <div className="hidden md:block absolute -inset-1 bg-gradient-to-r from-primary to-purple-600 rounded-lg blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
                 <Button 
                   size="lg" 
-                  className="relative w-full sm:w-auto h-14 px-8 bg-gray-900 ring-1 ring-white/10 hover:bg-gray-800 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all text-lg touch-manipulation"
+                  className="relative w-full sm:w-auto h-14 px-8 bg-gray-900 ring-1 ring-white/10 hover:bg-gray-800 text-white font-bold rounded-xl flex items-center justify-center gap-3 transition-all text-lg touch-manipulation shadow-2xl"
                   onClick={() => navigate("/register-type")}
                 >
-                  Começar Agora
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <BriefcaseBusiness className="w-5 h-5 text-primary" />
+                  Sou Profissional
+                  <ArrowRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </div>
               
+              {/* BOTÃO 2: PARA CLIENTES (Explorar) */}
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="lg" 
-                className="w-full sm:w-auto h-14 px-8 text-gray-400 hover:text-white border border-transparent hover:bg-white/5 rounded-xl text-lg touch-manipulation"
-                onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
+                className="w-full sm:w-auto h-14 px-8 text-white border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50 hover:text-primary rounded-xl text-lg font-bold gap-3 transition-all touch-manipulation"
+                onClick={() => navigate("/explore")}
               >
-                Ver Planos
+                <Search className="w-5 h-5" />
+                Agendar Horário
               </Button>
+
             </div>
-            <p className="mt-6 text-[10px] md:text-xs text-gray-600 uppercase tracking-widest">Sem cartão necessário para cadastro</p>
+            
+            <div className="mt-8 flex items-center justify-center gap-6 text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-medium">
+              <span className="flex items-center gap-1.5">
+                <Check className="text-emerald-500" size={14} /> 15 dias grátis para Pro
+              </span>
+              <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
+              <span className="flex items-center gap-1.5">
+                <Check className="text-primary" size={14} /> 100% Grátis para Clientes
+              </span>
+            </div>
           </AnimateOnScroll>
         </div>
       </section>

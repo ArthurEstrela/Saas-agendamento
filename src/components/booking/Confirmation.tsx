@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // Adicionado useLocation
 import { toast } from "react-hot-toast";
 import type { ClientProfile, PaymentMethod } from "../../types";
 import { FaWhatsapp } from "react-icons/fa";
@@ -47,13 +47,16 @@ export const Confirmation = () => {
     status,
     confirmBooking,
     goToPreviousStep,
-    setRedirectUrlAfterLogin,
     resetBookingState,
+    // setRedirectUrlAfterLogin, // Não precisamos mais disso pois usamos localStorage + location state
   } = useBookingProcessStore();
+  
   const navigate = useNavigate();
+  const location = useLocation(); // Hook para saber a URL atual
   const { isAuthenticated } = useAuthStore();
   const { userProfile } = useProfileStore();
 
+  // --- Lógica de Métodos de Pagamento ---
   const availableMethods = useMemo(() => {
     const methods = provider?.paymentMethods || [];
     const hasPix = methods.includes("pix") && !!provider?.pixKey;
@@ -81,6 +84,7 @@ export const Confirmation = () => {
     }
   }, [availableMethods, paymentMethod]);
 
+  // --- Cálculo de Totais ---
   const { totalPrice } = useMemo(
     () =>
       selectedServices.reduce(
@@ -93,6 +97,7 @@ export const Confirmation = () => {
     [selectedServices]
   );
 
+  // --- Geração do Payload Pix ---
   const pixPayload = useMemo(() => {
     if (!provider?.pixKey) return "";
     let key = provider.pixKey.trim();
@@ -119,26 +124,58 @@ export const Confirmation = () => {
     });
   }, [provider, totalPrice]);
 
+  // --- Lógica de Confirmação Principal ---
   const handleConfirm = async () => {
+    // 1. Verifica se está logado
     if (!isAuthenticated) {
-      if (provider?.id) {
-        setRedirectUrlAfterLogin(`/book/${provider.id}`);
-        navigate(`/login`);
-      }
+      // SALVA O ESTADO NO LOCALSTORAGE
+      // Isso permite recuperar os dados quando o usuário voltar do login
+      const pendingBooking = {
+        providerId: provider?.id,
+        services: selectedServices,
+        date: selectedDate,
+        time: selectedTimeSlot,
+        professionalId: selectedProfessional?.id, // Importante salvar o profissional também
+        timestamp: Date.now(),
+      };
+
+      localStorage.setItem("@stylo:pendingBooking", JSON.stringify(pendingBooking));
+
+      toast("Faça login para finalizar", {
+        icon: "🔐",
+        duration: 4000,
+        style: {
+          background: "#18181b",
+          color: "#fff",
+          border: "1px solid #333",
+        },
+      });
+
+      // Redireciona para login enviando a localização atual no state
+      // O LoginPage vai ler 'state.from' e redirecionar de volta para cá
+      navigate("/login", { state: { from: location } });
       return;
     }
+
+    // 2. Verifica se é cliente
     if (!userProfile || userProfile.role !== "client") {
-      toast.error("Apenas clientes podem agendar.");
+      toast.error("Apenas contas de 'Cliente' podem realizar agendamentos.");
       return;
     }
+
+    // 3. Executa a confirmação
     await confirmBooking(userProfile as ClientProfile, paymentMethod);
+    
+    // 4. Pós confirmação
     if (useBookingProcessStore.getState().status.isSuccess) {
-      if (paymentMethod === "pix") setShowPixModal(true);
-      else {
+      if (paymentMethod === "pix") {
+        setShowPixModal(true);
+      } else {
+        toast.success("Agendamento confirmado!");
         setTimeout(() => {
           resetBookingState(true);
-          navigate("/dashboard");
-        }, 1000);
+          navigate("/dashboard/appointments"); // Melhor mandar para a lista de agendamentos
+        }, 1500);
       }
     }
   };
@@ -147,7 +184,7 @@ export const Confirmation = () => {
     const code = pixPayload || provider?.pixKey;
     if (code) {
       navigator.clipboard.writeText(code);
-      toast.success("Código copiado!");
+      toast.success("Código Pix copiado!");
     }
   };
 
@@ -157,12 +194,15 @@ export const Confirmation = () => {
       provider?.businessPhone ||
       ""
     ).replace(/\D/g, "");
+    
     if (!phone) return toast.error("WhatsApp indisponível.");
+    
     const msg = `Olá! Agendei *${selectedServices
       .map((s) => s.name)
       .join(", ")}* para *${
       selectedDate ? format(selectedDate, "dd/MM", { locale: ptBR }) : ""
     } às ${selectedTimeSlot}*. Segue o comprovante!`;
+    
     window.open(
       `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -260,7 +300,7 @@ export const Confirmation = () => {
                     )}
                   </div>
                   <span className="text-white font-bold text-base md:text-lg">
-                    {selectedProfessional?.name}
+                    {selectedProfessional?.name || "Qualquer Profissional"}
                   </span>
                 </div>
               </div>
@@ -376,7 +416,7 @@ export const Confirmation = () => {
               </Button>
               <Button
                 onClick={handleConfirm}
-                className="flex-[2] font-bold text-base h-12 shadow-lg shadow-primary/20"
+                className="flex-[2] font-bold text-base h-12 shadow-lg shadow-primary/20 bg-primary text-black hover:bg-primary/90"
                 disabled={
                   status.isConfirming ||
                   (!availableMethods.hasPix && !availableMethods.hasOnSite)
@@ -407,7 +447,7 @@ export const Confirmation = () => {
           </Button>
           <Button
             onClick={handleConfirm}
-            className="flex-1 font-bold text-sm h-10 shadow-lg shadow-primary/10"
+            className="flex-1 font-bold text-sm h-10 shadow-lg shadow-primary/10 bg-primary text-black hover:bg-primary/90"
             disabled={
               status.isConfirming ||
               (!availableMethods.hasPix && !availableMethods.hasOnSite)

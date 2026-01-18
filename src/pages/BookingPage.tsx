@@ -133,20 +133,78 @@ const BookingSuccess = () => {
 
 export const BookingPage = () => {
   const { providerId } = useParams<{ providerId: string }>();
+  
   const {
     provider,
+    professionals, // Necessário para hidratar o profissional selecionado
     currentStep,
     status,
     fetchProviderData,
     resetBookingState,
   } = useBookingProcessStore();
 
+  // 1. Carrega os dados do prestador
   useEffect(() => {
     if (providerId) fetchProviderData(providerId);
+    
+    // Cleanup: Reseta o state ao sair, exceto se estivermos indo para o login 
+    // (A preservação é feita via localStorage no componente Confirmation, não aqui)
     return () => {
+      // O reset é importante para não mostrar dados antigos ao entrar em outro perfil
       resetBookingState(false);
     };
   }, [providerId, fetchProviderData, resetBookingState]);
+
+  // 2. Lógica de Restauração (Hydration) pós-login
+  useEffect(() => {
+    // Só tenta restaurar se os dados do prestador e profissionais já estiverem carregados
+    if (status.isLoading || !provider || !providerId) return;
+
+    const restoreBooking = () => {
+      const savedDataString = localStorage.getItem("@stylo:pendingBooking");
+      if (!savedDataString) return;
+
+      try {
+        const savedData = JSON.parse(savedDataString);
+
+        // Verificações de segurança:
+        // 1. O agendamento é para o mesmo prestador?
+        // 2. O agendamento é recente (menos de 1 hora)?
+        const isSameProvider = savedData.providerId === providerId;
+        const isRecent = (Date.now() - savedData.timestamp) < 1000 * 60 * 60; 
+
+        if (isSameProvider && isRecent) {
+          // Precisamos reconstruir o objeto do profissional a partir do ID salvo
+          // para que o estado da store fique consistente (espera objeto, não string)
+          let professionalToRestore = null;
+          if (savedData.professionalId && professionals.length > 0) {
+            professionalToRestore = professionals.find(p => p.id === savedData.professionalId) || null;
+          }
+
+          // Hydration Atômica: Usamos setState direto da store para evitar que
+          // actions individuais resetem os passos seguintes.
+          useBookingProcessStore.setState({
+            selectedServices: savedData.services || [],
+            selectedProfessional: professionalToRestore,
+            selectedDate: savedData.date ? new Date(savedData.date) : null,
+            selectedTimeSlot: savedData.time || null,
+            currentStep: 4, // Pula direto para a confirmação
+          });
+
+          // Limpa o storage para não restaurar novamente sem necessidade
+          localStorage.removeItem("@stylo:pendingBooking");
+        }
+      } catch (e) {
+        console.error("Erro ao restaurar agendamento:", e);
+        localStorage.removeItem("@stylo:pendingBooking");
+      }
+    };
+
+    // Pequeno delay para garantir que o Zustand e React terminaram de renderizar os profissionais
+    const timer = setTimeout(restoreBooking, 100);
+    return () => clearTimeout(timer);
+
+  }, [providerId, provider, professionals, status.isLoading]);
 
   const renderCurrentStep = () => {
     switch (currentStep) {
@@ -207,23 +265,20 @@ export const BookingPage = () => {
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-100 pb-24 font-sans relative selection:bg-primary/30 overflow-x-hidden">
       
-      {/* --- BACKGROUND HÍBRIDO OTIMIZADO --- 
-          Mobile: Gradiente estático (Leve)
-          Desktop: Aurora animada (Rico)
-      */}
+      {/* --- BACKGROUND HÍBRIDO OTIMIZADO --- */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         {/* MOBILE BG */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#0c0c0e] via-[#09090b] to-black md:hidden" />
         <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-primary/5 to-transparent opacity-30 md:hidden" />
 
-        {/* DESKTOP BG (Mantém os efeitos bonitos em telas grandes) */}
+        {/* DESKTOP BG */}
         <div className="hidden md:block">
           <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-primary/5 rounded-full blur-[120px] opacity-50" />
           <div className="absolute top-[10%] right-[-20%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] opacity-40" />
           <div className="absolute bottom-[-20%] left-[10%] w-[70vw] h-[70vw] bg-purple-900/5 rounded-full blur-[150px] opacity-40" />
         </div>
         
-        {/* Noise Texture (Leve) */}
+        {/* Noise Texture */}
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.02] mix-blend-overlay" />
       </div>
 
@@ -233,7 +288,6 @@ export const BookingPage = () => {
           <img
             src={provider.bannerUrl}
             alt={provider.businessName}
-            // Blur removido no mobile para performance e nitidez
             className="h-full w-full object-cover opacity-50 md:blur-[3px] scale-105 transition-transform duration-1000 md:hover:scale-110"
           />
         ) : (

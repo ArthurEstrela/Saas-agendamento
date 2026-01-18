@@ -30,9 +30,9 @@ import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
 
 const PLANOS = {
-  MENSAL: "price_1SMeWT3zDQy3p6yeWl0LC4wi",
-  TRIMESTRAL: "price_1SMeWT3zDQy3p6yezkMmrByP",
-  ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
+  MENSAL: "price_1SqnYS3zDQy3p6yeBktBjaKY",
+  TRIMESTRAL: "price_1SqnZd3zDQy3p6yeEnKfODmW",
+  ANUAL: "price_1SqnaO3zDQy3p6yefwnogUrm",
 };
 
 // Detalhes dos Planos

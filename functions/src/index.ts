@@ -71,9 +71,9 @@ const REGION = "southamerica-east1";
 const TIME_ZONE = "America/Sao_Paulo";
 
 const PLANOS_PERMITIDOS = {
-  MENSAL: "price_1SMeWT3zDQy3p6yeWl0LC4wi",
-  TRIMESTRAL: "price_1SMeWT3zDQy3p6yezkMmrByP",
-  ANUAL: "price_1SO7sB3zDQy3p6yevNXLXO8v",
+  MENSAL: "price_1SqnYS3zDQy3p6yeBktBjaKY",
+  TRIMESTRAL: "price_1SqnZd3zDQy3p6yeEnKfODmW",
+  ANUAL: "price_1SqnaO3zDQy3p6yefwnogUrm",
 };
 
 const YOUR_APP_URL = "https://stylo.app.br"; // Altere para a URL de produção quando lançar

@@ -339,7 +339,7 @@ const Home = () => {
                 <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Gestão de Clientes</li>
                 <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Página Pública</li>
               </ul>
-              {renderPlanButton("price_1SMeWT3zDQy3p6yeWl0LC4wi", "Testar Mensal", false)}
+              {renderPlanButton("price_1SqnYS3zDQy3p6yeBktBjaKY", "Testar Mensal", false)}
               <p className="text-[10px] text-center text-gray-600 mt-3 uppercase tracking-wide">15 dias grátis</p>
             </div>
           </AnimateOnScroll>
@@ -365,7 +365,7 @@ const Home = () => {
                 <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Notificações WhatsApp</li>
                 <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Relatórios Avançados</li>
               </ul>
-              {renderPlanButton("price_1SMeWT3zDQy3p6yezkMmrByP", "Assinar Trimestral", true)}
+              {renderPlanButton("price_1SqnZd3zDQy3p6yeEnKfODmW", "Assinar Trimestral", true)}
               <p className="text-xs text-center text-gray-400 mt-3 font-medium">Cancele quando quiser</p>
             </div>
           </AnimateOnScroll>
@@ -389,7 +389,7 @@ const Home = () => {
                 <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Domínio Personalizado</li>
                 <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Suporte Prioritário</li>
               </ul>
-              {renderPlanButton("price_1SO7sB3zDQy3p6yevNXLXO8v", "Testar Anual", false)}
+              {renderPlanButton("price_1SqnaO3zDQy3p6yefwnogUrm", "Testar Anual", false)}
               <p className="text-[10px] text-center text-gray-600 mt-3 uppercase tracking-wide">15 dias grátis</p>
             </div>
           </AnimateOnScroll>

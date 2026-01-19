@@ -1,5 +1,4 @@
 // functions/src/index.ts
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { SitemapStream, streamToPromise } from "sitemap";
 import * as logger from "firebase-functions/logger";
@@ -17,6 +16,15 @@ import { Resend } from "resend";
 import * as React from "react";
 import { StyloNotification } from "./emails/StyloNotification";
 import { WelcomeStylo } from "./emails/WelcomeStylo";
+import { setGlobalOptions } from "firebase-functions/v2";
+
+// Limita o uso de recursos para evitar sustos na fatura
+setGlobalOptions({
+  maxInstances: 10, // No máximo 10 servidores simultâneos (evita ataque DDoS ou bug de loop)
+  memory: "256MiB", // O padrão é 512MB ou mais. 256MB é suficiente para suas funções leves.
+  timeoutSeconds: 60, // Se travar, mata em 60s (padrão é maior)
+  region: "southamerica-east1", // Mantém sua região
+});
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -25,7 +33,20 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-export const generateSitemap = functions.https.onRequest(async (req, res) => {
+// --- CONFIGURAÇÕES GLOBAIS ---
+const REGION = "southamerica-east1";
+const TIME_ZONE = "America/Sao_Paulo";
+
+const PLANOS_PERMITIDOS = {
+  MENSAL: "price_1SqnYS3zDQy3p6yeBktBjaKY",
+  TRIMESTRAL: "price_1SqnZd3zDQy3p6yeEnKfODmW",
+  ANUAL: "price_1SqnaO3zDQy3p6yefwnogUrm",
+};
+
+const YOUR_APP_URL = "https://stylo.app.br"; // Altere para a URL de produção quando lançar
+
+
+export const generateSitemap = onRequest({ region: REGION }, async (req, res) => {
   try {
     const smStream = new SitemapStream({
       hostname: "https://stylo.app.br", // ⚠️ Troque pelo domínio real do Stylo
@@ -66,17 +87,6 @@ export const generateSitemap = functions.https.onRequest(async (req, res) => {
   }
 });
 
-// --- CONFIGURAÇÕES GLOBAIS ---
-const REGION = "southamerica-east1";
-const TIME_ZONE = "America/Sao_Paulo";
-
-const PLANOS_PERMITIDOS = {
-  MENSAL: "price_1SqnYS3zDQy3p6yeBktBjaKY",
-  TRIMESTRAL: "price_1SqnZd3zDQy3p6yeEnKfODmW",
-  ANUAL: "price_1SqnaO3zDQy3p6yefwnogUrm",
-};
-
-const YOUR_APP_URL = "https://stylo.app.br"; // Altere para a URL de produção quando lançar
 
 let stripeInstance: Stripe;
 

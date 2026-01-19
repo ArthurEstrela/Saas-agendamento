@@ -11,8 +11,8 @@ import {
   Sparkles, 
   ArrowRight,
   Zap,
-  Search, // Importado
-  BriefcaseBusiness // Importado
+  Search,
+  BriefcaseBusiness
 } from "lucide-react";
 import { httpsCallable } from "@firebase/functions";
 import { useAuthStore } from "../store/authStore";
@@ -42,12 +42,11 @@ const AnimateOnScroll = ({
     const element = ref.current;
     if (!element) return;
 
-    // Usando IntersectionObserver para performance
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true);
-          observer.unobserve(element); // Para de observar assim que aparece
+          observer.unobserve(element);
         }
       },
       { threshold: 0.1 }
@@ -63,7 +62,6 @@ const AnimateOnScroll = ({
   return (
     <div
       ref={ref}
-      // will-change-transform ajuda o navegador a preparar a animação
       className={`will-change-transform transition-all duration-1000 ease-out ${className}`}
       style={{
         transitionDelay: `${delay}ms`,
@@ -95,9 +93,8 @@ const Home = () => {
   // --- Lógica de Pagamento ---
   const handleCheckout = async (priceId: string) => {
     if (!user || !userProfile) {
-      // toast.error("Crie uma conta para começar seus 15 dias grátis.");
-      // Redireciona direto para cadastro para melhor UX
-      navigate("/register-type", { state: { from: location } });
+      // Redireciona direto para o cadastro de prestador para melhor UX nos planos
+      navigate("/register/provider", { state: { from: location } });
       return;
     }
 
@@ -179,18 +176,12 @@ const Home = () => {
   };
 
   return (
-    // Alterado para #09090b para consistência com as outras páginas otimizadas
     <div className="min-h-screen bg-[#09090b] text-gray-100 font-sans selection:bg-primary/30 selection:text-white overflow-x-hidden">
       
       {/* --- BACKGROUND OTIMIZADO --- */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        {/* Padrão de Grade (Leve) */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-        
-        {/* Desktop: Aurora Blur (Bonito) */}
         <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none opacity-40"></div>
-        
-        {/* Mobile: Gradiente Simples (Rápido) */}
         <div className="md:hidden absolute inset-0 bg-gradient-to-b from-[#121214] via-[#09090b] to-black opacity-80"></div>
         <div className="md:hidden absolute top-0 left-0 right-0 h-[400px] bg-gradient-to-b from-primary/10 to-transparent opacity-40"></div>
       </div>
@@ -200,7 +191,6 @@ const Home = () => {
         <div className="text-center max-w-5xl mx-auto space-y-8">
           
           <AnimateOnScroll>
-            {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm font-bold text-emerald-400 mb-6 hover:bg-emerald-500/20 transition-colors cursor-default">
               <ShieldCheck size={16} />
               <span>Plataforma completa para o seu negócio</span>
@@ -229,7 +219,7 @@ const Home = () => {
                 <Button 
                   size="lg" 
                   className="relative w-full sm:w-auto h-14 px-8 bg-gray-900 ring-1 ring-white/10 hover:bg-gray-800 text-white font-bold rounded-xl flex items-center justify-center gap-3 transition-all text-lg touch-manipulation shadow-2xl"
-                  onClick={() => navigate("/register-type")}
+                  onClick={() => navigate("/register/provider")}
                 >
                   <BriefcaseBusiness className="w-5 h-5 text-primary" />
                   Sou Profissional
@@ -247,7 +237,6 @@ const Home = () => {
                 <Search className="w-5 h-5" />
                 Agendar Horário
               </Button>
-
             </div>
             
             <div className="mt-8 flex items-center justify-center gap-6 text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-medium">
@@ -274,7 +263,6 @@ const Home = () => {
           </AnimateOnScroll>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-            {/* Feature 1 */}
             <AnimateOnScroll>
               <div className="group p-6 md:p-8 rounded-3xl bg-[#18181b] md:bg-gray-900/40 border border-white/5 md:hover:border-primary/30 transition-all duration-300 md:hover:shadow-2xl h-full">
                 <div className="mb-6 p-3 rounded-xl bg-gray-800/50 w-fit group-hover:bg-primary/10 transition-colors">
@@ -285,7 +273,6 @@ const Home = () => {
               </div>
             </AnimateOnScroll>
 
-            {/* Feature 2 */}
             <AnimateOnScroll delay={200}>
               <div className="group p-6 md:p-8 rounded-3xl bg-[#18181b] md:bg-gray-900/40 border border-white/5 md:hover:border-primary/30 transition-all duration-300 md:hover:shadow-2xl h-full">
                 <div className="mb-6 p-3 rounded-xl bg-gray-800/50 w-fit group-hover:bg-blue-500/10 transition-colors">
@@ -296,7 +283,6 @@ const Home = () => {
               </div>
             </AnimateOnScroll>
 
-            {/* Feature 3 */}
             <AnimateOnScroll delay={400}>
               <div className="group p-6 md:p-8 rounded-3xl bg-[#18181b] md:bg-gray-900/40 border border-white/5 md:hover:border-primary/30 transition-all duration-300 md:hover:shadow-2xl h-full">
                 <div className="mb-6 p-3 rounded-xl bg-gray-800/50 w-fit group-hover:bg-emerald-500/10 transition-colors">
@@ -324,7 +310,6 @@ const Home = () => {
         </AnimateOnScroll>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-start max-w-6xl mx-auto">
-          
           {/* MENSAL */}
           <AnimateOnScroll>
             <div className="relative p-6 md:p-8 rounded-3xl bg-[#18181b] md:bg-gray-900/40 border border-white/5 md:hover:border-white/10 transition-all">
@@ -344,14 +329,13 @@ const Home = () => {
             </div>
           </AnimateOnScroll>
 
-          {/* TRIMESTRAL (Destaque) */}
+          {/* TRIMESTRAL */}
           <AnimateOnScroll delay={200}>
             <div className="relative p-6 md:p-8 rounded-3xl bg-[#1d1d20] md:bg-gray-900/80 border border-primary/50 shadow-xl md:shadow-2xl md:shadow-primary/10 transform lg:-translate-y-6 z-10">
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1 w-max">
                 <Zap size={12} fill="currentColor" />
                 Mais Popular
               </div>
-              
               <h3 className="text-xl font-semibold text-white mb-2">Trimestral</h3>
               <div className="mb-1 flex items-baseline gap-1">
                 <span className="text-sm text-gray-400">R$</span>
@@ -359,7 +343,6 @@ const Home = () => {
                 <span className="text-gray-400">/mês</span>
               </div>
               <p className="text-xs text-gray-500 mb-8">Cobrado R$ 135,00 a cada 3 meses</p>
-
               <ul className="space-y-4 mb-8 text-sm text-white font-medium">
                 <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Tudo do Plano Mensal</li>
                 <li className="flex gap-3"><div className="p-0.5 rounded-full bg-primary/20 text-primary"><Check className="w-3.5 h-3.5" /></div> Notificações WhatsApp</li>
@@ -383,7 +366,6 @@ const Home = () => {
                 <span className="text-gray-400">/mês</span>
               </div>
               <p className="text-xs text-gray-500 mb-8">R$ 468,00 anualmente</p>
-
               <ul className="space-y-4 mb-8 text-sm text-gray-300">
                 <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Tudo do Trimestral</li>
                 <li className="flex gap-3"><Check className="w-5 h-5 text-gray-500" /> Domínio Personalizado</li>
@@ -395,7 +377,6 @@ const Home = () => {
           </AnimateOnScroll>
         </div>
 
-        {/* Garantia Footer */}
         <div className="mt-12 md:mt-16 text-center border-t border-white/5 pt-8">
           <p className="text-gray-500 text-xs md:text-sm flex items-center justify-center gap-2">
             <ShieldCheck size={16} className="text-primary" />

@@ -23,19 +23,19 @@ import {
   Hash,
   Globe,
   Building2,
-  Map as MapIcon,
   Navigation,
+  Map as MapIcon, // ✅ ADICIONADO: Importação que faltava
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   uploadProviderLogo,
   uploadProviderBanner,
 } from "../../firebase/userService";
-import { 
-  useForm, 
-  type SubmitHandler, 
-  Controller, 
-  type Resolver 
+import {
+  useForm,
+  type SubmitHandler,
+  Controller,
+  type Resolver,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -135,11 +135,11 @@ const pixConfig = {
     placeholder: "(64) 99999-9999",
   },
   email: {
-    mask: /^\S*@?\S*$/, 
+    mask: /^\S*@?\S*$/,
     placeholder: "seu@email.com",
   },
   random: {
-    mask: /.*/, 
+    mask: /.*/,
     placeholder: "Chave aleatória do banco",
   },
 };
@@ -176,14 +176,13 @@ const profileSchema = z.object({
   }),
   socialLinks: z
     .object({
-      instagram: z.string().url("URL inválida").optional().or(z.literal("")),
-      facebook: z.string().url("URL inválida").optional().or(z.literal("")),
-      website: z.string().url("URL inválida").optional().or(z.literal("")),
+      instagram: z.string().optional(),
+      facebook: z.string().optional(),
+      website: z.string().optional(),
       whatsapp: z.string().optional(),
     })
     .optional(),
 });
-
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
@@ -198,10 +197,11 @@ export const ProfileManagement = () => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
-const [logoToCrop, setLogoToCrop] = useState<string | null>(null);
-const [logoCrop, setLogoCrop] = useState({ x: 0, y: 0 });
-const [logoZoom, setLogoZoom] = useState(1);
-const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(null);
+  const [logoToCrop, setLogoToCrop] = useState<string | null>(null);
+  const [logoCrop, setLogoCrop] = useState({ x: 0, y: 0 });
+  const [logoZoom, setLogoZoom] = useState(1);
+  const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] =
+    useState<Area | null>(null);
 
   const {
     register,
@@ -214,7 +214,7 @@ const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema) as Resolver<ProfileFormData>,
     defaultValues: {
-      socialLinks: { instagram: "", facebook: "", website: "" },
+      socialLinks: { instagram: "", facebook: "", website: "", whatsapp: "" },
       pixKeyType: "cpf",
       cancellationMinHours: 2,
       documentType: "cpf",
@@ -243,11 +243,17 @@ const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(
       const docType = profile.documentType || (profile.cpf ? "cpf" : "cnpj");
       const docNumber = profile.cpf || profile.cnpj || "";
 
+      const whatsapp = profile.socialLinks?.whatsapp || "";
+
       const defaultValues = {
         ...profile,
         documentType: docType,
         documentNumber: docNumber,
         cancellationMinHours: profile.cancellationMinHours ?? 2,
+        socialLinks: {
+          ...profile.socialLinks,
+          whatsapp: whatsapp,
+        },
       };
 
       reset(defaultValues);
@@ -260,8 +266,8 @@ const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(
         setPosition(initialPos);
         setMapCenter([lat, lng]);
         setMapZoom(17);
-        // Utilizando asserção de tipo estrutural em vez de 'any'
-        const addrNumber = (profile.businessAddress as { number?: string }).number || "";
+        const addrNumber =
+          (profile.businessAddress as { number?: string }).number || "";
         lastSearchedAddressRef.current = `${profile.businessAddress.street}, ${addrNumber}, ${profile.businessAddress.city}`;
       }
     }
@@ -275,7 +281,7 @@ const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(
       try {
         const query = encodeURIComponent(currentQuery);
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`
+          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
         );
         const data = await response.json();
         if (data && data.length > 0) {
@@ -320,46 +326,44 @@ const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(
     }
   }, [address, setValue]);
 
-const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (file) {
-    // Opcional: Adicionar limite de tamanho aqui (Ex: 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande! Escolha uma de até 5MB.");
-      return;
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Imagem muito grande! Escolha uma de até 5MB.");
+        return;
+      }
+      setLogoToCrop(URL.createObjectURL(file));
     }
-    setLogoToCrop(URL.createObjectURL(file));
-  }
-};
+  };
 
-const saveCroppedLogo = useCallback(async () => {
-  if (!logoToCrop || !logoCroppedAreaPixels || !userProfile) return;
-  setIsUploadingLogo(true);
-  const loadingToast = toast.loading("Processando logo...");
+  const saveCroppedLogo = useCallback(async () => {
+    if (!logoToCrop || !logoCroppedAreaPixels || !userProfile) return;
+    setIsUploadingLogo(true);
+    const loadingToast = toast.loading("Processando logo...");
 
-  try {
-    // Aqui já aplicamos o PASSO 3: Resolução de 512x512 para a logo
-    const croppedFile = await getCroppedImg(
-      logoToCrop,
-      logoCroppedAreaPixels,
-      0.8,   // qualidade
-      512,   // targetWidth
-      512    // targetHeight
-    );
+    try {
+      const croppedFile = await getCroppedImg(
+        logoToCrop,
+        logoCroppedAreaPixels,
+        0.8,
+        512,
+        512,
+      );
 
-    const photoURL = await uploadProviderLogo(userProfile.id, croppedFile);
-    await updateUserProfile(userProfile.id, { logoUrl: photoURL });
-    setLogoPreview(photoURL);
-    setLogoToCrop(null);
-    toast.success("Logo atualizada com sucesso! 🎯");
-  } catch (error) {
-    console.error(error);
-    toast.error("Erro ao carregar logo.");
-  } finally {
-    setIsUploadingLogo(false);
-    toast.dismiss(loadingToast);
-  }
-}, [logoToCrop, logoCroppedAreaPixels, userProfile, updateUserProfile]);
+      const photoURL = await uploadProviderLogo(userProfile.id, croppedFile);
+      await updateUserProfile(userProfile.id, { logoUrl: photoURL });
+      setLogoPreview(photoURL);
+      setLogoToCrop(null);
+      toast.success("Logo atualizada com sucesso! 🎯");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao carregar logo.");
+    } finally {
+      setIsUploadingLogo(false);
+      toast.dismiss(loadingToast);
+    }
+  }, [logoToCrop, logoCroppedAreaPixels, userProfile, updateUserProfile]);
 
   const onBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0)
@@ -369,27 +373,25 @@ const saveCroppedLogo = useCallback(async () => {
   const showCroppedImage = useCallback(async () => {
     if (!bannerToCrop || !croppedAreaPixels || !userProfile) return;
     setIsUploadingBanner(true);
-
     const loadingToast = toast.loading("Processando imagem...");
 
     try {
-  const croppedImageFile = await getCroppedImg(
-  bannerToCrop,
-  croppedAreaPixels,
-  0.8,
-  1200, // Largura ideal para banners web
-  400   // Altura proporcional
-);
+      const croppedImageFile = await getCroppedImg(
+        bannerToCrop,
+        croppedAreaPixels,
+        0.8,
+        1200,
+        400,
+      );
 
       const bannerUrl = await uploadProviderBanner(
         userProfile.id,
-        croppedImageFile
+        croppedImageFile,
       );
 
       await updateUserProfile(userProfile.id, { bannerUrl });
       setBannerPreview(bannerUrl);
       setBannerToCrop(null);
-
       toast.dismiss(loadingToast);
       toast.success("Banner atualizado com sucesso! 🖼️");
     } catch (e) {
@@ -401,14 +403,45 @@ const saveCroppedLogo = useCallback(async () => {
     }
   }, [bannerToCrop, croppedAreaPixels, userProfile, updateUserProfile]);
 
+  const formatSocialLink = (
+    input: string | undefined,
+    baseUrl: string,
+  ): string | undefined => {
+    if (!input || input.trim() === "") return undefined;
+    let clean = input.trim();
+    if (clean.startsWith("http")) return clean;
+    if (clean.startsWith("@")) clean = clean.substring(1);
+    return `${baseUrl}/${clean}`;
+  };
+
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
     if (!userProfile || !isDirty) return;
     setIsSaving(true);
     try {
+      const formattedInstagram = formatSocialLink(
+        data.socialLinks?.instagram,
+        "https://www.instagram.com",
+      );
+      const formattedFacebook = formatSocialLink(
+        data.socialLinks?.facebook,
+        "https://www.facebook.com",
+      );
+      const formattedWebsite =
+        data.socialLinks?.website &&
+        !data.socialLinks.website.startsWith("http")
+          ? `https://${data.socialLinks.website}`
+          : data.socialLinks?.website;
+
       const updatedData = {
         ...data,
         cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
         cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
+        socialLinks: {
+          ...data.socialLinks,
+          instagram: formattedInstagram,
+          facebook: formattedFacebook,
+          website: formattedWebsite,
+        },
         businessAddress: {
           ...data.businessAddress,
           lat: position?.lat,
@@ -430,7 +463,7 @@ const saveCroppedLogo = useCallback(async () => {
     "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors",
     "placeholder:text-gray-500",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary",
-    "disabled:cursor-not-allowed disabled:opacity-50 pl-10"
+    "disabled:cursor-not-allowed disabled:opacity-50 pl-10",
   );
 
   if (!userProfile)
@@ -446,7 +479,7 @@ const saveCroppedLogo = useCallback(async () => {
       animate={{ opacity: 1 }}
       className="pb-20"
     >
-      {/* --- CROPPER MODAL --- */}
+      {/* --- CROPPER MODAL (Banner) --- */}
       {bannerToCrop && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
           <div className="relative w-full max-w-4xl h-[60vh] bg-gray-900 rounded-lg overflow-hidden shadow-2xl border border-gray-800">
@@ -482,7 +515,6 @@ const saveCroppedLogo = useCallback(async () => {
               min={1}
               max={3}
               step={0.1}
-              aria-labelledby="Zoom"
               onChange={(e) => setZoom(Number(e.target.value))}
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
             />
@@ -490,26 +522,30 @@ const saveCroppedLogo = useCallback(async () => {
         </div>
       )}
 
-      {/* --- LOGO CROPPER MODAL --- */}
-{logoToCrop && (
-  <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
-    <div className="relative w-full max-w-xl h-[50vh] bg-gray-900 rounded-lg overflow-hidden border border-gray-800">
-      <Cropper
-        image={logoToCrop}
-        crop={logoCrop}
-        zoom={logoZoom}
-        aspect={1 / 1} // Logo é sempre quadrada
-        onCropChange={setLogoCrop}
-        onZoomChange={setLogoZoom}
-        onCropComplete={(_, pixels) => setLogoCroppedAreaPixels(pixels)}
-      />
-    </div>
-    <div className="mt-6 flex gap-4">
-      <Button variant="secondary" onClick={() => setLogoToCrop(null)}>Cancelar</Button>
-      <Button onClick={saveCroppedLogo} className="font-bold">Salvar Logo</Button>
-    </div>
-  </div>
-)}
+      {/* --- CROPPER MODAL (Logo) --- */}
+      {logoToCrop && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
+          <div className="relative w-full max-w-xl h-[50vh] bg-gray-900 rounded-lg overflow-hidden border border-gray-800">
+            <Cropper
+              image={logoToCrop}
+              crop={logoCrop}
+              zoom={logoZoom}
+              aspect={1 / 1}
+              onCropChange={setLogoCrop}
+              onZoomChange={setLogoZoom}
+              onCropComplete={(_, pixels) => setLogoCroppedAreaPixels(pixels)}
+            />
+          </div>
+          <div className="mt-6 flex gap-4">
+            <Button variant="secondary" onClick={() => setLogoToCrop(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveCroppedLogo} className="font-bold">
+              Salvar Logo
+            </Button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* --- HERO HEADER (Banner + Avatar) --- */}
@@ -575,7 +611,6 @@ const saveCroppedLogo = useCallback(async () => {
                   />
                 </label>
               </div>
-
               <div
                 className="absolute bottom-4 right-2 bg-green-500 h-6 w-6 rounded-full border-4 border-gray-950"
                 title="Perfil Ativo"
@@ -620,19 +655,21 @@ const saveCroppedLogo = useCallback(async () => {
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
                 <div className="space-y-2">
-  <Label>Nome Fantasia</Label>
-  <div className="relative">
-    <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-    <Input
-      className="pl-10"
-      {...register("businessName")}
-      placeholder="Ex: Barbearia Estilo"
-    />
-  </div>
-  {errors.businessName && (
-    <span className="text-xs text-red-500">{errors.businessName.message}</span>
-  )}
-</div>
+                  <Label>Nome Fantasia</Label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                    <Input
+                      className="pl-10"
+                      {...register("businessName")}
+                      placeholder="Ex: Barbearia Estilo"
+                    />
+                  </div>
+                  {errors.businessName && (
+                    <span className="text-xs text-red-500">
+                      {errors.businessName.message}
+                    </span>
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1">
@@ -644,8 +681,7 @@ const saveCroppedLogo = useCallback(async () => {
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>
-                            Seu link será: agendai.com/
-                            <strong>seu-slug</strong>
+                            Seu link: agendai.com/<strong>seu-slug</strong>
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -681,7 +717,7 @@ const saveCroppedLogo = useCallback(async () => {
                           }
                           className={cn(
                             imaskClass,
-                            "bg-gray-800/50 text-gray-400 cursor-not-allowed"
+                            "bg-gray-800/50 text-gray-400 cursor-not-allowed",
                           )}
                           disabled
                         />
@@ -691,7 +727,7 @@ const saveCroppedLogo = useCallback(async () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Telefone Comercial</Label>
+                  <Label>Telefone Comercial / Pessoal</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
                     <Controller
@@ -836,11 +872,41 @@ const saveCroppedLogo = useCallback(async () => {
                   <div className="p-2 bg-pink-500/10 rounded-lg text-pink-500">
                     <Instagram size={20} />
                   </div>
-                  Presença Digital
+                  Presença Digital e Contato
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* WhatsApp de Atendimento (Público) */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-green-400">
+                      <FaWhatsapp className="h-4 w-4" /> WhatsApp de Atendimento
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-3 z-10 text-green-500 pointer-events-none">
+                        <FaWhatsapp size={18} />
+                      </div>
+                      <Controller
+                        name="socialLinks.whatsapp"
+                        control={control}
+                        render={({ field }) => (
+                          <IMaskInput
+                            {...field}
+                            mask="(00) 00000-0000"
+                            className={cn(
+                              imaskClass,
+                              "border-green-500/30 focus-visible:border-green-500",
+                            )}
+                            placeholder="(99) 99999-9999"
+                          />
+                        )}
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      Número público para agendamentos.
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>Instagram</Label>
                     <div className="relative">
@@ -848,7 +914,7 @@ const saveCroppedLogo = useCallback(async () => {
                       <Input
                         className="pl-10"
                         {...register("socialLinks.instagram")}
-                        placeholder="https://instagram.com/..."
+                        placeholder="@seu.perfil"
                       />
                     </div>
                   </div>
@@ -859,28 +925,11 @@ const saveCroppedLogo = useCallback(async () => {
                       <Input
                         className="pl-10"
                         {...register("socialLinks.facebook")}
-                        placeholder="https://facebook.com/..."
+                        placeholder="@sua.pagina"
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>WhatsApp (Link)</Label>
-                    <div className="relative">
-                      <FaWhatsapp className="absolute left-3 top-3 h-5 w-5 text-green-500 z-10" />
-                      <Controller
-                        name="socialLinks.whatsapp"
-                        control={control}
-                        render={({ field }) => (
-                          <IMaskInput
-                            {...field}
-                            mask="(00) 00000-0000"
-                            className={imaskClass}
-                            placeholder="(99) 99999-9999"
-                          />
-                        )}
-                      />
-                    </div>
-                  </div>
+
                   <div className="space-y-2">
                     <Label>Website</Label>
                     <div className="relative">
@@ -888,7 +937,7 @@ const saveCroppedLogo = useCallback(async () => {
                       <Input
                         className="pl-10"
                         {...register("socialLinks.website")}
-                        placeholder="https://seusite.com.br"
+                        placeholder="seusite.com.br"
                       />
                     </div>
                   </div>
@@ -917,8 +966,8 @@ const saveCroppedLogo = useCallback(async () => {
                     />
                   </div>
                   <p className="text-xs text-gray-500 leading-relaxed">
-                    Define quantas horas antes do agendamento o cliente ainda
-                    pode cancelar pelo app. "0" permite sempre.
+                    Tempo mínimo antes do agendamento para cancelamento. "0"
+                    permite sempre.
                   </p>
                 </div>
               </CardContent>
@@ -934,65 +983,64 @@ const saveCroppedLogo = useCallback(async () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Tipo da Chave</Label>
-                  <Controller
-                    name="pixKeyType"
-                    control={control}
-                    render={({ field }) => (
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        defaultValue={field.value}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cpf">CPF</SelectItem>
-                          <SelectItem value="cnpj">CNPJ</SelectItem>
-                          <SelectItem value="email">E-mail</SelectItem>
-                          <SelectItem value="phone">Celular</SelectItem>
-                          <SelectItem value="random">Aleatória</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
+                  <div className="relative">
+                    {/* Ícone para o Select (Simulado com div wrapper pois SelectTrigger é complexo de estilizar internamente) */}
+                    <Controller
+                      name="pixKeyType"
+                      control={control}
+                      render={({ field }) => (
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          defaultValue={field.value}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cpf">CPF</SelectItem>
+                            <SelectItem value="cnpj">CNPJ</SelectItem>
+                            <SelectItem value="email">E-mail</SelectItem>
+                            <SelectItem value="phone">Celular</SelectItem>
+                            <SelectItem value="random">Aleatória</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
                 </div>
-              <div className="space-y-2">
-  <Label>Chave Pix</Label>
-  <div className="relative">
-    <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
-   <Controller
-  name="pixKey"
-  control={control}
-  render={({ field: { onChange, value, ref } }) => {
-    // 1. Pegamos a configuração baseada no tipo selecionado
-    const currentType = watch("pixKeyType") || "cpf";
-    const config = pixConfig[currentType as keyof typeof pixConfig];
-
-    return (
-      <IMaskInput
-        // ✅ Em vez de ref={ref}, o IMask usa inputRef
-        inputRef={ref} 
-        className={imaskClass}
-        value={value || ""}
-        // ✅ Definimos explicitamente o tipo da máscara para evitar conflitos
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mask={config.mask as any} 
-        placeholder={config.placeholder}
-        // ✅ unmask={true} garante que você salve no banco apenas os números (ex: 00011122233)
-        // Se preferir salvar com pontuação, mude para false.
-        unmask={true} 
-        // ✅ O RHF precisa ser avisado da mudança através do onAccept
-        onAccept={(val: string) => onChange(val)}
-      />
-    );
-  }}
-/>
-    {errors.pixKey && (
-      <span className="text-xs text-red-500 mt-1">{errors.pixKey.message}</span>
-    )}
-  </div>
-</div>
+                <div className="space-y-2">
+                  <Label>Chave Pix</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-3 h-5 w-5 text-gray-500 z-10" />
+                    <Controller
+                      name="pixKey"
+                      control={control}
+                      render={({ field: { onChange, value, ref } }) => {
+                        const currentType = watch("pixKeyType") || "cpf";
+                        const config =
+                          pixConfig[currentType as keyof typeof pixConfig];
+                        return (
+                          <IMaskInput
+                            inputRef={ref}
+                            className={imaskClass}
+                            value={value || ""}
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            mask={config.mask as any}
+                            placeholder={config.placeholder}
+                            unmask={true}
+                            onAccept={(val: string) => onChange(val)}
+                          />
+                        );
+                      }}
+                    />
+                    {errors.pixKey && (
+                      <span className="text-xs text-red-500 mt-1">
+                        {errors.pixKey.message}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -1028,7 +1076,7 @@ const saveCroppedLogo = useCallback(async () => {
                   "w-full h-12 text-lg font-bold shadow-xl transition-all",
                   isDirty
                     ? "bg-primary hover:bg-primary/90 text-black shadow-primary/20 scale-105"
-                    : "bg-gray-800 text-gray-500"
+                    : "bg-gray-800 text-gray-500",
                 )}
               >
                 {isSaving ? (

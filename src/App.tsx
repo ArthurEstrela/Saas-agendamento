@@ -1,4 +1,5 @@
 import { useEffect, lazy, Suspense } from "react";
+import type { ComponentType } from "react"; 
 import { Routes, Route, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { useNotificationStore } from "./store/notificationsStore";
@@ -6,6 +7,46 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import AppLayout from "./components/AppLayout";
 import { ProtectedRoute } from "./components/Common/ProtectedRoute";
+
+// --- Utilitário de Retry para Lazy Load (Solução Anti-Erro de Vendor) ---
+// Tenta importar o componente. Se falhar por erro de rede/versão (comum em deploys),
+// força um reload na página do usuário para buscar o arquivo novo.
+// CORREÇÃO: Usamos 'any' aqui para aceitar componentes com quaisquer props (ex: ReviewsManagementProps)
+const lazyRetry = <T extends ComponentType<any>>(
+  componentImport: () => Promise<{ default: T }>
+) => {
+  return lazy(async () => {
+    try {
+      return await componentImport();
+    } catch (error) {
+      // Verifica se o erro é uma instância de Error para acessar .message e .name com segurança
+      if (error instanceof Error) {
+        const isChunkLoadError = 
+          error.message.includes("Failed to fetch dynamically imported module") ||
+          error.message.includes("Importing a module script failed") ||
+          error.name === "ChunkLoadError";
+
+        if (isChunkLoadError) {
+          // Previne loop infinito: verifica se já tentamos recarregar nesta sessão
+          const pageHasAlreadyBeenForceRefreshed = JSON.parse(
+            window.sessionStorage.getItem("page-has-been-force-refreshed") || "false"
+          );
+
+          if (!pageHasAlreadyBeenForceRefreshed) {
+            // Marca flag na sessão e recarrega
+            window.sessionStorage.setItem("page-has-been-force-refreshed", "true");
+            window.location.reload();
+            // Retorna promessa vazia para "pausar" o erro visual enquanto recarrega
+            return new Promise<{ default: T }>(() => {}); 
+          }
+        }
+      }
+      
+      // Se não for erro de chunk ou já tiver recarregado, lança o erro normal
+      throw error;
+    }
+  });
+};
 
 // --- Loader de Página ---
 const PageLoader = () => (
@@ -19,53 +60,53 @@ const PageLoader = () => (
   </motion.div>
 );
 
-// --- Lazy Imports ---
+// --- Lazy Imports (Agora usando lazyRetry) ---
 // Páginas Públicas
-const HomePage = lazy(() => import("./pages/HomePage"));
-const AboutUs = lazy(() => import("./components/AboutUs"));
-const Pricing = lazy(() => import("./components/Pricing"));
-const FAQ = lazy(() => import("./components/FAQ"));
-const Contact = lazy(() => import("./components/Contact"));
-const PrivacyPolicy = lazy(() => import("./components/PrivacyPolicy"));
-const TermsOfUse = lazy(() => import("./components/TermsOfUse"));
-const Features = lazy(() => import("./components/Features"));
+const HomePage = lazyRetry(() => import("./pages/HomePage"));
+const AboutUs = lazyRetry(() => import("./components/AboutUs"));
+const Pricing = lazyRetry(() => import("./components/Pricing"));
+const FAQ = lazyRetry(() => import("./components/FAQ"));
+const Contact = lazyRetry(() => import("./components/Contact"));
+const PrivacyPolicy = lazyRetry(() => import("./components/PrivacyPolicy"));
+const TermsOfUse = lazyRetry(() => import("./components/TermsOfUse"));
+const Features = lazyRetry(() => import("./components/Features"));
 
 // Auth & Onboarding
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const RegisterTypeSelection = lazy(() => import("./pages/RegisterTypeSelection"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
-const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const LoginPage = lazyRetry(() => import("./pages/LoginPage"));
+const RegisterTypeSelection = lazyRetry(() => import("./pages/RegisterTypeSelection"));
+const RegisterPage = lazyRetry(() => import("./pages/RegisterPage"));
+const ForgotPasswordPage = lazyRetry(() => import("./pages/ForgotPasswordPage"));
 
 // Agendamento Público e Misto
-const PublicBookingPage = lazy(() => import("./pages/PublicBookingPage"));
-const BookingPage = lazy(() => import("./pages/BookingPage").then(module => ({ default: module.BookingPage })));
+const PublicBookingPage = lazyRetry(() => import("./pages/PublicBookingPage"));
+const BookingPage = lazyRetry(() => import("./pages/BookingPage").then(module => ({ default: module.BookingPage })));
 
 // Funcionalidade Híbrida (Pública/Privada)
-const ClientSearchSection = lazy(() => import("./components/Client/ClientSearchSection").then(m => ({ default: m.ClientSearchSection })));
+const ClientSearchSection = lazyRetry(() => import("./components/Client/ClientSearchSection").then(m => ({ default: m.ClientSearchSection })));
 
 // Dashboard & Privado
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const DashboardPage = lazyRetry(() => import("./pages/DashboardPage"));
+const NotFoundPage = lazyRetry(() => import("./pages/NotFoundPage"));
 
 // Componentes do Dashboard (Client)
-const ClientMyAppointmentsSection = lazy(() => import("./components/Client/ClientMyAppointmentsSection").then(m => ({ default: m.ClientMyAppointmentsSection })));
-const ClientFavoritesSection = lazy(() => import("./components/Client/ClientFavoritesSection").then(m => ({ default: m.ClientFavoritesSection })));
-const ClientProfileSection = lazy(() => import("./components/Client/ClientProfileSection").then(m => ({ default: m.ClientProfileSection })));
+const ClientMyAppointmentsSection = lazyRetry(() => import("./components/Client/ClientMyAppointmentsSection").then(m => ({ default: m.ClientMyAppointmentsSection })));
+const ClientFavoritesSection = lazyRetry(() => import("./components/Client/ClientFavoritesSection").then(m => ({ default: m.ClientFavoritesSection })));
+const ClientProfileSection = lazyRetry(() => import("./components/Client/ClientProfileSection").then(m => ({ default: m.ClientProfileSection })));
 
 // Componentes do Dashboard (Service Provider / Professional)
-const AgendaView = lazy(() => import("./components/ServiceProvider/Agenda/AgendaView").then(m => ({ default: m.AgendaView })));
-const FinancialManagement = lazy(() => import("./components/ServiceProvider/FinancialManagement").then(m => ({ default: m.FinancialManagement })));
-const ProfessionalsManagement = lazy(() => import("./components/ServiceProvider/ProfessionalsManagement").then(m => ({ default: m.ProfessionalsManagement })));
-const AvailabilityManagement = lazy(() => import("./components/ServiceProvider/AvailabilityManagement").then(m => ({ default: m.AvailabilityManagement })));
-const ProfileManagement = lazy(() => import("./components/ServiceProvider/ProfileManagement").then(m => ({ default: m.ProfileManagement })));
-const ServicesManagement = lazy(() => import("./components/ServiceProvider/ServicesManagement").then(m => ({ default: m.ServicesManagement })));
-const ReviewsManagement = lazy(() => import("./components/ServiceProvider/ReviewsManagement").then(m => ({ default: m.ReviewsManagement })));
-const SubscriptionManagement = lazy(() => import("./components/ServiceProvider/SubscriptionManagement").then(m => ({ default: m.SubscriptionManagement })));
-const Notifications = lazy(() => import("./components/Common/Notifications").then(m => ({ default: m.Notifications })));
+const AgendaView = lazyRetry(() => import("./components/ServiceProvider/Agenda/AgendaView").then(m => ({ default: m.AgendaView })));
+const FinancialManagement = lazyRetry(() => import("./components/ServiceProvider/FinancialManagement").then(m => ({ default: m.FinancialManagement })));
+const ProfessionalsManagement = lazyRetry(() => import("./components/ServiceProvider/ProfessionalsManagement").then(m => ({ default: m.ProfessionalsManagement })));
+const AvailabilityManagement = lazyRetry(() => import("./components/ServiceProvider/AvailabilityManagement").then(m => ({ default: m.AvailabilityManagement })));
+const ProfileManagement = lazyRetry(() => import("./components/ServiceProvider/ProfileManagement").then(m => ({ default: m.ProfileManagement })));
+const ServicesManagement = lazyRetry(() => import("./components/ServiceProvider/ServicesManagement").then(m => ({ default: m.ServicesManagement })));
+const ReviewsManagement = lazyRetry(() => import("./components/ServiceProvider/ReviewsManagement").then(m => ({ default: m.ReviewsManagement })));
+const SubscriptionManagement = lazyRetry(() => import("./components/ServiceProvider/SubscriptionManagement").then(m => ({ default: m.SubscriptionManagement })));
+const Notifications = lazyRetry(() => import("./components/Common/Notifications").then(m => ({ default: m.Notifications })));
 
 // Componentes do Dashboard (Professional Employee)
-const ProfessionalHome = lazy(() => import("./components/Professional/ProfessionalHome").then(m => ({ default: m.ProfessionalHome })));
-const ProfessionalProfileManagement = lazy(() => import("./components/Professional/ProfessionalProfileManagement").then(m => ({ default: m.ProfessionalProfileManagement })));
+const ProfessionalHome = lazyRetry(() => import("./components/Professional/ProfessionalHome").then(m => ({ default: m.ProfessionalHome })));
+const ProfessionalProfileManagement = lazyRetry(() => import("./components/Professional/ProfessionalProfileManagement").then(m => ({ default: m.ProfessionalProfileManagement })));
 
 function App() {
   const location = useLocation();

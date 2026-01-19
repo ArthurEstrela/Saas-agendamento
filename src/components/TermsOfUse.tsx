@@ -234,14 +234,14 @@ const TermsOfUse = () => {
             <p>Dúvidas legais? Estamos à disposição.</p>
             <div className="mt-6 inline-block w-full sm:w-auto">
               <a
-                href="mailto:juridico@stylo.app.br"
+                href="mailto:contato@stylo.app.br"
                 className="flex items-center justify-center sm:justify-start gap-3 px-6 py-4 bg-[#27272a] md:bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded-xl transition-all group touch-manipulation"
               >
                 <div className="p-2 bg-gray-900 rounded-lg text-amber-500 group-hover:text-white transition-colors">
                   <Mail size={20} />
                 </div>
                 <span className="text-gray-200 font-medium group-hover:text-white">
-                  juridico@stylo.app.br
+                  contato@stylo.app.br
                 </span>
               </a>
             </div>

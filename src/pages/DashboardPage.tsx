@@ -11,18 +11,22 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Redirect root "/dashboard" to the correct default sub-route (English)
+  // Redireciona "/dashboard" para a sub-rota correta baseada no cargo
   useEffect(() => {
     if (userProfile && location.pathname === "/dashboard") {
+      // ✅ CORREÇÃO: Capturamos os parâmetros atuais (ex: ?action=review&id=123)
+      const targetSearch = location.search; 
+
       if (userProfile.role === "client") {
-        navigate("/dashboard/explore", { replace: true });
+        // ✅ Passamos o 'search' junto com o pathname para não perder os dados
+        navigate({ pathname: "/dashboard/explore", search: targetSearch }, { replace: true });
       } else if (userProfile.role === "serviceProvider") {
-        navigate("/dashboard/agenda", { replace: true });
+        navigate({ pathname: "/dashboard/agenda", search: targetSearch }, { replace: true });
       } else if (userProfile.role === "professional") {
-        navigate("/dashboard/home", { replace: true });
+        navigate({ pathname: "/dashboard/home", search: targetSearch }, { replace: true });
       }
     }
-  }, [userProfile, location.pathname, navigate]);
+  }, [userProfile, location.pathname, navigate, location.search]);
 
   if (isLoadingProfile && !userProfile) {
     return <DashboardSkeleton />;
@@ -37,7 +41,7 @@ const DashboardPage = () => {
     );
   }
 
-  // Render the Layout Wrapper based on User Role
+  // Renderiza o Dashboard correto baseada no User Role
   if (userProfile) {
     if (userProfile.role === "client") {
       return <ClientDashboard />;

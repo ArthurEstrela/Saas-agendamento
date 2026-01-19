@@ -124,7 +124,7 @@ const sendNotification = async (
   recipientId: string,
   title: string,
   body: string,
-  options?: { skipEmail?: boolean } // <--- NOVO PARÂMETRO OPCIONAL
+  options?: { skipEmail?: boolean; customLink?: string } // <--- Adicionado customLink
 ) => {
   if (!recipientId) return;
 
@@ -145,22 +145,27 @@ const sendNotification = async (
     const email = userData?.email;
     const userName = userData?.name || "Usuário";
 
+    // Define o link de destino (Padrão: dashboard, ou o link específico da ação)
+    const linkToUse = options?.customLink || "/dashboard";
+
     const tasks: Promise<any>[] = [];
 
-    // 1. Enviar Push Notification (FCM) - MANTIDO
+    // 1. Enviar Push Notification (FCM)
     if (fcmToken) {
       const pushTask = admin
         .messaging()
         .send({
           notification: { title, body },
+          // Envia o link nos dados para o app interceptar e navegar
+          data: { link: linkToUse }, 
           token: fcmToken,
         })
         .catch((e) => logger.error(`Erro Push:`, e));
       tasks.push(pushTask);
     }
 
-    // 2. Enviar E-mail (Resend) - SÓ ENVIA SE NÃO TIVER A FLAG skipEmail
-    if (email && resend && !options?.skipEmail) { // <--- VERIFICAÇÃO AQUI
+    // 2. Enviar E-mail (Resend) - Respeita a flag skipEmail
+    if (email && resend && !options?.skipEmail) {
       const emailTask = resend.emails
         .send({
           from: "Agendamento <contato@stylo.app.br>",
@@ -170,7 +175,7 @@ const sendNotification = async (
             userName: userName,
             title: title,
             body: body,
-            actionLink: `${YOUR_APP_URL}/dashboard`,
+            actionLink: `${YOUR_APP_URL}${linkToUse}`, // Concatena URL base + link interno
           }),
         })
         .catch((e) => logger.error(`Erro Email:`, e));
@@ -178,8 +183,8 @@ const sendNotification = async (
       tasks.push(emailTask);
     }
 
-    // 3. Salvar Notificação Interna (Firestore/Sininho) - MANTIDO
-    const firestoreTask = createFirestoreNotification(recipientId, title, body);
+    // 3. Salvar Notificação Interna (Firestore/Sininho) com o LINK CORRETO
+    const firestoreTask = createFirestoreNotification(recipientId, title, body, linkToUse);
     tasks.push(firestoreTask);
 
     await Promise.all(tasks);
@@ -194,7 +199,8 @@ const sendNotification = async (
 const createFirestoreNotification = async (
   recipientId: string,
   title: string,
-  message: string
+  message: string,
+  link: string = "/dashboard" // <--- Padrão mantido, mas sobrescrevível
 ) => {
   try {
     await db.collection("notifications").add({
@@ -203,7 +209,7 @@ const createFirestoreNotification = async (
       message,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      link: "/dashboard",
+      link: link, // Salva o link para o front-end usar no clique
     });
   } catch (error) {
     logger.error(
@@ -216,22 +222,49 @@ const createFirestoreNotification = async (
 // --- GATILHOS DO FIRESTORE (TRIGGERS) ---
 
 export const onAppointmentCreate = onDocumentCreated(
-  { document: "appointments/{appointmentId}", region: REGION},
+  { document: "appointments/{appointmentId}", region: REGION },
   async (event) => {
     const appointmentData = event.data?.data();
     if (!appointmentData) return;
 
-    const { professionalId, clientName, serviceName, startTime } =
-      appointmentData;
-    if (!professionalId) return;
+    const { 
+      providerId,      // ID do Dono do Negócio
+      professionalId,  // ID do Profissional que vai atender
+      clientName, 
+      serviceName, 
+      startTime 
+    } = appointmentData;
+
+    // Se não tiver dados essenciais, para
+    if (!providerId && !professionalId) return;
 
     const { formattedDate, formattedTime } = formatDate(startTime);
-    const title = "📅 Nova Solicitação!";
-    const body = `${clientName || "Novo cliente"} quer agendar "${
+    
+    const title = "📅 Novo Agendamento!";
+    const body = `${clientName || "Cliente"} agendou "${
       serviceName || "um serviço"
     }" para ${formattedDate} às ${formattedTime}.`;
 
-    await sendNotification(professionalId, title, body, { skipEmail: true });
+    const recipients = new Set<string>();
+    
+    if (providerId) recipients.add(providerId);
+    if (professionalId) recipients.add(professionalId);
+
+    // --- ENVIO PARALELO ---
+    const tasks = Array.from(recipients).map((userId) => 
+      sendNotification(
+        userId, 
+        title, 
+        body, 
+        { 
+          skipEmail: true,               // ✅ Garante que NÃO envia e-mail
+          customLink: "/dashboard/agenda" // ✅ Clica e vai direto pra agenda
+        }
+      )
+    );
+
+    await Promise.all(tasks);
+    logger.info(`Notificação de novo agendamento enviada para: ${Array.from(recipients).join(", ")}`);
   }
 );
 
@@ -241,7 +274,8 @@ export const onAppointmentUpdate = onDocumentUpdated(
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
 
-    // REMOVI A LINHA QUE CAUSAVA O ERRO (const appointmentId = ...)
+    // Recupera o ID do agendamento vindo da URL do documento
+    const appointmentId = event.params.appointmentId;
 
     if (!beforeData || !afterData || beforeData.status === afterData.status) {
       return;
@@ -280,6 +314,24 @@ export const onAppointmentUpdate = onDocumentUpdated(
         }" de ${formattedDate} às ${formattedTime}.`;
 
         await sendNotification(professionalId, title, body);
+      }
+    }
+
+    // 3. NOVO: Notificação para o CLIENTE avaliar (Quando status muda para 'completed')
+    if (beforeData.status !== "completed" && afterData.status === "completed") {
+      const { clientId, serviceName, professionalName } = afterData;
+      
+      if (clientId) {
+        const title = "Como foi seu atendimento? ⭐";
+        const body = `O serviço "${serviceName || "Atendimento"}" foi concluído. Toque para avaliar ${professionalName || "o profissional"}!`;
+
+        // Cria o Deep Link para abrir o modal de review
+        const reviewLink = `/dashboard?action=review&appointmentId=${appointmentId}`;
+
+        await sendNotification(clientId, title, body, { 
+          skipEmail: true,      // Economiza custo
+          customLink: reviewLink // Garante que abre o modal certo
+        });
       }
     }
   }

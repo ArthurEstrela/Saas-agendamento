@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useProviderReviewsStore } from "../../store/providerReviewsStore";
-import type { UserProfile, ProfessionalProfile } from "../../types"; // Importação dos tipos
+import type { UserProfile, ProfessionalProfile } from "../../types";
 import { Star, User, Sliders, Calendar, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
@@ -14,7 +14,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils/cn";
 
-// Interface para as propriedades do componente
 interface ReviewsManagementProps {
   userProfile?: UserProfile;
 }
@@ -93,21 +92,16 @@ const ReviewSummary = ({ reviews }: { reviews: { rating: number }[] }) => {
 
 export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
   const { user } = useAuthStore();
-  // Incluímos fetchProfessionalReviews da store atualizada
   const { reviews, isLoading, fetchReviews, fetchProfessionalReviews } = useProviderReviewsStore();
   const [filter, setFilter] = useState<string | number>("all");
 
   useEffect(() => {
-    // Cenário 1: É um Profissional visualizando sua dashboard
     if (userProfile?.role === "professional") {
       const professional = userProfile as ProfessionalProfile;
       if (professional.professionalId) {
         fetchProfessionalReviews(professional.professionalId);
       }
-    }
-    // Cenário 2: É o Dono (Service Provider) ou fallback padrão se não houver userProfile
-    else if (user?.uid) {
-      // Se userProfile foi passado e é serviceProvider, usamos o ID dele, senão usamos o user.uid logado
+    } else if (user?.uid) {
       const providerId = userProfile?.id || user.uid;
       fetchReviews(providerId);
     }
@@ -198,9 +192,14 @@ export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
                             </div>
                           </div>
                         </div>
-                        <p className="text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-gray-800/50">
-                          "{review.comment}"
-                        </p>
+                        
+                        {/* ✅ SÓ EXIBE SE TIVER TEXTO REAL */}
+                        {review.comment && review.comment.trim() !== "" && (
+                          <p className="text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-gray-800/50">
+                            "{review.comment}"
+                          </p>
+                        )}
+
                       </div>
                     </CardContent>
                   </Card>

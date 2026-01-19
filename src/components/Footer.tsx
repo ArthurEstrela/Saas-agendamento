@@ -158,29 +158,32 @@ const Footer = () => {
                 </li>
               </ul>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white tracking-wider uppercase">
-                Suporte
-              </h3>
-              <ul className="mt-4 space-y-3">
-                <li>
-                  <Link
-                    to="/faq"
-                    className="text-base text-gray-400 hover:text-[#daa520] transition-colors"
-                  >
-                    FAQ
-                  </Link>
-                </li>
-                <li>
-                  <a
-                    href="mailto:stylo.suporte.agenda@gmail.com"
-                    className="text-base text-gray-400 hover:text-[#daa520] transition-colors"
-                  >
-                    Email
-                  </a>
-                </li>
-              </ul>
-            </div>
+          <div>
+  <h3 className="text-sm font-semibold text-white tracking-wider uppercase">
+    Suporte
+  </h3>
+  <ul className="mt-4 space-y-3">
+    <li>
+      <Link
+        to="/faq"
+        className="text-base text-gray-400 hover:text-[#daa520] transition-colors"
+      >
+        FAQ
+      </Link>
+    </li>
+    <li>
+      {/* LINK ATUALIZADO ABAIXO 🚀 */}
+      <a
+        href="https://mail.google.com/mail/?view=cm&fs=1&to=contato@stylo.app.br"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-base text-gray-400 hover:text-[#daa520] transition-colors"
+      >
+        contato@stylo.app.br
+      </a>
+    </li>
+  </ul>
+</div>
           </div>
         </div>
 

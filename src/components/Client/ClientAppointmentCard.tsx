@@ -19,6 +19,7 @@ import { CancelAppointmentModal } from "../Common/CancelAppointmentModal";
 import { useUserAppointmentsStore } from "../../store/userAppointmentsStore";
 import ReviewModal from "../Common/ReviewModal";
 import { useReviewStore } from "../../store/reviewStore";
+import { FaWhatsapp } from "react-icons/fa";
 
 // Componentes UI Primitivos
 import { Card, CardHeader, CardContent, CardFooter } from "../ui/card";
@@ -35,6 +36,11 @@ const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
     cancelled: { label: "Cancelado", variant: "destructive", icon: XCircle },
   } as const;
 
+
+
+// No JSX, você usaria:
+// {formatDuration(appointment.totalDuration)}
+
   const config = statusConfig[status] || {
     label: "Desconhecido",
     variant: "outline",
@@ -47,6 +53,13 @@ const StatusBadge = ({ status }: { status: EnrichedAppointment["status"] }) => {
       <Icon size={12} /> {config.label}
     </Badge>
   );
+};
+
+  const formatDuration = (minutes: number) => {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
 };
 
 export const ClientAppointmentCard = ({
@@ -106,6 +119,27 @@ export const ClientAppointmentCard = ({
     setCancelModalOpen(false);
   };
 
+  const handleWhatsAppClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const phone = provider?.businessPhone || provider?.socialLinks?.whatsapp || "";
+    const cleanPhone = phone.replace(/\D/g, "");
+    
+    if (!cleanPhone) return;
+
+    const time = format(startTime, "HH:mm");
+    const date = format(startTime, "dd/MM");
+    const message = `Olá, gostaria de falar sobre meu agendamento para o dia ${date} às ${time} com ${professionalName}.`;
+    
+    window.open(
+      `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+  };
+
+  const hasPhone = !!(provider?.businessPhone || provider?.socialLinks?.whatsapp);
+
+  
+
   // --- LÓGICA DE CANCELAMENTO MELHORADA ---
   const minHoursNotice = provider?.cancellationMinHours ?? 2;
   const cancellationDeadline = subHours(appointment.startTime, minHoursNotice);
@@ -136,7 +170,7 @@ export const ClientAppointmentCard = ({
   const hasReview =
     appointment.review || (appointment as { reviewId?: string }).reviewId;
 
-  return (
+ return (
     <>
       <MotionCard
         initial={{ opacity: 0, y: 20 }}
@@ -155,7 +189,21 @@ export const ClientAppointmentCard = ({
               <h3 className="font-bold text-lg text-gray-100">
                 {professionalName}
               </h3>
-              <StatusBadge status={status} />
+              
+              {/* BOTÃO DO WHATSAPP ADICIONADO AQUI 💬 */}
+              <div className="flex items-center gap-2">
+                {hasPhone && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={handleWhatsAppClick}
+                    className="h-8 w-8 rounded-full text-green-500 hover:text-white hover:bg-green-600 transition-colors"
+                  >
+                    <FaWhatsapp size={18} />
+                  </Button>
+                )}
+                <StatusBadge status={status} />
+              </div>
             </div>
             <p className="text-sm text-gray-400 flex items-center gap-1">
               <span className="font-medium text-primary">
@@ -224,13 +272,23 @@ export const ClientAppointmentCard = ({
           </div>
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-4 pt-4 border-t border-gray-800/50 bg-black/20">
-          <div className="w-full flex justify-between items-center">
-            <span className="text-sm text-gray-400">Total estimado</span>
-            <span className="text-xl font-bold text-primary">
-              R$ {appointment.totalPrice.toFixed(2)}
-            </span>
-          </div>
+<CardFooter className="flex flex-col gap-4 pt-4 border-t border-gray-800/50 bg-black/20">
+  <div className="w-full space-y-2">
+    {/* Exibindo o tempo formatado ✨ */}
+    <div className="flex justify-between items-center">
+      <span className="text-sm text-gray-400">Tempo estimado</span>
+      <span className="text-sm font-medium text-gray-200">
+        {formatDuration(appointment.totalDuration)}
+      </span>
+    </div>
+
+    <div className="flex justify-between items-center">
+      <span className="text-sm text-gray-400">Total estimado</span>
+      <span className="text-xl font-bold text-primary">
+        R$ {appointment.totalPrice.toFixed(2)}
+      </span>
+    </div>
+  </div>
 
           {(status === "completed" && !hasReview) || canCancel ? (
             <div className="flex gap-3 w-full">

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Minus, HelpCircle, Sparkles, MessageCircle } from 'lucide-react';
-import { cn } from "../lib/utils/cn"; // Utilitário de classes recomendado
+import { cn } from "../lib/utils/cn";
 
 interface FAQItemProps {
   question: string;
@@ -18,10 +18,9 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer, isOpen, onClick, in
       initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-20px" }}
-      transition={{ delay: Math.min(index * 0.05, 0.3), duration: 0.4 }} // Delay limitado para não demorar em listas longas
+      transition={{ delay: Math.min(index * 0.05, 0.3), duration: 0.4 }}
       className={cn(
         "group rounded-xl md:rounded-2xl border transition-all duration-200 overflow-hidden",
-        // Mobile: Fundo sólido (Performance) | Desktop: Efeitos visuais
         isOpen 
           ? "bg-[#18181b] border-amber-500/30 md:bg-gray-900/60 md:shadow-[0_0_30px_rgba(245,158,11,0.05)]" 
           : "bg-[#0c0c0e] border-white/5 hover:border-white/10 md:bg-gray-900/20 md:hover:bg-gray-900/40"
@@ -38,7 +37,6 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer, isOpen, onClick, in
           {question}
         </span>
         <span className="flex-shrink-0 relative ml-2">
-          {/* Ícone Animado */}
           <div className={cn(
             "p-1.5 md:p-2 rounded-full transition-all duration-200",
             isOpen ? "bg-amber-500 text-black" : "bg-white/5 text-gray-400 group-hover:bg-white/10"
@@ -54,8 +52,8 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer, isOpen, onClick, in
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }} // Animação mais rápida
-            className="overflow-hidden will-change-[height,opacity]" // Dica de performance
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden will-change-[height,opacity]"
           >
             <div className="px-5 pb-6 pt-0 sm:px-8 sm:pb-8">
               <p className="text-sm md:text-base text-gray-400 leading-relaxed font-light">
@@ -108,24 +106,16 @@ const FAQ = () => {
   ];
 
   return (
-    // Fundo consistente otimizado
     <div className="min-h-screen bg-[#09090b] text-gray-100 font-sans selection:bg-amber-500/30 selection:text-amber-100 overflow-x-hidden">
       
-      {/* --- BACKGROUND OTIMIZADO --- */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        {/* Padrão de Grade (Leve) */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-        
-        {/* Mobile: Gradiente Estático (Rápido) */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#121214] via-[#09090b] to-black md:hidden opacity-90" />
-        
-        {/* Desktop: Blurs Ricos */}
         <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-amber-500/10 blur-[120px] rounded-full pointer-events-none opacity-30"></div>
       </div>
 
       <div className="max-w-4xl mx-auto py-20 px-4 sm:px-6 lg:px-8 relative z-10">
         
-        {/* --- HEADER --- */}
         <div className="text-center mb-12 md:mb-16">
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -158,7 +148,6 @@ const FAQ = () => {
           </motion.p>
         </div>
 
-        {/* --- LISTA DE FAQ --- */}
         <div className="space-y-3 md:space-y-4">
           {faqData.map((item, index) => (
             <FAQItem 
@@ -172,7 +161,6 @@ const FAQ = () => {
           ))}
         </div>
 
-        {/* --- FOOTER CTA --- */}
         <motion.div 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -185,8 +173,12 @@ const FAQ = () => {
               <span className="flex items-center gap-2">
                 <Sparkles className="text-amber-500" size={14} /> Ainda tem dúvidas?
               </span>
+              
+              {/* Botão configurado com o link direto para o Gmail 📧 */}
               <a 
-                href="mailto:contato@stylo.app.br" 
+                href="https://mail.google.com/mail/?view=cm&fs=1&to=contato@stylo.app.br&su=Suporte - FAQ Stylo" 
+                target="_blank" 
+                rel="noopener noreferrer"
                 className="font-bold text-white hover:text-amber-500 transition-colors flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 touch-manipulation"
               >
                 <MessageCircle size={16} /> Falar com o suporte

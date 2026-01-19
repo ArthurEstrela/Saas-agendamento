@@ -1,26 +1,116 @@
-import { useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu } from "lucide-react";
+import { toast } from "react-hot-toast";
 import logo from "../assets/stylo-logo.png";
+
+// Stores
+import { useProfileStore } from "../store/profileStore";
+import { useUserAppointmentsStore, type EnrichedAppointment } from "../store/userAppointmentsStore";
+import { useReviewStore } from "../store/reviewStore";
 
 // Componentes
 import { ClientSideNav } from "./Client/ClientSideNav";
+import ReviewModal from "./Common/ReviewModal";
 
 // UI
 import { Button } from "./ui/button";
 
 export const ClientDashboard = () => {
-  // Controle apenas do menu mobile.
+  // Controle do menu mobile e navegação
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Hooks para a Lógica de Avaliação (Review)
+  const { userProfile } = useProfileStore();
+  const { appointments, fetchAppointments } = useUserAppointmentsStore();
+  const { submitReview, isSubmitting: isSubmittingReview } = useReviewStore();
+
+  // Estados locais para o Modal de Avaliação
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [appointmentToReview, setAppointmentToReview] = useState<EnrichedAppointment | null>(null);
+  
+  // Refs de controle
+  const fetchInitiated = useRef(false);
+  const toastDisplayedRef = useRef(false);
+
+  // --- EFEITO: Detectar Deep Link de Avaliação na URL ---
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const appointmentId = searchParams.get("appointmentId");
+
+    // Reseta flags se não estiver em modo review
+    if (action !== "review") {
+      toastDisplayedRef.current = false;
+      return;
+    }
+
+    // Só ativa se tivermos um ID e o perfil carregado
+    if (appointmentId && userProfile?.id) {
+      
+      const foundAppointment = appointments.find((a) => a.id === appointmentId);
+
+      if (foundAppointment) {
+        
+        // 🔒 TRAVA DE SEGURANÇA: Verifica se já existe avaliação
+        if (foundAppointment.review || foundAppointment.reviewId) {
+          
+          // ✅ FIX DEFINITIVO: O 'id' impede duplicidade visual mesmo que o React execute 2x
+          toast.error("Você já avaliou este agendamento!", {
+            id: "review-already-exists" 
+          });
+          
+          setSearchParams({}); // Limpa a URL
+          setIsReviewModalOpen(false);
+          setAppointmentToReview(null);
+          return;
+        }
+
+        // Se passar na validação, abre o modal
+        setAppointmentToReview(foundAppointment);
+        setIsReviewModalOpen(true);
+
+      } else if (appointments.length === 0 && !fetchInitiated.current) {
+        // Se a lista está vazia, busca os dados
+        fetchInitiated.current = true;
+        fetchAppointments(userProfile.id);
+      }
+    }
+  }, [searchParams, appointments, userProfile, fetchAppointments, setSearchParams]);
+
+  // Handler: Enviar a Avaliação
+  const handleReviewSubmit = async (rating: number, comment: string) => {
+    if (!appointmentToReview || !userProfile) return;
+
+    await submitReview(appointmentToReview.id, {
+      appointmentId: appointmentToReview.id,
+      clientId: userProfile.id,
+      clientName: userProfile.name,
+      serviceProviderId: appointmentToReview.providerId,
+      professionalId: appointmentToReview.professionalId,
+      professionalName: appointmentToReview.professionalName,
+      rating,
+      comment,
+    });
+
+    setIsReviewModalOpen(false);
+    setAppointmentToReview(null);
+    setSearchParams({});
+  };
+
+  // Handler: Cancelar/Fechar Modal
+  const handleCloseReview = () => {
+    setIsReviewModalOpen(false);
+    setAppointmentToReview(null);
+    setSearchParams({});
+  };
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative overflow-x-hidden">
       
       {/* --- BACKGROUND (Efeito Aurora) --- */}
-      {/* OTIMIZAÇÃO: 'hidden md:block' esconde o efeito pesado em celulares para performance */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden hidden md:block">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-primary/5 rounded-full blur-[100px] opacity-40" />
         <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] opacity-30" />
@@ -34,7 +124,6 @@ export const ClientDashboard = () => {
       <main className="flex-1 flex flex-col min-h-screen md:ml-72 transition-all duration-300 relative z-10">
         
         {/* Header Mobile Otimizado */}
-        {/* Usei bg-background/95 para ser quase sólido, evitando processamento de transparência excessiva */}
         <header className="md:hidden flex justify-between items-center p-4 border-b border-white/5 bg-background/95 backdrop-blur-sm sticky top-0 z-30">
           <Link to="/dashboard">
             <img src={logo} alt="Stylo" className="h-8" />
@@ -43,7 +132,7 @@ export const ClientDashboard = () => {
             variant="ghost"
             size="icon"
             onClick={() => setIsMobileNavOpen(true)}
-            className="text-gray-300 hover:text-white active:scale-95 transition-transform" // Adicionado feedback de toque
+            className="text-gray-300 hover:text-white active:scale-95 transition-transform"
           >
             <Menu size={24} />
           </Button>
@@ -54,7 +143,7 @@ export const ClientDashboard = () => {
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, x: -5 }} // Reduzi o movimento (de -10 para -5) para ser mais fluido no mobile
+                initial={{ opacity: 0, x: -5 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 5 }}
                 transition={{ duration: 0.2 }}
@@ -66,6 +155,17 @@ export const ClientDashboard = () => {
           </div>
         </div>
       </main>
+
+      {/* --- MODAL GLOBAL DE AVALIAÇÃO --- */}
+      {appointmentToReview && (
+        <ReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={handleCloseReview}
+          appointment={appointmentToReview}
+          onSubmit={handleReviewSubmit}
+          isLoading={isSubmittingReview}
+        />
+      )}
     </div>
   );
 };

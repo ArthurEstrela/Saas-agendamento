@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom"; // ✅ Importar useNavigate
 import {
   Bell,
   Clock,
@@ -17,7 +18,7 @@ import { Card, CardContent } from "../ui/card";
 import { cn } from "../../lib/utils/cn";
 import { type Notification } from "../../types";
 
-// --- Componentes Auxiliares (NotificationCard) permanecem iguais ---
+// --- Componentes Auxiliares (NotificationCard) ---
 interface NotificationCardProps {
   notification: Notification;
   onMarkAsRead: (id: string) => Promise<void>;
@@ -29,7 +30,9 @@ function hasToDateMethod(value: unknown): value is { toDate: () => Date } {
 }
 
 const NotificationCard = ({ notification, onMarkAsRead, onDelete }: NotificationCardProps) => {
+  const navigate = useNavigate(); // ✅ Hook de navegação
   const { createdAt } = notification;
+  
   const dateObj = useMemo(() => {
     if (!createdAt) return new Date();
     if (hasToDateMethod(createdAt)) return createdAt.toDate();
@@ -38,9 +41,23 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: Notification
     return new Date();
   }, [createdAt]);
 
+  // ✅ Função de clique no card
+  const handleCardClick = () => {
+    if (notification.link) {
+      navigate(notification.link);
+    }
+  };
+
   return (
     <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="group">
-      <Card className={cn("relative overflow-hidden transition-all duration-300 border", notification.isRead ? "bg-gray-900/40 border-gray-800" : "bg-gray-900/80 border-primary/40 shadow-[0_0_20px_-10px_rgba(218,165,32,0.15)]")}>
+      <Card 
+        onClick={handleCardClick} // ✅ Evento de clique
+        className={cn(
+          "relative overflow-hidden transition-all duration-300 border", 
+          notification.isRead ? "bg-gray-900/40 border-gray-800" : "bg-gray-900/80 border-primary/40 shadow-[0_0_20px_-10px_rgba(218,165,32,0.15)]",
+          notification.link && "cursor-pointer hover:bg-gray-800/60" // ✅ Feedback visual se tiver link
+        )}
+      >
         {!notification.isRead && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_8px_#daa520]" />}
         <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
           <div className="flex gap-4 flex-1">
@@ -60,11 +77,21 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: Notification
           </div>
           <div className="flex sm:flex-col items-center sm:justify-center gap-2 pt-2 sm:pt-0 mt-2 sm:mt-0 border-t sm:border-t-0 sm:border-l border-white/5 sm:pl-4">
             {!notification.isRead && (
-              <Button variant="ghost" size="sm" onClick={() => onMarkAsRead(notification.id)} className="flex-1 sm:flex-none w-full sm:w-auto h-9 sm:h-8 px-3 text-primary hover:text-primary hover:bg-primary/10">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={(e) => { e.stopPropagation(); onMarkAsRead(notification.id); }} // ✅ Stop Propagation
+                className="flex-1 sm:flex-none w-full sm:w-auto h-9 sm:h-8 px-3 text-primary hover:text-primary hover:bg-primary/10"
+              >
                 <CheckCircle2 size={18} />
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => onDelete(notification.id)} className="flex-1 sm:flex-none w-full sm:w-auto h-9 sm:h-8 px-3 text-gray-500 hover:text-red-400 hover:bg-red-500/10">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }} // ✅ Stop Propagation
+              className="flex-1 sm:flex-none w-full sm:w-auto h-9 sm:h-8 px-3 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+            >
               <Trash2 size={18} />
             </Button>
           </div>
@@ -74,7 +101,7 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: Notification
   );
 };
 
-// --- Componente Principal ---
+// ... O resto do componente Notifications (export const Notifications) permanece igual ...
 export const Notifications = () => {
   const {
     notifications,

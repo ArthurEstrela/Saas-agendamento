@@ -45,48 +45,49 @@ const PLANOS_PERMITIDOS = {
 
 const YOUR_APP_URL = "https://stylo.app.br"; // Altere para a URL de produção quando lançar
 
+export const generateSitemap = onRequest(
+  { region: REGION },
+  async (req, res) => {
+    try {
+      const smStream = new SitemapStream({
+        hostname: "https://stylo.app.br", // ⚠️ Troque pelo domínio real do Stylo
+      });
 
-export const generateSitemap = onRequest({ region: REGION }, async (req, res) => {
-  try {
-    const smStream = new SitemapStream({
-      hostname: "https://stylo.app.br", // ⚠️ Troque pelo domínio real do Stylo
-    });
+      // 1. Adicione as páginas estáticas principais
+      smStream.write({ url: "/", changefreq: "daily", priority: 1.0 });
+      smStream.write({ url: "/login", changefreq: "monthly", priority: 0.5 });
 
-    // 1. Adicione as páginas estáticas principais
-    smStream.write({ url: "/", changefreq: "daily", priority: 1.0 });
-    smStream.write({ url: "/login", changefreq: "monthly", priority: 0.5 });
+      // 2. Busque todos os profissionais no Firestore
+      const snapshot = await admin
+        .firestore()
+        .collection("users")
+        .where("role", "==", "serviceProvider") // Filtra apenas prestadores
+        .get();
 
-    // 2. Busque todos os profissionais no Firestore
-    const snapshot = await admin.firestore()
-      .collection("users")
-      .where("role", "==", "serviceProvider") // Filtra apenas prestadores
-      .get();
+      // 3. Adicione o link de cada perfil público ao sitemap
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.publicProfileSlug) {
+          smStream.write({
+            url: `/schedule/${data.publicProfileSlug}`, // ✨ ALTERADO DE /p/ PARA /schedule/
+            changefreq: "weekly",
+            priority: 0.8,
+          });
+        }
+      });
+      smStream.end();
 
-    // 3. Adicione o link de cada perfil público ao sitemap
-    snapshot.forEach((doc) => {
-  const data = doc.data();
-  if (data.publicProfileSlug) {
-    smStream.write({
-      url: `/schedule/${data.publicProfileSlug}`, // ✨ ALTERADO DE /p/ PARA /schedule/
-      changefreq: "weekly",
-      priority: 0.8,
-    });
-  }
-});
-    smStream.end();
+      const sitemapOutput = await streamToPromise(smStream);
 
-    const sitemapOutput = await streamToPromise(smStream);
-
-    // Configura o cabeçalho para XML e envia
-    res.header("Content-Type", "application/xml");
-    res.send(sitemapOutput);
-
-  } catch (error) {
-    console.error("Erro ao gerar sitemap:", error);
-    res.status(500).send("Erro interno");
-  }
-});
-
+      // Configura o cabeçalho para XML e envia
+      res.header("Content-Type", "application/xml");
+      res.send(sitemapOutput);
+    } catch (error) {
+      console.error("Erro ao gerar sitemap:", error);
+      res.status(500).send("Erro interno");
+    }
+  },
+);
 
 let stripeInstance: Stripe;
 
@@ -95,7 +96,7 @@ const getStripe = (): Stripe => {
     const stripeSecret = process.env.STRIPE_API_SECRET;
     if (!stripeSecret) {
       throw new Error(
-        "Stripe secret key is not configured in .env file (STRIPE_API_SECRET)."
+        "Stripe secret key is not configured in .env file (STRIPE_API_SECRET).",
       );
     }
     stripeInstance = new Stripe(stripeSecret, {
@@ -124,7 +125,7 @@ const sendNotification = async (
   recipientId: string,
   title: string,
   body: string,
-  options?: { skipEmail?: boolean; customLink?: string } // <--- Adicionado customLink
+  options?: { skipEmail?: boolean; customLink?: string }, // <--- Adicionado customLink
 ) => {
   if (!recipientId) return;
 
@@ -157,7 +158,7 @@ const sendNotification = async (
         .send({
           notification: { title, body },
           // Envia o link nos dados para o app interceptar e navegar
-          data: { link: linkToUse }, 
+          data: { link: linkToUse },
           token: fcmToken,
         })
         .catch((e) => logger.error(`Erro Push:`, e));
@@ -184,7 +185,12 @@ const sendNotification = async (
     }
 
     // 3. Salvar Notificação Interna (Firestore/Sininho) com o LINK CORRETO
-    const firestoreTask = createFirestoreNotification(recipientId, title, body, linkToUse);
+    const firestoreTask = createFirestoreNotification(
+      recipientId,
+      title,
+      body,
+      linkToUse,
+    );
     tasks.push(firestoreTask);
 
     await Promise.all(tasks);
@@ -200,7 +206,7 @@ const createFirestoreNotification = async (
   recipientId: string,
   title: string,
   message: string,
-  link: string = "/dashboard" // <--- Padrão mantido, mas sobrescrevível
+  link: string = "/dashboard", // <--- Padrão mantido, mas sobrescrevível
 ) => {
   try {
     await db.collection("notifications").add({
@@ -214,7 +220,7 @@ const createFirestoreNotification = async (
   } catch (error) {
     logger.error(
       `Erro ao salvar notificação no Firestore para ${recipientId}:`,
-      error
+      error,
     );
   }
 };
@@ -227,49 +233,50 @@ export const onAppointmentCreate = onDocumentCreated(
     const appointmentData = event.data?.data();
     if (!appointmentData) return;
 
-    const { 
-      providerId,      // ID do Dono do Negócio
-      professionalId,  // ID do Profissional que vai atender
-      clientName, 
-      serviceName, 
-      startTime 
+    const {
+      providerId, // ID do Dono do Negócio
+      professionalId, // ID do Profissional que vai atender
+      clientName,
+      serviceName,
+      startTime,
     } = appointmentData;
 
     // Se não tiver dados essenciais, para
     if (!providerId && !professionalId) return;
 
     const { formattedDate, formattedTime } = formatDate(startTime);
-    
+
     const title = "📅 Novo Agendamento!";
     const body = `${clientName || "Cliente"} agendou "${
       serviceName || "um serviço"
     }" para ${formattedDate} às ${formattedTime}.`;
 
     const recipients = new Set<string>();
-    
+
     if (providerId) recipients.add(providerId);
     if (professionalId) recipients.add(professionalId);
 
     // --- ENVIO PARALELO ---
-    const tasks = Array.from(recipients).map((userId) => 
-      sendNotification(
-        userId, 
-        title, 
-        body, 
-        { 
-          skipEmail: true,               // ✅ Garante que NÃO envia e-mail
-          customLink: "/dashboard/agenda" // ✅ Clica e vai direto pra agenda
-        }
-      )
+    const tasks = Array.from(recipients).map((userId) =>
+      sendNotification(userId, title, body, {
+        skipEmail: true, // ✅ Garante que NÃO envia e-mail
+        customLink: "/dashboard/agenda", // ✅ Clica e vai direto pra agenda
+      }),
     );
 
     await Promise.all(tasks);
-    logger.info(`Notificação de novo agendamento enviada para: ${Array.from(recipients).join(", ")}`);
-  }
+    logger.info(
+      `Notificação de novo agendamento enviada para: ${Array.from(recipients).join(", ")}`,
+    );
+  },
 );
 
 export const onAppointmentUpdate = onDocumentUpdated(
-  { document: "appointments/{appointmentId}", region: REGION, secrets: ["RESEND_API_KEY"] },
+  {
+    document: "appointments/{appointmentId}",
+    region: REGION,
+    secrets: ["RESEND_API_KEY"],
+  },
   async (event) => {
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
@@ -320,7 +327,7 @@ export const onAppointmentUpdate = onDocumentUpdated(
     // 3. NOVO: Notificação para o CLIENTE avaliar (Quando status muda para 'completed')
     if (beforeData.status !== "completed" && afterData.status === "completed") {
       const { clientId, serviceName, professionalName } = afterData;
-      
+
       if (clientId) {
         const title = "Como foi seu atendimento? ⭐";
         const body = `O serviço "${serviceName || "Atendimento"}" foi concluído. Toque para avaliar ${professionalName || "o profissional"}!`;
@@ -328,13 +335,13 @@ export const onAppointmentUpdate = onDocumentUpdated(
         // Cria o Deep Link para abrir o modal de review
         const reviewLink = `/dashboard?action=review&appointmentId=${appointmentId}`;
 
-        await sendNotification(clientId, title, body, { 
-          skipEmail: true,      // Economiza custo
-          customLink: reviewLink // Garante que abre o modal certo
+        await sendNotification(clientId, title, body, {
+          skipEmail: true, // Economiza custo
+          customLink: reviewLink, // Garante que abre o modal certo
         });
       }
     }
-  }
+  },
 );
 
 export const onReviewCreate = onDocumentCreated(
@@ -372,15 +379,20 @@ export const onReviewCreate = onDocumentCreated(
       serviceProviderId,
       "⭐ Nova Avaliação Recebida",
       `Você recebeu uma nota ${rating}. Parabéns!`,
-      { skipEmail: true } // <--- A MÁGICA ACONTECE AQUI
+      { skipEmail: true }, // <--- A MÁGICA ACONTECE AQUI
     );
-  }
+  },
 );
 
 // --- FUNÇÕES AGENDADAS ---
 
 export const sendAppointmentReminders = onSchedule(
-  { schedule: "every day 09:00", timeZone: TIME_ZONE, region: REGION, secrets: ["RESEND_API_KEY"] },
+  {
+    schedule: "every day 09:00",
+    timeZone: TIME_ZONE,
+    region: REGION,
+    secrets: ["RESEND_API_KEY"],
+  },
   async () => {
     logger.info("Executando envio de lembretes de agendamento.");
 
@@ -393,12 +405,12 @@ export const sendAppointmentReminders = onSchedule(
       .where(
         "startTime",
         ">=",
-        admin.firestore.Timestamp.fromDate(tomorrowStart)
+        admin.firestore.Timestamp.fromDate(tomorrowStart),
       )
       .where(
         "startTime",
         "<=",
-        admin.firestore.Timestamp.fromDate(tomorrowEnd)
+        admin.firestore.Timestamp.fromDate(tomorrowEnd),
       );
 
     const snapshot = await q.get();
@@ -422,7 +434,7 @@ export const sendAppointmentReminders = onSchedule(
 
     await Promise.all(remindersSent);
     logger.info(`${remindersSent.length} lembretes enviados.`);
-  }
+  },
 );
 
 // --- FUNÇÕES CHAMÁVEIS (CALLABLE) ---
@@ -435,9 +447,12 @@ export const createStripeCheckout = onCall(
     secrets: ["STRIPE_API_SECRET"],
   },
   async (request) => {
-    if (!request.auth)
+    // 1. Validação de Autenticação
+    if (!request.auth) {
       throw new HttpsError("unauthenticated", "Autenticação necessária.");
+    }
 
+    // 2. Validação do Plano
     const { priceId } = request.data;
     if (
       !priceId ||
@@ -454,39 +469,77 @@ export const createStripeCheckout = onCall(
       const userDoc = await userDocRef.get();
       const userData = userDoc.data();
 
-      if (!userData)
+      if (!userData) {
         throw new HttpsError("not-found", "Usuário não encontrado.");
+      }
 
+      // --- FUNÇÃO AUXILIAR PARA CRIAR A SESSÃO (SÓ CARTÃO) ---
+      const createSession = async (customerId: string) => {
+        // 👇 REMOVI PIX E BOLETO PARA NÃO DAR ERRO
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "subscription",
+          customer: customerId,
+          line_items: [{ price: priceId, quantity: 1 }],
+          allow_promotion_codes: true,
+          success_url: `${YOUR_APP_URL}/dashboard?checkout=success`,
+          cancel_url: `${YOUR_APP_URL}/dashboard`,
+          client_reference_id: uid,
+        });
+
+        if (!session.url) throw new Error("URL da sessão não gerada.");
+        return { url: session.url };
+      };
+
+      // --- LÓGICA DE CLIENTE ---
       let stripeCustomerId = userData.stripeCustomerId;
+
+      // Se o usuário nunca teve ID, cria agora
       if (!stripeCustomerId) {
-        const customer = await stripe.customers.create({
+        const newCustomer = await stripe.customers.create({
           email: userData.email,
           name: userData.name,
           metadata: { firebaseUID: uid },
         });
-        stripeCustomerId = customer.id;
+        stripeCustomerId = newCustomer.id;
         await userDocRef.update({ stripeCustomerId });
       }
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card", "boleto"],
-        mode: "subscription",
-        customer: stripeCustomerId,
-        line_items: [{ price: priceId, quantity: 1 }],
-        allow_promotion_codes: true,
-        success_url: `${YOUR_APP_URL}/dashboard?checkout=success`,
-        cancel_url: `${YOUR_APP_URL}/dashboard`,
-        client_reference_id: uid,
-      });
+      // --- TENTATIVA DE CHECKOUT (SELF-HEALING) ---
+      try {
+        return await createSession(stripeCustomerId);
+      } catch (stripeError: any) {
+        // Se der erro de "Cliente não encontrado", recria e tenta de novo
+        if (
+          stripeError.code === "resource_missing" ||
+          (stripeError.message &&
+            stripeError.message.includes("No such customer"))
+        ) {
+          logger.warn(
+            `Cliente Stripe inválido detectado (${stripeCustomerId}). Recriando...`,
+          );
 
-      if (!session.url)
-        throw new HttpsError("internal", "Falha ao criar sessão.");
-      return { url: session.url };
-    } catch (error) {
-      logger.error("Erro Stripe Checkout:", error);
-      throw new HttpsError("internal", "Erro ao processar pagamento.");
+          const freshCustomer = await stripe.customers.create({
+            email: userData.email,
+            name: userData.name,
+            metadata: { firebaseUID: uid },
+          });
+
+          await userDocRef.update({ stripeCustomerId: freshCustomer.id });
+          return await createSession(freshCustomer.id);
+        }
+
+        // Relança outros erros
+        throw stripeError;
+      }
+    } catch (error: any) {
+      logger.error("Erro Fatal no Stripe Checkout:", error);
+      throw new HttpsError(
+        "internal",
+        "Erro ao processar pagamento. Tente novamente.",
+      );
     }
-  }
+  },
 );
 
 export const createStripeCustomerPortal = onCall(
@@ -518,7 +571,7 @@ export const createStripeCustomerPortal = onCall(
       logger.error("Erro Portal Stripe:", error);
       throw new HttpsError("internal", "Erro ao acessar portal.");
     }
-  }
+  },
 );
 
 export const stripeWebhook = onRequest(
@@ -542,7 +595,7 @@ export const stripeWebhook = onRequest(
       event = stripe.webhooks.constructEvent(
         request.rawBody,
         sig,
-        webhookSecret
+        webhookSecret,
       );
     } catch (err: any) {
       response.status(400).send(`Webhook Error: ${err.message}`);
@@ -604,7 +657,7 @@ export const stripeWebhook = onRequest(
       return;
     }
     response.status(200).send({ received: true });
-  }
+  },
 );
 
 export const createProfessionalUser = onCall(
@@ -623,7 +676,7 @@ export const createProfessionalUser = onCall(
     if (providerDoc.data()?.role !== "serviceProvider") {
       throw new HttpsError(
         "permission-denied",
-        "Apenas prestadores podem criar equipe."
+        "Apenas prestadores podem criar equipe.",
       );
     }
 
@@ -639,7 +692,7 @@ export const createProfessionalUser = onCall(
       const providerData = providerDoc.data();
       const allServices = providerData?.services || [];
       const selectedServices = allServices.filter((s: { id: string }) =>
-        serviceIds.includes(s.id)
+        serviceIds.includes(s.id),
       );
 
       const newProfessionalRef = db
@@ -675,10 +728,10 @@ export const createProfessionalUser = onCall(
       logger.error("Erro ao criar profissional:", error);
       throw new HttpsError(
         "internal",
-        error.message || "Erro ao criar profissional."
+        error.message || "Erro ao criar profissional.",
       );
     }
-  }
+  },
 );
 
 export const createAppointment = onCall(
@@ -712,7 +765,7 @@ export const createAppointment = onCall(
     } else {
       throw new HttpsError(
         "invalid-argument",
-        "ID do estabelecimento não fornecido."
+        "ID do estabelecimento não fornecido.",
       );
     }
 
@@ -738,7 +791,7 @@ export const createAppointment = onCall(
             .where("professionalId", "==", professionalId)
             .where("startTime", ">=", startOfDay)
             .where("startTime", "<=", endOfDay)
-            .where("status", "in", ["scheduled", "pending"])
+            .where("status", "in", ["scheduled", "pending"]),
         );
 
         let hasConflict = false;
@@ -774,7 +827,7 @@ export const createAppointment = onCall(
         transaction.set(
           lockRef,
           { lastUpdate: admin.firestore.FieldValue.serverTimestamp() },
-          { merge: true }
+          { merge: true },
         );
 
         return newRef.id;
@@ -786,7 +839,7 @@ export const createAppointment = onCall(
       logger.error("Erro no agendamento:", error);
       throw new HttpsError("internal", "Erro ao agendar.");
     }
-  }
+  },
 );
 
 export const completeAppointment = onCall(
@@ -826,7 +879,7 @@ export const completeAppointment = onCall(
         if (!isOwner && !isLinkedProfessional && !isDirectMatch) {
           throw new HttpsError(
             "permission-denied",
-            "Você não tem permissão para finalizar este agendamento."
+            "Você não tem permissão para finalizar este agendamento.",
           );
         }
 
@@ -867,7 +920,7 @@ export const completeAppointment = onCall(
       logger.error("Erro ao completar:", error);
       throw new HttpsError("internal", "Erro interno.");
     }
-  }
+  },
 );
 
 export const cancelAppointmentByClient = onCall(
@@ -900,7 +953,7 @@ export const cancelAppointmentByClient = onCall(
         if (appointment.clientId !== uid) {
           throw new HttpsError(
             "permission-denied",
-            "Este agendamento não é seu."
+            "Este agendamento não é seu.",
           );
         }
 
@@ -911,7 +964,7 @@ export const cancelAppointmentByClient = onCall(
         ) {
           throw new HttpsError(
             "failed-precondition",
-            "Agendamento não pode ser cancelado neste estado."
+            "Agendamento não pode ser cancelado neste estado.",
           );
         }
 
@@ -936,7 +989,7 @@ export const cancelAppointmentByClient = onCall(
         if (diffHours < minHours) {
           throw new HttpsError(
             "failed-precondition",
-            `O prazo para cancelamento online expirou. Necessário ${minHours}h de antecedência.`
+            `O prazo para cancelamento online expirou. Necessário ${minHours}h de antecedência.`,
           );
         }
 
@@ -957,44 +1010,50 @@ export const cancelAppointmentByClient = onCall(
       if (error instanceof HttpsError) throw error;
       throw new HttpsError(
         "internal",
-        error.message || "Erro interno ao cancelar."
+        error.message || "Erro interno ao cancelar.",
       );
     }
-  }
+  },
 );
 
 // functions/src/index.ts
 
 export const deleteProfessionalAccount = onCall(
-  { 
-    region: REGION, 
-    cors: true // 👈 Mude para true para evitar bloqueios de domínio durante os testes
+  {
+    region: REGION,
+    cors: true, // 👈 Mude para true para evitar bloqueios de domínio durante os testes
   },
   async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Acesso negado.");
+    if (!request.auth)
+      throw new HttpsError("unauthenticated", "Acesso negado.");
 
     const { professionalId, providerId } = request.data;
-    
+
     if (request.auth.uid !== providerId) {
       throw new HttpsError("permission-denied", "Apenas o dono pode excluir.");
     }
 
     try {
-      const userQuery = await db.collection("users")
+      const userQuery = await db
+        .collection("users")
         .where("professionalId", "==", professionalId)
-        .limit(1).get();
+        .limit(1)
+        .get();
 
       const batch = db.batch();
-      
-      const profRef = db.collection("serviceProviders").doc(providerId)
-        .collection("professionals").doc(professionalId);
+
+      const profRef = db
+        .collection("serviceProviders")
+        .doc(providerId)
+        .collection("professionals")
+        .doc(professionalId);
       batch.delete(profRef);
 
       if (!userQuery.empty) {
         const userDoc = userQuery.docs[0];
         batch.delete(userDoc.ref);
         await batch.commit();
-        
+
         // Deleta o login permanentemente
         await admin.auth().deleteUser(userDoc.id);
         logger.info(`Conta ${userDoc.id} removida com sucesso.`);
@@ -1006,9 +1065,12 @@ export const deleteProfessionalAccount = onCall(
     } catch (error: any) {
       logger.error("Erro na Cloud Function:", error);
       // Retorna o erro real para o seu console.log do front-end
-      throw new HttpsError("internal", error.message || "Erro ao excluir conta.");
+      throw new HttpsError(
+        "internal",
+        error.message || "Erro ao excluir conta.",
+      );
     }
-  }
+  },
 );
 
 const checkSubscription = async (uid: string) => {
@@ -1023,17 +1085,22 @@ const checkSubscription = async (uid: string) => {
 
   if (!status || !allowedStatuses.includes(status)) {
     logger.warn(
-      `Bloqueio de Kill Switch acionado para provider: ${uid}. Status: ${status}`
+      `Bloqueio de Kill Switch acionado para provider: ${uid}. Status: ${status}`,
     );
     throw new HttpsError(
       "permission-denied",
-      "O estabelecimento está com a assinatura inativa ou pendente. Agendamento não permitido."
+      "O estabelecimento está com a assinatura inativa ou pendente. Agendamento não permitido.",
     );
   }
 };
 
 export const checkExpiredTrials = onSchedule(
-  { schedule: "every day 00:00", timeZone: TIME_ZONE, region: REGION, secrets: ["RESEND_API_KEY"] },
+  {
+    schedule: "every day 00:00",
+    timeZone: TIME_ZONE,
+    region: REGION,
+    secrets: ["RESEND_API_KEY"],
+  },
   async () => {
     logger.info("Verificando trials expirados...");
 
@@ -1072,8 +1139,8 @@ export const checkExpiredTrials = onSchedule(
         sendNotification(
           doc.id,
           "Seu período de teste acabou 🔒",
-          "Seus agendamentos públicos foram pausados. Assine um plano agora para continuar usando o Stylo sem interrupções."
-        )
+          "Seus agendamentos públicos foram pausados. Assine um plano agora para continuar usando o Stylo sem interrupções.",
+        ),
       );
 
       count++;
@@ -1086,18 +1153,18 @@ export const checkExpiredTrials = onSchedule(
     await Promise.all(notificationPromises);
 
     logger.info(`${count} contas de trial foram expiradas e notificadas.`);
-  }
+  },
 );
 
 export const onUserCreate = onDocumentCreated(
-  { 
-    document: "users/{userId}", 
-    region: REGION, 
-    secrets: ["RESEND_API_KEY"] // Necessário para acessar o Resend
+  {
+    document: "users/{userId}",
+    region: REGION,
+    secrets: ["RESEND_API_KEY"], // Necessário para acessar o Resend
   },
   async (event) => {
     const userData = event.data?.data();
-    
+
     // Validações básicas
     if (!userData || !userData.email) {
       logger.info("Usuário criado sem e-mail ou dados inválidos.");
@@ -1105,7 +1172,7 @@ export const onUserCreate = onDocumentCreated(
     }
 
     const { email, name } = userData;
-    
+
     // Inicializa o Resend aqui dentro (Seguro)
     const resendApiKey = process.env.RESEND_API_KEY;
     if (!resendApiKey) {
@@ -1124,10 +1191,10 @@ export const onUserCreate = onDocumentCreated(
           actionLink: `${YOUR_APP_URL}/dashboard`, // Leva direto pro painel
         }),
       });
-      
+
       logger.info(`E-mail de boas-vindas enviado para: ${email}`);
     } catch (error) {
       logger.error(`Erro ao enviar boas-vindas para ${email}:`, error);
     }
-  }
+  },
 );

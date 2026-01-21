@@ -1079,7 +1079,7 @@ const checkSubscription = async (uid: string) => {
   const userDoc = await db.collection("users").doc(uid).get();
   const userData = userDoc.data();
 
-  const allowedStatuses = ["active", "trialing", "trial"];
+  const allowedStatuses = ["active", "trialing", "trial","free", "lifetime"];
 
   const status = userData?.subscriptionStatus;
 

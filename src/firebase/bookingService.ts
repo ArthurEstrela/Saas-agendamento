@@ -7,6 +7,7 @@ import {
   updateDoc,
   Timestamp,
   orderBy,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "./config";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -218,4 +219,28 @@ export const cancelAppointmentSecurely = async (
   
   // Isso vai lançar erro se a Cloud Function rejeitar (ex: fora do prazo)
   await cancelCallable({ appointmentId, reason });
+};
+
+// Adicione esta função ao arquivo
+export const setAppointmentReminder = async (
+  appointmentId: string,
+  minutesBefore: number
+): Promise<void> => {
+  const appointmentRef = doc(db, "appointments", appointmentId);
+  const appointmentSnap = await getDoc(appointmentRef); // Importar getDoc
+
+  if (!appointmentSnap.exists()) throw new Error("Agendamento não encontrado");
+
+  const data = appointmentSnap.data();
+  // Converte o Timestamp do Firestore para Date JS
+  const startTime = data.startTime.toDate(); 
+  
+  // Calcula a hora exata do lembrete (Data do agendamento - Minutos escolhidos)
+  const reminderTime = new Date(startTime.getTime() - minutesBefore * 60000);
+
+  await updateDoc(appointmentRef, {
+    reminderTime: Timestamp.fromDate(reminderTime),
+    reminderOffsetMinutes: minutesBefore,
+    reminderSent: false
+  });
 };

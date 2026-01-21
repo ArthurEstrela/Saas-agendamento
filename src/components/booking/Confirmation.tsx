@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
+import { setAppointmentReminder } from "../../firebase/bookingService"; 
 import {
   Loader2,
   Calendar,
@@ -12,10 +13,12 @@ import {
   Copy,
   CheckCircle2,
   ChevronLeft,
+  Bell,
+  Clock
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useNavigate, useLocation } from "react-router-dom"; // Adicionado useLocation
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import type { ClientProfile, PaymentMethod } from "../../types";
 import { FaWhatsapp } from "react-icons/fa";
@@ -32,10 +35,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from "../ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Separator } from "../ui/separator";
 import { motion } from "framer-motion";
-
-// ... (Funções auxiliares de Pix mantidas no final) ...
 
 export const Confirmation = () => {
   const {
@@ -48,13 +56,17 @@ export const Confirmation = () => {
     confirmBooking,
     goToPreviousStep,
     resetBookingState,
-    // setRedirectUrlAfterLogin, // Não precisamos mais disso pois usamos localStorage + location state
+    // Removido lastCreatedAppointmentId daqui pois usamos getState()
   } = useBookingProcessStore();
   
   const navigate = useNavigate();
-  const location = useLocation(); // Hook para saber a URL atual
+  const location = useLocation();
   const { isAuthenticated } = useAuthStore();
   const { userProfile } = useProfileStore();
+
+  // --- Estado do Lembrete ---
+  // Padrão: 60 minutos (1 hora)
+  const [reminderMinutes, setReminderMinutes] = useState<string>("60");
 
   // --- Lógica de Métodos de Pagamento ---
   const availableMethods = useMemo(() => {
@@ -128,14 +140,12 @@ export const Confirmation = () => {
   const handleConfirm = async () => {
     // 1. Verifica se está logado
     if (!isAuthenticated) {
-      // SALVA O ESTADO NO LOCALSTORAGE
-      // Isso permite recuperar os dados quando o usuário voltar do login
       const pendingBooking = {
         providerId: provider?.id,
         services: selectedServices,
         date: selectedDate,
         time: selectedTimeSlot,
-        professionalId: selectedProfessional?.id, // Importante salvar o profissional também
+        professionalId: selectedProfessional?.id,
         timestamp: Date.now(),
       };
 
@@ -151,8 +161,6 @@ export const Confirmation = () => {
         },
       });
 
-      // Redireciona para login enviando a localização atual no state
-      // O LoginPage vai ler 'state.from' e redirecionar de volta para cá
       navigate("/login", { state: { from: location } });
       return;
     }
@@ -163,18 +171,33 @@ export const Confirmation = () => {
       return;
     }
 
-    // 3. Executa a confirmação
+    // 3. Executa a confirmação (Cria o agendamento)
     await confirmBooking(userProfile as ClientProfile, paymentMethod);
     
-    // 4. Pós confirmação
-    if (useBookingProcessStore.getState().status.isSuccess) {
+    // 4. Pós confirmação: Configura o Lembrete
+    // Acessamos o store diretamente para garantir o estado mais recente após o await
+    const storeState = useBookingProcessStore.getState();
+    
+    if (storeState.status.isSuccess) {
+      // Se tivermos um ID de agendamento criado, salvamos o lembrete
+      if (storeState.lastCreatedAppointmentId) {
+        try {
+          await setAppointmentReminder(
+            storeState.lastCreatedAppointmentId, 
+            parseInt(reminderMinutes)
+          );
+        } catch (error) {
+          console.error("Erro ao configurar lembrete:", error);
+        }
+      }
+
       if (paymentMethod === "pix") {
         setShowPixModal(true);
       } else {
         toast.success("Agendamento confirmado!");
         setTimeout(() => {
           resetBookingState(true);
-          navigate("/dashboard/appointments"); // Melhor mandar para a lista de agendamentos
+          navigate("/dashboard/appointments");
         }, 1500);
       }
     }
@@ -217,7 +240,7 @@ export const Confirmation = () => {
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="pb-24 md:pb-10" // Padding extra no mobile para o footer não cobrir
+      className="pb-24 md:pb-10"
     >
       <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 px-2 md:px-0">
         <div className="text-center mb-4 md:mb-8">
@@ -227,7 +250,7 @@ export const Confirmation = () => {
           </p>
         </div>
 
-        {/* Card Principal Otimizado */}
+        {/* Card Principal */}
         <Card className="bg-[#18181b] md:bg-gray-900/60 border-white/5 md:backdrop-blur-md md:shadow-2xl overflow-hidden">
           {/* Header do Card (Total) */}
           <div className="bg-[#27272a] md:bg-primary/10 p-4 md:p-6 flex justify-between items-center border-b border-white/5">
@@ -267,13 +290,14 @@ export const Confirmation = () => {
               </div>
             </div>
 
-            {/* Data e Profissional (Grid) */}
+            {/* Grid: Data, Profissional e LEMBRETE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {/* Data */}
               <div className="space-y-2">
                 <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                   <Calendar size={12} className="md:w-[14px] md:h-[14px]" /> Quando?
                 </h3>
-                <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5">
+                <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5 h-full flex flex-col justify-center">
                   <div className="text-white font-bold capitalize text-base md:text-lg">
                     {formattedDate}
                   </div>
@@ -283,11 +307,12 @@ export const Confirmation = () => {
                 </div>
               </div>
 
+              {/* Profissional */}
               <div className="space-y-2">
                 <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                   <User size={12} className="md:w-[14px] md:h-[14px]" /> Com quem?
                 </h3>
-                <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5 flex items-center gap-3 md:gap-4">
+                <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5 flex items-center gap-3 md:gap-4 h-full">
                   <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
                     {selectedProfessional?.photoURL ? (
                       <img
@@ -303,6 +328,35 @@ export const Confirmation = () => {
                     {selectedProfessional?.name || "Qualquer Profissional"}
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* --- SEÇÃO DE LEMBRETE (NOVA) --- */}
+            <div className="space-y-2">
+              <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <Bell size={12} className="md:w-[14px] md:h-[14px]" /> Notificação de Lembrete
+              </h3>
+              <div className="bg-[#27272a] md:bg-black/20 p-1 rounded-xl border border-white/5 flex items-center">
+                 <Select value={reminderMinutes} onValueChange={setReminderMinutes}>
+                  <SelectTrigger className="w-full bg-transparent border-none text-white focus:ring-0 focus:ring-offset-0 h-12">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 p-2 rounded-lg text-primary">
+                        <Clock size={18} />
+                      </div>
+                      <div className="flex flex-col items-start text-left">
+                         <span className="text-xs text-gray-400">Me avise com antecedência de:</span>
+                         <SelectValue placeholder="Selecione..." />
+                      </div>
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1c1c1f] border-white/10 text-white">
+                    <SelectItem value="30">30 minutos antes</SelectItem>
+                    <SelectItem value="60">1 hora antes</SelectItem>
+                    <SelectItem value="120">2 horas antes</SelectItem>
+                    <SelectItem value="240">4 horas antes</SelectItem>
+                    <SelectItem value="1440">1 dia antes</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -404,7 +458,7 @@ export const Confirmation = () => {
               </div>
             </div>
 
-            {/* Botões Desktop (Escondidos no mobile para usar o footer fixo) */}
+            {/* Botões Desktop */}
             <div className="hidden md:flex gap-4 pt-6">
               <Button
                 variant="ghost"
@@ -434,7 +488,7 @@ export const Confirmation = () => {
         </Card>
       </div>
 
-      {/* Footer Fixo Mobile Otimizado */}
+      {/* Footer Fixo Mobile */}
       <div className="md:hidden fixed bottom-0 left-0 w-full z-50 p-2 pointer-events-none">
         <div className="max-w-4xl mx-auto pointer-events-auto bg-[#121214] border-t border-white/10 shadow-2xl p-3 flex justify-between items-center gap-3 ring-1 ring-white/5 rounded-xl">
            <Button
@@ -463,7 +517,7 @@ export const Confirmation = () => {
         </div>
       </div>
 
-      {/* Modal Pix Otimizado */}
+      {/* Modal Pix */}
       <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
         <DialogContent className="w-[90%] rounded-xl sm:max-w-md bg-[#18181b] border-gray-800 shadow-2xl px-4 py-6">
           <DialogHeader>
@@ -527,7 +581,7 @@ export const Confirmation = () => {
   );
 };
 
-// ... Funções auxiliares mantidas ...
+// ... Funções auxiliares (generatePixPayload e calculateCRC16) ...
 interface PixData {
   key: string;
   name: string;

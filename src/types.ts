@@ -111,6 +111,9 @@ export interface Appointment {
   rejectionReason?: string;
   completedAt?: Date | FieldValue;
   createdAt: Date | FieldValue;
+  reminderTime?: Date | FieldValue; // Hora exata para enviar o lembrete
+  reminderSent?: boolean; // Se o lembrete já foi enviado
+  reminderOffsetMinutes?: number; // Quantos minutos antes (apenas para registro)
 }
 
 export interface Notification {

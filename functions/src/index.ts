@@ -1198,3 +1198,65 @@ export const onUserCreate = onDocumentCreated(
     }
   },
 );
+
+// Adicione em functions/src/index.ts
+
+// Esta função roda a cada 15 minutos para garantir precisão
+export const sendPreciseReminders = onSchedule(
+  {
+    schedule: "every 15 minutes", // Frequência de verificação
+    timeZone: TIME_ZONE,
+    region: REGION,
+    secrets: ["RESEND_API_KEY"],
+  },
+  async () => {
+    logger.info("Verificando lembretes personalizados...");
+
+    const now = admin.firestore.Timestamp.now();
+    
+    // Busca agendamentos onde a hora do lembrete JÁ PASSOU (ou é agora) 
+    // e o lembrete AINDA NÃO foi enviado.
+    const appointmentsRef = db.collection("appointments");
+    const q = appointmentsRef
+      .where("reminderSent", "==", false) // Ainda não enviado
+      .where("reminderTime", "<=", now) // Hora do lembrete já chegou
+      .where("status", "==", "scheduled"); // Agendamento confirmado
+
+    const snapshot = await q.get();
+
+    if (snapshot.empty) return;
+
+    const batch = db.batch();
+    const notifications: Promise<any>[] = [];
+
+    snapshot.forEach((doc) => {
+      const appt = doc.data();
+      
+      // Validação de segurança: Não enviar se o agendamento já passou há muito tempo (ex: > 2h de atraso no cron)
+      // Isso evita spam de notificações velhas se o servidor ficar offline
+      const reminderTime = appt.reminderTime.toDate();
+      const diffHours = (now.toDate().getTime() - reminderTime.getTime()) / 36e5;
+      
+      if (diffHours > 2) {
+        // Marca como enviado só para limpar da fila, mas não manda notificação
+        batch.update(doc.ref, { reminderSent: true });
+        return;
+      }
+
+      // Prepara atualização do banco (Marca como enviado)
+      batch.update(doc.ref, { reminderSent: true });
+
+      // Prepara envio da notificação
+      const { formattedTime } = formatDate(appt.startTime);
+      const title = "⏰ Seu horário está chegando!";
+      const body = `Lembrete: Você tem um agendamento de "${appt.serviceName}" às ${formattedTime}.`;
+
+      notifications.push(sendNotification(appt.clientId, title, body));
+    });
+
+    await batch.commit();
+    await Promise.all(notifications);
+    
+    logger.info(`${notifications.length} lembretes personalizados enviados.`);
+  }
+);

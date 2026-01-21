@@ -28,6 +28,11 @@ interface BookingFlowState {
 
   // Controle do fluxo
   currentStep: number;
+  
+  // NOVO: Armazena o ID do último agendamento criado com sucesso
+  // Necessário para configurar o lembrete na tela de sucesso
+  lastCreatedAppointmentId: string | null;
+
   status: {
     isLoading: boolean;
     isConfirming: boolean;
@@ -66,6 +71,7 @@ const initialState: BookingFlowState = {
   selectedDate: null,
   selectedTimeSlot: null,
   currentStep: 1, 
+  lastCreatedAppointmentId: null, // Inicializa como null
   status: {
     isLoading: false,
     isConfirming: false,
@@ -198,12 +204,12 @@ export const useBookingProcessStore = create<BookingStore>()(
           totalDuration,
           createdAt: new Date(),
           notes: "",
-          paymentMethod, // <-- Incluindo o método de pagamento
+          paymentMethod, 
         };
 
+        // Chama a função de criar
         const promise = createAppointment(appointmentData);
 
-        // Se for Pix, a mensagem muda sutilmente
         const successMsg = paymentMethod === 'pix' 
           ? "Pré-agendamento realizado! Efetue o pagamento." 
           : "Agendamento confirmado com sucesso!";
@@ -220,8 +226,15 @@ export const useBookingProcessStore = create<BookingStore>()(
         });
 
         try {
-          await promise;
-          set({ status: { ...initialState.status, isSuccess: true } });
+          // Await e captura o ID do agendamento criado
+          const appointmentId = await promise;
+          
+          set({ 
+            status: { ...initialState.status, isSuccess: true },
+            // Salva o ID no store para ser usado na tela de sucesso (lembrete)
+            lastCreatedAppointmentId: appointmentId 
+          });
+
         } catch (error) {
           console.error("Erro no confirmBooking:", error);
           const errorMessage =
@@ -242,6 +255,7 @@ export const useBookingProcessStore = create<BookingStore>()(
       goToPreviousStep: () =>
         set((state) => ({ currentStep: state.currentStep - 1 })),
       setRedirectUrlAfterLogin: (url) => set({ redirectUrlAfterLogin: url }),
+      
       resetBookingState: (keepProvider = false) => {
         const { provider, professionals, providerId, redirectUrlAfterLogin } =
           get();
@@ -251,6 +265,8 @@ export const useBookingProcessStore = create<BookingStore>()(
           professionals: keepProvider ? professionals : [],
           providerId: keepProvider ? providerId : null,
           redirectUrlAfterLogin,
+          // Garante que o ID do último agendamento seja limpo
+          lastCreatedAppointmentId: null, 
         });
       },
     }),
@@ -265,6 +281,8 @@ export const useBookingProcessStore = create<BookingStore>()(
         selectedTimeSlot: state.selectedTimeSlot,
         currentStep: state.currentStep,
         redirectUrlAfterLogin: state.redirectUrlAfterLogin,
+        // OBS: Não persistimos lastCreatedAppointmentId no localStorage de propósito
+        // para evitar que IDs antigos interfiram em novos fluxos se o usuário voltar dias depois.
       }),
     }
   )

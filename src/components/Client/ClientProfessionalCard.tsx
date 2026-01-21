@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
+import { useAuthStore } from "../../store/authStore";
 import { cn } from "../../lib/utils/cn";
 
 // Interface estendida
@@ -24,6 +25,7 @@ interface Props {
 export const ClientProfessionalCard = ({ provider }: Props) => {
   const { userProfile, toggleFavorite } = useProfileStore();
   const { reviews } = provider;
+  const { user } = useAuthStore();
 
   // Calcula a média das avaliações
   const reviewSummary = useMemo(() => {
@@ -38,7 +40,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
   const isClientProfile = userProfile?.role === "client";
   const isFavorited = isClientProfile
     ? (userProfile as ClientProfile).favoriteProfessionals?.includes(
-        provider.id
+        provider.id,
       )
     : false;
 
@@ -57,36 +59,38 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
       to={`/schedule/${provider.publicProfileSlug || provider.id}`}
       className="block h-full group touch-manipulation"
     >
-      <Card 
+      <Card
         className={cn(
           "h-full overflow-hidden relative transition-all duration-300",
           // Mobile: Fundo sólido (Performance)
-          "bg-[#18181b] border-white/5", 
+          "bg-[#18181b] border-white/5",
           // Desktop: Efeito vidro e hover
-          "md:bg-gray-900/40 md:backdrop-blur-md md:hover:border-primary/50 md:hover:-translate-y-1 md:hover:shadow-2xl"
+          "md:bg-gray-900/40 md:backdrop-blur-md md:hover:border-primary/50 md:hover:-translate-y-1 md:hover:shadow-2xl",
         )}
       >
         {/* --- Botão Favoritar (Otimizado) --- */}
-        <button
-          onClick={handleFavoriteClick}
-          className={cn(
-            "absolute top-3 right-3 z-20 p-2.5 rounded-full transition-all duration-200 border group/heart touch-manipulation active:scale-90",
-            // Mobile: Fundo escuro sólido / Desktop: Blur
-            "bg-black/60 border-white/10 md:backdrop-blur-md hover:bg-black/80",
-            isFavorited ? "border-red-500/30" : "border-white/10"
-          )}
-          aria-label="Favoritar"
-        >
-          <Heart
-            size={18}
+        {user && (
+          <button
+            onClick={handleFavoriteClick}
             className={cn(
-              "transition-all duration-300",
-              isFavorited
-                ? "text-red-500 fill-red-500 scale-110"
-                : "text-white group-hover/heart:text-red-400"
+              "absolute top-3 right-3 z-20 p-2.5 rounded-full transition-all duration-200 border group/heart touch-manipulation active:scale-90",
+              // Mobile: Fundo escuro sólido / Desktop: Blur
+              "bg-black/60 border-white/10 md:backdrop-blur-md hover:bg-black/80",
+              isFavorited ? "border-red-500/30" : "border-white/10",
             )}
-          />
-        </button>
+            aria-label="Favoritar"
+          >
+            <Heart
+              size={18}
+              className={cn(
+                "transition-all duration-300",
+                isFavorited
+                  ? "text-red-500 fill-red-500 scale-110"
+                  : "text-white group-hover/heart:text-red-400",
+              )}
+            />
+          </button>
+        )}
 
         {/* --- Área do Banner (Hero) --- */}
         <div className="relative h-36 md:h-40 overflow-hidden bg-gray-900">
@@ -121,13 +125,12 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
 
         {/* --- Conteúdo --- */}
         <CardContent className="p-4 pt-0 md:p-5 md:pt-0 relative">
-          
           {/* Avatar e Nota */}
           <div className="-mt-9 md:-mt-10 mb-3 flex justify-between items-end">
             <Avatar className="h-16 w-16 md:h-20 md:w-20 border-[3px] md:border-4 border-[#18181b] shadow-lg bg-zinc-800 group-hover:border-zinc-800 transition-colors">
-              <AvatarImage 
-                src={provider.logoUrl} 
-                alt={provider.businessName} 
+              <AvatarImage
+                src={provider.logoUrl}
+                alt={provider.businessName}
                 className="object-cover"
               />
               <AvatarFallback className="bg-zinc-800 text-base md:text-lg font-bold text-primary">
@@ -137,7 +140,10 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
 
             {/* Badge de Nota Compacto */}
             <div className="mb-1.5 md:mb-2 flex items-center gap-1 bg-zinc-800/90 px-2 py-1 rounded-lg border border-white/5 shadow-sm">
-              <Star size={12} className="text-amber-400 fill-amber-400 md:w-3.5 md:h-3.5" />
+              <Star
+                size={12}
+                className="text-amber-400 fill-amber-400 md:w-3.5 md:h-3.5"
+              />
               <span className="text-xs md:text-sm font-bold text-white">
                 {reviewSummary.average > 0
                   ? reviewSummary.average.toFixed(1)
@@ -166,7 +172,10 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
             </div>
 
             <div className="flex items-center text-xs md:text-sm text-zinc-400 gap-1.5">
-              <MapPin size={12} className="text-zinc-600 shrink-0 md:w-3.5 md:h-3.5" />
+              <MapPin
+                size={12}
+                className="text-zinc-600 shrink-0 md:w-3.5 md:h-3.5"
+              />
               <span className="truncate">
                 {provider.businessAddress?.city
                   ? `${provider.businessAddress.city}, ${provider.businessAddress.state}`

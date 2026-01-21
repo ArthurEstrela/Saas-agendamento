@@ -115,11 +115,4 @@ input[type="number"] {
     @apply bg-background text-foreground;
   }
 }
-html, body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  /* Isso impede que o fundo preto apareça ao rolar a página no celular */
-  background-color: #cfcfd3; 
-}
 /* FIM DO ARQUIVO - Sem o bloco .rdp */

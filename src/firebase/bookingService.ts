@@ -59,7 +59,7 @@ export const convertAppointmentTimestamps = (
  * Cria um novo agendamento via Cloud Functions para segurança (atomicidade).
  */
 export const createAppointment = async (
-  appointmentData: Omit<Appointment, "id">
+  appointmentData: Omit<Appointment, "id"> & { reminderMinutes: number }
 ): Promise<string> => {
   try {
     const createAppointmentCallable = httpsCallable(
@@ -67,11 +67,12 @@ export const createAppointment = async (
       "createAppointment"
     );
 
-    const payload = {
+    const payload = { 
       ...appointmentData,
       // Serializa datas para milissegundos (UTC-safe) antes do envio
       startTime: appointmentData.startTime.getTime(),
       endTime: appointmentData.endTime.getTime(),
+      reminderMinutes: appointmentData.reminderMinutes || 60,
     };
 
     const result = await createAppointmentCallable(payload);

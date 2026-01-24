@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { useAuthStore } from "../../store/authStore";
 import { useProfileStore } from "../../store/profileStore";
-import { setAppointmentReminder } from "../../firebase/bookingService"; 
+// setAppointmentReminder removido: Agora é feito atomicamente na criação
 import {
   Loader2,
   Calendar,
@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   Bell,
-  Clock
+  Clock,
+  AlertCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -56,7 +57,6 @@ export const Confirmation = () => {
     confirmBooking,
     goToPreviousStep,
     resetBookingState,
-    // Removido lastCreatedAppointmentId daqui pois usamos getState()
   } = useBookingProcessStore();
   
   const navigate = useNavigate();
@@ -171,26 +171,18 @@ export const Confirmation = () => {
       return;
     }
 
-    // 3. Executa a confirmação (Cria o agendamento)
-    await confirmBooking(userProfile as ClientProfile, paymentMethod);
+    // 3. Executa a confirmação (Cria o agendamento JÁ com o lembrete)
+    // ATENÇÃO: Verifique se confirmBooking na store aceita o 3º argumento
+    await confirmBooking(
+      userProfile as ClientProfile, 
+      paymentMethod, 
+      parseInt(reminderMinutes)
+    );
     
-    // 4. Pós confirmação: Configura o Lembrete
-    // Acessamos o store diretamente para garantir o estado mais recente após o await
+    // 4. Verificação de Sucesso
     const storeState = useBookingProcessStore.getState();
     
     if (storeState.status.isSuccess) {
-      // Se tivermos um ID de agendamento criado, salvamos o lembrete
-      if (storeState.lastCreatedAppointmentId) {
-        try {
-          await setAppointmentReminder(
-            storeState.lastCreatedAppointmentId, 
-            parseInt(reminderMinutes)
-          );
-        } catch (error) {
-          console.error("Erro ao configurar lembrete:", error);
-        }
-      }
-
       if (paymentMethod === "pix") {
         setShowPixModal(true);
       } else {
@@ -290,7 +282,7 @@ export const Confirmation = () => {
               </div>
             </div>
 
-            {/* Grid: Data, Profissional e LEMBRETE */}
+            {/* Grid: Data, Profissional */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Data */}
               <div className="space-y-2">
@@ -331,25 +323,30 @@ export const Confirmation = () => {
               </div>
             </div>
 
-            {/* --- SEÇÃO DE LEMBRETE (NOVA) --- */}
+            {/* --- SEÇÃO DE LEMBRETE (Melhorada) --- */}
             <div className="space-y-2">
               <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                 <Bell size={12} className="md:w-[14px] md:h-[14px]" /> Notificação de Lembrete
               </h3>
-              <div className="bg-[#27272a] md:bg-black/20 p-1 rounded-xl border border-white/5 flex items-center">
+              
+              <div className="bg-[#27272a] md:bg-black/20 rounded-xl border border-white/5 overflow-hidden transition-colors hover:border-white/10">
                  <Select value={reminderMinutes} onValueChange={setReminderMinutes}>
-                  <SelectTrigger className="w-full bg-transparent border-none text-white focus:ring-0 focus:ring-offset-0 h-12">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                        <Clock size={18} />
+                  <SelectTrigger className="w-full bg-transparent border-none text-white focus:ring-0 focus:ring-offset-0 h-auto p-4 md:p-4">
+                    <div className="flex items-center gap-4 w-full">
+                      <div className="bg-primary/10 p-2.5 rounded-lg text-primary shrink-0">
+                        <Clock size={20} />
                       </div>
-                      <div className="flex flex-col items-start text-left">
-                         <span className="text-xs text-gray-400">Me avise com antecedência de:</span>
-                         <SelectValue placeholder="Selecione..." />
+                      <div className="flex flex-col items-start text-left flex-1">
+                          <span className="text-white font-bold text-sm md:text-base">
+                             <SelectValue placeholder="Selecione..." />
+                          </span>
+                          <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">
+                            Tempo de antecedência do aviso
+                          </span>
                       </div>
                     </div>
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1c1c1f] border-white/10 text-white">
+                  <SelectContent className="bg-[#1c1c1f] border-white/10 text-white shadow-xl">
                     <SelectItem value="30">30 minutos antes</SelectItem>
                     <SelectItem value="60">1 hora antes</SelectItem>
                     <SelectItem value="120">2 horas antes</SelectItem>
@@ -369,8 +366,12 @@ export const Confirmation = () => {
               </h3>
 
               {!availableMethods.hasPix && !availableMethods.hasOnSite && (
-                <div className="text-red-400 text-xs md:text-sm bg-red-400/10 p-3 md:p-4 rounded-lg border border-red-400/20">
-                  Este prestador não configurou métodos de pagamento.
+                <div className="flex items-start gap-3 text-red-400 text-xs md:text-sm bg-red-400/10 p-3 md:p-4 rounded-xl border border-red-400/20">
+                  <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block mb-1">Pagamento Indisponível</span>
+                    Este prestador ainda não configurou métodos de pagamento. Entre em contato diretamente.
+                  </div>
                 </div>
               )}
 
@@ -382,7 +383,7 @@ export const Confirmation = () => {
                     className={cn(
                       "h-auto p-4 md:p-5 justify-start border-2 relative hover:bg-gray-800 transition-all active:scale-[0.98]",
                       paymentMethod === "pix"
-                        ? "border-primary bg-primary/10"
+                        ? "border-primary bg-primary/10 shadow-[0_0_20px_-10px_rgba(255,255,255,0.3)]"
                         : "border-gray-700 bg-[#27272a] md:bg-gray-900/50"
                     )}
                     onClick={() => setPaymentMethod("pix")}
@@ -420,7 +421,7 @@ export const Confirmation = () => {
                     className={cn(
                       "h-auto p-4 md:p-5 justify-start border-2 hover:bg-gray-800 transition-all active:scale-[0.98]",
                       paymentMethod === "cash"
-                        ? "border-primary bg-primary/10"
+                        ? "border-primary bg-primary/10 shadow-[0_0_20px_-10px_rgba(255,255,255,0.3)]"
                         : "border-gray-700 bg-[#27272a] md:bg-gray-900/50"
                     )}
                     onClick={() => setPaymentMethod("cash")}
@@ -581,7 +582,7 @@ export const Confirmation = () => {
   );
 };
 
-// ... Funções auxiliares (generatePixPayload e calculateCRC16) ...
+// ... Funções auxiliares mantidas intactas para funcionar ...
 interface PixData {
   key: string;
   name: string;

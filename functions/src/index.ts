@@ -384,59 +384,6 @@ export const onReviewCreate = onDocumentCreated(
   },
 );
 
-// --- FUNÇÕES AGENDADAS ---
-
-export const sendAppointmentReminders = onSchedule(
-  {
-    schedule: "every day 09:00",
-    timeZone: TIME_ZONE,
-    region: REGION,
-    secrets: ["RESEND_API_KEY"],
-  },
-  async () => {
-    logger.info("Executando envio de lembretes de agendamento.");
-
-    const tomorrowStart = startOfTomorrow();
-    const tomorrowEnd = endOfTomorrow();
-
-    const appointmentsRef = db.collection("appointments");
-    const q = appointmentsRef
-      .where("status", "==", "scheduled")
-      .where(
-        "startTime",
-        ">=",
-        admin.firestore.Timestamp.fromDate(tomorrowStart),
-      )
-      .where(
-        "startTime",
-        "<=",
-        admin.firestore.Timestamp.fromDate(tomorrowEnd),
-      );
-
-    const snapshot = await q.get();
-
-    if (snapshot.empty) {
-      logger.info("Nenhum agendamento para amanhã.");
-      return;
-    }
-
-    const remindersSent: Promise<void>[] = [];
-    snapshot.forEach((doc) => {
-      const appointment = doc.data();
-      const { clientId, serviceName, startTime } = appointment;
-      const { formattedTime } = formatDate(startTime);
-
-      const title = "⏰ Lembrete de Agendamento";
-      const body = `Lembrete: seu agendamento de "${serviceName}" é amanhã às ${formattedTime}.`;
-
-      remindersSent.push(sendNotification(clientId, title, body));
-    });
-
-    await Promise.all(remindersSent);
-    logger.info(`${remindersSent.length} lembretes enviados.`);
-  },
-);
-
 // --- FUNÇÕES CHAMÁVEIS (CALLABLE) ---
 // (Mantidas inalteradas, pois sua lógica é de negócio/financeira e já está correta)
 
@@ -754,6 +701,7 @@ export const createAppointment = onCall(
       totalPrice,
       totalDuration,
       notes,
+      reminderMinutes,
     } = request.data;
 
     if (!clientId || !professionalId || !startTime || !endTime) {
@@ -773,6 +721,9 @@ export const createAppointment = onCall(
     const end = new Date(endTime);
     if (start < new Date())
       throw new HttpsError("invalid-argument", "Data inválida (passado).");
+
+    const minutesToSubtract = typeof reminderMinutes === "number" ? reminderMinutes : 60;
+    const reminderDate = new Date(start.getTime() - minutesToSubtract * 60000);
 
     const appointmentsRef = db.collection("appointments");
     const lockRef = db.collection("availability_locks").doc(professionalId);
@@ -820,6 +771,9 @@ export const createAppointment = onCall(
           notes: notes || "",
           startTime: admin.firestore.Timestamp.fromDate(start),
           endTime: admin.firestore.Timestamp.fromDate(end),
+          reminderTime: admin.firestore.Timestamp.fromDate(reminderDate),
+          reminderSent: false,
+          reminderMinutes: minutesToSubtract,
           status: "pending",
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });

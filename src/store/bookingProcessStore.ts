@@ -29,8 +29,7 @@ interface BookingFlowState {
   // Controle do fluxo
   currentStep: number;
   
-  // NOVO: Armazena o ID do último agendamento criado com sucesso
-  // Necessário para configurar o lembrete na tela de sucesso
+  // Armazena o ID do último agendamento criado com sucesso
   lastCreatedAppointmentId: string | null;
 
   status: {
@@ -51,8 +50,12 @@ interface BookingFlowActions {
   selectProfessional: (professional: Professional) => void;
   selectDateAndTime: (date: Date, timeSlot: string) => void;
   
-  // Atualizado para receber paymentMethod
-  confirmBooking: (client: ClientProfile, paymentMethod: PaymentMethod) => Promise<void>;
+  // ATUALIZADO: Recebe reminderMinutes agora
+  confirmBooking: (
+    client: ClientProfile, 
+    paymentMethod: PaymentMethod,
+    reminderMinutes: number
+  ) => Promise<void>;
 
   goToNextStep: () => void;
   goToPreviousStep: () => void;
@@ -71,7 +74,7 @@ const initialState: BookingFlowState = {
   selectedDate: null,
   selectedTimeSlot: null,
   currentStep: 1, 
-  lastCreatedAppointmentId: null, // Inicializa como null
+  lastCreatedAppointmentId: null,
   status: {
     isLoading: false,
     isConfirming: false,
@@ -153,7 +156,8 @@ export const useBookingProcessStore = create<BookingStore>()(
         set({ selectedDate: date, selectedTimeSlot: timeSlot, currentStep: 4 });
       },
 
-      confirmBooking: async (client, paymentMethod) => {
+      // ATUALIZADO: Recebe o reminderMinutes
+      confirmBooking: async (client, paymentMethod, reminderMinutes) => {
         const {
           provider,
           selectedServices,
@@ -186,7 +190,9 @@ export const useBookingProcessStore = create<BookingStore>()(
 
         const endTime = new Date(startTime.getTime() + totalDuration * 60000);
 
-        const appointmentData: Omit<Appointment, "id"> = {
+        // Monta o objeto incluindo o reminderMinutes
+        // Usamos cast para evitar erro se o tipo Appointment ainda não tiver reminderMinutes
+        const appointmentData = {
           clientId: client.id,
           clientName: client.name,
           clientPhone: client.phoneNumber,
@@ -204,10 +210,12 @@ export const useBookingProcessStore = create<BookingStore>()(
           totalDuration,
           createdAt: new Date(),
           notes: "",
-          paymentMethod, 
-        };
+          paymentMethod,
+          reminderMinutes, // <--- CAMPO NOVO AQUI
+        } as Omit<Appointment, "id"> & { reminderMinutes: number };
 
-        // Chama a função de criar
+        // Chama a função de criar passando o dado extra
+        // Certifique-se que o bookingService.ts foi atualizado para aceitar isso também
         const promise = createAppointment(appointmentData);
 
         const successMsg = paymentMethod === 'pix' 
@@ -226,12 +234,10 @@ export const useBookingProcessStore = create<BookingStore>()(
         });
 
         try {
-          // Await e captura o ID do agendamento criado
           const appointmentId = await promise;
           
           set({ 
             status: { ...initialState.status, isSuccess: true },
-            // Salva o ID no store para ser usado na tela de sucesso (lembrete)
             lastCreatedAppointmentId: appointmentId 
           });
 
@@ -265,7 +271,6 @@ export const useBookingProcessStore = create<BookingStore>()(
           professionals: keepProvider ? professionals : [],
           providerId: keepProvider ? providerId : null,
           redirectUrlAfterLogin,
-          // Garante que o ID do último agendamento seja limpo
           lastCreatedAppointmentId: null, 
         });
       },
@@ -281,8 +286,6 @@ export const useBookingProcessStore = create<BookingStore>()(
         selectedTimeSlot: state.selectedTimeSlot,
         currentStep: state.currentStep,
         redirectUrlAfterLogin: state.redirectUrlAfterLogin,
-        // OBS: Não persistimos lastCreatedAppointmentId no localStorage de propósito
-        // para evitar que IDs antigos interfiram em novos fluxos se o usuário voltar dias depois.
       }),
     }
   )

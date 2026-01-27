@@ -4,9 +4,9 @@ import { ClientProfessionalCard } from "./ClientProfessionalCard";
 import { Loader2, Search, Frown } from "lucide-react";
 import { useProfileStore } from "../../store/profileStore";
 import { ProviderFilter } from "./ProviderFilter";
-import { Link, useLocation } from "react-router-dom"; // Adicionado useLocation
+import { Link, useLocation } from "react-router-dom";
 import type { PaymentMethod, ServiceProviderProfile } from "../../types";
-import { cn } from "../../lib/utils/cn"; // Importante para classes condicionais
+import { cn } from "../../lib/utils/cn";
 
 // UI Components
 import { Input } from "../ui/input";
@@ -18,7 +18,7 @@ const getDistance = (
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ) => {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -49,70 +49,112 @@ interface EnrichedProvider extends ServiceProviderProfile {
 export const ClientSearchSection = () => {
   const { userProfile } = useProfileStore();
   const location = useLocation();
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const { results: rawResults, isLoading, search } = useSearchStore();
   const [searchTerm, setSearchTerm] = useState("");
+
+  // ALTERAÇÃO 1: Default aumentado para 500 (Sem limite) para evitar esconder perfis
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
-    distance: 50,
+    distance: 500,
     areaOfWork: "all",
     minRating: 0,
     paymentMethods: [],
   });
 
-  // Verifica se está dentro do Dashboard
   const isDashboard = location.pathname.includes("/dashboard");
 
-  // --- Efeitos e Lógica (Mantidos) ---
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
-        (error) => console.error("Erro GPS", error)
+        (position) =>
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }),
+        (error) => console.error("Erro GPS", error),
       );
     }
     search("");
   }, [search]);
 
-  const availableAreas = useMemo(() => 
-    Array.from(new Set(rawResults.map((p) => p.areaOfWork).filter(Boolean))) as string[], 
-  [rawResults]);
+  const availableAreas = useMemo(
+    () =>
+      Array.from(
+        new Set(rawResults.map((p) => p.areaOfWork).filter(Boolean)),
+      ) as string[],
+    [rawResults],
+  );
 
   const filteredAndSortedProviders = useMemo(() => {
     let filtered: EnrichedProvider[] = rawResults.map((p) => ({ ...p }));
 
     if (appliedFilters.areaOfWork !== "all") {
-      filtered = filtered.filter((p) => p.areaOfWork === appliedFilters.areaOfWork);
+      filtered = filtered.filter(
+        (p) => p.areaOfWork === appliedFilters.areaOfWork,
+      );
     }
     if (appliedFilters.paymentMethods.length > 0) {
-      filtered = filtered.filter((p) =>
-        p.paymentMethods && appliedFilters.paymentMethods.every((pm) => p.paymentMethods!.includes(pm))
+      filtered = filtered.filter(
+        (p) =>
+          p.paymentMethods &&
+          appliedFilters.paymentMethods.every((pm) =>
+            p.paymentMethods!.includes(pm),
+          ),
       );
     }
 
     filtered = filtered.map((provider) => {
       const totalReviews = provider.reviews?.length || 0;
-      const average = totalReviews > 0
-          ? provider.reviews!.reduce((acc, review) => acc + review.rating, 0) / totalReviews
+      const average =
+        totalReviews > 0
+          ? provider.reviews!.reduce((acc, review) => acc + review.rating, 0) /
+            totalReviews
           : 0;
       return { ...provider, averageRating: average };
     });
 
     if (appliedFilters.minRating > 0) {
-      filtered = filtered.filter((p) => (p.averageRating || 0) >= appliedFilters.minRating);
+      filtered = filtered.filter(
+        (p) => (p.averageRating || 0) >= appliedFilters.minRating,
+      );
     }
 
+    // ALTERAÇÃO 2: Lógica de distância corrigida
+    // Se a distância for 500 (nosso max), consideramos "Sem limite" e não filtramos por distância
+    // Isso permite que perfis com endereço errado (Infinity) apareçam.
     if (userLocation) {
       filtered = filtered.map((provider) => ({
-          ...provider,
-          distance: provider.businessAddress?.lat && provider.businessAddress?.lng
-              ? getDistance(userLocation.lat, userLocation.lng, provider.businessAddress.lat, provider.businessAddress.lng)
-              : Infinity,
-        })).filter((provider) => (provider.distance || Infinity) <= appliedFilters.distance);
+        ...provider,
+        distance:
+          provider.businessAddress?.lat && provider.businessAddress?.lng
+            ? getDistance(
+                userLocation.lat,
+                userLocation.lng,
+                provider.businessAddress.lat,
+                provider.businessAddress.lng,
+              )
+            : Infinity,
+      }));
+
+      if (appliedFilters.distance < 500) {
+        filtered = filtered.filter(
+          (provider) =>
+            (provider.distance || Infinity) <= appliedFilters.distance,
+        );
+      }
     } else {
-      filtered = filtered.map((provider) => ({ ...provider, distance: Infinity }));
+      filtered = filtered.map((provider) => ({
+        ...provider,
+        distance: Infinity,
+      }));
     }
 
-    return filtered.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+    return filtered.sort(
+      (a, b) => (a.distance || Infinity) - (b.distance || Infinity),
+    );
   }, [rawResults, userLocation, appliedFilters]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -120,11 +162,12 @@ export const ClientSearchSection = () => {
     search(searchTerm);
   };
 
-  const handleApplyFilters = useCallback((filters: AppliedFilters) => setAppliedFilters(filters), []);
+  const handleApplyFilters = useCallback(
+    (filters: AppliedFilters) => setAppliedFilters(filters),
+    [],
+  );
 
-  // --- Renderização do Header Adaptativo ---
   const renderHeader = () => {
-    // Cenário 1: Logado (Dashboard ou Explorar Logado)
     if (userProfile) {
       const firstName = userProfile.name.split(" ")[0];
       return (
@@ -141,7 +184,6 @@ export const ClientSearchSection = () => {
       );
     }
 
-    // Cenário 2: Visitante (Público)
     return (
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -149,38 +191,41 @@ export const ClientSearchSection = () => {
             Encontre o <span className="text-primary">Melhor</span> Serviço
           </h1>
           <p className="text-gray-400 max-w-xl">
-            Explore barbeiros e profissionais próximos a você. Veja fotos, avaliações e agende em segundos.
+            Explore barbeiros e profissionais próximos a você. Veja fotos,
+            avaliações e agende em segundos.
           </p>
         </div>
         <div className="hidden md:block text-right">
-           <p className="text-sm text-gray-500 mb-1">É um profissional?</p>
-           <Link to="/register-type">
-             <Button variant="outline" size="sm" className="border-white/10 text-xs">Criar conta Business</Button>
-           </Link>
+          <p className="text-sm text-gray-500 mb-1">É um profissional?</p>
+          <Link to="/register-type">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/10 text-xs"
+            >
+              Criar conta Business
+            </Button>
+          </Link>
         </div>
       </div>
     );
   };
 
   return (
-    <div 
+    <div
       className={cn(
         "space-y-8 transition-all duration-300",
-        // LÓGICA DE ESPAÇAMENTO CRUCIAL:
-        // Se NÃO for dashboard (Rota Pública), adiciona container e padding top para fugir do Header Fixo
         !isDashboard && "container mx-auto px-4 pt-24 pb-12 min-h-screen",
-        // Se FOR dashboard, usa padding padrão e altura total
-        isDashboard && "h-full w-full"
+        isDashboard && "h-full w-full",
       )}
     >
-      {/* Header e Busca */}
       <div className="space-y-8">
         {renderHeader()}
 
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <form onSubmit={handleSearch} className="flex-grow relative group">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-500 group-focus-within:text-primary transition-colors" />
+              <Search className="h-5 w-5 text-gray-500 group-focus-within:text-primary transition-colors" />
             </div>
             <Input
               value={searchTerm}
@@ -197,7 +242,6 @@ export const ClientSearchSection = () => {
             </Button>
           </form>
 
-          {/* Filtro separado para mobile/desktop se comportar bem */}
           <div className="shrink-0">
             <ProviderFilter
               onApplyFilters={handleApplyFilters}
@@ -208,12 +252,13 @@ export const ClientSearchSection = () => {
         </div>
       </div>
 
-      {/* Resultados */}
       <div className="min-h-[300px]">
         {isLoading ? (
           <div className="flex flex-col justify-center items-center h-64 gap-4">
             <Loader2 className="animate-spin text-primary" size={48} />
-            <p className="text-gray-500 text-sm animate-pulse">Buscando profissionais...</p>
+            <p className="text-gray-500 text-sm animate-pulse">
+              Buscando profissionais...
+            </p>
           </div>
         ) : filteredAndSortedProviders.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -225,18 +270,22 @@ export const ClientSearchSection = () => {
           <Card className="bg-[#18181b] border-dashed border-white/10 mt-8">
             <CardContent className="flex flex-col items-center justify-center h-64 text-gray-500 text-center p-6">
               <div className="bg-white/5 p-4 rounded-full mb-4">
-                 <Frown size={40} className="opacity-50" />
+                <Frown size={40} className="opacity-50" />
               </div>
               <h3 className="text-xl font-bold text-gray-300 mb-2">
                 Nenhum profissional encontrado
               </h3>
               <p className="text-sm max-w-xs mx-auto text-gray-500">
-                Não encontramos resultados para "{searchTerm}". Tente buscar por outros termos ou aumente a distância no filtro.
+                Não encontramos resultados para "{searchTerm}". Tente buscar por
+                outros termos ou aumente a distância no filtro.
               </p>
-              <Button 
-                variant="link" 
-                className="text-primary mt-4" 
-                onClick={() => { setSearchTerm(""); setAppliedFilters({...appliedFilters, distance: 100}); }}
+              <Button
+                variant="link"
+                className="text-primary mt-4"
+                onClick={() => {
+                  setSearchTerm("");
+                  setAppliedFilters({ ...appliedFilters, distance: 500 });
+                }}
               >
                 Limpar filtros e buscar novamente
               </Button>
@@ -245,16 +294,18 @@ export const ClientSearchSection = () => {
         )}
       </div>
 
-      {/* Footerzinho para Visitante (CTA) */}
       {!userProfile && !isLoading && filteredAndSortedProviders.length > 0 && (
-         <div className="mt-12 pt-8 border-t border-white/5 text-center">
-            <p className="text-gray-400 text-sm mb-4">Gostou do que viu?</p>
-            <Link to="/login">
-                <Button variant="outline" className="border-primary/20 text-primary hover:bg-primary/10 hover:text-primary">
-                    Fazer Login para Agendar
-                </Button>
-            </Link>
-         </div>
+        <div className="mt-12 pt-8 border-t border-white/5 text-center">
+          <p className="text-gray-400 text-sm mb-4">Gostou do que viu?</p>
+          <Link to="/login">
+            <Button
+              variant="outline"
+              className="border-primary/20 text-primary hover:bg-primary/10 hover:text-primary"
+            >
+              Fazer Login para Agendar
+            </Button>
+          </Link>
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SlidersHorizontal, MapPin, Star, CreditCard} from "lucide-react";
+import { SlidersHorizontal, MapPin, Star, CreditCard } from "lucide-react";
 import type { PaymentMethod } from "../../types";
 
 // UI
@@ -51,7 +51,7 @@ export const ProviderFilter = ({
 
   const handleClear = () => {
     const reset = {
-      distance: 50,
+      distance: 500, // Default aumentado para resetar sem filtros de distância restritivos
       areaOfWork: "all",
       minRating: 0,
       paymentMethods: [],
@@ -97,13 +97,15 @@ export const ProviderFilter = ({
                 <MapPin size={16} /> Distância Máxima
               </Label>
               <span className="text-primary font-bold text-sm">
-                {filters.distance} km
+                {filters.distance >= 500
+                  ? "Sem limite"
+                  : `${filters.distance} km`}
               </span>
             </div>
             <input
               type="range"
               min="1"
-              max="100"
+              max="500" // AUMENTADO: de 100 para 500
               step="1"
               value={filters.distance}
               onChange={(e) =>
@@ -116,7 +118,7 @@ export const ProviderFilter = ({
             />
             <div className="flex justify-between text-xs text-gray-500">
               <span>1km</span>
-              <span>100km</span>
+              <span>500km+</span>
             </div>
           </div>
 
@@ -191,7 +193,7 @@ export const ProviderFilter = ({
                       "cursor-pointer h-9 px-4 text-sm transition-all",
                       isSelected
                         ? "bg-primary/20 border-primary text-primary hover:bg-primary/30"
-                        : "text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                        : "text-gray-400 border-gray-700 hover:text-white hover:border-gray-500",
                     )}
                     onClick={() => togglePayment(opt.id)}
                   >

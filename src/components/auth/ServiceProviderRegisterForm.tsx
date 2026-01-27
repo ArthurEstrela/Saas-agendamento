@@ -24,7 +24,9 @@ import {
   IdCard,
   Hash,
   QrCode,
-  Smartphone, // Ícone novo para WhatsApp
+  Smartphone,
+  AlertTriangle,
+  MousePointerClick
 } from "lucide-react";
 import type { PaymentMethod, ServiceProviderProfile } from "../../types";
 import { useAuthStore } from "../../store/authStore";
@@ -230,8 +232,10 @@ const schema = z
     neighborhood: z.string().min(1, "O bairro é obrigatório"),
     city: z.string().min(1, "A cidade é obrigatória"),
     state: z.string().min(2, "O estado (UF) é obrigatório"),
-    lat: z.number().optional(),
-    lng: z.number().optional(),
+    
+    // 🔥 CORREÇÃO: Usando 'message' em vez de 'invalid_type_error'
+    lat: z.number({ message: "A localização no mapa é obrigatória." }),
+    lng: z.number({ message: "A localização no mapa é obrigatória." }),
   })
   .superRefine((data, ctx) => {
     // Validação Documento
@@ -316,6 +320,7 @@ export const ServiceProviderRegisterForm = () => {
     -15.79, -47.88,
   ]);
   const [mapZoom, setMapZoom] = useState(4);
+  const [geocodingLoading, setGeocodingLoading] = useState(false);
 
   // Watchers
   const zipCodeValue = watch("zipCode");
@@ -354,36 +359,54 @@ export const ServiceProviderRegisterForm = () => {
     }
   }, [address, cepError, setValue]);
 
-  // Geolocalização
+  // Geolocalização Automática
   const fetchCoordinates = useCallback(async () => {
     if (streetValue && numberValue && cityValue) {
+      setGeocodingLoading(true);
       try {
         const query = encodeURIComponent(
           `${streetValue}, ${numberValue}, ${cityValue}`,
         );
+        // Usando Brasil para evitar ambiguidades
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=br`,
         );
         const data = await response.json();
         if (data && data.length > 0) {
           const { lat, lon } = data[0];
           const newPos = new L.LatLng(parseFloat(lat), parseFloat(lon));
+          
           setPosition(newPos);
           setMapCenter([newPos.lat, newPos.lng]);
           setMapZoom(17);
+          
+          // 🔥 Atualiza o form para passar na validação
+          setValue("lat", newPos.lat);
+          setValue("lng", newPos.lng);
+          clearErrors(["lat", "lng"]);
+        } else {
+            console.log("Geocoding não encontrou endereço exato");
         }
       } catch (error) {
         console.error("Erro GPS:", error);
+      } finally {
+        setGeocodingLoading(false);
       }
     }
-  }, [streetValue, numberValue, cityValue]);
+  }, [streetValue, numberValue, cityValue, setValue, clearErrors]);
 
   useEffect(() => {
-    const handler = setTimeout(() => fetchCoordinates(), 1200);
+    const handler = setTimeout(() => fetchCoordinates(), 1500); 
     return () => clearTimeout(handler);
   }, [streetValue, numberValue, cityValue, fetchCoordinates]);
 
-  const handleMapClick = (latlng: L.LatLng) => setPosition(latlng);
+  // Handler de clique no mapa
+  const handleMapClick = (latlng: L.LatLng) => {
+      setPosition(latlng);
+      setValue("lat", latlng.lat);
+      setValue("lng", latlng.lng);
+      clearErrors(["lat", "lng"]);
+  };
 
   const handleCepBlur = () => {
     const cleanedZip = zipCodeValue?.replace(/\D/g, "") || "";
@@ -399,8 +422,8 @@ export const ServiceProviderRegisterForm = () => {
       "businessPhone",
       "areaOfWork",
     ],
-    3: ["whatsapp", "instagram", "facebook", "website"], // ✅ WhatsApp adicionado aqui
-    4: ["zipCode", "street", "number", "neighborhood", "city", "state"],
+    3: ["whatsapp", "instagram", "facebook", "website"],
+    4: ["zipCode", "street", "number", "neighborhood", "city", "state", "lat", "lng"],
   };
 
   const nextStep = async (e?: React.MouseEvent | React.KeyboardEvent) => {
@@ -453,8 +476,13 @@ export const ServiceProviderRegisterForm = () => {
 
   const onSubmit: SubmitHandler<ProviderFormData> = async (data) => {
     if (currentStep !== 4) return;
+    
+    // Validação Final de Segurança para o Mapa
+    if (!position || !data.lat || !data.lng) {
+        setError("lat", { message: "Selecione a localização no mapa" });
+        return;
+    }
 
-    // Formata Instagram e Facebook automaticamente
     const formattedInstagram = formatSocialLink(
       data.instagram,
       "https://www.instagram.com",
@@ -469,12 +497,12 @@ export const ServiceProviderRegisterForm = () => {
       documentType: data.documentType,
       cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
       cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
-      businessPhone: data.businessPhone, // Telefone do Admin
+      businessPhone: data.businessPhone,
       areaOfWork: data.areaOfWork,
       pixKey: data.pixKey,
       pixKeyType: data.pixKeyType,
       socialLinks: {
-        whatsapp: data.whatsapp, // ✅ Novo campo salvo
+        whatsapp: data.whatsapp,
         instagram: formattedInstagram,
         facebook: formattedFacebook,
         website: data.website,
@@ -487,8 +515,8 @@ export const ServiceProviderRegisterForm = () => {
         neighborhood: data.neighborhood,
         city: data.city,
         state: data.state,
-        lat: position?.lat,
-        lng: position?.lng,
+        lat: position.lat,
+        lng: position.lng,
       },
       subscriptionStatus: "trial",
     };
@@ -969,9 +997,43 @@ export const ServiceProviderRegisterForm = () => {
                 />
               </div>
             </div>
-            <div className="mt-4">
-              <Label>Confirme no Mapa</Label>
-              <div className="h-64 w-full rounded-lg overflow-hidden border border-gray-700 shadow-sm mt-2">
+
+            {/* SEÇÃO DO MAPA BLINDADA */}
+            <div className="mt-6 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className={cn("text-base", !position && "text-destructive")}>
+                   Confirme a localização no Mapa (Obrigatório)
+                </Label>
+                {geocodingLoading && <div className="text-xs text-primary flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Buscando coordenadas...</div>}
+              </div>
+
+              {/* Alerta Visual se não tiver posição */}
+              {!position && !geocodingLoading && (
+                 <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-md p-3 flex items-start gap-3">
+                    <AlertTriangle className="text-yellow-500 shrink-0 mt-0.5" size={18} />
+                    <div className="text-sm text-yellow-200">
+                       <span className="font-bold block">Atenção:</span>
+                       Não encontramos a localização exata automaticamente. 
+                       <span className="font-bold underline ml-1 cursor-pointer">Clique no mapa</span> onde fica seu estabelecimento para habilitar o cadastro.
+                    </div>
+                 </div>
+              )}
+
+              <div 
+                className={cn(
+                    "h-64 w-full rounded-lg overflow-hidden border shadow-sm mt-2 transition-all relative group",
+                    !position ? "border-destructive ring-1 ring-destructive" : "border-gray-700 hover:border-primary"
+                )}
+              >
+                {!position && (
+                    <div className="absolute inset-0 z-[400] bg-black/40 flex items-center justify-center pointer-events-none group-hover:bg-transparent transition-colors">
+                        <div className="bg-background/90 text-foreground px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                             <MousePointerClick className="animate-bounce text-primary" />
+                             <span className="text-sm font-bold">Clique no local exato</span>
+                        </div>
+                    </div>
+                )}
+                
                 <MapContainer
                   center={mapCenter}
                   zoom={mapZoom}
@@ -983,6 +1045,14 @@ export const ServiceProviderRegisterForm = () => {
                   {position && <Marker position={position}></Marker>}
                 </MapContainer>
               </div>
+              {errors.lat && (
+                  <p className="text-sm text-destructive font-medium text-center animate-pulse">
+                      {errors.lat.message}
+                  </p>
+              )}
+               <p className="text-xs text-gray-500 text-center">
+                  Isso garante que seu estabelecimento apareça nas buscas por proximidade.
+              </p>
             </div>
           </section>
         )}

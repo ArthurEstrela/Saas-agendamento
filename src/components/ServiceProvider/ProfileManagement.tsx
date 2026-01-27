@@ -250,6 +250,7 @@ export const ProfileManagement = () => {
         documentType: docType,
         documentNumber: docNumber,
         cancellationMinHours: profile.cancellationMinHours ?? 2,
+        pixKeyType: profile.pixKeyType || "cpf",
         socialLinks: {
           ...profile.socialLinks,
           whatsapp: whatsapp,

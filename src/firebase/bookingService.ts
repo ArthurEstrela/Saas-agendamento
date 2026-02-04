@@ -8,6 +8,7 @@ import {
   Timestamp,
   orderBy,
   getDoc,
+  addDoc,
 } from "firebase/firestore";
 import { db } from "./config";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -244,4 +245,25 @@ export const setAppointmentReminder = async (
     reminderOffsetMinutes: minutesBefore,
     reminderSent: false
   });
+};
+
+export const createManualAppointment = async (
+  appointmentData: Omit<Appointment, "id">
+): Promise<string> => {
+  try {
+    const appointmentsCollection = collection(db, "appointments");
+    
+    // Adicionamos um marcador 'isManual' para estatísticas futuras
+    const docRef = await addDoc(appointmentsCollection, {
+      ...appointmentData,
+      status: "scheduled", // Já entra como confirmado
+      isManual: true,
+      createdAt: new Date(),
+    });
+
+    return docRef.id;
+  } catch (error) {
+    console.error("Erro ao criar agendamento manual:", error);
+    throw error;
+  }
 };

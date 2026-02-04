@@ -1,42 +1,57 @@
 import { create } from "zustand";
 import type { Appointment } from "../types";
 
-// Define quais modals/ações podem estar ativas
-type ModalView = "details" | "complete" | "cancel" | "decline";
+// ✅ Mantendo as definições de tipos consistentes
+export type ModalView = "details" | "complete" | "cancel" | "decline" | "manual_booking";
 
 interface AgendaModalState {
   modalView: ModalView | null;
   selectedAppointment: Appointment | null;
-  
+  modalData: {
+    defaultDate?: Date;
+  } | null;
+
   /**
-   * Abre um modal para uma ação e agendamento específicos.
+   * Abre um modal. Parâmetros opcionais usam 'undefined' por padrão para satisfazer o TS.
    */
-  openModal: (view: ModalView, appointment: Appointment) => void;
+  openModal: (view: ModalView, appointment?: Appointment, data?: { defaultDate?: Date }) => void;
   
-  /**
-   * Fecha qualquer modal que esteja aberto, limpando o agendamento.
-   */
   closeModal: () => void;
   
   /**
-   * Muda o modal ativo (ex: de 'details' para 'cancel').
+   * Muda a visualização atual.
    */
-  setModalView: (view: ModalView) => void;
+  setModalView: (view: ModalView | null, appointment?: Appointment) => void;
 }
 
 export const useAgendaModalStore = create<AgendaModalState>((set) => ({
   modalView: null,
   selectedAppointment: null,
-  
-  openModal: (view, appointment) => {
-    set({ modalView: view, selectedAppointment: appointment });
+  modalData: null,
+
+  // ✅ CORREÇÃO: Alterado de '= null' para '= undefined' para bater com o tipo 'Appointment | undefined'
+  openModal: (view, appointment = undefined, data = undefined) => {
+    set({ 
+      modalView: view, 
+      // O estado interno aceita 'null', então convertemos se vier undefined
+      selectedAppointment: appointment ?? null, 
+      modalData: data ?? null 
+    });
   },
   
   closeModal: () => {
-    set({ modalView: null, selectedAppointment: null });
+    set({ 
+      modalView: null, 
+      selectedAppointment: null, 
+      modalData: null 
+    });
   },
 
-  setModalView: (view) => {
-    set({ modalView: view });
+  setModalView: (view, appointment) => {
+    set((state) => ({ 
+      modalView: view,
+      // Se um novo appointment for passado, usa ele, senão mantém o que já estava
+      selectedAppointment: appointment !== undefined ? appointment : state.selectedAppointment
+    }));
   }
 }));

@@ -24,7 +24,7 @@ import {
   Globe,
   Building2,
   Navigation,
-  Map as MapIcon, // ✅ ADICIONADO: Importação que faltava
+  Map as MapIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -91,6 +91,23 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
+
+// --- HELPER: Inferir Tipo de Pix ---
+// Ajuda a corrigir perfis antigos que salvaram a chave sem o tipo
+const inferPixType = (
+  key: string | undefined | null,
+): "cpf" | "cnpj" | "email" | "phone" | "random" => {
+  if (!key) return "cpf"; // Padrão seguro
+  if (key.includes("@")) return "email";
+  
+  const cleanKey = key.replace(/\D/g, "");
+  // Lógica aproximada para chaves numéricas
+  if (cleanKey.length === 11) return "cpf"; // 11 dígitos = CPF ou Celular (CPF é mais comum como padrão)
+  if (cleanKey.length === 14) return "cnpj";
+  if (cleanKey.length > 20) return "random"; // Chaves aleatórias são longas
+  
+  return "cpf"; // Fallback final
+};
 
 const ChangeView = ({
   center,
@@ -245,12 +262,19 @@ export const ProfileManagement = () => {
 
       const whatsapp = profile.socialLinks?.whatsapp || "";
 
+      // 🔥 Lógica Inteligente para Pix
+      // Se não tiver tipo salvo, tenta inferir pela chave existente
+      let finalPixType = profile.pixKeyType;
+      if (!finalPixType) {
+        finalPixType = inferPixType(profile.pixKey);
+      }
+
       const defaultValues = {
         ...profile,
         documentType: docType,
         documentNumber: docNumber,
         cancellationMinHours: profile.cancellationMinHours ?? 2,
-        pixKeyType: profile.pixKeyType || "cpf",
+        pixKeyType: finalPixType, // Usa o tipo recuperado ou inferido
         socialLinks: {
           ...profile.socialLinks,
           whatsapp: whatsapp,

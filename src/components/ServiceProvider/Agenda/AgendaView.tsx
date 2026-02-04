@@ -5,7 +5,7 @@ import {
   type EnrichedProviderAppointment,
 } from "../../../store/providerAppointmentsStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
-import { useAvailabilityStore } from "../../../store/availabilityStore"; 
+import { useAvailabilityStore } from "../../../store/availabilityStore";
 import type {
   UserProfile,
   ProfessionalProfile,
@@ -20,6 +20,7 @@ import {
   Clock as ClockIcon,
   Filter,
   Download,
+  Plus,
 } from "lucide-react";
 import { startOfDay, isPast, format, parse } from "date-fns";
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
@@ -49,8 +50,9 @@ export type ViewMode = "card" | "list" | "calendar";
 
 export const AgendaView = () => {
   const { userProfile } = useProfileStore();
-  const { appointments, isLoading, fetchAppointments, updateStatus } = useProviderAppointmentsStore();
-  const { availableSlots } = useAvailabilityStore(); 
+  const { appointments, isLoading, fetchAppointments, updateStatus } =
+    useProviderAppointmentsStore();
+  const { availableSlots } = useAvailabilityStore();
   const { openModal } = useAgendaModalStore();
 
   const [selectedDay, setSelectedDay] = useState(startOfDay(new Date()));
@@ -59,7 +61,7 @@ export const AgendaView = () => {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const [viewMode, setViewMode] = usePersistentState<ViewMode>(
     "agenda_view_mode",
-    isMobile ? "list" : "calendar"
+    isMobile ? "list" : "calendar",
   );
 
   const [selectedProfessionalId, setSelectedProfessionalId] =
@@ -82,30 +84,31 @@ export const AgendaView = () => {
     selectedProfessionalId,
     activeTab,
     selectedDay,
-    viewMode
+    viewMode,
   );
 
   // Lógica de exportação com ordenação cronológica
   const handleExport = () => {
-    const apps = filteredAppointments.map(app => ({
+    const apps = filteredAppointments.map((app) => ({
       ...app,
-      isVacant: false
+      isVacant: false,
     }));
 
-    const vacantData = availableSlots.map(slotTime => ({
+    const vacantData = availableSlots.map((slotTime) => ({
       startTime: parse(slotTime, "HH:mm", selectedDay),
       isVacant: true,
       clientName: "DISPONÍVEL",
       serviceName: "-",
-      status: "free"
+      status: "free",
     }));
 
     // Ordena por horário para separar os dias corretamente
-    const fullDailyData = [...apps, ...vacantData].sort((a, b) => 
-      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    const fullDailyData = [...apps, ...vacantData].sort(
+      (a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
     );
 
-    const filename = `agenda_${format(selectedDay, 'dd-MM-yyyy')}.csv`;
+    const filename = `agenda_${format(selectedDay, "dd-MM-yyyy")}.csv`;
     exportDailyAgendaToCsv(filename, fullDailyData);
   };
 
@@ -114,7 +117,7 @@ export const AgendaView = () => {
 
   const pendingCount = useMemo(
     () => appointments.filter((a) => a.status === "pending").length,
-    [appointments]
+    [appointments],
   );
 
   const pendingPastCount = useMemo(() => {
@@ -123,7 +126,7 @@ export const AgendaView = () => {
       (appt) =>
         appt.status === "scheduled" &&
         isPast(appt.endTime) &&
-        appt.endTime < beginningOfToday
+        appt.endTime < beginningOfToday,
     ).length;
   }, [appointments]);
 
@@ -134,7 +137,8 @@ export const AgendaView = () => {
       </div>
     );
 
-  const enrichedFiltered = filteredAppointments as EnrichedProviderAppointment[];
+  const enrichedFiltered =
+    filteredAppointments as EnrichedProviderAppointment[];
 
   const renderContent = () => {
     if (isLoading)
@@ -145,7 +149,12 @@ export const AgendaView = () => {
       );
 
     if (viewMode !== "calendar" && filteredAppointments.length === 0) {
-      return <AgendaListView appointments={[]} onAppointmentSelect={handleOpenDetails} />;
+      return (
+        <AgendaListView
+          appointments={[]}
+          onAppointmentSelect={handleOpenDetails}
+        />
+      );
     }
 
     if (viewMode === "calendar")
@@ -173,7 +182,6 @@ export const AgendaView = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 w-full max-w-full md:bg-gray-900/60 md:backdrop-blur-sm md:border md:border-gray-800 md:shadow-2xl md:rounded-xl overflow-hidden">
-      
       <div className="flex-shrink-0 flex flex-col bg-background/95 md:bg-transparent z-10 w-full border-b border-gray-800">
         <div className="flex flex-col gap-2 p-2 sm:p-4 pb-0 sm:pb-2 w-full">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full">
@@ -188,6 +196,19 @@ export const AgendaView = () => {
             </div>
 
             <div className="flex items-center justify-end gap-2 w-full sm:w-auto shrink-0">
+              <Button
+                size="sm"
+                onClick={() =>
+                  openModal("manual_booking", undefined, {
+                    defaultDate: selectedDay,
+                  })
+                }
+                className="bg-primary text-black hover:bg-primary/90 flex items-center gap-2"
+              >
+                <Plus size={16} />
+                <span className="hidden xs:inline">Novo Agendamento</span>
+              </Button>
+
               {activeTab === "scheduled" && (
                 <Button
                   variant="outline"
@@ -230,7 +251,11 @@ export const AgendaView = () => {
         <AnimatePresence>
           {isOwner && (!isMobile || showFiltersMobile) && (
             <motion.div
-              initial={isMobile ? { height: 0, opacity: 0 } : { height: "auto", opacity: 1 }}
+              initial={
+                isMobile
+                  ? { height: 0, opacity: 0 }
+                  : { height: "auto", opacity: 1 }
+              }
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden w-full px-2 sm:px-4"
@@ -238,7 +263,9 @@ export const AgendaView = () => {
               <div className="py-2 md:w-[250px]">
                 <ProfessionalFilter
                   selectedProfessionalId={selectedProfessionalId}
-                  onSelectProfessional={(id) => setSelectedProfessionalId(id || "all")}
+                  onSelectProfessional={(id) =>
+                    setSelectedProfessionalId(id || "all")
+                  }
                 />
               </div>
             </motion.div>
@@ -246,11 +273,16 @@ export const AgendaView = () => {
         </AnimatePresence>
 
         <div className="w-full overflow-x-auto p-2 scrollbar-hide border-t border-gray-800/30 mt-2 bg-gray-900/30">
-           <div className="flex items-center gap-2 w-max mx-auto sm:mx-0">
+          <div className="flex items-center gap-2 w-max mx-auto sm:mx-0">
             {[
               { id: "requests", label: "Solicitações", count: pendingCount },
               { id: "scheduled", label: "Agenda", count: 0 },
-              { id: "pendingIssues", label: "Pendências", count: pendingPastCount, alert: true },
+              {
+                id: "pendingIssues",
+                label: "Pendências",
+                count: pendingPastCount,
+                alert: true,
+              },
               { id: "history", label: "Histórico", count: 0 },
             ].map((tab) => (
               <Button
@@ -260,14 +292,19 @@ export const AgendaView = () => {
                 onClick={() => setActiveTab(tab.id as AgendaTab)}
                 className={cn(
                   "h-8 rounded-full px-3 text-xs sm:text-sm font-medium transition-all whitespace-nowrap",
-                  activeTab === tab.id ? "bg-primary text-black hover:bg-primary/90" : "text-gray-400 hover:text-white hover:bg-gray-800"
+                  activeTab === tab.id
+                    ? "bg-primary text-black hover:bg-primary/90"
+                    : "text-gray-400 hover:text-white hover:bg-gray-800",
                 )}
               >
                 {tab.label}
                 {tab.count > 0 && (
                   <Badge
                     variant={tab.alert ? "destructive" : "secondary"}
-                    className={cn("ml-1.5 h-4 min-w-[16px] px-1 flex items-center justify-center rounded-full text-[10px]", tab.alert ? "animate-pulse" : "bg-gray-700 text-white")}
+                    className={cn(
+                      "ml-1.5 h-4 min-w-[16px] px-1 flex items-center justify-center rounded-full text-[10px]",
+                      tab.alert ? "animate-pulse" : "bg-gray-700 text-white",
+                    )}
                   >
                     {tab.count}
                   </Badge>
@@ -291,20 +328,32 @@ export const AgendaView = () => {
             >
               {activeTab === "requests" && (
                 <div className="p-2 sm:p-0">
-                  <RequestsTab appointments={enrichedFiltered} onAppointmentSelect={handleOpenDetails} onUpdateStatus={updateStatus} />
+                  <RequestsTab
+                    appointments={enrichedFiltered}
+                    onAppointmentSelect={handleOpenDetails}
+                    onUpdateStatus={updateStatus}
+                  />
                 </div>
               )}
               {activeTab === "scheduled" && (
-                <div className="h-full flex flex-col w-full">{renderContent()}</div>
+                <div className="h-full flex flex-col w-full">
+                  {renderContent()}
+                </div>
               )}
               {activeTab === "pendingIssues" && (
                 <div className="p-2 sm:p-0">
-                  <PendingIssuesTab appointments={enrichedFiltered} onAppointmentSelect={handleOpenDetails} />
+                  <PendingIssuesTab
+                    appointments={enrichedFiltered}
+                    onAppointmentSelect={handleOpenDetails}
+                  />
                 </div>
               )}
               {activeTab === "history" && (
                 <div className="p-2 sm:p-0">
-                  <HistoryTab appointments={enrichedFiltered} onAppointmentSelect={handleOpenDetails} />
+                  <HistoryTab
+                    appointments={enrichedFiltered}
+                    onAppointmentSelect={handleOpenDetails}
+                  />
                 </div>
               )}
             </motion.div>

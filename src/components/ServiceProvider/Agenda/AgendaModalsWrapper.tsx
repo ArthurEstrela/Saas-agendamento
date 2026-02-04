@@ -1,5 +1,6 @@
 // src/components/ServiceProvider/Agenda/AgendaModalsWrapper.tsx
 
+import { toast } from "react-hot-toast";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { CancelAppointmentModal } from "../../Common/CancelAppointmentModal";
@@ -49,9 +50,10 @@ export const AgendaModalsWrapper = () => {
                 selectedAppointment.totalPrice === 0 ||
                 selectedAppointment.isPersonalBlock
               ) {
-                // Se for bloqueio, apenas marcamos como concluído sem abrir o financeiro
                 updateStatus(selectedAppointment.id, "completed");
                 closeModal();
+                // Dica: Adicionar um feedback
+                toast.success("Compromisso finalizado!");
               } else {
                 setModalView("complete");
               }

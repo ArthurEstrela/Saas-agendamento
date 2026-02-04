@@ -114,6 +114,7 @@ export interface Appointment {
   reminderTime?: Date | FieldValue; // Hora exata para enviar o lembrete
   reminderSent?: boolean; // Se o lembrete já foi enviado
   reminderOffsetMinutes?: number; // Quantos minutos antes (apenas para registro)
+  isPersonalBlock?: boolean;
 }
 
 export interface Notification {

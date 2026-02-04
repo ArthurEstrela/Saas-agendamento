@@ -39,15 +39,16 @@ const AppointmentRow = ({
         "group relative flex items-center gap-2 sm:gap-3 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden",
         "bg-gray-900/60 border-gray-800/50 backdrop-blur-sm",
         "hover:bg-gray-800/80 hover:border-primary/20",
-        isPending && "bg-yellow-500/5 border-yellow-500/30 hover:bg-yellow-500/10"
+        isPending &&
+          "bg-yellow-500/5 border-yellow-500/30 hover:bg-yellow-500/10",
       )}
     >
       {/* Indicador lateral colorido */}
-      <div 
+      <div
         className={cn(
           "absolute left-0 top-0 bottom-0 w-1 sm:w-1.5",
-          isPending ? "bg-yellow-500" : "bg-primary"
-        )} 
+          isPending ? "bg-yellow-500" : "bg-primary",
+        )}
       />
 
       {/* Coluna de Tempo (Largura fixa reduzida no mobile) */}
@@ -56,7 +57,9 @@ const AppointmentRow = ({
           {format(appointment.startTime, "HH:mm")}
         </span>
         <span className="text-[9px] sm:text-[10px] text-gray-500 font-medium uppercase text-center leading-tight">
-            Até<br/>{format(appointment.endTime, "HH:mm")}
+          Até
+          <br />
+          {format(appointment.endTime, "HH:mm")}
         </span>
       </div>
 
@@ -64,12 +67,17 @@ const AppointmentRow = ({
       <div className="flex-grow min-w-0 flex flex-col justify-center gap-0.5 sm:gap-1.5">
         {/* Serviços */}
         <div className="flex items-center gap-1.5">
-          <Scissors size={12} className="text-primary shrink-0 sm:w-3.5 sm:h-3.5" />
+          <Scissors
+            size={12}
+            className="text-primary shrink-0 sm:w-3.5 sm:h-3.5"
+          />
           <span className="font-semibold text-xs sm:text-sm text-gray-200 truncate leading-tight">
-            {appointment.services.map((s) => s.name).join(", ")}
+            {appointment.services.length > 0
+              ? appointment.services.map((s) => s.name).join(", ")
+              : appointment.serviceName || "Serviço Manual"}
           </span>
         </div>
-        
+
         {/* Cliente */}
         <div className="flex items-center gap-1.5 text-xs text-gray-400">
           <User size={12} className="shrink-0 sm:w-[13px] sm:h-[13px]" />
@@ -92,9 +100,12 @@ const AppointmentRow = ({
         <span className="font-bold text-white text-xs sm:text-base bg-gray-800/50 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md whitespace-nowrap">
           R$ {appointment.totalPrice.toFixed(0)}
         </span>
-        
+
         {/* Indicador visual de 'clique para ver mais' */}
-        <ChevronRight size={14} className="text-gray-600 group-hover:text-primary transition-colors sm:w-4 sm:h-4" />
+        <ChevronRight
+          size={14}
+          className="text-gray-600 group-hover:text-primary transition-colors sm:w-4 sm:h-4"
+        />
       </div>
     </motion.li>
   );
@@ -129,7 +140,7 @@ export const AgendaListView = ({
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-500 animate-fade-in px-4 text-center">
         <div className="bg-gray-800/50 p-4 rounded-full mb-4">
-            <Clock size={40} className="opacity-40" />
+          <Clock size={40} className="opacity-40" />
         </div>
         <p className="text-base font-medium">Nenhum agendamento aqui.</p>
         <p className="text-xs opacity-60">Aproveite o tempo livre!</p>
@@ -138,7 +149,7 @@ export const AgendaListView = ({
   }
 
   return (
-    <div className="flex flex-col h-full w-full"> 
+    <div className="flex flex-col h-full w-full">
       <ul className="space-y-2 sm:space-y-3 pb-4 w-full">
         <AnimatePresence mode="popLayout">
           {paginatedAppointments.map((appt) => (

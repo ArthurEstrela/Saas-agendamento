@@ -38,7 +38,7 @@ export const AppointmentCard = ({
     }
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
-      "_blank"
+      "_blank",
     );
   };
 
@@ -79,7 +79,7 @@ export const AppointmentCard = ({
               <User size={14} className="text-gray-400" />
             </div>
             <p className="text-sm font-semibold text-gray-200 truncate group-hover:text-white transition-colors">
-              {client?.name || "Cliente sem nome"}
+              {appointment.clientName || client?.name || "Particular"}
             </p>
           </div>
 
@@ -88,7 +88,9 @@ export const AppointmentCard = ({
               <Scissors size={14} className="text-gray-500" />
             </div>
             <p className="text-xs text-gray-400 truncate leading-relaxed">
-              {services.map((s) => s.name).join(", ")}
+              {services.length > 0
+                ? services.map((s) => s.name).join(", ")
+                : appointment.serviceName}
             </p>
           </div>
         </div>

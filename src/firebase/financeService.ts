@@ -4,35 +4,35 @@ import {
   where,
   getDocs,
   Timestamp,
-} from 'firebase/firestore';
-import { db } from './config';
-import type { Appointment, FinancialData, Service } from '../types'; 
-import { getExpensesByDateRange } from './expenseService';
+} from "firebase/firestore";
+import { db } from "./config";
+import type { Appointment, FinancialData, Service } from "../types";
+import { getExpensesByDateRange } from "./expenseService";
 
 export const getFinancialData = async (
   providerId: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
 ): Promise<FinancialData> => {
   const startTimestamp = Timestamp.fromDate(startDate);
   const endTimestamp = Timestamp.fromDate(endDate);
 
   // 1. Buscar Agendamentos (Receitas)
-  const appointmentsRef = collection(db, 'appointments');
+  const appointmentsRef = collection(db, "appointments");
   const appointmentsQuery = query(
     appointmentsRef,
-    where('providerId', '==', providerId),
-    where('status', '==', 'completed'),
-    where('completedAt', '>=', startTimestamp),
-    where('completedAt', '<=', endTimestamp)
+    where("providerId", "==", providerId),
+    where("status", "==", "completed"),
+    where("completedAt", ">=", startTimestamp),
+    where("completedAt", "<=", endTimestamp),
   );
 
   const appointmentsSnapshot = await getDocs(appointmentsQuery);
   const appointments = appointmentsSnapshot.docs.map((doc) => {
     const data = doc.data();
-    
-    const completedAt = data.completedAt 
-      ? (data.completedAt as Timestamp).toDate() 
+
+    const completedAt = data.completedAt
+      ? (data.completedAt as Timestamp).toDate()
       : undefined;
 
     return {
@@ -49,20 +49,24 @@ export const getFinancialData = async (
   const expenses = await getExpensesByDateRange(providerId, startDate, endDate);
 
   // 3. Calcular Totais
-  const totalRevenue = appointments.reduce(
-    (sum, appt) => sum + (appt.finalPrice ?? appt.totalPrice),
-    0
-  );
+  const totalRevenue = appointments
+    .filter(
+      (appt) =>
+        !appt.isPersonalBlock && (appt.finalPrice ?? appt.totalPrice) > 0,
+    )
+    .reduce((sum, appt) => sum + (appt.finalPrice ?? appt.totalPrice), 0);
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const netIncome = totalRevenue - totalExpenses;
 
   // 4. Estruturar dados mensais
   const monthlyRevenue: Record<string, number> = {};
-  appointments.forEach((appt) => { 
-    
-    // Checa se completedAt existe e é um objeto Date antes de usar
+  appointments.forEach((appt) => {
+    // ✅ Adicione esta condição de guarda:
+    if (appt.isPersonalBlock || (appt.finalPrice ?? appt.totalPrice) <= 0)
+      return;
+
     if (appt.completedAt && appt.completedAt instanceof Date) {
-      const monthYear = appt.completedAt.toISOString().slice(0, 7); // "YYYY-MM"
+      const monthYear = appt.completedAt.toISOString().slice(0, 7);
       if (!monthlyRevenue[monthYear]) {
         monthlyRevenue[monthYear] = 0;
       }
@@ -74,7 +78,10 @@ export const getFinancialData = async (
   const serviceRevenue: Record<string, number> = {};
   const professionalRevenue: Record<string, number> = {};
 
-  appointments.forEach((appt) => { 
+  appointments.forEach((appt) => {
+    if (appt.isPersonalBlock || (appt.finalPrice ?? appt.totalPrice) <= 0)
+      return;
+
     const pricePaid = appt.finalPrice ?? appt.totalPrice;
 
     // --- LÓGICA DE SERVIÇOS ---
@@ -85,14 +92,17 @@ export const getFinancialData = async (
         const serviceKey = service.name;
         const serviceProportion = service.price / originalTotalPrice;
         const proportionalRevenue = serviceProportion * pricePaid;
-        serviceRevenue[serviceKey] = (serviceRevenue[serviceKey] || 0) + proportionalRevenue;
+        serviceRevenue[serviceKey] =
+          (serviceRevenue[serviceKey] || 0) + proportionalRevenue;
       });
     } else if (appt.services && appt.services.length === 1) {
       const serviceKey = appt.services[0].name;
-      serviceRevenue[serviceKey] = (serviceRevenue[serviceKey] || 0) + pricePaid;
+      serviceRevenue[serviceKey] =
+        (serviceRevenue[serviceKey] || 0) + pricePaid;
     } else {
       const serviceKey = appt.serviceName || "Serviço Desconhecido";
-      serviceRevenue[serviceKey] = (serviceRevenue[serviceKey] || 0) + pricePaid;
+      serviceRevenue[serviceKey] =
+        (serviceRevenue[serviceKey] || 0) + pricePaid;
     }
 
     // --- LÓGICA DE PROFISSIONAIS ---
@@ -101,7 +111,7 @@ export const getFinancialData = async (
         (professionalRevenue[appt.professionalName] || 0) + pricePaid;
     }
   });
-  
+
   // Ordena e fatia o top 5
   const topServices = Object.entries(serviceRevenue)
     .map(([name, revenue]) => ({ name, revenue }))
@@ -112,7 +122,7 @@ export const getFinancialData = async (
     .map(([name, revenue]) => ({ name, revenue }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5);
-  
+
   // --- FIM DA LÓGICA ---
 
   return {

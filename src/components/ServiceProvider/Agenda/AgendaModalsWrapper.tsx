@@ -9,19 +9,24 @@ import { ManualAppointmentModal } from "./ManualAppointmentModal";
 
 export const AgendaModalsWrapper = () => {
   // Agora modalData e o valor "manual_booking" são reconhecidos pelo TS
-  const { modalView, closeModal, selectedAppointment, setModalView, modalData } =
-    useAgendaModalStore();
-    
+  const {
+    modalView,
+    closeModal,
+    selectedAppointment,
+    setModalView,
+    modalData,
+  } = useAgendaModalStore();
+
   const { updateStatus, completeAppointment, cancelAppointment, isLoading } =
     useProviderAppointmentsStore();
 
   return (
     <>
       {/* O Modal Manual abre independente de ter um appointment selecionado */}
-      <ManualAppointmentModal 
-        isOpen={modalView === "manual_booking"} 
+      <ManualAppointmentModal
+        isOpen={modalView === "manual_booking"}
         onClose={closeModal}
-        defaultDate={modalData?.defaultDate} 
+        defaultDate={modalData?.defaultDate}
       />
 
       {/* Modais que exigem um agendamento existente */}
@@ -39,7 +44,18 @@ export const AgendaModalsWrapper = () => {
                 closeModal();
               }
             }}
-            onComplete={() => setModalView("complete", selectedAppointment)}
+            onComplete={() => {
+              if (
+                selectedAppointment.totalPrice === 0 ||
+                selectedAppointment.isPersonalBlock
+              ) {
+                // Se for bloqueio, apenas marcamos como concluído sem abrir o financeiro
+                updateStatus(selectedAppointment.id, "completed");
+                closeModal();
+              } else {
+                setModalView("complete");
+              }
+            }}
           />
 
           <ServiceCompletionModal

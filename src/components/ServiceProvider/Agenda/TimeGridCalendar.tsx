@@ -9,11 +9,11 @@ import { type EnrichedProviderAppointment } from "../../../store/providerAppoint
 
 // --- Configurações de Layout ---
 const START_HOUR = 6; // Começando um pouco mais cedo para garantir (opcional)
-const END_HOUR = 23;  // Indo até um pouco mais tarde
+const END_HOUR = 23; // Indo até um pouco mais tarde
 const TOTAL_HOURS = END_HOUR - START_HOUR;
 
 // AUMENTADO: De 70 para 120px por hora para dar respiro visual
-const ROW_HEIGHT = 120; 
+const ROW_HEIGHT = 120;
 
 // --- Hook Mobile ---
 function useMediaQuery(query: string) {
@@ -50,12 +50,13 @@ const AppointmentCard = ({
   // Altura calculada baseada no novo ROW_HEIGHT
   const calculatedHeight = (durationInMinutes / 60) * ROW_HEIGHT;
   // Mínimo de 45px para garantir clique fácil no dedo (mobile)
-  const height = Math.max(calculatedHeight, 45); 
+  const height = Math.max(calculatedHeight, 45);
 
   const isPending = appointment.status === "pending";
   const isCompleted = appointment.status === "completed";
   const isPastTime =
     !isPending && !isCompleted && !isFuture(appointment.endTime);
+  const isBlock = appointment.serviceName?.includes("BLOQUEIO") || appointment.clientId === "manual-entry" && appointment.services.length === 0;
 
   const statusClasses = cn(
     "border-l-[3px] sm:border-l-[4px] shadow-md backdrop-blur-sm transition-all",
@@ -66,13 +67,15 @@ const AppointmentCard = ({
     isCompleted &&
       "bg-emerald-600/30 border-emerald-400 text-emerald-50 hover:bg-emerald-600/40",
 
+      isBlock && "bg-amber-600/20 border-amber-500/50 text-amber-100 italic",
+
     !isPending &&
       !isCompleted &&
       !isPastTime &&
       "bg-gray-800 border-primary text-white hover:bg-gray-700 shadow-lg shadow-black/30",
 
     isPastTime &&
-      "bg-gray-800/60 border-gray-600 text-gray-400 grayscale opacity-80"
+      "bg-gray-800/60 border-gray-600 text-gray-400 grayscale opacity-80",
   );
 
   // Define se o card é "curto" para esconder detalhes secundários
@@ -94,17 +97,18 @@ const AppointmentCard = ({
       }}
       className={cn(
         "absolute left-1 right-1 sm:left-2 sm:right-2 rounded-md sm:rounded-lg overflow-hidden cursor-pointer z-10 select-none group",
-        statusClasses
+        statusClasses,
       )}
     >
       <div className="h-full w-full px-2 sm:px-3 py-1.5 flex flex-col justify-center relative">
         {/* Horário e Serviço */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden w-full">
           <span className="text-[10px] sm:text-xs font-mono font-bold opacity-80 shrink-0 bg-black/20 px-1 rounded w-fit">
-            {format(appointment.startTime, "HH:mm")} - {format(appointment.endTime, "HH:mm")}
+            {format(appointment.startTime, "HH:mm")} -{" "}
+            {format(appointment.endTime, "HH:mm")}
           </span>
           <span className="text-xs sm:text-sm font-bold truncate leading-tight mt-0.5 sm:mt-0">
-            {appointment.services[0].name}
+            {appointment.services?.[0]?.name || appointment.serviceName || "Compromisso"}
           </span>
         </div>
 
@@ -114,7 +118,7 @@ const AppointmentCard = ({
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs opacity-90 truncate max-w-[75%]">
               <User size={12} className="shrink-0" />
               <span className="truncate font-medium">
-                {appointment.client?.name || "Cliente"}
+                {appointment.clientName || appointment.client?.name || "Particular"}
               </span>
             </div>
             <span className="text-[10px] sm:text-xs font-bold bg-white/10 px-1.5 py-0.5 rounded text-white/90">
@@ -217,11 +221,14 @@ export const TimeGridCalendar = ({
         <div
           className={cn(
             "flex-shrink-0 bg-gray-900/95 border-r border-gray-800",
-            timeColWidthClass
+            timeColWidthClass,
           )}
         />
         <div
-          className={cn("flex-1 grid divide-x divide-gray-800/50", gridColsClass)}
+          className={cn(
+            "flex-1 grid divide-x divide-gray-800/50",
+            gridColsClass,
+          )}
         >
           {weekDays.map((day) => {
             const isDayToday = isToday(day);
@@ -230,22 +237,24 @@ export const TimeGridCalendar = ({
                 key={day.toISOString()}
                 className={cn(
                   "py-3 sm:py-4 text-center relative transition-colors duration-300",
-                  isDayToday ? "bg-primary/5" : "bg-gray-900/50"
+                  isDayToday ? "bg-primary/5" : "bg-gray-900/50",
                 )}
               >
                 {isDayToday && (
                   <div className="absolute top-0 left-0 w-full h-0.5 sm:h-1 bg-primary shadow-[0_0_8px_rgba(var(--primary),0.6)]" />
                 )}
-                <p className={cn(
-                  "text-[10px] sm:text-[11px] uppercase font-bold tracking-wider",
-                  isDayToday ? "text-primary/80" : "text-gray-500"
-                )}>
+                <p
+                  className={cn(
+                    "text-[10px] sm:text-[11px] uppercase font-bold tracking-wider",
+                    isDayToday ? "text-primary/80" : "text-gray-500",
+                  )}
+                >
                   {format(day, "EEE", { locale: ptBR })}
                 </p>
                 <div
                   className={cn(
                     "text-lg sm:text-2xl font-bold font-mono mt-0.5",
-                    isDayToday ? "text-primary" : "text-gray-200"
+                    isDayToday ? "text-primary" : "text-gray-200",
                   )}
                 >
                   {format(day, "d")}
@@ -263,7 +272,7 @@ export const TimeGridCalendar = ({
           ref={timeColumnRef}
           className={cn(
             "flex-shrink-0 bg-gray-900/40 border-r border-gray-800 overflow-hidden select-none",
-            timeColWidthClass
+            timeColWidthClass,
           )}
         >
           <div
@@ -289,7 +298,7 @@ export const TimeGridCalendar = ({
           ref={containerRef}
           className={cn(
             "flex-1 overflow-y-auto custom-scrollbar relative scroll-smooth",
-            gridColsClass
+            gridColsClass,
           )}
         >
           <div
@@ -301,7 +310,10 @@ export const TimeGridCalendar = ({
               const dailyAppointments = appointmentsByDay.get(dayKey) || [];
 
               return (
-                <div key={dayKey} className="relative h-full group bg-[url('/grid-pattern.png')]">
+                <div
+                  key={dayKey}
+                  className="relative h-full group bg-[url('/grid-pattern.png')]"
+                >
                   {/* Linhas de Grade e Guias Visuais */}
                   {timeLabels.map((hour) => (
                     <div key={`grid-block-${hour}`}>
@@ -316,7 +328,7 @@ export const TimeGridCalendar = ({
                       <div
                         className="absolute w-full border-t border-gray-800/20 border-dashed"
                         style={{
-                          top: `${(hour - START_HOUR) * ROW_HEIGHT + (ROW_HEIGHT / 2)}px`,
+                          top: `${(hour - START_HOUR) * ROW_HEIGHT + ROW_HEIGHT / 2}px`,
                         }}
                       />
                     </div>

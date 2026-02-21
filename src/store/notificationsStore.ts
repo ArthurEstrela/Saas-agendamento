@@ -1,102 +1,96 @@
 import { create } from 'zustand';
+import { isAxiosError } from 'axios';
 import type { Notification } from '../types';
-import { onNotifications, markNotificationAsRead, deleteNotificationById } from '../firebase/notificationService';
-import type { Unsubscribe } from 'firebase/firestore';
+import { api } from '../lib/api';
+
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
 
 interface NotificationsState {
   notifications: Notification[];
   unreadCount: number;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
-  unsubscribe: Unsubscribe | null;
-  fetchNotifications: (userId: string) => void;
-  markAsRead: (notificationId: string) => Promise<void>;
-  markAllAsRead: () => Promise<void>; // <--- ADICIONADO AQUI NA INTERFACE
-  deleteNotification: (notificationId: string) => Promise<void>;
-  clearNotifications: () => void;
+
+  fetchNotifications: () => Promise<void>;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  clearError: () => void;
 }
 
-export const useNotificationStore = create<NotificationsState>((set, get) => ({
+export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
-  isLoading: false,
+  loading: false,
   error: null,
-  unsubscribe: null,
 
-  fetchNotifications: (userId) => {
-    if (!userId) return;
-    get().unsubscribe?.();
-    set({ isLoading: true, error: null });
+  // ==========================================================================
+  // 1. BUSCAR NOTIFICAÇÕES (API LÊ O TOKEN E SABE QUEM É O USER)
+  // ==========================================================================
+  fetchNotifications: async () => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.get<Notification[]>('/notifications');
+      const data = response.data;
+      
+      // Conta automaticamente quantas estão "isRead = false"
+      const unread = data.filter(n => !n.isRead).length;
+      
+      set({ notifications: data, unreadCount: unread, loading: false });
+    } catch (error) {
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao carregar notificações.'), 
+        loading: false 
+      });
+    }
+  },
 
-    const unsubscribe = onNotifications(userId, (notifications) => {
-      const unreadCount = notifications.filter(n => !n.isRead).length;
-      set({ notifications, unreadCount, isLoading: false });
+  // ==========================================================================
+  // 2. MARCAR UMA ÚNICA NOTIFICAÇÃO COMO LIDA
+  // ==========================================================================
+  markAsRead: async (id: string) => {
+    // ⭐️ OPTIMISTIC UPDATE: Atualiza a tela primeiro para não parecer lento
+    const { notifications } = get();
+    const updated = notifications.map(n => n.id === id ? { ...n, isRead: true } : n);
+    set({ 
+      notifications: updated, 
+      unreadCount: updated.filter(n => !n.isRead).length 
     });
 
-    set({ unsubscribe });
-  },
-
-  markAsRead: async (notificationId: string) => {
-    const notification = get().notifications.find(n => n.id === notificationId);
-    if (notification && !notification.isRead) {
-      set(state => ({
-        notifications: state.notifications.map(n =>
-          n.id === notificationId ? { ...n, isRead: true } : n
-        ),
-        unreadCount: Math.max(0, state.unreadCount - 1),
-      }));
-      try {
-        await markNotificationAsRead(notificationId);
-      } catch (err) {
-        console.error("Erro ao marcar como lida:", err);
-        get().fetchNotifications(notification.userId);
-      }
+    try {
+      // Confirma na base de dados (Java)
+      await api.patch(`/notifications/${id}/read`);
+    } catch (error) {
+      // Em caso de falha de rede, reverte para o estado anterior buscando da DB
+      await get().fetchNotifications();
+      set({ error: extractErrorMessage(error, 'Erro ao marcar notificação como lida.') });
     }
   },
 
-  // --- NOVA FUNÇÃO IMPLEMENTADA ---
+  // ==========================================================================
+  // 3. MARCAR TODAS COMO LIDAS (O BOTÃO "LER TODAS")
+  // ==========================================================================
   markAllAsRead: async () => {
     const { notifications } = get();
-    const unreadNotifications = notifications.filter(n => !n.isRead);
+    
+    // ⭐️ OPTIMISTIC UPDATE: Zera o contador na hora
+    const updated = notifications.map(n => ({ ...n, isRead: true }));
+    set({ notifications: updated, unreadCount: 0 });
 
-    if (unreadNotifications.length === 0) return;
-
-    // 1. Atualização Otimista (zera o contador e marca visuais como lidos)
-    set(state => ({
-      notifications: state.notifications.map(n => ({ ...n, isRead: true })),
-      unreadCount: 0
-    }));
-
-    // 2. Chama o serviço para cada notificação não lida
-    // (Idealmente, crie um batch update no Firebase, mas isso resolve por agora)
     try {
-      await Promise.all(
-        unreadNotifications.map(n => markNotificationAsRead(n.id))
-      );
-    } catch (err) {
-      console.error("Erro ao marcar todas como lidas:", err);
-      // O listener do onNotifications deve corrigir o estado se falhar
+      await api.patch('/notifications/read-all');
+    } catch (error) {
+      await get().fetchNotifications();
+      set({ error: extractErrorMessage(error, 'Erro ao limpar notificações.') });
     }
   },
 
-  deleteNotification: async (notificationId: string) => {
-    const originalNotifications = get().notifications;
-    set(state => ({
-      notifications: state.notifications.filter(n => n.id !== notificationId),
-      unreadCount: state.notifications.find(n => n.id === notificationId && !n.isRead)
-        ? Math.max(0, state.unreadCount - 1)
-        : state.unreadCount,
-    }));
-    try {
-      await deleteNotificationById(notificationId);
-    } catch (err) {
-      console.error("Erro ao deletar notificação:", err);
-      set({ notifications: originalNotifications });
-    }
-  },
-  
-  clearNotifications: () => {
-    get().unsubscribe?.();
-    set({ notifications: [], unreadCount: 0, isLoading: false, error: null, unsubscribe: null });
-  },
+  clearError: () => set({ error: null }),
 }));

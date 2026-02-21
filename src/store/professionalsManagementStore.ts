@@ -1,224 +1,206 @@
-// src/store/professionalsManagementStore.ts
+import { create } from 'zustand';
+import { isAxiosError } from 'axios';
+import type { ProfessionalProfile, DailyAvailability } from '../types';
+import { api } from '../lib/api';
 
-import { create } from "zustand";
-import { useProfileStore } from "./profileStore";
-import {
-  createProfessionalAccount,
-  createOwnerAsProfessional,
-  updateProfessionalPhotoUrls,
-  updateProfessionalInProvider,
-  uploadProfessionalPhoto,
-  deleteProfessionalComplete, // 👈 ADICIONE ISSO AQUI!
-} from "../firebase/professionalsManagementService";
-import type { Professional } from "../types";
-import { toast } from "react-hot-toast";
-
-type ProfessionalFormData = Partial<Professional> & {
-  email?: string;
-  password?: string;
-  serviceIds?: string[];
-  photoFile?: File | null;
+// Helper de erro sênior
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
 };
 
 interface ProfessionalsManagementState {
-  isSubmitting: boolean;
+  professionals: ProfessionalProfile[];
+  loading: boolean;
   error: string | null;
-  addProfessional: (
-    providerId: string,
-    payload: ProfessionalFormData
-  ) => Promise<void>;
-  updateProfessional: (
-    providerId: string,
-    professionalId: string,
-    payload: ProfessionalFormData
-  ) => Promise<void>;
-  removeProfessional: (
-    providerId: string,
-    professionalId: string
-  ) => Promise<void>;
+
+  // Ações Principais
   fetchProfessionals: (providerId: string) => Promise<void>;
-  // ✅ ADICIONADO: Função para registrar o dono
-  registerOwnerAsProfessional: (
-    providerId: string,
-    name: string,
-    email: string,
-    photoURL?: string
-  ) => Promise<void>;
+  createProfessional: (providerId: string, data: Partial<ProfessionalProfile>, photoFile?: File) => Promise<void>;
+  updateProfessional: (id: string, data: Partial<ProfessionalProfile>, photoFile?: File) => Promise<void>;
+  
+  // Ações Específicas (Alinhadas com os Endpoints do Java)
+  updateAvailability: (id: string, availability: DailyAvailability[]) => Promise<void>;
+  updateServices: (id: string, serviceIds: string[]) => Promise<void>;
+  updateCommission: (id: string, commissionPercentage: number) => Promise<void>;
+  deleteProfessional: (id: string) => Promise<void>;
+  
+  clearError: () => void;
 }
 
-export const useProfessionalsManagementStore =
-  create<ProfessionalsManagementState>((set) => ({
-    isSubmitting: false,
-    error: null,
+export const useProfessionalsManagementStore = create<ProfessionalsManagementState>((set) => ({
+  professionals: [],
+  loading: false,
+  error: null,
 
-    fetchProfessionals: async (providerId: string) => {
-      set({ isSubmitting: true, error: null });
-      try {
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      } catch (err) {
-        console.error("Erro ao buscar profissionais:", err);
-        set({ error: "Falha ao carregar lista de profissionais." });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
-
-    // ✅ IMPLEMENTAÇÃO DA NOVA FUNÇÃO
-    registerOwnerAsProfessional: async (
-      providerId,
-      name,
-      email,
-      photoURL = ""
-    ) => {
-      set({ isSubmitting: true, error: null });
-      try {
-        await createOwnerAsProfessional(providerId, name, email, photoURL);
-        // Atualiza a lista globalmente
-        await useProfileStore.getState().fetchUserProfile(providerId);
-        toast.success("Seu perfil foi ativado na equipe!");
-      } catch (err) {
-        console.error("Erro ao registrar dono como profissional:", err);
-        toast.error("Erro ao ativar perfil de atendimento.");
-        set({ error: "Falha ao registrar dono como profissional." });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
-
-    addProfessional: async (providerId, payload) => {
-      set({ isSubmitting: true, error: null });
-
-      const addAndRefetchPromise = async () => {
-        const { photoFile, email, password, name, serviceIds } = payload;
-
-        if (!email || !password || !name || !serviceIds) {
-          throw new Error("Dados do formulário incompletos.");
-        }
-
-        const { uid, professionalId } = await createProfessionalAccount({
-          name,
-          email,
-          password,
-          serviceIds,
-        });
-
-        if (photoFile) {
-          const photoURL = await uploadProfessionalPhoto(
-            providerId,
-            professionalId,
-            photoFile
-          );
-
-          await updateProfessionalPhotoUrls(
-            providerId,
-            uid,
-            professionalId,
-            photoURL
-          );
-        }
-
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      };
-
-      try {
-        await toast.promise(addAndRefetchPromise(), {
-          loading: "Criando conta do profissional...",
-          success: "Profissional adicionado com sucesso!",
-          error: (err) => err.message || "Falha ao adicionar profissional.",
-        });
-      } catch (err) {
-        console.error("Erro em addProfessional:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-        set({ error: errorMessage });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
-
-    updateProfessional: async (providerId, professionalId, payload) => {
-      set({ isSubmitting: true, error: null });
-
-      const updateAndRefetchPromise = async () => {
-        const { photoFile, ...professionalData } = payload;
-        let photoURL = professionalData.photoURL || "";
-
-        if (photoFile) {
-          photoURL = await uploadProfessionalPhoto(
-            providerId,
-            professionalId,
-            photoFile
-          );
-        }
-
-        const currentProfessional = useProfileStore
-          .getState()
-          .professionals?.find((p) => p.id === professionalId);
-
-        const finalProfessional: Professional = {
-          id: professionalId,
-          name: professionalData.name || currentProfessional?.name || "",
-          services:
-            professionalData.services || currentProfessional?.services || [],
-          photoURL: photoURL,
-          availability:
-            professionalData.availability !== undefined
-              ? professionalData.availability
-              : currentProfessional?.availability || [],
-          isOwner:
-            professionalData.isOwner !== undefined
-              ? professionalData.isOwner
-              : currentProfessional?.isOwner,
-        };
-
-        await updateProfessionalInProvider(providerId, finalProfessional);
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      };
-
-      try {
-        await toast.promise(updateAndRefetchPromise(), {
-          loading: "Atualizando dados...",
-          success: "Dados atualizados com sucesso!",
-          error: "Falha ao atualizar os dados.",
-        });
-      } catch (err) {
-        console.error("Erro em updateProfessional:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-        set({ error: errorMessage });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
-
-
-removeProfessional: async (providerId: string, professionalId: string) => {
-    set({ isSubmitting: true, error: null });
-
+  // ==========================================================================
+  // 1. BUSCAR TODOS OS PROFISSIONAIS DO ESTABELECIMENTO
+  // ==========================================================================
+  fetchProfessionals: async (providerId: string) => {
+    set({ loading: true, error: null });
     try {
-      // 1. Chamamos o serviço
-      await deleteProfessionalComplete(providerId, professionalId);
-
-      // 2. IMPORTANTE: Pegamos a lista da ProfileStore
-      const profileStore = useProfileStore.getState();
-      const currentProfessionals = profileStore.professionals || [];
-
-      // 3. Filtramos para remover da tela instantaneamente
-      const updatedList = currentProfessionals.filter((p) => p.id !== professionalId);
-
-      // 4. Atualizamos o estado global do perfil
-      profileStore.updateProfessionalsInProfile(updatedList);
-
-      toast.success("Profissional removido com sucesso! ✨");
+      const response = await api.get<ProfessionalProfile[]>(`/professionals/provider/${providerId}`);
+      set({ professionals: response.data, loading: false });
     } catch (error) {
-      console.error("Erro detalhado na exclusão:", error);
-      toast.error("Falha ao remover profissional. Verifique o console.");
-      
-      // Verificação segura de tipo
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao remover profissional.";
-      set({ error: errorMessage });
-    } finally {
-      set({ isSubmitting: false });
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao carregar a lista de profissionais.'), 
+        loading: false 
+      });
     }
   },
-  }));
+
+  // ==========================================================================
+  // 2. CRIAR UM NOVO PROFISSIONAL
+  // ==========================================================================
+  createProfessional: async (providerId: string, data: Partial<ProfessionalProfile>, photoFile?: File) => {
+    set({ loading: true, error: null });
+    try {
+      // Cria o registro no banco de dados Java
+      const response = await api.post<ProfessionalProfile>('/professionals', {
+        providerId: providerId,
+        name: data.name,
+        email: data.email,
+        bio: data.bio,
+        commissionPercentage: data.commissionPercentage
+      });
+
+      const newProfessionalId = response.data.id; // Ou professionalId, dependendo de como sua API retorna
+
+      // Se houver foto, faz o upload para o endpoint de imagens
+      if (photoFile) {
+        const formData = new FormData();
+        formData.append('file', photoFile);
+        
+        // Alinhado com o ProfileImageController.java
+        const photoResponse = await api.put(`/profile-images/professional/${newProfessionalId}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        // Atualiza a URL da foto na resposta local para evitar novo fetch
+        response.data.profilePictureUrl = photoResponse.data.url;
+      }
+
+      set((state) => ({
+        professionals: [...state.professionals, response.data],
+        loading: false
+      }));
+    } catch (error) {
+      set({ error: extractErrorMessage(error, 'Erro ao cadastrar profissional.'), loading: false });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 3. ATUALIZAR DADOS BÁSICOS DO PROFISSIONAL E FOTO
+  // ==========================================================================
+  updateProfessional: async (id: string, data: Partial<ProfessionalProfile>, photoFile?: File) => {
+    set({ loading: true, error: null });
+    try {
+      // Chamada PUT genérica (se a sua API tiver esse endpoint principal, senão usemos as específicas abaixo)
+      const response = await api.put<ProfessionalProfile>(`/professionals/${id}`, data);
+      const updatedProf = response.data;
+
+      // Atualizar foto, se enviada
+      if (photoFile) {
+        const formData = new FormData();
+        formData.append('file', photoFile);
+        const photoResponse = await api.put(`/profile-images/professional/${id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        updatedProf.profilePictureUrl = photoResponse.data.url;
+      }
+
+      set((state) => ({
+        professionals: state.professionals.map((prof) => (prof.id === id ? updatedProf : prof)),
+        loading: false
+      }));
+    } catch (error) {
+      set({ error: extractErrorMessage(error, 'Erro ao atualizar dados do profissional.'), loading: false });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 4. ATUALIZAR HORÁRIOS (AVAILABILITY)
+  // ==========================================================================
+  updateAvailability: async (id: string, availability: DailyAvailability[]) => {
+    set({ loading: true, error: null });
+    try {
+      await api.put(`/professionals/${id}/availability`, { availability });
+      
+      set((state) => ({
+        professionals: state.professionals.map((prof) => 
+          prof.id === id ? { ...prof, availability } : prof
+        ),
+        loading: false
+      }));
+    } catch (error) {
+      set({ error: extractErrorMessage(error, 'Erro ao salvar os horários de trabalho.'), loading: false });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 5. VINCULAR SERVIÇOS AO PROFISSIONAL
+  // ==========================================================================
+  updateServices: async (id: string, serviceIds: string[]) => {
+    set({ loading: true, error: null });
+    try {
+      await api.put(`/professionals/${id}/services`, { serviceIds });
+      
+      // Para manter a UI 100% fiel sem ter que recarregar do zero, fazemos um reload limpo
+      // Ou apenas fechamos o loading e dizemos para o componente fazer fetch dnv.
+      set({ loading: false }); 
+    } catch (error) {
+      set({ error: extractErrorMessage(error, 'Erro ao vincular serviços.'), loading: false });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 6. ATUALIZAR COMISSÃO
+  // ==========================================================================
+  updateCommission: async (id: string, commissionPercentage: number) => {
+    set({ loading: true, error: null });
+    try {
+      await api.put(`/professionals/${id}/commission`, { commissionPercentage });
+      
+      set((state) => ({
+        professionals: state.professionals.map((prof) => 
+          prof.id === id ? { ...prof, commissionPercentage } : prof
+        ),
+        loading: false
+      }));
+    } catch (error) {
+      set({ error: extractErrorMessage(error, 'Erro ao atualizar a comissão.'), loading: false });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 7. EXCLUIR PROFISSIONAL
+  // ==========================================================================
+  deleteProfessional: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      await api.delete(`/professionals/${id}`);
+      
+      set((state) => ({
+        professionals: state.professionals.filter((prof) => prof.id !== id),
+        loading: false
+      }));
+    } catch (error) {
+      set({ error: extractErrorMessage(error, 'Erro ao excluir profissional. Verifique se ele não possui agendamentos pendentes.'), loading: false });
+      throw error;
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));

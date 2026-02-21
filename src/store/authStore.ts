@@ -1,179 +1,180 @@
-import { create } from "zustand";
-import {
-  type User as FirebaseUser,
+import { create } from 'zustand';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
   onAuthStateChanged,
-  signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendEmailVerification,
-  type AuthError,
-} from "firebase/auth";
-import { toast } from "react-hot-toast";
-import { auth } from "../firebase/config";
-import { useProfileStore } from "./profileStore";
-import { useNotificationStore } from "./notificationsStore"; // [MELHORIA] Importado para limpeza
-import { useUserAppointmentsStore } from "./userAppointmentsStore";
-import { useProviderAppointmentsStore } from "./providerAppointmentsStore";
-import { createUserProfile } from "../firebase/userService";
-import type {
-  ServiceProviderProfile,
-  ClientProfile,
-  UserProfile,
-} from "../types";
+  signInWithPopup,
+  GoogleAuthProvider
+} from 'firebase/auth';
+import { isAxiosError } from 'axios'; // ✨ CORREÇÃO: Importamos o validador nativo do Axios
+import { auth } from '../firebase/config';
+import type { UserProfile, RegisterData, ClientRegisterData, ProviderRegisterData } from '../types';
+import { api } from '../lib/api';
 
-const getAuthErrorMessage = (error: unknown): string => {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const authError = error as AuthError;
-    switch (authError.code) {
-      case "auth/user-not-found":
-      case "auth/wrong-password":
-      case "auth/invalid-credential":
-        return "E-mail ou senha inválidos.";
-      case "auth/invalid-email":
-        return "O formato do e-mail é inválido.";
-      case "auth/email-already-in-use":
-        return "Este e-mail já está em uso por outra conta.";
-      case "auth/weak-password":
-        return "A senha é muito fraca. Use pelo menos 6 caracteres.";
-      case "auth/too-many-requests":
-        return "Acesso bloqueado temporariamente devido a muitas tentativas.";
-      default:
-        return "Ocorreu um erro inesperado. Tente novamente.";
-    }
+// ✨ FUNÇÃO HELPER SÊNIOR: Trata qualquer tipo de erro sem usar 'any'
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    // Se for um erro da sua API Java (ex: "E-mail já cadastrado")
+    return error.response?.data?.message || 'Erro de comunicação com o servidor.';
   }
-  return error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
+  if (error instanceof Error) {
+    // Se for um erro do Firebase ou de código nativo
+    return error.message;
+  }
+  return defaultMessage;
 };
 
 interface AuthState {
-  user: FirebaseUser | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  isSubmitting: boolean;
+  user: UserProfile | null;
+  loading: boolean;
   error: string | null;
-  initializeAuth: () => () => void;
-  login: (email: string, password: string) => Promise<UserProfile | null>;
-  signup: (
-    email: string,
-    password: string,
-    fullName: string,
-    userType: "client" | "serviceProvider",
-    additionalData?: Partial<ServiceProviderProfile | ClientProfile>
-  ) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  signInWithGoogle: (role: 'CLIENT' | 'SERVICE_PROVIDER') => Promise<void>;
   logout: () => Promise<void>;
-  sendPasswordReset: (email: string) => Promise<void>;
+  initAuth: () => void;
   clearError: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  isSubmitting: false,
+  loading: true,
   error: null,
 
-  initializeAuth: () => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await useProfileStore.getState().fetchUserProfile(user.uid);
-        set({ user, isAuthenticated: true, isLoading: false });
+  // ==========================================================================
+  // 1. LOGIN
+  // ==========================================================================
+  login: async (email, password) => {
+    set({ loading: true, error: null });
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      const response = await api.get<UserProfile>('/auth/me');
+      set({ user: response.data, loading: false });
+    } catch (error) { // ✨ Removido o ': any'
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao fazer login. Verifique as credenciais.'), 
+        loading: false 
+      });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 2. REGISTRO (E-mail e Senha)
+  // ==========================================================================
+  register: async (data: RegisterData) => {
+    set({ loading: true, error: null });
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password!);
+      await userCredential.user.getIdToken(true);
+
+      let response;
+      if (data.role === 'client' || data.role === 'CLIENT') {
+        const clientData = data as ClientRegisterData;
+        response = await api.post<UserProfile>('/auth/register/client', {
+          name: clientData.name,
+          email: clientData.email,
+          phoneNumber: clientData.phone || '',
+          password: clientData.password
+        });
       } else {
-        // [MELHORIA] Limpeza centralizada quando não há usuário
-        useProfileStore.getState().clearProfile();
-        useNotificationStore.getState().clearNotifications(); 
-        useProviderAppointmentsStore.getState().clearAppointments();
-        useUserAppointmentsStore.getState().clearAppointments();
-        set({ user: null, isAuthenticated: false, isLoading: false });
+        const providerData = data as ProviderRegisterData;
+        response = await api.post<UserProfile>('/service-providers/register', {
+          name: providerData.name,
+          email: providerData.email,
+          businessName: providerData.businessName,
+          document: providerData.document,
+          phone: providerData.phone || '',
+          password: providerData.password
+        });
+      }
+
+      set({ user: response.data, loading: false });
+    } catch (error) { // ✨ Removido o ': any'
+      if (auth.currentUser) await auth.currentUser.delete().catch(console.error);
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao criar conta. Verifique os dados e tente novamente.'), 
+        loading: false 
+      });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 3. LOGIN / REGISTRO VIA GOOGLE
+  // ==========================================================================
+  signInWithGoogle: async (role: 'CLIENT' | 'SERVICE_PROVIDER') => {
+    set({ loading: true, error: null });
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      
+      try {
+        const response = await api.get<UserProfile>('/auth/me');
+        set({ user: response.data, loading: false });
+      } catch (err) { // ✨ Removido o ': any'
+        if (isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 404)) {
+            const basePayload = {
+                name: result.user.displayName || 'Usuário Google',
+                email: result.user.email!,
+                phoneNumber: result.user.phoneNumber || '',
+                password: result.user.uid
+            };
+
+            let regResponse;
+            if (role === 'CLIENT') {
+                regResponse = await api.post<UserProfile>('/auth/register/client', basePayload);
+            } else {
+                regResponse = await api.post<UserProfile>('/service-providers/register', { 
+                    ...basePayload, 
+                    businessName: basePayload.name, 
+                    document: '00000000000', 
+                    phone: basePayload.phoneNumber 
+                });
+            }
+
+            set({ user: regResponse.data, loading: false });
+        } else {
+            throw err;
+        }
+      }
+    } catch (error) { // ✨ Removido o ': any'
+      set({ error: extractErrorMessage(error, 'Erro na autenticação com o Google.'), loading: false });
+      throw error;
+    }
+  },
+
+  // ==========================================================================
+  // 4. LOGOUT
+  // ==========================================================================
+  logout: async () => {
+    set({ loading: true });
+    try {
+      await signOut(auth);
+      set({ user: null, loading: false });
+    } catch (error) { // ✨ Removido o ': any'
+      set({ error: extractErrorMessage(error, 'Erro ao sair da conta.'), loading: false });
+    }
+  },
+
+  // ==========================================================================
+  // 5. INICIALIZAÇÃO E LISTENER DA SESSÃO
+  // ==========================================================================
+  initAuth: () => {
+    onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const response = await api.get<UserProfile>('/auth/me');
+          set({ user: response.data, loading: false });
+        } catch (error) {
+          console.error("Usuário no Firebase desincronizado com a API Java. Forçando logout local.", error);
+          set({ user: null, loading: false });
+        }
+      } else {
+        set({ user: null, loading: false });
       }
     });
-    return unsubscribe;
-  },
-
-  login: async (email, password) => {
-    set({ isSubmitting: true, error: null });
-    const loadingToast = toast.loading("Autenticando...");
-
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      await useProfileStore.getState().fetchUserProfile(user.uid);
-      const userProfile = useProfileStore.getState().userProfile;
-
-      toast.success("Login realizado com sucesso! Bem-vindo(a) de volta.", { id: loadingToast });
-      set({ user, isAuthenticated: true, isSubmitting: false });
-
-      return userProfile;
-    } catch (err) {
-      const errorMessage = getAuthErrorMessage(err);
-      toast.error(errorMessage, { id: loadingToast });
-      set({ error: errorMessage, isSubmitting: false });
-      return null;
-    }
-  },
-
-  signup: async (email, password, fullName, userType, additionalData) => {
-    set({ isSubmitting: true, error: null });
-
-    const promise = (async () => {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(userCredential.user);
-      await createUserProfile(userCredential.user.uid, email, fullName, userType, additionalData);
-    })();
-
-    toast.promise(promise, {
-      loading: "Criando sua conta...",
-      success: "Conta criada! Verifique seu e-mail para ativar o acesso.",
-      error: (err) => getAuthErrorMessage(err),
-    });
-
-    try {
-      await promise;
-    } catch (err) {
-      set({ error: getAuthErrorMessage(err) });
-    } finally {
-      set({ isSubmitting: false });
-    }
-  },
-
-  logout: async () => {
-    const promise = signOut(auth);
-
-    toast.promise(promise, {
-      loading: "Saindo...",
-      success: "Você foi desconectado. Até breve!",
-      error: "Ocorreu um erro ao tentar sair.",
-    });
-
-    try {
-      await promise;
-      // [PERFEITO] Limpa absolutamente todos os estados globais sensíveis
-      useProfileStore.getState().clearProfile();
-      useNotificationStore.getState().clearNotifications(); 
-      useProviderAppointmentsStore.getState().clearAppointments();
-      useUserAppointmentsStore.getState().clearAppointments();
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  },
-
-  sendPasswordReset: async (email: string) => {
-    set({ isSubmitting: true, error: null });
-    const promise = sendPasswordResetEmail(auth, email);
-
-    toast.promise(promise, {
-      loading: 'Enviando e-mail de recuperação...',
-      success: 'E-mail enviado! Verifique sua caixa de entrada.',
-      error: (err) => getAuthErrorMessage(err),
-    });
-    
-    try {
-      await promise;
-    } catch (err) {
-      set({ error: getAuthErrorMessage(err) });
-    } finally {
-      set({ isSubmitting: false });
-    }
   },
 
   clearError: () => set({ error: null }),

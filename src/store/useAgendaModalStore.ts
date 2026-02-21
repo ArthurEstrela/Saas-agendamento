@@ -1,57 +1,57 @@
 import { create } from "zustand";
 import type { Appointment } from "../types";
 
-// ✅ Mantendo as definições de tipos consistentes
 export type ModalView = "details" | "complete" | "cancel" | "decline" | "manual_booking";
 
+interface ModalDataPayload {
+  selectedDate?: Date;
+  selectedTime?: string;
+  [key: string]: unknown; // Permite passar outros dados extras sem usar o perigoso 'any'
+}
+
 interface AgendaModalState {
+  // Estado
   modalView: ModalView | null;
   selectedAppointment: Appointment | null;
-  modalData: {
-    defaultDate?: Date;
-  } | null;
+  modalData: ModalDataPayload;
 
-  /**
-   * Abre um modal. Parâmetros opcionais usam 'undefined' por padrão para satisfazer o TS.
-   */
-  openModal: (view: ModalView, appointment?: Appointment, data?: { defaultDate?: Date }) => void;
-  
+  // Ações
+  openModal: (view: ModalView, appointment?: Appointment | null, data?: ModalDataPayload) => void;
   closeModal: () => void;
-  
-  /**
-   * Muda a visualização atual.
-   */
-  setModalView: (view: ModalView | null, appointment?: Appointment) => void;
+  setModalData: (data: Partial<ModalDataPayload>) => void;
 }
 
 export const useAgendaModalStore = create<AgendaModalState>((set) => ({
+  // Estado Inicial
   modalView: null,
   selectedAppointment: null,
-  modalData: null,
+  modalData: {},
 
-  // ✅ CORREÇÃO: Alterado de '= null' para '= undefined' para bater com o tipo 'Appointment | undefined'
-  openModal: (view, appointment = undefined, data = undefined) => {
+  // ==========================================================================
+  // 1. ABRIR UM MODAL
+  // ==========================================================================
+  openModal: (view, appointment = null, data = {}) => 
     set({ 
       modalView: view, 
-      // O estado interno aceita 'null', então convertemos se vier undefined
-      selectedAppointment: appointment ?? null, 
-      modalData: data ?? null 
-    });
-  },
-  
-  closeModal: () => {
+      selectedAppointment: appointment, 
+      modalData: data 
+    }),
+
+  // ==========================================================================
+  // 2. FECHAR O MODAL E LIMPAR OS DADOS TEMPORÁRIOS
+  // ==========================================================================
+  closeModal: () => 
     set({ 
       modalView: null, 
       selectedAppointment: null, 
-      modalData: null 
-    });
-  },
+      modalData: {} 
+    }),
 
-  setModalView: (view, appointment) => {
+  // ==========================================================================
+  // 3. ATUALIZAR DADOS DENTRO DO MODAL ABERTO
+  // ==========================================================================
+  setModalData: (data) => 
     set((state) => ({ 
-      modalView: view,
-      // Se um novo appointment for passado, usa ele, senão mantém o que já estava
-      selectedAppointment: appointment !== undefined ? appointment : state.selectedAppointment
-    }));
-  }
+      modalData: { ...state.modalData, ...data } 
+    })),
 }));

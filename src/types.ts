@@ -1,138 +1,78 @@
-import type { FieldValue } from "firebase/firestore";
+// ============================================================================
+// 1. ENUMS (Alinhados com o backend Spring Boot)
+// ============================================================================
 
-export const UserRole = {
-  Client: "client",
-  ServiceProvider: "serviceProvider",
-  Professional: "professional",
-} as const;
+export type UserRoleType =
+  | "CLIENT"
+  | "SERVICE_PROVIDER"
+  | "PROFESSIONAL"
+  | "ADMIN"
+  | "client"
+  | "serviceProvider"
+  | "professional";
+export type PaymentMethod =
+  | "PIX"
+  | "CREDIT_CARD"
+  | "DEBIT_CARD"
+  | "CASH"
+  | "LINK"
+  | "pix"
+  | "credit_card"
+  | "cash";
+export type AppointmentStatus =
+  | "PENDING"
+  | "SCHEDULED"
+  | "CONFIRMED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW"
+  | "BLOCKED"
+  | "pending"
+  | "scheduled"
+  | "completed"
+  | "cancelled";
+export type DayOfWeek =
+  | "SUNDAY"
+  | "MONDAY"
+  | "TUESDAY"
+  | "WEDNESDAY"
+  | "THURSDAY"
+  | "FRIDAY"
+  | "SATURDAY"
+  | "Sunday"
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday";
+export type DiscountType =
+  | "PERCENTAGE"
+  | "FIXED_AMOUNT"
+  | "percentage"
+  | "fixed";
+export type CashTransactionType =
+  | "INCOME"
+  | "EXPENSE"
+  | "COMMISSION"
+  | "PAYOUT"
+  | "WITHDRAWAL";
+export type StockMovementType = "IN" | "OUT" | "ADJUSTMENT" | "SALE";
+export type WaitlistStatus = "WAITING" | "NOTIFIED" | "SCHEDULED" | "CANCELLED";
 
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+// ============================================================================
+// 2. COMMON & BASE TYPES
+// ============================================================================
 
-export interface BaseUser {
-  id: string;
-  email: string;
-  name: string;
-  role: UserRole;
-  createdAt: Date | FieldValue;
-  lastLogin?: Date;
-  phoneNumber?: string;
-  profilePictureUrl?: string;
-}
-
-export interface TimeSlot {
-  start: string;
-  end: string;
-}
-
-export interface ProviderAdditionalData {
-  businessName: string;
-  cnpj: string;
-  cpf?: string;
-  documentType?: "cpf" | "cnpj";
-  address: {
-    street: string;
-    number: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    zipCode: string;
-  };
-}
-
-export interface DailyAvailability {
-  dayOfWeek:
-    | "Sunday"
-    | "Monday"
-    | "Tuesday"
-    | "Wednesday"
-    | "Thursday"
-    | "Friday"
-    | "Saturday";
-  isAvailable: boolean;
-  slots: TimeSlot[];
-}
-
-export interface Service {
-  id: string;
-  name: string;
-  description: string;
-  duration: number;
-  price: number;
-}
-
-export interface Professional {
-  id: string;
-  name: string;
-  email?: string;
-  photoURL?: string;
-  services: Service[];
-  availability: DailyAvailability[];
-  slotInterval?: number;
-  isOwner?: boolean;
-}
-
-export interface Review {
-  id: string;
-  appointmentId: string;
-  clientId: string;
-  clientName: string;
-  serviceProviderId: string;
-  professionalId: string;
-  professionalName: string;
-  rating: number;
-  comment: string;
-  createdAt: Date;
-}
-
-export type PaymentMethod = "pix" | "credit_card" | "cash";
-
-export interface Appointment {
-  id: string;
-  clientId: string;
-  clientName: string;
-  clientPhone?: string;
-  providerId: string;
-  professionalId: string;
-  professionalName: string;
-  professionalAvatarUrl?: string;
-  providerAvatarUrl?: string;
-  services: Service[];
-  serviceName: string;
-  startTime: Date;
-  endTime: Date;
-  status: "pending" | "scheduled" | "completed" | "cancelled";
-  paymentMethod?: PaymentMethod;
-  totalPrice: number;
-  finalPrice?: number;
-  totalDuration: number;
-  notes?: string;
-  review?: Review;
-  reviewId?: string;
-  rejectionReason?: string;
-  completedAt?: Date | FieldValue;
-  createdAt: Date | FieldValue;
-  reminderTime?: Date | FieldValue; // Hora exata para enviar o lembrete
-  reminderSent?: boolean; // Se o lembrete já foi enviado
-  reminderOffsetMinutes?: number; // Quantos minutos antes (apenas para registro)
-  isPersonalBlock?: boolean;
-}
-
-export interface Notification {
-  id: string;
-  userId: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: Date | FieldValue;
-  link?: string;
-}
-
-export interface ClientProfile extends BaseUser {
-  role: "client";
-  favoriteProfessionals?: string[];
-  cpf?: string;
-  dateOfBirth?: string;
-  gender?: "Masculino" | "Feminino" | "Outro" | "Prefiro não dizer";
+// Espelha a classe PagedResult.java do backend
+export interface PagedResult<T> {
+  data: T[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
 }
 
 export interface Address {
@@ -146,22 +86,54 @@ export interface Address {
   lng?: number;
 }
 
-export interface ServiceProviderProfile extends BaseUser {
-  role: "serviceProvider";
-  businessName: string;
-  businessAddress: Address;
-  cnpj?: string;
+export interface TimeSlot {
+  start: string; // Formato "HH:mm"
+  end: string;
+}
+
+export interface DailyAvailability {
+  dayOfWeek: DayOfWeek;
+  isAvailable: boolean;
+  slots: TimeSlot[];
+}
+
+export interface BaseUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRoleType;
+  createdAt: string; // Recebido como String ISO 8601 (ex: "2026-02-21T10:00:00Z")
+  lastLogin?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+}
+
+// ============================================================================
+// 3. USER PROFILES
+// ============================================================================
+
+export interface ClientProfile extends BaseUser {
+  role: "CLIENT" | "client";
   cpf?: string;
-  documentType?: "cpf" | "cnpj";
+  dateOfBirth?: string;
+  gender?: string;
+  favoriteProfessionals?: string[]; // IDs
+  noShowCount?: number; // Contador de faltas do backend
+}
+
+export interface ServiceProviderProfile extends BaseUser {
+  role: "SERVICE_PROVIDER" | "serviceProvider";
+  businessName: string;
+  businessAddress?: Address;
+  documentType?: "cpf" | "cnpj" | "CPF" | "CNPJ";
+  document?: string;
   publicProfileSlug?: string;
   businessPhone?: string;
-  services: Service[];
-  reviews: Review[];
   areaOfWork?: string;
   logoUrl?: string;
   bannerUrl?: string;
   pixKey?: string;
-  pixKeyType?: "cpf" | "cnpj" | "email" | "phone" | "random";
+  pixKeyType?: string;
   cancellationMinHours?: number;
   socialLinks?: {
     instagram?: string;
@@ -171,18 +143,30 @@ export interface ServiceProviderProfile extends BaseUser {
   };
   paymentMethods?: PaymentMethod[];
   bookingWindowDays?: number;
-  slotInterval?: 15 | 30 | 60;
+  slotInterval?: number;
   subscriptionStatus?:
+    | "ACTIVE"
+    | "CANCELLED"
+    | "PAST_DUE"
+    | "TRIAL"
+    | "EXPIRED"
+    | "FREE"
     | "active"
-    | "cancelled"
-    | "past_due"
-    | "trial"
-    | "expired"
-    | "free"
     | string;
   stripeSubscriptionId?: string;
-  trialEndsAt?: Date | FieldValue;
+  trialEndsAt?: string;
   onboardingDismissed?: boolean;
+  averageRating?: number; // Adicionado pela migration V14
+}
+
+export interface ProfessionalProfile extends BaseUser {
+  role: "PROFESSIONAL" | "professional";
+  serviceProviderId: string;
+  professionalId: string;
+  bio?: string;
+  services?: Service[];
+  availability?: DailyAvailability[];
+  commissionPercentage?: number;
 }
 
 export type UserProfile =
@@ -190,43 +174,247 @@ export type UserProfile =
   | ServiceProviderProfile
   | ProfessionalProfile;
 
+// ============================================================================
+// 4. CORE BUSINESS ENTITIES (Services, Products, Appointments)
+// ============================================================================
+
+export interface Service {
+  id: string;
+  providerId: string;
+  name: string;
+  description: string;
+  duration: number; // Minutos
+  price: number;
+  active: boolean;
+}
+
+export interface Product {
+  id: string;
+  providerId: string;
+  name: string;
+  description?: string;
+  price: number;
+  stockQuantity: number;
+  minStockAlert: number;
+  active: boolean;
+}
+
+// Item do agendamento (pode ser serviço ou produto vendido na hora)
+export interface AppointmentItem {
+  id?: string;
+  referenceId: string; // ID do serviço ou produto
+  name: string;
+  type: "SERVICE" | "PRODUCT";
+  price: number;
+  quantity: number;
+  professionalId?: string;
+}
+
+export interface Appointment {
+  id: string;
+  providerId: string;
+  professionalId: string;
+  professionalName?: string;
+  professionalAvatarUrl?: string;
+  clientId: string;
+  clientName: string;
+  clientPhone?: string;
+  startTime: string; // ISO String
+  endTime: string;
+  status: AppointmentStatus;
+  items: AppointmentItem[]; // Lista de serviços/produtos (Ajustado com o backend)
+  totalAmount: number;
+  discountAmount: number;
+  finalAmount: number;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+  couponId?: string;
+  reviewId?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface Review {
+  id: string;
+  appointmentId: string;
+  clientId: string;
+  clientName: string;
+  serviceProviderId: string;
+  professionalId: string;
+  professionalName?: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+// ============================================================================
+// 5. MARKETING & WAITLIST (Cupons e Lista de Espera)
+// ============================================================================
+
+export interface Coupon {
+  id: string;
+  providerId: string;
+  code: string;
+  description?: string;
+  type: DiscountType;
+  value: number;
+  minPurchaseAmount?: number;
+  maxUses?: number;
+  currentUses: number;
+  validFrom: string; // ISO String
+  validUntil: string;
+  active: boolean;
+}
+
+export interface WaitlistEntry {
+  id: string;
+  providerId: string;
+  professionalId?: string;
+  clientId: string;
+  clientName?: string;
+  requestedDate: string; // YYYY-MM-DD
+  requestedStartTime: string; // HH:mm
+  requestedEndTime: string; // HH:mm
+  status: WaitlistStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+// ============================================================================
+// 6. FINANCIAL & POS (Caixa e Despesas)
+// ============================================================================
+
+export interface CashRegister {
+  id: string;
+  providerId: string;
+  openedAt: string;
+  closedAt?: string;
+  status: "OPEN" | "CLOSED";
+  initialBalance: number;
+  currentBalance: number;
+  totalIncome: number;
+  totalExpense: number;
+  openedByUserId: string;
+  closedByUserId?: string;
+}
+
 export interface Expense {
   id: string;
   providerId: string;
   description: string;
   amount: number;
-  date: Date | FieldValue;
+  date: string; // ISO String
   category: string;
-  type: "one-time" | "recurring";
-  frequency?: "monthly";
+  type: "ONE_TIME" | "RECURRING" | "one-time" | "recurring";
+  frequency?: "MONTHLY" | "monthly" | string;
 }
 
-export interface FinancialData {
+// Baseado no FinancialDashboardResponse.java
+export interface FinancialDashboardData {
   totalRevenue: number;
-  totalExpenses: number;
   netIncome: number;
-  monthlyRevenue: Record<string, number>;
-  expenses: Expense[];
-  appointments: Appointment[];
-  topServices: { name: string; revenue: number }[];
-  topProfessionals: { name: string; revenue: number }[];
+  totalExpenses: number;
+  totalCommissions: number;
+  balance: number;
+  pendingPayouts: number;
+  dailyCashFlow: Array<{
+    date: string;
+    income: number;
+    expense: number;
+    net: number;
+  }>;
+  topServices: Array<{ name: string; revenue: number; count: number }>;
+  topProfessionals: Array<{
+    name: string;
+    revenue: number;
+    commission: number;
+  }>;
+  occupancyReport: {
+    occupancyRate: number;
+    totalSlots: number;
+    bookedSlots: number;
+    cancelledSlots: number;
+    noShowSlots: number;
+  };
 }
 
-export interface ProfessionalProfile extends BaseUser {
-  role: "professional";
-  serviceProviderId: string;
+// ============================================================================
+// 7. GOOGLE CALENDAR
+// ============================================================================
+
+export interface GoogleConnectionStatus {
+  isConnected: boolean;
+  email?: string;
+  syncEnabled: boolean;
+  lastSyncAt?: string;
+}
+
+// ============================================================================
+// 8. REQUEST DTOs (Para usar no Front-end ao enviar dados via Axios)
+// ============================================================================
+
+export interface ClientRegisterData {
+  role: "client" | "CLIENT";
+  name: string;
+  email: string;
+  password?: string; // Opcional se for Google Login
+  phone?: string;
+}
+
+export interface ProviderRegisterData {
+  role: "serviceProvider" | "SERVICE_PROVIDER";
+  name: string;
+  email: string;
+  password?: string;
+  businessName: string;
+  document: string; // CPF ou CNPJ
+  phone?: string;
+}
+
+export type RegisterData = ClientRegisterData | ProviderRegisterData;
+
+export interface CreateAppointmentRequest {
   professionalId: string;
-  avatarUrl?: string;
-  bio?: string;
+  clientId: string; // Em caso do provedor marcando para o cliente
+  startTime: string; // ISO String
+  endTime: string; // ISO String
+  items: Array<{
+    referenceId: string; // Service ID ou Product ID
+    type: "SERVICE" | "PRODUCT";
+    quantity: number;
+  }>;
+  couponCode?: string;
+  notes?: string;
 }
 
-export type ProviderDashboardView =
-  | "agenda"
-  | "profile"
-  | "services"
-  | "professionals"
-  | "availability"
-  | "financial"
-  | "reviews"
-  | "notifications"
-  | "subscription";
+export interface CompleteAppointmentRequest {
+  paymentMethod: PaymentMethod;
+  finalAmount: number;
+  discountAmount?: number;
+  notes?: string;
+}
+
+export interface ProviderSearchCriteria {
+  city?: string;
+  state?: string;
+  minRating?: number;
+  maxPrice?: number;
+  serviceName?: string;
+  page?: number;
+  size?: number;
+}
+
+// ============================================================================
+// NOTIFICATIONS (In-App)
+// ============================================================================
+
+export interface Notification {
+  id: string; // UUID vindo do Java
+  userId: string;
+  title: string;
+  message: string;
+  link?: string;
+  isRead: boolean;
+  createdAt: string; // ISO String (ex: "2026-02-21T10:00:00Z")
+}

@@ -1,65 +1,65 @@
-import { create } from "zustand";
-import { toast } from "react-hot-toast";
-import { addReview, getReviewsForProvider } from "../firebase/reviewService";
-import type { Review } from "../types";
+import { create } from 'zustand';
+import { isAxiosError } from 'axios';
+import { toast } from 'react-hot-toast';
+import type { Review } from '../types';
+import { api } from '../lib/api';
+import { useUserAppointmentsStore } from './userAppointmentsStore';
+
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
 
 interface ReviewState {
-  reviews: Review[];
-  isLoading: boolean; // Usado para carregar a lista de reviews
-  isSubmitting: boolean; // Usado para o botão de enviar review
+  loading: boolean;
   error: string | null;
-
-  fetchReviews: (providerId: string) => Promise<void>;
-  submitReview: (
-    appointmentId: string,
-    // Ajustei o Omit para garantir que não tentem passar campos gerados pelo back-end
-    reviewData: Omit<Review, "id" | "createdAt" | "reply">
-  ) => Promise<void>;
+  submitReview: (appointmentId: string, rating: number, comment: string) => Promise<Review>;
+  clearError: () => void;
 }
 
 export const useReviewStore = create<ReviewState>((set) => ({
-  reviews: [],
-  isLoading: false,
-  isSubmitting: false, // <--- ADICIONADO: Estado inicial
+  loading: false,
   error: null,
 
-  fetchReviews: async (providerId) => {
-    set({ isLoading: true, error: null });
-
-    // Não usamos toast.promise aqui para não "spamar" o usuário toda vez que ele abrir um perfil
+  // ==========================================================================
+  // 1. CLIENTE ENVIA A AVALIAÇÃO
+  // ==========================================================================
+  submitReview: async (appointmentId: string, rating: number, comment: string) => {
+    set({ loading: true, error: null });
     try {
-      const reviews = await getReviewsForProvider(providerId);
-      set({ reviews, isLoading: false });
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Erro ao carregar avaliações.";
-      console.error(err);
-      set({ error: errorMessage, isLoading: false });
-      // Toast de erro discreto se falhar o carregamento
-      toast.error("Não foi possível carregar as avaliações.");
+      // O CreateReviewRequest do seu Java espera estes dados
+      const payload = {
+        appointmentId,
+        rating,
+        comment
+      };
+
+      const response = await api.post<Review>('/reviews', payload);
+      
+      // Mágica do Zustand: Após enviar a review, atualizamos o Histórico do Cliente
+      // para que o botão "Avaliar" desapareça da tela imediatamente
+      const userAptsStore = useUserAppointmentsStore.getState();
+      const updatedAppointments = userAptsStore.appointments.map(apt => 
+        apt.id === appointmentId ? { ...apt, reviewId: response.data.id, review: response.data } : apt
+      );
+      useUserAppointmentsStore.setState({ appointments: updatedAppointments });
+
+      toast.success('Avaliação enviada! Obrigado pelo feedback.');
+      set({ loading: false });
+      
+      return response.data;
+    } catch (error) {
+      const errMsg = extractErrorMessage(error, 'Erro ao enviar a avaliação.');
+      set({ error: errMsg, loading: false });
+      toast.error(errMsg);
+      throw error;
     }
   },
 
-  submitReview: async (appointmentId, reviewData) => {
-    set({ isSubmitting: true, error: null }); // <--- Ativa o loading do botão
-
-    const promise = addReview(appointmentId, reviewData);
-
-    toast.promise(promise, {
-      loading: "Enviando sua avaliação...",
-      success: "Avaliação enviada com sucesso! Obrigado.",
-      error: "Erro ao enviar avaliação. Tente novamente.",
-    });
-
-    try {
-      await promise;
-      // Sucesso: O toast já avisa
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Erro desconhecido.";
-      set({ error: errorMessage });
-    } finally {
-      set({ isSubmitting: false }); // <--- Desativa o loading do botão (sempre)
-    }
-  },
+  clearError: () => set({ error: null }),
 }));

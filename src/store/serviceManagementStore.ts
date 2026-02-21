@@ -1,120 +1,120 @@
-import { create } from "zustand";
-import { useProfileStore } from "./profileStore";
-import {
-  addServiceToProvider,
-  removeServiceFromProvider,
-  updateServiceInProvider,
-} from "../firebase/serviceManagementService";
-import type { Service } from "../types";
-import { toast } from "react-hot-toast";
+import { create } from 'zustand';
+import { isAxiosError } from 'axios';
+import type { Service } from '../types';
+import { api } from '../lib/api';
 
-// Definindo os tipos de payload com base no types.ts
-type ServiceAddData = Omit<Service, "id">;
-type ServiceUpdateData = Partial<Omit<Service, "id">>;
+// Helper de erro (Reutilizando a lógica sênior)
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
 
 interface ServiceManagementState {
-  isSubmitting: boolean;
+  services: Service[];
+  loading: boolean;
   error: string | null;
-  addService: (providerId: string, serviceData: ServiceAddData) => Promise<void>;
-  updateService: (
-    providerId: string,
-    serviceId: string,
-    updates: ServiceUpdateData
-  ) => Promise<void>;
-  removeService: (providerId: string, service: Service) => Promise<void>;
+  
+  // Ações
+  fetchServices: (providerId: string) => Promise<void>;
+  createService: (data: Omit<Service, 'id' | 'providerId'>) => Promise<void>;
+  updateService: (id: string, data: Partial<Service>) => Promise<void>;
+  deleteService: (id: string) => Promise<void>;
+  clearError: () => void;
 }
 
-export const useServiceManagementStore = create<ServiceManagementState>(
-  (set) => ({
-    isSubmitting: false,
-    error: null,
+export const useServiceManagementStore = create<ServiceManagementState>((set) => ({
+  services: [],
+  loading: false,
+  error: null,
 
-    /**
-     * Adiciona um novo serviço e força a atualização do profileStore.
-     */
-    addService: async (providerId, service) => {
-      set({ isSubmitting: true, error: null });
+  // 1. BUSCAR TODOS OS SERVIÇOS DO ESTABELECIMENTO
+  fetchServices: async (providerId: string) => {
+    set({ loading: true, error: null });
+    try {
+      // O Spring Boot devolve uma List<ServiceResponse> no ServiceController
+      const response = await api.get<Service[]>(`/services/provider/${providerId}`);
+      set({ services: response.data, loading: false });
+    } catch (error) {
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao carregar os serviços.'), 
+        loading: false 
+      });
+    }
+  },
 
-      // A promise agora inclui o refetch
-      const addAndRefetchPromise = async () => {
-        // 1. Adiciona no Firebase
-        await addServiceToProvider(providerId, service);
-        // 2. Atualiza o estado global
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      };
+  // 2. CRIAR UM NOVO SERVIÇO
+  createService: async (data) => {
+    set({ loading: true, error: null });
+    try {
+      // Envia os dados para a API (o provedor é inferido pelo token no backend ou passado no body dependendo da sua API)
+      const response = await api.post<Service>('/services', {
+        name: data.name,
+        description: data.description,
+        duration: data.duration,
+        price: data.price,
+        active: data.active ?? true
+      });
+      
+      // Adiciona o novo serviço à lista atual sem precisar de fazer outro fetch
+      set((state) => ({
+        services: [...state.services, response.data],
+        loading: false
+      }));
+    } catch (error) {
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao criar o serviço.'), 
+        loading: false 
+      });
+      throw error;
+    }
+  },
 
-      try {
-        await toast.promise(addAndRefetchPromise(), {
-          loading: "Adicionando serviço...",
-          success: "Serviço adicionado com sucesso!",
-          error: "Falha ao adicionar o serviço.",
-        });
-      } catch (err: unknown) {
-        console.error("Erro em addService:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-        set({ error: errorMessage });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
+  // 3. ATUALIZAR UM SERVIÇO
+  updateService: async (id: string, data: Partial<Service>) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.put<Service>(`/services/${id}`, data);
+      
+      // Atualiza o serviço específico na lista local
+      set((state) => ({
+        services: state.services.map((srv) => 
+          srv.id === id ? response.data : srv
+        ),
+        loading: false
+      }));
+    } catch (error) {
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao atualizar o serviço.'), 
+        loading: false 
+      });
+      throw error;
+    }
+  },
 
-    /**
-     * Atualiza um serviço existente e força a atualização do profileStore.
-     */
-    updateService: async (providerId, serviceId, updates) => {
-      set({ isSubmitting: true, error: null });
+  // 4. ELIMINAR (OU DESATIVAR) UM SERVIÇO
+  deleteService: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      await api.delete(`/services/${id}`);
+      
+      // Remove o serviço da lista local
+      set((state) => ({
+        services: state.services.filter((srv) => srv.id !== id),
+        loading: false
+      }));
+    } catch (error) {
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao eliminar o serviço.'), 
+        loading: false 
+      });
+      throw error;
+    }
+  },
 
-      const updateAndRefetchPromise = async () => {
-        // 1. Atualiza no Firebase
-        await updateServiceInProvider(providerId, serviceId, updates);
-        // 2. Atualiza o estado global
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      };
-
-      try {
-        await toast.promise(updateAndRefetchPromise(), {
-          loading: "Atualizando serviço...",
-          success: "Serviço atualizado com sucesso!",
-          error: "Falha ao atualizar o serviço.",
-        });
-      } catch (err: unknown) {
-        console.error("Erro em updateService:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-        set({ error: errorMessage });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
-
-    /**
-     * Remove um serviço e força a atualização do profileStore.
-     */
-    removeService: async (providerId, service) => {
-      set({ isSubmitting: true, error: null });
-
-      const removeAndRefetchPromise = async () => {
-        // 1. Remove do Firebase
-        await removeServiceFromProvider(providerId, service);
-        // 2. Atualiza o estado global
-        await useProfileStore.getState().fetchUserProfile(providerId);
-      };
-
-      try {
-        await toast.promise(removeAndRefetchPromise(), {
-          loading: "Removendo serviço...",
-          success: "Serviço removido com sucesso!",
-          error: "Falha ao remover o serviço.",
-        });
-      } catch (err: unknown) {
-        console.error("Erro em removeService:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-        set({ error: errorMessage });
-      } finally {
-        set({ isSubmitting: false });
-      }
-    },
-  })
-);
+  clearError: () => set({ error: null }),
+}));

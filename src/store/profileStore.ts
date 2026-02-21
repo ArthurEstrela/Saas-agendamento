@@ -1,198 +1,84 @@
-import { create } from "zustand";
-import type {
-  UserProfile,
-  ClientProfile,
-  Service,
-  Professional,
-} from "../types";
-import {
-  getUserProfile,
-  toggleFavoriteProfessional,
-  updateUserProfile,
-  uploadProfilePicture as uploadService,
-} from "../firebase/userService";
-import { getProfessionalsByProviderId } from "../firebase/professionalsManagementService";
+import { create } from 'zustand';
+import { isAxiosError } from 'axios';
+import { toast } from 'react-hot-toast';
+import type { ClientProfile } from '../types';
+import { api } from '../lib/api';
+import { useAuthStore } from './authStore'; // Importamos o authStore para sincronizar os dados globais
+
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
 
 interface ProfileState {
-  userProfile: UserProfile | null;
-  professionals: Professional[] | null;
-  isLoadingProfile: boolean;
+  loading: boolean;
   error: string | null;
-  fetchUserProfile: (uid: string) => Promise<void>;
-  updateUserProfile: (uid: string, data: Partial<UserProfile>) => Promise<void>;
-  uploadProfilePicture: (
-    uid: string,
-    file: File
-  ) => Promise<string | undefined>;
-  setUserProfile: (profile: UserProfile) => void;
-  clearProfile: () => void;
-  toggleFavorite: (professionalId: string) => Promise<void>;
-  updateServicesInProfile: (services: Service[]) => void;
-  updateProfessionalsInProfile: (professionals: Professional[]) => void;
+  updateProfile: (id: string, data: Partial<ClientProfile>) => Promise<void>;
+  uploadAvatar: (id: string, file: File) => Promise<void>;
+  clearError: () => void;
 }
 
-export const useProfileStore = create<ProfileState>((set, get) => ({
-  userProfile: null,
-  professionals: null,
-  isLoadingProfile: false,
+export const useProfileStore = create<ProfileState>((set) => ({
+  loading: false,
   error: null,
 
-fetchUserProfile: async (uid: string) => {
-    set({ isLoadingProfile: true, error: null });
+  // ==========================================================================
+  // 1. ATUALIZAR DADOS DE TEXTO DO CLIENTE
+  // ==========================================================================
+  updateProfile: async (id: string, data: Partial<ClientProfile>) => {
+    set({ loading: true, error: null });
     try {
-      const profileData = await getUserProfile(uid);
-
-      if (profileData) {
-        
-        if (profileData.role === "serviceProvider") {
-          // Lógica do Dono (igual)
-          const professionalsList = await getProfessionalsByProviderId(uid);
-          set({
-            userProfile: profileData,
-            professionals: professionalsList,
-            isLoadingProfile: false,
-          });
-        
-        } else if (profileData.role === "professional") {
-          const providerId = profileData.serviceProviderId;
-          const professionalsList = await getProfessionalsByProviderId(providerId);
-          set({
-            userProfile: profileData,
-            professionals: professionalsList, // <-- Carrega a lista
-            isLoadingProfile: false,
-          });
-
-        } else {
-          // Lógica do Cliente (igual)
-          set({
-            userProfile: profileData,
-            professionals: null,
-            isLoadingProfile: false,
-          });
-        }
-      } else {
-        throw new Error("Perfil de usuário não encontrado.");
-      }
-    } catch (err: unknown) {
-      let errorMessage = "Erro ao buscar o perfil do usuário.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      console.error("Erro ao buscar perfil:", err);
-      set({
-        error: errorMessage,
-        isLoadingProfile: false,
-        professionals: null,
-      });
+      const response = await api.put<ClientProfile>(`/clients/${id}`, data);
+      
+      // Sincroniza o novo utilizador no AuthStore para o cabeçalho do site atualizar na hora!
+      useAuthStore.setState({ user: response.data });
+      
+      toast.success('Perfil atualizado com sucesso!');
+      set({ loading: false });
+    } catch (error) {
+      const errMsg = extractErrorMessage(error, 'Erro ao atualizar o perfil.');
+      set({ error: errMsg, loading: false });
+      toast.error(errMsg);
+      throw error;
     }
   },
 
-  updateUserProfile: async (uid: string, data: Partial<UserProfile>) => {
-    const currentProfile = get().userProfile;
-    if (!currentProfile) return;
-
-    // Atualização otimista
-    set({
-      userProfile: { ...currentProfile, ...data } as UserProfile,
-    });
-
+  // ==========================================================================
+  // 2. UPLOAD DA FOTO DE PERFIL
+  // ==========================================================================
+  uploadAvatar: async (id: string, file: File) => {
+    set({ loading: true, error: null });
     try {
-      await updateUserProfile(uid, data);
-    } catch (err: unknown) {
-      let errorMessage = "Falha ao salvar as alterações.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      console.error("Erro ao atualizar o perfil:", err);
-      // Reverte em caso de erro
-      set({ userProfile: currentProfile, error: errorMessage });
-    }
-  },
+      const formData = new FormData();
+      formData.append('file', file);
 
-  // --- FUNÇÃO ADICIONADA ---
-  // Esta é a função que a authStore chamará após o signup para evitar
-  // uma nova chamada desnecessária ao banco de dados.
-  setUserProfile: (profile: UserProfile) => {
-    set({ userProfile: profile, isLoadingProfile: false });
-  },
-
-  // --- FUNÇÃO ADICIONADA (Esqueleto) ---
-  // Para completar a interface que você definiu.
-  uploadProfilePicture: async (uid, file) => {
-    const currentProfile = get().userProfile;
-    if (!currentProfile) return;
-
-    set({ isLoadingProfile: true });
-    try {
-      const downloadURL = await uploadService(uid, file);
-      set((state) => ({
-        userProfile: state.userProfile
-          ? { ...state.userProfile, profilePictureUrl: downloadURL }
-          : null,
-        isLoadingProfile: false,
-      }));
-      return downloadURL;
-    } catch (err) {
-      console.error("Erro no upload da foto:", err);
-      set({ error: "Falha ao enviar a foto.", isLoadingProfile: false });
-      return undefined;
-    }
-  },
-
-  clearProfile: () => {
-    set({ userProfile: null, isLoadingProfile: false, error: null });
-  },
-
-  toggleFavorite: async (professionalId: string) => {
-    const { userProfile } = get();
-    if (userProfile && userProfile.role === "client") {
-      const clientProfile = userProfile as ClientProfile;
-      const oldFavorites = clientProfile.favoriteProfessionals || [];
-
-      // Atualização Otimista: atualiza a UI primeiro para uma resposta instantânea
-      const isFavorite = oldFavorites.includes(professionalId);
-      const newFavorites = isFavorite
-        ? oldFavorites.filter((id) => id !== professionalId)
-        : [...oldFavorites, professionalId];
-
-      set({
-        userProfile: { ...clientProfile, favoriteProfessionals: newFavorites },
+      // Endpoint para envio de multipart/form-data
+      const response = await api.put(`/profile-images/client/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      try {
-        // Em seguida, atualiza o banco de dados em segundo plano
-        await toggleFavoriteProfessional(clientProfile.id, professionalId);
-      } catch (error) {
-        console.error("Failed to update favorite status:", error);
-        // Em caso de erro, reverte a UI para o estado anterior
-        set({
-          userProfile: {
-            ...clientProfile,
-            favoriteProfessionals: oldFavorites,
-          },
+      // Atualiza a URL da foto no AuthStore
+      const currentUser = useAuthStore.getState().user as ClientProfile;
+      if (currentUser) {
+        useAuthStore.setState({ 
+          user: { ...currentUser, profilePictureUrl: response.data.url } 
         });
       }
+
+      toast.success('Foto de perfil atualizada!');
+      set({ loading: false });
+    } catch (error) {
+      const errMsg = extractErrorMessage(error, 'Erro ao enviar a foto.');
+      set({ error: errMsg, loading: false });
+      toast.error(errMsg);
+      throw error;
     }
   },
 
-  updateServicesInProfile: (services) => {
-    const { userProfile } = get();
-    if (userProfile && userProfile.role === "serviceProvider") {
-      const updatedProfile = {
-        ...userProfile,
-        services,
-      };
-      set({ userProfile: updatedProfile });
-    }
-  },
-
-  updateProfessionalsInProfile: (professionals) => {
-    // Esta função agora só atualiza o novo estado 'professionals'
-    const { userProfile } = get();
-    if (userProfile && userProfile.role === "serviceProvider") {
-      // A atualização não é mais feita no userProfile, mas sim no estado dedicado.
-      set({ professionals });
-    }
-    // Para tipos que não são ServiceProvider, a ação é ignorada.
-  },
+  clearError: () => set({ error: null }),
 }));

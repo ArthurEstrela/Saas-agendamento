@@ -1,292 +1,180 @@
-import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import { toast } from "react-hot-toast";
-import type {
-  Service,
-  Professional,
-  ServiceProviderProfile,
-  Appointment,
+import { create } from 'zustand';
+import { isAxiosError } from 'axios';
+import { toast } from 'react-hot-toast';
+import type { 
+  Service, 
+  ProfessionalProfile, 
+  ServiceProviderProfile, 
   ClientProfile,
-  PaymentMethod,
-} from "../types";
-import { createAppointment } from "../firebase/bookingService";
-import { getUserProfile } from "../firebase/userService";
-import { getProfessionalsByProviderId } from "../firebase/professionalsManagementService";
+  CreateAppointmentRequest,
+  Appointment
+} from '../types';
+import { api } from '../lib/api';
 
-// Representa o estado do processo de agendamento
-interface BookingFlowState {
-  // Dados do fluxo
-  providerId: string | null;
-  provider: ServiceProviderProfile | null;
-  professionals: Professional[];
-
-  // Seleções do usuário
-  selectedServices: Service[];
-  selectedProfessional: Professional | null;
-  selectedDate: Date | null;
-  selectedTimeSlot: string | null;
-
-  // Controle do fluxo
-  currentStep: number;
-  
-  // Armazena o ID do último agendamento criado com sucesso
-  lastCreatedAppointmentId: string | null;
-
-  status: {
-    isLoading: boolean;
-    isConfirming: boolean;
-    error: string | null;
-    isSuccess: boolean;
-  };
-
-  // Utilidade para login
-  redirectUrlAfterLogin: string | null;
-}
-
-// Ações que podem ser executadas no store
-interface BookingFlowActions {
-  fetchProviderData: (providerId: string) => Promise<void>;
-  toggleService: (service: Service) => void;
-  selectProfessional: (professional: Professional) => void;
-  selectDateAndTime: (date: Date, timeSlot: string) => void;
-  
-  // ATUALIZADO: Recebe reminderMinutes agora
-  confirmBooking: (
-    client: ClientProfile, 
-    paymentMethod: PaymentMethod,
-    reminderMinutes: number
-  ) => Promise<void>;
-
-  goToNextStep: () => void;
-  goToPreviousStep: () => void;
-  setRedirectUrlAfterLogin: (url: string | null) => void;
-  resetBookingState: (keepProvider?: boolean) => void;
-}
-
-type BookingStore = BookingFlowState & BookingFlowActions;
-
-const initialState: BookingFlowState = {
-  providerId: null,
-  provider: null,
-  professionals: [],
-  selectedServices: [],
-  selectedProfessional: null,
-  selectedDate: null,
-  selectedTimeSlot: null,
-  currentStep: 1, 
-  lastCreatedAppointmentId: null,
-  status: {
-    isLoading: false,
-    isConfirming: false,
-    error: null,
-    isSuccess: false,
-  },
-  redirectUrlAfterLogin: null,
+// Helper de erro padronizado
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
 };
 
-export const useBookingProcessStore = create<BookingStore>()(
-  persist(
-    (set, get) => ({
-      ...initialState,
+interface BookingState {
+  // Estado do Processo
+  step: number;
+  loading: boolean;
+  error: string | null;
 
-      fetchProviderData: async (providerId) => {
-        set({
-          status: { ...initialState.status, isLoading: true },
-          providerId,
-        });
-        try {
-          const profilePromise = getUserProfile(providerId);
-          const professionalsPromise = getProfessionalsByProviderId(providerId);
+  // Seleções do Cliente
+  provider: ServiceProviderProfile | null;
+  professional: ProfessionalProfile | null;
+  services: Service[];
+  date: Date | null;
+  time: string | null;
+  couponCode: string | null;
 
-          const [providerProfile, professionals] = await Promise.all([
-            profilePromise,
-            professionalsPromise,
-          ]);
+  // Ações de Navegação
+  setStep: (step: number) => void;
+  nextStep: () => void;
+  prevStep: () => void;
+  reset: () => void;
 
-          if (!providerProfile || providerProfile.role !== "serviceProvider") {
-            throw new Error("Prestador de serviço não encontrado.");
-          }
+  // Ações de Seleção
+  setProvider: (provider: ServiceProviderProfile) => void;
+  setProfessional: (professional: ProfessionalProfile | null) => void;
+  toggleService: (service: Service) => void;
+  setDate: (date: Date) => void;
+  setTime: (time: string) => void;
+  setCouponCode: (code: string) => void;
 
-          set({
-            provider: providerProfile as ServiceProviderProfile,
-            professionals,
-            status: { ...initialState.status, isLoading: false },
-          });
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "Não foi possível carregar os dados.";
-          toast.error(errorMessage);
-          set({
-            ...initialState,
-            status: {
-              ...initialState.status,
-              isLoading: false,
-              error: errorMessage,
-            },
-          });
-        }
-      },
+  // Calculadoras
+  getTotalPrice: () => number;
+  getTotalDuration: () => number;
 
-      toggleService: (service) => {
-        const { selectedServices } = get();
-        const isSelected = selectedServices.some((s) => s.id === service.id);
-        const newSelectedServices = isSelected
-          ? selectedServices.filter((s) => s.id !== service.id)
-          : [...selectedServices, service];
+  // Ação Final (Comunicação com Java)
+  confirmBooking: (client: ClientProfile, notes?: string) => Promise<Appointment>;
+}
 
-        set({
-          selectedServices: newSelectedServices,
-          selectedProfessional: null,
-          selectedDate: null,
-          selectedTimeSlot: null,
-        });
-      },
+export const useBookingProcessStore = create<BookingState>((set, get) => ({
+  // Estado Inicial
+  step: 1,
+  loading: false,
+  error: null,
+  provider: null,
+  professional: null,
+  services: [],
+  date: null,
+  time: null,
+  couponCode: null,
 
-      selectProfessional: (professional) => {
-        set({
-          selectedProfessional: professional,
-          selectedDate: null,
-          selectedTimeSlot: null,
-        });
-      },
+  // ==========================================================================
+  // NAVEGAÇÃO
+  // ==========================================================================
+  setStep: (step) => set({ step }),
+  nextStep: () => set((state) => ({ step: state.step + 1 })),
+  prevStep: () => set((state) => ({ step: Math.max(1, state.step - 1) })),
+  reset: () => set({
+    step: 1,
+    loading: false,
+    error: null,
+    provider: null,
+    professional: null,
+    services: [],
+    date: null,
+    time: null,
+    couponCode: null,
+  }),
 
-      selectDateAndTime: (date, timeSlot) => {
-        set({ selectedDate: date, selectedTimeSlot: timeSlot, currentStep: 4 });
-      },
-
-      // ATUALIZADO: Recebe o reminderMinutes
-      confirmBooking: async (client, paymentMethod, reminderMinutes) => {
-        const {
-          provider,
-          selectedServices,
-          selectedProfessional,
-          selectedDate,
-          selectedTimeSlot,
-        } = get();
-
-        if (
-          !provider ||
-          selectedServices.length === 0 ||
-          !selectedProfessional ||
-          !selectedDate ||
-          !selectedTimeSlot
-        ) {
-          toast.error("Informações incompletas para finalizar o agendamento.");
-          return;
-        }
-
-        set({ status: { ...get().status, isConfirming: true } });
-
-        const totalDuration = selectedServices.reduce(
-          (acc, s) => acc + s.duration,
-          0
-        );
-
-        const startTime = new Date(selectedDate);
-        const [hours, minutes] = selectedTimeSlot.split(":").map(Number);
-        startTime.setHours(hours, minutes, 0, 0);
-
-        const endTime = new Date(startTime.getTime() + totalDuration * 60000);
-
-        // Monta o objeto incluindo o reminderMinutes
-        // Usamos cast para evitar erro se o tipo Appointment ainda não tiver reminderMinutes
-        const appointmentData = {
-          clientId: client.id,
-          clientName: client.name,
-          clientPhone: client.phoneNumber,
-          providerId: provider.id,
-          professionalId: selectedProfessional.id,
-          professionalName: selectedProfessional.name,
-          professionalAvatarUrl: selectedProfessional.photoURL || undefined, 
-          providerAvatarUrl: provider.logoUrl || undefined,
-          services: selectedServices,
-          serviceName: selectedServices.map((s) => s.name).join(", "),
-          startTime,
-          endTime,
-          status: "pending",
-          totalPrice: selectedServices.reduce((acc, s) => acc + s.price, 0),
-          totalDuration,
-          createdAt: new Date(),
-          notes: "",
-          paymentMethod,
-          reminderMinutes, // <--- CAMPO NOVO AQUI
-        } as Omit<Appointment, "id"> & { reminderMinutes: number };
-
-        // Chama a função de criar passando o dado extra
-        // Certifique-se que o bookingService.ts foi atualizado para aceitar isso também
-        const promise = createAppointment(appointmentData);
-
-        const successMsg = paymentMethod === 'pix' 
-          ? "Pré-agendamento realizado! Efetue o pagamento." 
-          : "Agendamento confirmado com sucesso!";
-
-        toast.promise(promise, {
-          loading: "Processando agendamento seguro...",
-          success: successMsg,
-          error: (err) => {
-            if (err.message && err.message.includes("já foi reservado")) {
-              return "Ops! Este horário acabou de ser ocupado. Tente outro.";
-            }
-            return "Erro ao agendar. Tente novamente.";
-          },
-        });
-
-        try {
-          const appointmentId = await promise;
-          
-          set({ 
-            status: { ...initialState.status, isSuccess: true },
-            lastCreatedAppointmentId: appointmentId 
-          });
-
-        } catch (error) {
-          console.error("Erro no confirmBooking:", error);
-          const errorMessage =
-            error instanceof Error ? error.message : "Erro desconhecido.";
-
-          set({
-            status: {
-              ...initialState.status,
-              isConfirming: false,
-              error: errorMessage,
-            },
-          });
-        }
-      },
-
-      goToNextStep: () =>
-        set((state) => ({ currentStep: state.currentStep + 1 })),
-      goToPreviousStep: () =>
-        set((state) => ({ currentStep: state.currentStep - 1 })),
-      setRedirectUrlAfterLogin: (url) => set({ redirectUrlAfterLogin: url }),
-      
-      resetBookingState: (keepProvider = false) => {
-        const { provider, professionals, providerId, redirectUrlAfterLogin } =
-          get();
-        set({
-          ...initialState,
-          provider: keepProvider ? provider : null,
-          professionals: keepProvider ? professionals : [],
-          providerId: keepProvider ? providerId : null,
-          redirectUrlAfterLogin,
-          lastCreatedAppointmentId: null, 
-        });
-      },
-    }),
-    {
-      name: "booking-flow-storage",
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        providerId: state.providerId,
-        selectedServices: state.selectedServices,
-        selectedProfessional: state.selectedProfessional,
-        selectedDate: state.selectedDate,
-        selectedTimeSlot: state.selectedTimeSlot,
-        currentStep: state.currentStep,
-        redirectUrlAfterLogin: state.redirectUrlAfterLogin,
-      }),
+  // ==========================================================================
+  // SELEÇÕES
+  // ==========================================================================
+  setProvider: (provider) => set({ provider, professional: null, services: [], date: null, time: null }),
+  setProfessional: (professional) => set({ professional, time: null }),
+  
+  toggleService: (service) => set((state) => {
+    const exists = state.services.find((s) => s.id === service.id);
+    if (exists) {
+      return { services: state.services.filter((s) => s.id !== service.id) };
     }
-  )
-);
+    return { services: [...state.services, service] };
+  }),
+
+  setDate: (date) => set({ date, time: null }),
+  setTime: (time) => set({ time }),
+  setCouponCode: (code) => set({ couponCode: code }),
+
+  // ==========================================================================
+  // CALCULADORAS DE RESUMO
+  // ==========================================================================
+  getTotalPrice: () => {
+    return get().services.reduce((total, service) => total + service.price, 0);
+  },
+  
+  getTotalDuration: () => {
+    return get().services.reduce((total, service) => total + service.duration, 0);
+  },
+
+  // ==========================================================================
+  // AÇÃO FINAL: CONFIRMAR AGENDAMENTO (CHAMADA À API JAVA)
+  // ==========================================================================
+  confirmBooking: async (client: ClientProfile, notes?: string) => {
+    const state = get();
+    
+    // Validações de segurança antes de chamar a API
+    if (!state.provider || !state.professional || state.services.length === 0 || !state.date || !state.time) {
+      const errMsg = 'Faltam informações para concluir o agendamento.';
+      set({ error: errMsg });
+      toast.error(errMsg);
+      throw new Error(errMsg);
+    }
+
+    set({ loading: true, error: null });
+
+    try {
+      // 1. Criar as Strings ISO de Data e Hora combinadas
+      // Extrai YYYY-MM-DD da data selecionada
+      const dateString = state.date.toISOString().split('T')[0]; 
+      
+      // Assumindo que state.time é "14:30" (Ajusta o fuso horário para UTC/Local consoante o backend)
+      const startDateTime = new Date(`${dateString}T${state.time}:00`);
+      
+      // Calcula o fim com base na duração total dos serviços escolhidos
+      const endDateTime = new Date(startDateTime.getTime() + state.getTotalDuration() * 60000);
+
+      // 2. Mapear os serviços escolhidos para o formato AppointmentItem do Java
+      const items = state.services.map(service => ({
+        referenceId: service.id,
+        type: "SERVICE" as const, // Força a tipagem estrita
+        quantity: 1
+      }));
+
+      // 3. Montar o DTO exato que o Spring Boot (AppointmentController) espera
+      const payload: CreateAppointmentRequest = {
+        professionalId: state.professional.id,
+        clientId: client.id,
+        startTime: startDateTime.toISOString(), // Envia como String ISO 8601
+        endTime: endDateTime.toISOString(),
+        items: items,
+        couponCode: state.couponCode || undefined,
+        notes: notes
+      };
+
+      // 4. Enviar para o Backend
+      const response = await api.post<Appointment>('/appointments', payload);
+      
+      // Limpa o store após o sucesso
+      get().reset();
+      toast.success('Agendamento confirmado com sucesso!');
+      
+      return response.data;
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error, 'Erro ao confirmar agendamento. O horário pode já não estar disponível.');
+      set({ error: errorMessage, loading: false });
+      toast.error(errorMessage);
+      throw error;
+    }
+  }
+}));

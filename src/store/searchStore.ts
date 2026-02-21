@@ -1,86 +1,116 @@
-import { create } from "zustand";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  QueryConstraint,
-} from "firebase/firestore"; 
-import { db } from "../firebase/config";
-import type { Review, ServiceProviderProfile } from "../types";
+import { create } from 'zustand';
+import { isAxiosError } from 'axios';
+import type { ServiceProviderProfile, ProviderSearchCriteria, PagedResult } from '../types';
+import { api } from '../lib/api';
+
+// Helper de erro padronizado
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (isAxiosError(error)) {
+    return error.response?.data?.message || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
+
+// Estado Inicial dos Filtros
+const initialFilters: ProviderSearchCriteria = {
+  city: '',
+  state: '',
+  serviceName: '',
+  minRating: undefined,
+  maxPrice: undefined,
+  page: 0,
+  size: 10, // Traz 10 estabelecimentos por página
+};
 
 interface SearchState {
+  // Dados
   results: ServiceProviderProfile[];
-  isLoading: boolean;
-  search: (term: string) => Promise<void>;
+  loading: boolean;
+  error: string | null;
+  
+  // Metadados de Paginação
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  hasNext: boolean;
+
+  // Filtros Atuais
+  filters: ProviderSearchCriteria;
+
+  // Ações
+  setFilters: (filters: Partial<ProviderSearchCriteria>) => void;
+  clearFilters: () => void;
+  searchProviders: (page?: number) => Promise<void>;
 }
 
-export const useSearchStore = create<SearchState>((set) => ({
+export const useSearchStore = create<SearchState>((set, get) => ({
   results: [],
-  isLoading: false,
-  search: async (term) => {
-    set({ isLoading: true });
+  loading: false,
+  error: null,
+  
+  totalElements: 0,
+  totalPages: 0,
+  currentPage: 0,
+  hasNext: false,
+
+  filters: initialFilters,
+
+  // ==========================================================================
+  // 1. ATUALIZAR FILTROS (UI)
+  // ==========================================================================
+  setFilters: (newFilters) => set((state) => ({
+    filters: { ...state.filters, ...newFilters }
+  })),
+
+  // ==========================================================================
+  // 2. LIMPAR TODOS OS FILTROS
+  // ==========================================================================
+  clearFilters: () => set({ filters: initialFilters }),
+
+  // ==========================================================================
+  // 3. EXECUTAR A PESQUISA (CHAMADA À API JAVA)
+  // ==========================================================================
+  searchProviders: async (pageIndex = 0) => {
+    const { filters } = get();
+    set({ loading: true, error: null });
 
     try {
-      const searchTermLower = term.toLowerCase();
-      const usersCollection = collection(db, "users");
+      // Limpa os campos vazios para não enviar "city=" na query string desnecessariamente
+      const queryParams: Record<string, any> = {
+        page: pageIndex,
+        size: filters.size,
+      };
 
-      // 1. Create a base list of query constraints
-      const queryConstraints: QueryConstraint[] = [
-        where("role", "==", "serviceProvider"),
-      ];
+      if (filters.city) queryParams.city = filters.city;
+      if (filters.state) queryParams.state = filters.state;
+      if (filters.serviceName) queryParams.serviceName = filters.serviceName;
+      if (filters.minRating) queryParams.minRating = filters.minRating;
+      if (filters.maxPrice) queryParams.maxPrice = filters.maxPrice;
 
-      // 2. If there's a search term, add the "starts with" constraints
-      if (term) {
-        queryConstraints.push(
-          where("businessNameLower", ">=", searchTermLower)
-        );
-        queryConstraints.push(
-          where("businessNameLower", "<=", searchTermLower + "\uf8ff")
-        );
-        // If you wanted to search areaOfWork as well, you would need a more complex setup,
-        // as Firestore's `or` does not support range queries (`>=`, `<=`).
-      }
+      // Endpoint público no Spring Boot (não requer token obrigatório para ver a vitrine)
+      const response = await api.get<PagedResult<ServiceProviderProfile>>('/service-providers/search', {
+        params: queryParams,
+      });
 
-      // 3. Build the final query by spreading the constraints
-      const providersQuery = query(usersCollection, ...queryConstraints);
-
-      const querySnapshot = await getDocs(providersQuery);
-      let providers = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as ServiceProviderProfile[];
-
-      // Fetch reviews for each provider
-      if (providers.length > 0) {
-        providers = await Promise.all(
-          providers.map(async (provider) => {
-            const reviewsQuery = query(
-              collection(db, "reviews"),
-              where("serviceProviderId", "==", provider.id)
-            );
-            const reviewsSnapshot = await getDocs(reviewsQuery);
-            const reviews = reviewsSnapshot.docs.map(
-              (doc) => doc.data() as Review
-            );
-            return { ...provider, reviews };
-          })
-        );
-      }
-
-      // Final client-side filtering (good for refining results)
-      if (term) {
-        providers = providers.filter(
-          (p) =>
-            p.businessName.toLowerCase().includes(searchTermLower) ||
-            p.areaOfWork?.toLowerCase().includes(searchTermLower)
-        );
-      }
-
-      set({ results: providers, isLoading: false });
+      // Se for a página 0, substituímos a lista. Se for página > 0 (Infinite Scroll), adicionamos ao final.
+      set((state) => ({
+        results: pageIndex === 0 
+          ? response.data.data 
+          : [...state.results, ...response.data.data],
+        totalElements: response.data.totalElements,
+        totalPages: response.data.totalPages,
+        currentPage: response.data.currentPage,
+        hasNext: response.data.hasNext,
+        loading: false,
+      }));
     } catch (error) {
-      console.error("Erro ao buscar prestadores:", error);
-      set({ isLoading: false });
+      set({ 
+        error: extractErrorMessage(error, 'Erro ao procurar estabelecimentos. Tente novamente mais tarde.'), 
+        loading: false 
+      });
     }
-  },
+  }
 }));

@@ -17,7 +17,7 @@ import { Separator } from "../ui/separator";
 import { Label } from "../ui/label";
 import { cn } from "../../lib/utils/cn";
 
-interface AppliedFilters {
+export interface AppliedFilters {
   distance: number;
   areaOfWork: string;
   minRating: number;
@@ -31,9 +31,9 @@ interface ProviderFilterProps {
 }
 
 const paymentOptions: { id: PaymentMethod; label: string }[] = [
-  { id: "pix", label: "Pix" },
-  { id: "credit_card", label: "Cartão" },
-  { id: "cash", label: "Dinheiro" },
+  { id: "PIX", label: "Pix" }, // ✨ AJUSTE: Uppercase para alinhar com o ENUM da API Java
+  { id: "CREDIT_CARD", label: "Cartão" },
+  { id: "CASH", label: "Dinheiro" },
 ];
 
 export const ProviderFilter = ({
@@ -50,7 +50,7 @@ export const ProviderFilter = ({
   };
 
   const handleClear = () => {
-    const reset = {
+    const reset: AppliedFilters = {
       distance: 500, // Default aumentado para resetar sem filtros de distância restritivos
       areaOfWork: "all",
       minRating: 0,
@@ -69,6 +69,10 @@ export const ProviderFilter = ({
       return { ...prev, paymentMethods: methods };
     });
   };
+
+  // Helper para garantir tipagem exata no Badge do Shadcn UI
+  type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+  const getVariant = (isActive: boolean): BadgeVariant => (isActive ? "default" : "outline");
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -133,7 +137,7 @@ export const ProviderFilter = ({
               {[0, 3, 4, 4.5].map((rating) => (
                 <Badge
                   key={rating}
-                  variant={filters.minRating === rating ? "default" : "outline"}
+                  variant={getVariant(filters.minRating === rating)}
                   className="cursor-pointer h-9 px-4 text-sm"
                   onClick={() =>
                     setFilters((prev) => ({ ...prev, minRating: rating }))
@@ -152,7 +156,7 @@ export const ProviderFilter = ({
             <Label className="text-base text-white">Categoria</Label>
             <div className="flex flex-wrap gap-2">
               <Badge
-                variant={filters.areaOfWork === "all" ? "default" : "outline"}
+                variant={getVariant(filters.areaOfWork === "all")}
                 className="cursor-pointer h-8"
                 onClick={() =>
                   setFilters((prev) => ({ ...prev, areaOfWork: "all" }))
@@ -163,7 +167,7 @@ export const ProviderFilter = ({
               {availableAreas.map((area) => (
                 <Badge
                   key={area}
-                  variant={filters.areaOfWork === area ? "default" : "outline"}
+                  variant={getVariant(filters.areaOfWork === area)}
                   className="cursor-pointer h-8"
                   onClick={() =>
                     setFilters((prev) => ({ ...prev, areaOfWork: area }))

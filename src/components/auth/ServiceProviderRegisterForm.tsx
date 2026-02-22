@@ -26,11 +26,15 @@ import {
   QrCode,
   Smartphone,
   AlertTriangle,
-  MousePointerClick
+  MousePointerClick,
 } from "lucide-react";
-import type { PaymentMethod, ServiceProviderProfile } from "../../types";
+import type { PaymentMethod } from "../../types";
+
+// Novos Stores (Sem Firebase)
 import { useAuthStore } from "../../store/authStore";
+import { useProviderProfileStore } from "../../store/providerProfileStore";
 import { useViaCep } from "../../hooks/useViaCep";
+
 import { StepProgressBar } from "./StepProgressBar";
 import {
   MapContainer,
@@ -232,8 +236,7 @@ const schema = z
     neighborhood: z.string().min(1, "O bairro é obrigatório"),
     city: z.string().min(1, "A cidade é obrigatória"),
     state: z.string().min(2, "O estado (UF) é obrigatório"),
-    
-    // 🔥 CORREÇÃO: Usando 'message' em vez de 'invalid_type_error'
+
     lat: z.number({ message: "A localização no mapa é obrigatória." }),
     lng: z.number({ message: "A localização no mapa é obrigatória." }),
   })
@@ -287,8 +290,14 @@ const paymentOptions: {
 
 export const ServiceProviderRegisterForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
-  const { signup, isSubmitting, error: authError } = useAuthStore();
   const navigate = useNavigate();
+
+  // 🔥 CONEXÃO COM OS NOVOS STORES
+  const registerProvider = useAuthStore((state) => state.register);
+  const authError = useAuthStore((state) => state.error);
+  const { updateProfile } = useProviderProfileStore();
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+
   const {
     address,
     loading: cepLoading,
@@ -375,17 +384,16 @@ export const ServiceProviderRegisterForm = () => {
         if (data && data.length > 0) {
           const { lat, lon } = data[0];
           const newPos = new L.LatLng(parseFloat(lat), parseFloat(lon));
-          
+
           setPosition(newPos);
           setMapCenter([newPos.lat, newPos.lng]);
           setMapZoom(17);
-          
-          // 🔥 Atualiza o form para passar na validação
+
           setValue("lat", newPos.lat);
           setValue("lng", newPos.lng);
           clearErrors(["lat", "lng"]);
         } else {
-            console.log("Geocoding não encontrou endereço exato");
+          console.log("Geocoding não encontrou endereço exato");
         }
       } catch (error) {
         console.error("Erro GPS:", error);
@@ -396,16 +404,16 @@ export const ServiceProviderRegisterForm = () => {
   }, [streetValue, numberValue, cityValue, setValue, clearErrors]);
 
   useEffect(() => {
-    const handler = setTimeout(() => fetchCoordinates(), 1500); 
+    const handler = setTimeout(() => fetchCoordinates(), 1500);
     return () => clearTimeout(handler);
   }, [streetValue, numberValue, cityValue, fetchCoordinates]);
 
   // Handler de clique no mapa
   const handleMapClick = (latlng: L.LatLng) => {
-      setPosition(latlng);
-      setValue("lat", latlng.lat);
-      setValue("lng", latlng.lng);
-      clearErrors(["lat", "lng"]);
+    setPosition(latlng);
+    setValue("lat", latlng.lat);
+    setValue("lng", latlng.lng);
+    clearErrors(["lat", "lng"]);
   };
 
   const handleCepBlur = () => {
@@ -423,7 +431,16 @@ export const ServiceProviderRegisterForm = () => {
       "areaOfWork",
     ],
     3: ["whatsapp", "instagram", "facebook", "website"],
-    4: ["zipCode", "street", "number", "neighborhood", "city", "state", "lat", "lng"],
+    4: [
+      "zipCode",
+      "street",
+      "number",
+      "neighborhood",
+      "city",
+      "state",
+      "lat",
+      "lng",
+    ],
   };
 
   const nextStep = async (e?: React.MouseEvent | React.KeyboardEvent) => {
@@ -474,64 +491,72 @@ export const ServiceProviderRegisterForm = () => {
     return `${baseUrl}/${clean}`;
   };
 
+  // 🔥 NOVA LÓGICA DE SUBMIT (JAVA API)
   const onSubmit: SubmitHandler<ProviderFormData> = async (data) => {
     if (currentStep !== 4) return;
-    
+
     // Validação Final de Segurança para o Mapa
     if (!position || !data.lat || !data.lng) {
-        setError("lat", { message: "Selecione a localização no mapa" });
-        return;
+      setError("lat", { message: "Selecione a localização no mapa" });
+      return;
     }
 
-    const formattedInstagram = formatSocialLink(
-      data.instagram,
-      "https://www.instagram.com",
-    );
-    const formattedFacebook = formatSocialLink(
-      data.facebook,
-      "https://www.facebook.com",
-    );
-
-    const additionalData: Partial<ServiceProviderProfile> = {
-      businessName: data.businessName,
-      documentType: data.documentType,
-      cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
-      cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
-      businessPhone: data.businessPhone,
-      areaOfWork: data.areaOfWork,
-      pixKey: data.pixKey,
-      pixKeyType: data.pixKeyType,
-      socialLinks: {
-        whatsapp: data.whatsapp,
-        instagram: formattedInstagram,
-        facebook: formattedFacebook,
-        website: data.website,
-      },
-      paymentMethods: data.paymentMethods as PaymentMethod[],
-      businessAddress: {
-        zipCode: data.zipCode,
-        street: data.street,
-        number: data.number,
-        neighborhood: data.neighborhood,
-        city: data.city,
-        state: data.state,
-        lat: position.lat,
-        lng: position.lng,
-      },
-      subscriptionStatus: "trial",
-    };
+    setIsSubmittingForm(true);
 
     try {
-      await signup(
-        data.email,
-        data.password,
-        data.name,
-        "serviceProvider",
-        additionalData,
-      );
+      // 1. Registo Base (AuthStore)
+      await registerProvider({
+        role: "SERVICE_PROVIDER",
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        businessName: data.businessName,
+        document: data.documentNumber.replace(/\D/g, ""), // Manda limpo
+        phone: data.businessPhone,
+      });
+
+      // 2. Atualização dos Dados Extras (ProfileStore)
+      const newUser = useAuthStore.getState().user;
+
+      if (newUser && newUser.id) {
+        const formattedInstagram = formatSocialLink(
+          data.instagram,
+          "https://www.instagram.com",
+        );
+        const formattedFacebook = formatSocialLink(
+          data.facebook,
+          "https://www.facebook.com",
+        );
+
+        await updateProfile(newUser.id, {
+          areaOfWork: data.areaOfWork,
+          pixKey: data.pixKey,
+          pixKeyType: data.pixKeyType,
+          socialLinks: {
+            whatsapp: data.whatsapp,
+            instagram: formattedInstagram,
+            facebook: formattedFacebook,
+            website: data.website,
+          },
+          paymentMethods: data.paymentMethods as PaymentMethod[],
+          businessAddress: {
+            zipCode: data.zipCode,
+            street: data.street,
+            number: data.number,
+            neighborhood: data.neighborhood,
+            city: data.city,
+            state: data.state,
+            lat: position.lat,
+            lng: position.lng,
+          },
+        });
+      }
+
       navigate("/dashboard");
     } catch (error) {
-      console.error("Falha no cadastro:", error);
+      console.error("Falha no cadastro do estabelecimento:", error);
+    } finally {
+      setIsSubmittingForm(false);
     }
   };
 
@@ -1001,39 +1026,56 @@ export const ServiceProviderRegisterForm = () => {
             {/* SEÇÃO DO MAPA BLINDADA */}
             <div className="mt-6 space-y-2">
               <div className="flex items-center justify-between">
-                <Label className={cn("text-base", !position && "text-destructive")}>
-                   Confirme a localização no Mapa (Obrigatório)
+                <Label
+                  className={cn("text-base", !position && "text-destructive")}
+                >
+                  Confirme a localização no Mapa (Obrigatório)
                 </Label>
-                {geocodingLoading && <div className="text-xs text-primary flex items-center gap-1"><Loader2 size={12} className="animate-spin"/> Buscando coordenadas...</div>}
+                {geocodingLoading && (
+                  <div className="text-xs text-primary flex items-center gap-1">
+                    <Loader2 size={12} className="animate-spin" /> Buscando
+                    coordenadas...
+                  </div>
+                )}
               </div>
 
               {/* Alerta Visual se não tiver posição */}
               {!position && !geocodingLoading && (
-                 <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-md p-3 flex items-start gap-3">
-                    <AlertTriangle className="text-yellow-500 shrink-0 mt-0.5" size={18} />
-                    <div className="text-sm text-yellow-200">
-                       <span className="font-bold block">Atenção:</span>
-                       Não encontramos a localização exata automaticamente. 
-                       <span className="font-bold underline ml-1 cursor-pointer">Clique no mapa</span> onde fica seu estabelecimento para habilitar o cadastro.
-                    </div>
-                 </div>
+                <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-md p-3 flex items-start gap-3">
+                  <AlertTriangle
+                    className="text-yellow-500 shrink-0 mt-0.5"
+                    size={18}
+                  />
+                  <div className="text-sm text-yellow-200">
+                    <span className="font-bold block">Atenção:</span>
+                    Não encontramos a localização exata automaticamente.
+                    <span className="font-bold underline ml-1 cursor-pointer">
+                      Clique no mapa
+                    </span>{" "}
+                    onde fica seu estabelecimento para habilitar o cadastro.
+                  </div>
+                </div>
               )}
 
-              <div 
+              <div
                 className={cn(
-                    "h-64 w-full rounded-lg overflow-hidden border shadow-sm mt-2 transition-all relative group",
-                    !position ? "border-destructive ring-1 ring-destructive" : "border-gray-700 hover:border-primary"
+                  "h-64 w-full rounded-lg overflow-hidden border shadow-sm mt-2 transition-all relative group",
+                  !position
+                    ? "border-destructive ring-1 ring-destructive"
+                    : "border-gray-700 hover:border-primary",
                 )}
               >
                 {!position && (
-                    <div className="absolute inset-0 z-[400] bg-black/40 flex items-center justify-center pointer-events-none group-hover:bg-transparent transition-colors">
-                        <div className="bg-background/90 text-foreground px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
-                             <MousePointerClick className="animate-bounce text-primary" />
-                             <span className="text-sm font-bold">Clique no local exato</span>
-                        </div>
+                  <div className="absolute inset-0 z-[400] bg-black/40 flex items-center justify-center pointer-events-none group-hover:bg-transparent transition-colors">
+                    <div className="bg-background/90 text-foreground px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                      <MousePointerClick className="animate-bounce text-primary" />
+                      <span className="text-sm font-bold">
+                        Clique no local exato
+                      </span>
                     </div>
+                  </div>
                 )}
-                
+
                 <MapContainer
                   center={mapCenter}
                   zoom={mapZoom}
@@ -1046,12 +1088,13 @@ export const ServiceProviderRegisterForm = () => {
                 </MapContainer>
               </div>
               {errors.lat && (
-                  <p className="text-sm text-destructive font-medium text-center animate-pulse">
-                      {errors.lat.message}
-                  </p>
+                <p className="text-sm text-destructive font-medium text-center animate-pulse">
+                  {errors.lat.message}
+                </p>
               )}
-               <p className="text-xs text-gray-500 text-center">
-                  Isso garante que seu estabelecimento apareça nas buscas por proximidade.
+              <p className="text-xs text-gray-500 text-center">
+                Isso garante que seu estabelecimento apareça nas buscas por
+                proximidade.
               </p>
             </div>
           </section>
@@ -1074,12 +1117,12 @@ export const ServiceProviderRegisterForm = () => {
           )}
           <Button
             type={currentStep === 4 ? "submit" : "button"}
-            disabled={isSubmitting}
+            disabled={isSubmittingForm}
             onClick={currentStep === 4 ? undefined : nextStep}
             className={currentStep === 1 ? "w-full" : "w-2/3"}
           >
             {currentStep === 4 ? (
-              isSubmitting ? (
+              isSubmittingForm ? (
                 <Loader2 className="animate-spin h-5 w-5 mr-2" />
               ) : (
                 "Finalizar Cadastro"

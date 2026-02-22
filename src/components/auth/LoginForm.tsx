@@ -21,7 +21,8 @@ interface LoginFormProps {
 }
 
 export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
-  const { login, isSubmitting } = useAuthStore();
+  // 🔥 Trocámos isSubmitting por loading, de acordo com o nosso novo authStore
+  const { login, loading, error: authError } = useAuthStore();
 
   const {
     register,
@@ -34,7 +35,12 @@ export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
 
   const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
     try {
-      const user = await login(data.email, data.password);
+      // Faz o login no Firebase e puxa os dados do Spring Boot para a memória
+      await login(data.email, data.password);
+      
+      // Lê o utilizador que acabou de ser gravado no estado global
+      const user = useAuthStore.getState().user;
+      
       if (user) {
         onLoginSuccess(user);
       }
@@ -76,12 +82,19 @@ export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
         </div>
       </div>
 
+      {/* 🔥 Melhoria: Exibe a mensagem de erro que vem do Backend / Firebase */}
+      {authError && (
+        <p className="text-sm text-destructive text-center animate-fade-in-down">
+          {authError}
+        </p>
+      )}
+
       <Button
         type="submit"
-        disabled={isSubmitting}
+        disabled={loading}
         className="w-full h-11 text-base font-bold shadow-lg shadow-primary/10 mt-2"
       >
-        {isSubmitting ? (
+        {loading ? (
           <Loader2 className="animate-spin mr-2 h-5 w-5" />
         ) : (
           <div className="flex items-center gap-2">

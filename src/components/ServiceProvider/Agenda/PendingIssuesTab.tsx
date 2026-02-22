@@ -1,12 +1,10 @@
-import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { PendingIssueCard } from "./PendingIssueCard";
-
 import { motion, AnimatePresence } from "framer-motion";
 
 interface PendingIssuesTabProps {
-  appointments: EnrichedProviderAppointment[];
+  appointments: Appointment[]; // ✨ Tipagem oficial e limpa
   onAppointmentSelect: (appointment: Appointment) => void;
   emptyStateMessage?: string;
 }
@@ -16,9 +14,9 @@ export const PendingIssuesTab = ({
   onAppointmentSelect,
   emptyStateMessage = "Nenhum agendamento pendente de conclusão.",
 }: PendingIssuesTabProps) => {
-  // Ordena por mais antigo primeiro (prioridade de resolução)
+  // ✨ Ordena por mais antigo primeiro, lidando com as datas (ISO String) de forma segura
   const sortedAppointments = [...appointments].sort(
-    (a, b) => a.startTime.getTime() - b.startTime.getTime()
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
   );
 
   if (appointments.length === 0) {

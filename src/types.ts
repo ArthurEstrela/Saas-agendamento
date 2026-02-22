@@ -156,7 +156,11 @@ export interface ServiceProviderProfile extends BaseUser {
   stripeSubscriptionId?: string;
   trialEndsAt?: string;
   onboardingDismissed?: boolean;
-  averageRating?: number; // Adicionado pela migration V14
+  averageRating?: number;
+
+  services?: Service[];
+  professionals?: ProfessionalProfile[];
+  reviews?: Review[];
 }
 
 export interface ProfessionalProfile extends BaseUser {

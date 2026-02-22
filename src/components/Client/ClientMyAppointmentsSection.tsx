@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
-import {
-  useUserAppointmentsStore,
-} from "../../store/userAppointmentsStore";
+import { useUserAppointmentsStore } from "../../store/userAppointmentsStore";
 import { ClientAppointmentCard } from "./ClientAppointmentCard";
 import { AppointmentCardSkeleton } from "./AppointmentCardSkeleton";
 import { Clock, History } from "lucide-react";
@@ -16,33 +14,64 @@ type Tab = "upcoming" | "past";
 
 export const ClientMyAppointmentsSection = () => {
   const { user } = useAuthStore();
-  const { appointments, isLoading, fetchAppointments, clearAppointments } =
-    useUserAppointmentsStore();
+
+  // 🔥 Mapeamos 'loading' (padrão dos nossos novos stores) para 'isLoading'
+  const {
+    appointments,
+    loading: isLoading,
+    fetchUserAppointments,
+  } = useUserAppointmentsStore();
+
   const [activeTab, setActiveTab] = useState<Tab>("upcoming");
 
   useEffect(() => {
-    if (user?.uid) fetchAppointments(user.uid);
-    return () => clearAppointments();
-  }, [user?.uid, fetchAppointments, clearAppointments]);
+    // A chamada não precisa do ID, pois a API Java lê o Token JWT
+    if (user?.id) {
+      fetchUserAppointments();
+    }
+  }, [user?.id, fetchUserAppointments]);
 
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
     const now = new Date();
+
+    // ✨ CORREÇÃO 2: Função segura para garantir que lemos a String do Java como Data
+    const parseDate = (dateVal: string | Date) => new Date(dateVal);
+
     const upcoming = appointments
-      .filter(
-        (a) =>
-          a.startTime >= now &&
-          (a.status === "pending" || a.status === "scheduled")
-      )
-      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+      .filter((a) => {
+        const start = parseDate(a.startTime);
+        // ✨ CORREÇÃO 3: Normalizamos o Enum do Java para evitar bugs
+        const status = a.status.toUpperCase();
+
+        return (
+          start >= now &&
+          (status === "PENDING" ||
+            status === "SCHEDULED" ||
+            status === "CONFIRMED")
+        );
+      })
+      .sort(
+        (a, b) =>
+          parseDate(a.startTime).getTime() - parseDate(b.startTime).getTime(),
+      );
 
     const past = appointments
-      .filter(
-        (a) =>
-          a.startTime < now ||
-          a.status === "completed" ||
-          a.status === "cancelled"
-      )
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      .filter((a) => {
+        const start = parseDate(a.startTime);
+        const status = a.status.toUpperCase();
+
+        return (
+          start < now ||
+          status === "COMPLETED" ||
+          status === "CANCELLED" ||
+          status === "NO_SHOW" ||
+          status === "BLOCKED"
+        );
+      })
+      .sort(
+        (a, b) =>
+          parseDate(b.startTime).getTime() - parseDate(a.startTime).getTime(),
+      );
 
     return { upcomingAppointments: upcoming, pastAppointments: past };
   }, [appointments]);
@@ -79,7 +108,7 @@ export const ClientMyAppointmentsSection = () => {
               "rounded-md transition-all",
               activeTab === "upcoming"
                 ? "bg-gray-800 text-white shadow-sm"
-                : "text-gray-400 hover:text-white"
+                : "text-gray-400 hover:text-white",
             )}
           >
             Próximos ({upcomingAppointments.length})
@@ -92,7 +121,7 @@ export const ClientMyAppointmentsSection = () => {
               "rounded-md transition-all",
               activeTab === "past"
                 ? "bg-gray-800 text-white shadow-sm"
-                : "text-gray-400 hover:text-white"
+                : "text-gray-400 hover:text-white",
             )}
           >
             Histórico ({pastAppointments.length})

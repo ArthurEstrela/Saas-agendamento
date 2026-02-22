@@ -1,8 +1,9 @@
-import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
+import type { Appointment } from "../../../types";
 import { format, isPast } from "date-fns";
 import { motion } from "framer-motion";
 import { Clock, User, Scissors, MessageCircle } from "lucide-react";
-import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
+// ✨ Agora importamos do ModalStore para lidar com a seleção!
+import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 
 // UI Primitivos
 import { Card } from "../../ui/card";
@@ -11,15 +12,22 @@ import { Badge } from "../../ui/badge";
 export const AppointmentCard = ({
   appointment,
 }: {
-  appointment: EnrichedProviderAppointment;
+  appointment: Appointment;
 }) => {
-  const { setSelectedAppointment } = useProviderAppointmentsStore();
+  // ✨ Usamos a openModal para selecionar e abrir diretamente, sem intermediários.
+  const { openModal } = useAgendaModalStore();
 
-  const { client, startTime, services, clientPhone } = appointment;
+  const { startTime: rawStartTime, items, clientPhone, clientName } = appointment;
 
-  const handleCardClick = () => setSelectedAppointment(appointment);
+  // ✨ Ao clicar no card, abre o modal de detalhes já com o appointment
+  const handleCardClick = () => openModal("details", appointment);
 
-  const phoneToUse = clientPhone || client?.phoneNumber;
+  // Parsing seguro da data para uso no date-fns
+  const startTime = new Date(rawStartTime);
+
+  // Lêmo diretamente da raiz da interface Appointment (Sem 'any' e sem objetos aninhados)
+  const phoneToUse = clientPhone;
+  const nameToUse = clientName || "Particular";
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -27,14 +35,16 @@ export const AppointmentCard = ({
     if (!phoneToUse) return;
 
     const cleanPhone = phoneToUse.replace(/\D/g, "");
-    const serviceName = services[0]?.name || "serviço";
+    
+    // Tratamento seguro de items (lê o array oficial da API Java)
+    const serviceName = items && items.length > 0 ? items[0].name : "serviço";
 
     let message = "";
     if (isPast(startTime)) {
-      message = `Olá ${client?.name || "cliente"}, faz tempo que não te vejo! Bora marcar aquele ${serviceName}?`;
+      message = `Olá ${nameToUse}, faz tempo que não te vejo! Bora marcar aquele ${serviceName}?`;
     } else {
       const timeString = format(startTime, "HH:mm");
-      message = `Olá ${client?.name || "cliente"}, passando para confirmar nosso agendamento de ${serviceName} às ${timeString}.`;
+      message = `Olá ${nameToUse}, passando para confirmar nosso agendamento de ${serviceName} às ${timeString}.`;
     }
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
@@ -42,8 +52,15 @@ export const AppointmentCard = ({
     );
   };
 
-  // Motion Wrapper
   const MotionCard = motion(Card);
+
+  // Duração (Usa uma duração fictícia caso a API ainda não a envie na listagem)
+  // Nota: Se a sua API Java não devolve totalDuration, mostramos 30min default.
+  // Idealmente, deve adicionar 'totalDuration' à interface Appointment no types.ts
+  const displayDuration = (appointment as Appointment & { totalDuration?: number }).totalDuration || 30;
+  
+  // Preço (Padrão API Spring Boot)
+  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
 
   return (
     <MotionCard
@@ -54,11 +71,9 @@ export const AppointmentCard = ({
       onClick={handleCardClick}
       className="relative p-4 bg-gray-900/60 border-gray-800/60 backdrop-blur-sm cursor-pointer hover:border-primary/30 hover:bg-gray-800/80 transition-all h-full flex flex-col justify-between group rounded-xl overflow-hidden"
     >
-      {/* Efeito de borda lateral colorida baseada no status */}
       <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
       <div>
-        {/* Header: Hora e Duração */}
         <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-800/50">
           <Badge
             variant="outline"
@@ -68,18 +83,17 @@ export const AppointmentCard = ({
           </Badge>
           <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-950/30 px-2 py-1 rounded-full">
             <Clock size={12} />
-            <span>{appointment.totalDuration} min</span>
+            <span>{displayDuration} min</span>
           </div>
         </div>
 
-        {/* Info Principal */}
         <div className="space-y-2">
           <div className="flex items-center gap-2.5">
             <div className="bg-gray-800 p-1.5 rounded-full shrink-0">
               <User size={14} className="text-gray-400" />
             </div>
             <p className="text-sm font-semibold text-gray-200 truncate group-hover:text-white transition-colors">
-              {appointment.clientName || client?.name || "Particular"}
+              {nameToUse}
             </p>
           </div>
 
@@ -88,17 +102,15 @@ export const AppointmentCard = ({
               <Scissors size={14} className="text-gray-500" />
             </div>
             <p className="text-xs text-gray-400 truncate leading-relaxed">
-              {services.length > 0
-                ? services.map((s) => s.name).join(", ")
-                : appointment.serviceName}
+              {items && items.length > 0
+                ? items.map((s) => s.name).join(", ")
+                : "Serviço não especificado"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Footer: Preço e Ação */}
       <div className="flex justify-between items-center mt-4 pt-2 border-t border-gray-800/50">
-        {/* ✅ LÓGICA CORRIGIDA: Usa phoneToUse para decidir se exibe o botão */}
         {phoneToUse ? (
           <button
             onClick={handleWhatsAppClick}
@@ -118,7 +130,7 @@ export const AppointmentCard = ({
           <span className="text-[10px] text-gray-500 mr-1 font-normal uppercase">
             R$
           </span>
-          {appointment.totalPrice.toFixed(0)}
+          {displayPrice.toFixed(0)}
         </span>
       </div>
     </MotionCard>

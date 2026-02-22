@@ -1,60 +1,19 @@
-import { useState, useEffect } from "react";
-import { useProfileStore } from "../../store/profileStore";
-import { getProfessionalsByIds } from "../../firebase/userService";
-import type {
-  ServiceProviderProfile,
-  ClientProfile,
-  Review,
-} from "../../types";
+import { useEffect } from "react";
+import { useFavoritesStore } from "../../store/favoritesStore"; // ✨ NOVO: Store dedicado a favoritos
 import { ClientProfessionalCard } from "./ClientProfessionalCard";
 import { Loader2, Heart, HeartCrack } from "lucide-react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../../firebase/config";
 
 // UI
 import { Card, CardContent } from "../ui/card";
 
 export const ClientFavoritesSection = () => {
-  const { userProfile } = useProfileStore();
-  const [favoriteProviders, setFavoriteProviders] = useState<
-    ServiceProviderProfile[]
-  >([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // 🔥 Pegamos a lista já processada diretamente do Store!
+  const { favorites, loading: isLoading, fetchFavorites } = useFavoritesStore();
 
   useEffect(() => {
-    const fetchFavorites = async () => {
-      if (userProfile && userProfile.role === "client") {
-        const clientProfile = userProfile as ClientProfile;
-        const favoriteIds = clientProfile.favoriteProfessionals || [];
-
-        if (favoriteIds.length > 0) {
-          try {
-            let providers = await getProfessionalsByIds(favoriteIds);
-            providers = await Promise.all(
-              providers.map(async (provider) => {
-                const q = query(
-                  collection(db, "reviews"),
-                  where("serviceProviderId", "==", provider.id)
-                );
-                const snap = await getDocs(q);
-                return {
-                  ...provider,
-                  reviews: snap.docs.map((d) => d.data() as Review),
-                };
-              })
-            );
-            setFavoriteProviders(providers);
-          } catch (error) {
-            console.error("Erro ao buscar favoritos:", error);
-          }
-        } else {
-          setFavoriteProviders([]);
-        }
-      }
-      setIsLoading(false);
-    };
+    // Ao montar o componente, pede ao Java a lista completa de estabelecimentos favoritos
     fetchFavorites();
-  }, [userProfile]);
+  }, [fetchFavorites]);
 
   return (
     <div className="space-y-8">
@@ -69,9 +28,9 @@ export const ClientFavoritesSection = () => {
         <div className="flex justify-center items-center h-64">
           <Loader2 className="animate-spin text-primary" size={48} />
         </div>
-      ) : favoriteProviders.length > 0 ? (
+      ) : favorites.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {favoriteProviders.map((provider) => (
+          {favorites.map((provider) => (
             <ClientProfessionalCard key={provider.id} provider={provider} />
           ))}
         </div>

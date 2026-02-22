@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
+// O EnrichedProviderAppointment era o tipo antigo. A API agora devolve o 'Appointment' com tudo incluído.
 import type { Appointment } from "../../../types";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,10 +22,18 @@ const AppointmentRow = ({
   appointment,
   onClick,
 }: {
-  appointment: EnrichedProviderAppointment;
+  appointment: Appointment; // ✨ TIPAGEM DIRETA DA API
   onClick: () => void;
 }) => {
-  const isPending = appointment.status === "pending";
+  // 🔥 Tratamento do Status Case-Insensitive (API Java = MAIÚSCULAS)
+  const isPending = appointment.status.toUpperCase() === "PENDING";
+
+  // 🔥 Converter Datas ISO String para Objetos Date com segurança
+  const startTime = new Date(appointment.startTime);
+  const endTime = new Date(appointment.endTime);
+
+  // Fallback de Preço
+  const displayPrice = appointment.totalAmount || 0;
 
   return (
     <motion.li
@@ -51,19 +59,19 @@ const AppointmentRow = ({
         )}
       />
 
-      {/* Coluna de Tempo (Largura fixa reduzida no mobile) */}
+      {/* Coluna de Tempo */}
       <div className="flex flex-col items-center justify-center w-12 sm:w-16 shrink-0 border-r border-gray-800 pr-2 sm:pr-3 my-0.5">
         <span className="font-bold text-base sm:text-xl text-gray-100 font-mono tracking-tighter">
-          {format(appointment.startTime, "HH:mm")}
+          {format(startTime, "HH:mm")}
         </span>
         <span className="text-[9px] sm:text-[10px] text-gray-500 font-medium uppercase text-center leading-tight">
           Até
           <br />
-          {format(appointment.endTime, "HH:mm")}
+          {format(endTime, "HH:mm")}
         </span>
       </div>
 
-      {/* Info Principal (min-w-0 é crucial para o truncate funcionar no flex) */}
+      {/* Info Principal */}
       <div className="flex-grow min-w-0 flex flex-col justify-center gap-0.5 sm:gap-1.5">
         {/* Serviços */}
         <div className="flex items-center gap-1.5">
@@ -72,9 +80,11 @@ const AppointmentRow = ({
             className="text-primary shrink-0 sm:w-3.5 sm:h-3.5"
           />
           <span className="font-semibold text-xs sm:text-sm text-gray-200 truncate leading-tight">
-            {appointment.services.length > 0
-              ? appointment.services.map((s) => s.name).join(", ")
-              : appointment.serviceName || "Serviço Manual"}
+            {/* ✨ CORREÇÃO: Lê de 'items' em vez de 'services' */}
+            {/* ✨ REMOVIDO O 'any': Lemos apenas do array de items */}
+            {appointment.items && appointment.items.length > 0
+              ? appointment.items.map((i) => i.name).join(", ")
+              : "Serviço não especificado"}
           </span>
         </div>
 
@@ -82,7 +92,7 @@ const AppointmentRow = ({
         <div className="flex items-center gap-1.5 text-xs text-gray-400">
           <User size={12} className="shrink-0 sm:w-[13px] sm:h-[13px]" />
           <span className="truncate font-medium text-[11px] sm:text-xs">
-            {appointment.client?.name || "Cliente sem cadastro"}
+            {appointment.clientName || "Cliente sem cadastro"}
           </span>
         </div>
 
@@ -98,7 +108,7 @@ const AppointmentRow = ({
       {/* Coluna da Direita: Preço + Seta */}
       <div className="flex flex-col items-end justify-center shrink-0 gap-1 pl-1">
         <span className="font-bold text-white text-xs sm:text-base bg-gray-800/50 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md whitespace-nowrap">
-          R$ {appointment.totalPrice.toFixed(0)}
+          R$ {displayPrice.toFixed(0)}
         </span>
 
         {/* Indicador visual de 'clique para ver mais' */}
@@ -115,7 +125,7 @@ export const AgendaListView = ({
   appointments,
   onAppointmentSelect,
 }: {
-  appointments: EnrichedProviderAppointment[];
+  appointments: Appointment[]; // ✨ TIPAGEM ESTRITA DA API
   onAppointmentSelect: (appointment: Appointment) => void;
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -124,7 +134,10 @@ export const AgendaListView = ({
     setCurrentPage(1);
   }, [appointments]);
 
-  const totalPages = Math.ceil(appointments.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(appointments.length / ITEMS_PER_PAGE),
+  );
 
   const paginatedAppointments = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;

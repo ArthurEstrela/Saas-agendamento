@@ -1,4 +1,3 @@
-// src/components/ServiceProvider/Agenda/AppointmentDetailsModal.tsx
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,7 @@ import {
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { toast } from "react-hot-toast";
-import type { Appointment, ClientProfile } from "../../../types";
+import type { Appointment } from "../../../types";
 import { cn } from "../../../lib/utils/cn";
 
 // UI Components
@@ -29,15 +28,28 @@ import { Avatar, AvatarImage, AvatarFallback } from "../../ui/avatar";
 import { Badge } from "../../ui/badge";
 import { Card } from "../../ui/card";
 
-interface EnrichedAppointment extends Appointment {
-  client?: ClientProfile;
-}
+// Tipagem exata para as props do componente Badge (Shadcn)
+type BadgeVariant =
+  | "default"
+  | "secondary"
+  | "destructive"
+  | "outline"
+  | "success"
+  | "warning";
+
+// ✨ TIPAGEM ESTRITA SEM 'ANY':
+// Estendemos a interface base para aceitar o objeto client caso a API o inclua no payload
+type ModalAppointment = Appointment & {
+  client?: {
+    profilePictureUrl?: string;
+  };
+};
 
 interface AppointmentDetailsModalProps {
-  appointment: EnrichedAppointment | null;
+  appointment: ModalAppointment | null;
   isOpen: boolean;
   onClose: () => void;
-  onStatusChange: (id: string, newStatus: Appointment["status"]) => void;
+  onStatusChange: (id: string, newStatus: string) => void;
   onComplete: (appointment: Appointment) => void;
 }
 
@@ -50,38 +62,60 @@ export const AppointmentDetailsModal = ({
 }: AppointmentDetailsModalProps) => {
   if (!appointment) return null;
 
-  const statusVariantMap = {
+  // Normalizamos o status para usar como chave nos mapas
+  const normalizedStatus = appointment.status.toLowerCase();
+
+  const statusVariantMap: Record<string, BadgeVariant> = {
     pending: "warning",
     scheduled: "default",
+    confirmed: "default",
     completed: "success",
     cancelled: "destructive",
-  } as const;
-
-  const statusLabels = {
-    pending: "Pendente",
-    scheduled: "Agendado",
-    completed: "Concluído",
-    cancelled: "Cancelado",
+    no_show: "destructive",
+    blocked: "outline",
   };
 
-  const rawPhone =
-    appointment.clientPhone || appointment.client?.phoneNumber || "";
+  const statusLabels: Record<string, string> = {
+    pending: "Pendente",
+    scheduled: "Agendado",
+    confirmed: "Confirmado",
+    completed: "Concluído",
+    cancelled: "Cancelado",
+    no_show: "Faltou",
+    blocked: "Bloqueado",
+  };
+
+  // Trata o número de telemóvel e remove caracteres não numéricos
+  const rawPhone = appointment.clientPhone || "";
   const cleanPhone = rawPhone.replace(/\D/g, "");
   const hasPhone = !!cleanPhone;
+
+  // ✨ SEM ANY AQUI! O TypeScript agora sabe que client é opcional e tem profilePictureUrl
   const clientPhotoUrl = appointment.client?.profilePictureUrl;
 
   const now = new Date();
+  const startTime = new Date(appointment.startTime);
   const endTime = new Date(appointment.endTime);
   const isTooEarlyToComplete = now < endTime;
 
+  // Tratamento seguro para os items/serviços
+  const serviceName =
+    appointment.items && appointment.items.length > 0
+      ? appointment.items.map((i) => i.name).join(", ")
+      : "Serviço não especificado";
+
+  // Preço
+  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
+
   const handleWhatsApp = () => {
     if (!hasPhone) return toast.error("Telefone indisponível");
-    const time = format(new Date(appointment.startTime), "HH:mm");
-    const date = format(new Date(appointment.startTime), "dd/MM");
-    const message = `Olá ${appointment.clientName}, gostaria de confirmar nosso agendamento para ${date} às ${time}.`;
+    const timeStr = format(startTime, "HH:mm");
+    const dateStr = format(startTime, "dd/MM");
+    const clientName = appointment.clientName || "Cliente";
+    const message = `Olá ${clientName}, gostaria de confirmar nosso agendamento para ${dateStr} às ${timeStr}.`;
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
-      "_blank"
+      "_blank",
     );
   };
 
@@ -107,10 +141,10 @@ export const AppointmentDetailsModal = ({
               </p>
             </div>
             <Badge
-              variant={statusVariantMap[appointment.status]}
+              variant={statusVariantMap[normalizedStatus] || "outline"}
               className="uppercase text-[10px] tracking-wide px-2 h-6"
             >
-              {statusLabels[appointment.status]}
+              {statusLabels[normalizedStatus] || "Desconhecido"}
             </Badge>
           </div>
         </DialogHeader>
@@ -123,13 +157,13 @@ export const AppointmentDetailsModal = ({
               <Avatar className="h-12 w-12 border border-gray-700 shadow-md">
                 <AvatarImage src={clientPhotoUrl} className="object-cover" />
                 <AvatarFallback className="bg-gray-800 text-primary font-bold">
-                  {appointment.clientName.charAt(0)}
+                  {(appointment.clientName || "C").charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
 
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-base text-white truncate">
-                  {appointment.clientName}
+                  {appointment.clientName || "Cliente Particular"}
                 </p>
                 {hasPhone ? (
                   <button
@@ -171,7 +205,7 @@ export const AppointmentDetailsModal = ({
                   <Calendar size={10} /> Data
                 </span>
                 <p className="text-sm font-medium text-gray-200">
-                  {format(new Date(appointment.startTime), "dd/MM")}
+                  {format(startTime, "dd/MM/yyyy")}
                 </p>
               </div>
               <div className="bg-gray-900/40 p-3 rounded-lg border border-gray-800/50 space-y-1">
@@ -179,7 +213,7 @@ export const AppointmentDetailsModal = ({
                   <Clock size={10} /> Horário
                 </span>
                 <p className="text-sm font-medium text-gray-200">
-                  {format(new Date(appointment.startTime), "HH:mm")}
+                  {format(startTime, "HH:mm")}
                 </p>
               </div>
             </div>
@@ -190,7 +224,7 @@ export const AppointmentDetailsModal = ({
                   <Scissors size={10} /> Serviço
                 </span>
                 <p className="text-sm font-medium text-gray-200 leading-tight">
-                  {appointment.serviceName}
+                  {serviceName}
                 </p>
               </div>
 
@@ -202,7 +236,7 @@ export const AppointmentDetailsModal = ({
                     <User size={10} /> Profissional
                   </span>
                   <p className="text-xs text-gray-300">
-                    {appointment.professionalName}
+                    {appointment.professionalName || "Profissional"}
                   </p>
                 </div>
                 <div className="text-right">
@@ -210,7 +244,7 @@ export const AppointmentDetailsModal = ({
                     <span className="text-xs text-gray-500 font-normal mr-1">
                       R$
                     </span>
-                    {appointment.totalPrice.toFixed(2)}
+                    {displayPrice.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -218,13 +252,14 @@ export const AppointmentDetailsModal = ({
           </div>
         </div>
 
-        {/* Footer Actions - Garantindo visibilidade no mobile */}
+        {/* Footer Actions */}
         <DialogFooter className="p-4 bg-gray-900 border-t border-gray-800 flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-2">
-          {appointment.status === "scheduled" ? (
+          {normalizedStatus === "scheduled" ||
+          normalizedStatus === "confirmed" ? (
             <div className="flex flex-col-reverse w-full sm:flex-row gap-3">
               <Button
                 variant="destructive"
-                onClick={() => onStatusChange(appointment.id, "cancelled")}
+                onClick={() => onStatusChange(appointment.id, "CANCELLED")}
                 className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 h-10"
               >
                 <XCircle size={18} className="mr-2" /> Cancelar
@@ -236,7 +271,7 @@ export const AppointmentDetailsModal = ({
                   "flex-1 font-bold h-10",
                   isTooEarlyToComplete
                     ? "opacity-50 cursor-not-allowed bg-gray-800 text-gray-400"
-                    : "bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20"
+                    : "bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20",
                 )}
               >
                 {isTooEarlyToComplete ? (
@@ -247,13 +282,13 @@ export const AppointmentDetailsModal = ({
                 Concluir
               </Button>
             </div>
-          ) : appointment.status === "pending" ? (
+          ) : normalizedStatus === "pending" ? (
             <div className="flex w-full gap-3">
               <Button variant="ghost" onClick={onClose} className="flex-1 h-10">
                 Fechar
               </Button>
               <Button
-                onClick={() => onStatusChange(appointment.id, "scheduled")}
+                onClick={() => onStatusChange(appointment.id, "SCHEDULED")}
                 className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white h-10 shadow-lg shadow-blue-900/20"
               >
                 Aprovar Agendamento

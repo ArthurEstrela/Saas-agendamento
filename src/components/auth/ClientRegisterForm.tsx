@@ -13,12 +13,13 @@ import {
   UserCheck,
   Image as ImageIcon,
 } from "lucide-react";
-import { useAuthStore } from "../../store/authStore";
 import { useNavigate } from "react-router-dom";
-import { uploadProfilePicture } from "../../firebase/userService";
-import type { ClientProfile } from "../../types";
 
-// Novos Componentes UI
+// Novos Stores (Sem Firebase)
+import { useAuthStore } from "../../store/authStore";
+import { useProfileStore } from "../../store/profileStore";
+
+// Componentes UI
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils/cn";
@@ -35,18 +36,13 @@ const inputBaseClasses =
   "flex h-11 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 // --- Função de Validação Forte de CPF ---
-// Verifica o algoritmo matemático oficial (dígitos verificadores)
 const validateCPF = (cpf: string) => {
-  // Remove caracteres não numéricos
   cpf = cpf.replace(/[^\d]+/g, "");
-
-  // Verifica tamanho padrão e se todos os dígitos são iguais (ex: 111.111.111-11)
   if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
 
   let soma = 0;
   let resto;
 
-  // Validação do 1º Dígito Verificador
   for (let i = 1; i <= 9; i++)
     soma = soma + parseInt(cpf.substring(i - 1, i)) * (11 - i);
 
@@ -54,7 +50,6 @@ const validateCPF = (cpf: string) => {
   if (resto === 10 || resto === 11) resto = 0;
   if (resto !== parseInt(cpf.substring(9, 10))) return false;
 
-  // Validação do 2º Dígito Verificador
   soma = 0;
   for (let i = 1; i <= 10; i++)
     soma = soma + parseInt(cpf.substring(i - 1, i)) * (12 - i);
@@ -72,12 +67,7 @@ const schema = z.object({
   email: z.string().email("Por favor, insira um email válido"),
   password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
   phoneNumber: z.string().min(14, "O telefone/WhatsApp é obrigatório"),
-  
-  // Aqui aplicamos a validação forte
-  cpf: z
-    .string()
-    .refine((val) => validateCPF(val), "CPF inválido"),
-
+  cpf: z.string().refine((val) => validateCPF(val), "CPF inválido"),
   dateOfBirth: z.string().min(10, "Data de nascimento é obrigatória"),
   gender: z.string().min(1, "Selecione um gênero"),
 });
@@ -86,10 +76,15 @@ type ClientFormData = z.infer<typeof schema>;
 
 export const ClientRegisterForm = () => {
   const navigate = useNavigate();
-  const { signup, isSubmitting, error: authError } = useAuthStore();
+  
+  // Conectamos aos nossos Stores atualizados
+  const registerClient = useAuthStore((state) => state.register);
+  const authError = useAuthStore((state) => state.error);
+  const { updateProfile, uploadAvatar } = useProfileStore();
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
   const {
     register,
@@ -110,24 +105,39 @@ export const ClientRegisterForm = () => {
   };
 
   const onSubmit: SubmitHandler<ClientFormData> = async (data) => {
+    setIsSubmittingForm(true);
     try {
-      await signup(data.email, data.password, data.name, "client", {
-        phoneNumber: data.phoneNumber,
-        cpf: data.cpf,
-        dateOfBirth: data.dateOfBirth,
-        gender: data.gender as ClientProfile["gender"],
+      // 1. Cria a conta no Firebase e na API Spring Boot
+      await registerClient({
+        role: "CLIENT",
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        phone: data.phoneNumber,
       });
 
-      if (profileImage) {
-        const user = useAuthStore.getState().user;
-        if (user) {
-          await uploadProfilePicture(user.uid, profileImage);
+      // 2. Recupera o ID do novo utilizador que acabou de ser criado e gravado no store
+      const newUser = useAuthStore.getState().user;
+      
+      if (newUser && newUser.id) {
+        // 3. Atualiza os dados complementares de perfil
+        await updateProfile(newUser.id, {
+          cpf: data.cpf,
+          dateOfBirth: data.dateOfBirth,
+          gender: data.gender,
+        });
+
+        // 4. Se houver foto, faz o upload para a nova rota Multipart do Java
+        if (profileImage) {
+          await uploadAvatar(newUser.id, profileImage);
         }
       }
 
       navigate("/dashboard");
     } catch (error) {
       console.error("Falha no cadastro do cliente:", error);
+    } finally {
+      setIsSubmittingForm(false);
     }
   };
 
@@ -298,7 +308,7 @@ export const ClientRegisterForm = () => {
                   defaultValue={field.value}
                 >
                   <SelectTrigger
-                    className={errors.gender ? "border-destructive" : ""}
+                    className={errors.gender ? "border-destructive border" : ""}
                   >
                     <SelectValue placeholder="Gênero" />
                   </SelectTrigger>
@@ -325,8 +335,8 @@ export const ClientRegisterForm = () => {
           <p className="text-sm text-destructive text-center">{authError}</p>
         )}
 
-        <Button type="submit" disabled={isSubmitting} className="w-full">
-          {isSubmitting ? (
+        <Button type="submit" disabled={isSubmittingForm} className="w-full">
+          {isSubmittingForm ? (
             <Loader2 className="animate-spin h-5 w-5 mr-2" />
           ) : null}
           Finalizar Cadastro

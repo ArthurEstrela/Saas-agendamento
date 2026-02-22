@@ -1,15 +1,17 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Heart, Star, Scissors } from "lucide-react";
-import { useProfileStore } from "../../store/profileStore";
-import type { ClientProfile, ServiceProviderProfile } from "../../types";
+
+// Novos Stores (Sem Firebase)
+import { useAuthStore } from "../../store/authStore";
+import { useFavoritesStore } from "../../store/favoritesStore"; // ✨ CORREÇÃO 1: Store correto
+import type { ServiceProviderProfile } from "../../types";
 
 // UI Components
 import { Card, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
-import { useAuthStore } from "../../store/authStore";
 import { cn } from "../../lib/utils/cn";
 
 // Interface estendida
@@ -23,9 +25,13 @@ interface Props {
 }
 
 export const ClientProfessionalCard = ({ provider }: Props) => {
-  const { userProfile, toggleFavorite } = useProfileStore();
-  const { reviews } = provider;
+  // Lemos o usuário diretamente do authStore
   const { user } = useAuthStore();
+  
+  // ✨ CORREÇÃO 2: Lemos os métodos de favoritos do store dedicado
+  const { toggleFavorite, isFavorite } = useFavoritesStore();
+  
+  const { reviews } = provider;
 
   // Calcula a média das avaliações
   const reviewSummary = useMemo(() => {
@@ -36,18 +42,20 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
     return { average, count: totalReviews };
   }, [reviews]);
 
-  // Verifica favorito
-  const isClientProfile = userProfile?.role === "client";
-  const isFavorited = isClientProfile
-    ? (userProfile as ClientProfile).favoriteProfessionals?.includes(
-        provider.id,
-      )
-    : false;
+  // Verifica se o utilizador logado é um cliente
+  const isClientProfile = user?.role === "CLIENT" || user?.role === "client";
+  
+  // ✨ CORREÇÃO 3: Usa a função isFavorite do store que verifica a array global
+  const isFavorited = isClientProfile ? isFavorite(provider.id) : false;
 
-  const handleFavoriteClick = (e: React.MouseEvent) => {
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
     e.preventDefault(); // Evita navegar para o perfil
     e.stopPropagation();
-    toggleFavorite(provider.id);
+    
+    if (!user) return;
+
+    // 🔥 O toggleFavorite do store já cuida do "Optimistic Update" e da chamada à API Java
+    await toggleFavorite(provider.id);
   };
 
   // Formatação de categoria
@@ -69,7 +77,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
         )}
       >
         {/* --- Botão Favoritar (Otimizado) --- */}
-        {user && (
+        {user && isClientProfile && (
           <button
             onClick={handleFavoriteClick}
             className={cn(
@@ -98,7 +106,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
             <img
               src={provider.bannerUrl}
               alt="Banner"
-              loading="lazy" // Carregamento preguiçoso
+              loading="lazy"
               decoding="async"
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
             />
@@ -112,7 +120,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
           <div className="absolute inset-0 bg-gradient-to-t from-[#18181b] via-transparent to-black/30 opacity-80 md:opacity-60" />
 
           {/* Badge de Distância */}
-          {provider.distance !== undefined && (
+          {provider.distance !== undefined && provider.distance < Infinity && (
             <Badge
               variant="secondary"
               className="absolute top-3 left-3 bg-black/70 border-none text-[10px] font-medium text-white gap-1 px-2 h-6"

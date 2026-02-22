@@ -1,7 +1,6 @@
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { motion } from "framer-motion";
 import { Check, Plus, ShoppingCart, Clock, DollarSign } from "lucide-react";
-import { useMemo } from "react";
 import { cn } from "../../lib/utils/cn";
 
 // Primitivos
@@ -11,18 +10,19 @@ import { Badge } from "../ui/badge";
 import { Typography } from "../ui/typography";
 
 export const ServiceSelection = () => {
-  const { provider, selectedServices, toggleService, goToNextStep } =
-    useBookingProcessStore();
+  // 🔥 Lemos o estado diretamente do nosso novo Store Refatorado
+  const { 
+    provider, 
+    services: selectedServices, 
+    toggleService, 
+    nextStep,
+    getTotalPrice,
+    getTotalDuration 
+  } = useBookingProcessStore();
 
-  const { totalDuration, totalPrice } = useMemo(() => {
-    return selectedServices.reduce(
-      (acc, service) => ({
-        totalDuration: acc.totalDuration + service.duration,
-        totalPrice: acc.totalPrice + service.price,
-      }),
-      { totalDuration: 0, totalPrice: 0 }
-    );
-  }, [selectedServices]);
+  // 🔥 Adeus `useMemo` com `reduce` complexo! O Zustand já nos dá as respostas prontas.
+  const totalDuration = getTotalDuration();
+  const totalPrice = getTotalPrice();
 
   const hasServices = (provider?.services?.length ?? 0) > 0;
   const isServiceSelected = selectedServices.length > 0;
@@ -52,19 +52,17 @@ export const ServiceSelection = () => {
               return (
                 <motion.div
                   key={service.id}
-                  // Removemos scale no hover em mobile via media query do CSS se necessário, 
-                  // mas aqui mantemos sutil
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="touch-manipulation" // Melhora resposta ao toque
+                  className="touch-manipulation"
                 >
                   <Card
                     onClick={() => toggleService(service)}
                     className={cn(
                       "cursor-pointer h-full transition-all duration-200 border relative overflow-hidden",
                       isSelected
-                        ? "border-primary bg-primary/10 md:shadow-[0_0_20px_rgba(218,165,32,0.15)]" // Sombra pesada só no desktop
-                        : "border-white/5 hover:border-primary/40 bg-[#18181b] md:bg-gray-900/60 md:backdrop-blur-sm" // Fundo sólido no mobile
+                        ? "border-primary bg-primary/10 md:shadow-[0_0_20px_rgba(218,165,32,0.15)]"
+                        : "border-white/5 hover:border-primary/40 bg-[#18181b] md:bg-gray-900/60 md:backdrop-blur-sm"
                     )}
                   >
                     <CardHeader className="pb-3 space-y-0 relative z-10">
@@ -147,7 +145,6 @@ export const ServiceSelection = () => {
               </div>
             </div>
             
-            {/* Info Mobile Extra (Contador) */}
             <div className="sm:hidden text-right">
                 <span className="text-xs text-gray-500 font-medium">
                     {selectedServices.length} {selectedServices.length === 1 ? 'item' : 'itens'}
@@ -156,7 +153,7 @@ export const ServiceSelection = () => {
           </div>
           
           <Button
-            onClick={goToNextStep}
+            onClick={nextStep}
             disabled={!isServiceSelected}
             size="lg"
             className="w-full sm:w-auto px-8 font-bold shadow-lg shadow-primary/10 transition-all active:scale-95"

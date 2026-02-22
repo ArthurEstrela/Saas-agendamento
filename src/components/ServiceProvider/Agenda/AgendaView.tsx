@@ -1,15 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
-import { useProfileStore } from "../../../store/profileStore";
-import {
-  useProviderAppointmentsStore,
-  type EnrichedProviderAppointment,
-} from "../../../store/providerAppointmentsStore";
+// Lemos o utilizador centralizado no authStore
+import { useAuthStore } from "../../../store/authStore";
+import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
 import { useAvailabilityStore } from "../../../store/availabilityStore";
 import type {
-  UserProfile,
-  ProfessionalProfile,
   ServiceProviderProfile,
+  ProfessionalProfile,
   Appointment,
 } from "../../../types";
 import { AnimatePresence, motion } from "framer-motion";
@@ -22,7 +19,7 @@ import {
   Download,
   Plus,
 } from "lucide-react";
-import { startOfDay, isPast, format, parse } from "date-fns";
+import { startOfDay, isPast, format, parse, startOfWeek, endOfWeek } from "date-fns";
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useFilteredAppointments } from "../../../hooks/useFilteredAppointments";
 import { AgendaModalsWrapper } from "./AgendaModalsWrapper";
@@ -49,9 +46,18 @@ export type AgendaTab = "requests" | "scheduled" | "pendingIssues" | "history";
 export type ViewMode = "card" | "list" | "calendar";
 
 export const AgendaView = () => {
-  const { userProfile } = useProfileStore();
-  const { appointments, isLoading, fetchAppointments, updateStatus } =
-    useProviderAppointmentsStore();
+  // 🔥 Pegamos o usuário do Store Principal de Autenticação
+  const { user } = useAuthStore();
+
+  // 🔥 Lemos funções corretas e estritas do provider store
+  const {
+    appointments,
+    loading: isLoading,
+    fetchAppointments,
+    confirmAppointment,
+    cancelAppointment,
+  } = useProviderAppointmentsStore();
+
   const { availableSlots } = useAvailabilityStore();
   const { openModal } = useAgendaModalStore();
 
@@ -68,19 +74,34 @@ export const AgendaView = () => {
     usePersistentState<string>("agenda_professional_filter", "all");
 
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
-  const isOwner = userProfile?.role === "serviceProvider";
+
+  // Verifica se o usuário é um Service Provider (dono)
+  const isOwner =
+    user?.role === "SERVICE_PROVIDER" || user?.role === "serviceProvider";
 
   useEffect(() => {
-    if (!userProfile) return;
+    if (!user) return;
+    
     const providerId = isOwner
-      ? (userProfile as ServiceProviderProfile).id
-      : (userProfile as ProfessionalProfile).serviceProviderId;
-    if (providerId) fetchAppointments(providerId);
-  }, [isOwner, userProfile, fetchAppointments]);
+      ? (user as ServiceProviderProfile).id
+      : (user as ProfessionalProfile).serviceProviderId;
+
+    if (providerId) {
+      // ✨ CORREÇÃO: Passando as datas corretamente (vamos buscar a semana toda ao redor da data selecionada)
+      const startDateStr = format(startOfWeek(selectedDay), "yyyy-MM-dd");
+      const endDateStr = format(endOfWeek(selectedDay), "yyyy-MM-dd");
+      fetchAppointments(providerId, startDateStr, endDateStr);
+    }
+  }, [isOwner, user, selectedDay, fetchAppointments]);
+
+  // Cast seguro para a interface correta do Hook
+  const providerUser = isOwner
+    ? (user as ServiceProviderProfile)
+    : (user as ProfessionalProfile);
 
   const filteredAppointments = useFilteredAppointments(
     appointments,
-    userProfile as UserProfile,
+    providerUser,
     selectedProfessionalId,
     activeTab,
     selectedDay,
@@ -95,14 +116,14 @@ export const AgendaView = () => {
     }));
 
     const vacantData = availableSlots.map((slotTime) => ({
-      startTime: parse(slotTime, "HH:mm", selectedDay),
+      startTime: parse(slotTime, "HH:mm", selectedDay).toISOString(),
       isVacant: true,
       clientName: "DISPONÍVEL",
       serviceName: "-",
-      status: "free",
+      status: "FREE",
     }));
 
-    // Ordena por horário para separar os dias corretamente
+    // Ordena por horário convertendo as strings ISO em Date
     const fullDailyData = [...apps, ...vacantData].sort(
       (a, b) =>
         new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
@@ -115,30 +136,31 @@ export const AgendaView = () => {
   const handleOpenDetails = (appointment: Appointment) =>
     openModal("details", appointment);
 
+  // Status agora chegam em maiúsculas (PENDING)
   const pendingCount = useMemo(
-    () => appointments.filter((a) => a.status === "pending").length,
+    () =>
+      appointments.filter((a) => a.status.toUpperCase() === "PENDING").length,
     [appointments],
   );
 
   const pendingPastCount = useMemo(() => {
     const beginningOfToday = startOfDay(new Date());
-    return appointments.filter(
-      (appt) =>
-        appt.status === "scheduled" &&
-        isPast(appt.endTime) &&
-        appt.endTime < beginningOfToday,
-    ).length;
+    return appointments.filter((appt) => {
+      const endTimeDate = new Date(appt.endTime);
+      return (
+        appt.status.toUpperCase() === "SCHEDULED" &&
+        isPast(endTimeDate) &&
+        endTimeDate < beginningOfToday
+      );
+    }).length;
   }, [appointments]);
 
-  if (!userProfile)
+  if (!user)
     return (
       <div className="flex justify-center h-[50vh] items-center">
         <Loader2 className="animate-spin text-primary" size={40} />
       </div>
     );
-
-  const enrichedFiltered =
-    filteredAppointments as EnrichedProviderAppointment[];
 
   const renderContent = () => {
     if (isLoading)
@@ -174,10 +196,21 @@ export const AgendaView = () => {
       );
     return (
       <ScheduledAppointmentsTab
-        appointments={enrichedFiltered}
+        appointments={filteredAppointments}
         onAppointmentSelect={handleOpenDetails}
       />
     );
+  };
+
+  // 🔥 Wrapper para a tabela de 'Solicitações' (RequestsTab)
+  // Recebe o id e o status (Confirmar/Rejeitar) e chama os métodos corretos do Java.
+  const handleUpdateStatusWrapper = async (id: string, newStatus: string) => {
+    const normalizedStatus = newStatus.toUpperCase();
+    if (normalizedStatus === "SCHEDULED" || normalizedStatus === "CONFIRMED") {
+      await confirmAppointment(id);
+    } else if (normalizedStatus === "CANCELLED" || normalizedStatus === "REJECTED") {
+      await cancelAppointment(id, "Rejeitado pelo profissional");
+    }
   };
 
   return (
@@ -214,7 +247,6 @@ export const AgendaView = () => {
                   variant="outline"
                   size="sm"
                   onClick={handleExport}
-                  // Removido 'hidden sm:flex' para aparecer no celular
                   className="flex items-center gap-2 bg-gray-800 border-gray-700 text-gray-300 hover:text-white"
                 >
                   <Download size={16} />
@@ -329,9 +361,9 @@ export const AgendaView = () => {
               {activeTab === "requests" && (
                 <div className="p-2 sm:p-0">
                   <RequestsTab
-                    appointments={enrichedFiltered}
+                    appointments={filteredAppointments}
                     onAppointmentSelect={handleOpenDetails}
-                    onUpdateStatus={updateStatus}
+                    onUpdateStatus={handleUpdateStatusWrapper} // Agora com wrapper seguro!
                   />
                 </div>
               )}
@@ -343,7 +375,7 @@ export const AgendaView = () => {
               {activeTab === "pendingIssues" && (
                 <div className="p-2 sm:p-0">
                   <PendingIssuesTab
-                    appointments={enrichedFiltered}
+                    appointments={filteredAppointments}
                     onAppointmentSelect={handleOpenDetails}
                   />
                 </div>
@@ -351,7 +383,7 @@ export const AgendaView = () => {
               {activeTab === "history" && (
                 <div className="p-2 sm:p-0">
                   <HistoryTab
-                    appointments={enrichedFiltered}
+                    appointments={filteredAppointments}
                     onAppointmentSelect={handleOpenDetails}
                   />
                 </div>

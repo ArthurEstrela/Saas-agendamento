@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchStore } from "../../store/searchStore";
+import { useAuthStore } from "../../store/authStore"; // ✨ NOVO: Substitui o profileStore
 import { ClientProfessionalCard } from "./ClientProfessionalCard";
 import { Loader2, Search, Frown } from "lucide-react";
-import { useProfileStore } from "../../store/profileStore";
 import { ProviderFilter } from "./ProviderFilter";
 import { Link, useLocation } from "react-router-dom";
 import type { PaymentMethod, ServiceProviderProfile } from "../../types";
@@ -47,16 +47,25 @@ interface EnrichedProvider extends ServiceProviderProfile {
 }
 
 export const ClientSearchSection = () => {
-  const { userProfile } = useProfileStore();
+  // 🔥 Lemos o utilizador diretamente do authStore
+  const { user } = useAuthStore();
   const location = useLocation();
   const [userLocation, setUserLocation] = useState<{
     lat: number;
     lng: number;
   } | null>(null);
-  const { results: rawResults, isLoading, search } = useSearchStore();
+
+  // 🔥 Conectamos ao NOVO SearchStore refatorado
+  const { 
+    results: rawResults, 
+    loading: isLoading, 
+    searchProviders, 
+    setFilters: setApiFilters 
+  } = useSearchStore();
+
   const [searchTerm, setSearchTerm] = useState("");
 
-  // ALTERAÇÃO 1: Default aumentado para 500 (Sem limite) para evitar esconder perfis
+  // Default aumentado para 500 (Sem limite) para evitar esconder perfis
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
     distance: 500,
     areaOfWork: "all",
@@ -77,8 +86,9 @@ export const ClientSearchSection = () => {
         (error) => console.error("Erro GPS", error),
       );
     }
-    search("");
-  }, [search]);
+    // Faz a primeira busca limpa na montagem
+    searchProviders(0);
+  }, [searchProviders]);
 
   const availableAreas = useMemo(
     () =>
@@ -122,9 +132,7 @@ export const ClientSearchSection = () => {
       );
     }
 
-    // ALTERAÇÃO 2: Lógica de distância corrigida
-    // Se a distância for 500 (nosso max), consideramos "Sem limite" e não filtramos por distância
-    // Isso permite que perfis com endereço errado (Infinity) apareçam.
+    // Lógica de distância corrigida
     if (userLocation) {
       filtered = filtered.map((provider) => ({
         ...provider,
@@ -157,9 +165,12 @@ export const ClientSearchSection = () => {
     );
   }, [rawResults, userLocation, appliedFilters]);
 
+  // 🔥 Quando o utilizador clica em "Buscar"
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    search(searchTerm);
+    // Atualiza os filtros da API com o nome do barbeiro/serviço e executa a busca
+    setApiFilters({ serviceName: searchTerm });
+    searchProviders(0); 
   };
 
   const handleApplyFilters = useCallback(
@@ -168,8 +179,8 @@ export const ClientSearchSection = () => {
   );
 
   const renderHeader = () => {
-    if (userProfile) {
-      const firstName = userProfile.name.split(" ")[0];
+    if (user) {
+      const firstName = user.name.split(" ")[0];
       return (
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
@@ -284,6 +295,8 @@ export const ClientSearchSection = () => {
                 className="text-primary mt-4"
                 onClick={() => {
                   setSearchTerm("");
+                  setApiFilters({ serviceName: undefined }); // Limpa o filtro na API
+                  searchProviders(0); // Refaz a busca
                   setAppliedFilters({ ...appliedFilters, distance: 500 });
                 }}
               >
@@ -294,7 +307,7 @@ export const ClientSearchSection = () => {
         )}
       </div>
 
-      {!userProfile && !isLoading && filteredAndSortedProviders.length > 0 && (
+      {!user && !isLoading && filteredAndSortedProviders.length > 0 && (
         <div className="mt-12 pt-8 border-t border-white/5 text-center">
           <p className="text-gray-400 text-sm mb-4">Gostou do que viu?</p>
           <Link to="/login">

@@ -1,8 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useBookingProcessStore } from "../../store/bookingProcessStore";
 import { useAuthStore } from "../../store/authStore";
-import { useProfileStore } from "../../store/profileStore";
-// setAppointmentReminder removido: Agora é feito atomicamente na criação
 import {
   Loader2,
   Calendar,
@@ -15,13 +13,13 @@ import {
   ChevronLeft,
   Bell,
   Clock,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import type { ClientProfile, PaymentMethod } from "../../types";
+import type { PaymentMethod, ClientProfile } from "../../types";
 import { FaWhatsapp } from "react-icons/fa";
 import { QRCodeCanvas } from "qrcode.react";
 import { cn } from "../../lib/utils/cn";
@@ -47,26 +45,26 @@ import { Separator } from "../ui/separator";
 import { motion } from "framer-motion";
 
 export const Confirmation = () => {
+  // 🔥 Lemos o novo estado simplificado do Zustand
   const {
-    selectedServices,
+    services,
     provider,
-    selectedProfessional,
-    selectedDate,
-    selectedTimeSlot,
-    status,
+    professional,
+    date,
+    time,
+    loading: isConfirming, // ✨ CORREÇÃO 1: Usamos 'loading' em vez de 'status.isConfirming'
     confirmBooking,
-    goToPreviousStep,
-    resetBookingState,
+    prevStep,
+    reset,
+    getTotalPrice,
   } = useBookingProcessStore();
-  
+
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAuthStore();
-  const { userProfile } = useProfileStore();
+  const { user } = useAuthStore();
 
-  // --- Estado do Lembrete ---
-  // Padrão: 60 minutos (1 hora)
   const [reminderMinutes, setReminderMinutes] = useState<string>("60");
+  const totalPrice = getTotalPrice();
 
   // --- Lógica de Métodos de Pagamento ---
   const availableMethods = useMemo(() => {
@@ -96,19 +94,6 @@ export const Confirmation = () => {
     }
   }, [availableMethods, paymentMethod]);
 
-  // --- Cálculo de Totais ---
-  const { totalPrice } = useMemo(
-    () =>
-      selectedServices.reduce(
-        (acc, s) => ({
-          totalDuration: acc.totalDuration + s.duration,
-          totalPrice: acc.totalPrice + s.price,
-        }),
-        { totalDuration: 0, totalPrice: 0 }
-      ),
-    [selectedServices]
-  );
-
   // --- Geração do Payload Pix ---
   const pixPayload = useMemo(() => {
     if (!provider?.pixKey) return "";
@@ -121,7 +106,10 @@ export const Confirmation = () => {
       } else if (numbersOnly.length === 13 && !key.startsWith("+")) {
         key = `+${numbersOnly}`;
       }
-    } else if (provider.pixKeyType === "cpf" || provider.pixKeyType === "cnpj") {
+    } else if (
+      provider.pixKeyType === "cpf" ||
+      provider.pixKeyType === "cnpj"
+    ) {
       key = key.replace(/\D/g, "");
     } else {
       key = key.replace(/\s+/g, "");
@@ -137,19 +125,23 @@ export const Confirmation = () => {
   }, [provider, totalPrice]);
 
   // --- Lógica de Confirmação Principal ---
+  // --- Lógica de Confirmação Principal ---
   const handleConfirm = async () => {
     // 1. Verifica se está logado
-    if (!isAuthenticated) {
+    if (!user) {
       const pendingBooking = {
         providerId: provider?.id,
-        services: selectedServices,
-        date: selectedDate,
-        time: selectedTimeSlot,
-        professionalId: selectedProfessional?.id,
+        services: services,
+        date: date,
+        time: time,
+        professionalId: professional?.id,
         timestamp: Date.now(),
       };
 
-      localStorage.setItem("@stylo:pendingBooking", JSON.stringify(pendingBooking));
+      localStorage.setItem(
+        "@stylo:pendingBooking",
+        JSON.stringify(pendingBooking),
+      );
 
       toast("Faça login para finalizar", {
         icon: "🔐",
@@ -166,32 +158,37 @@ export const Confirmation = () => {
     }
 
     // 2. Verifica se é cliente
-    if (!userProfile || userProfile.role !== "client") {
+    if (user.role !== "CLIENT" && user.role !== "client") {
       toast.error("Apenas contas de 'Cliente' podem realizar agendamentos.");
       return;
     }
 
-    // 3. Executa a confirmação (Cria o agendamento JÁ com o lembrete)
-    // ATENÇÃO: Verifique se confirmBooking na store aceita o 3º argumento
-    await confirmBooking(
-      userProfile as ClientProfile, 
-      paymentMethod, 
-      parseInt(reminderMinutes)
-    );
-    
-    // 4. Verificação de Sucesso
-    const storeState = useBookingProcessStore.getState();
-    
-    if (storeState.status.isSuccess) {
-      if (paymentMethod === "pix") {
-        setShowPixModal(true);
-      } else {
-        toast.success("Agendamento confirmado!");
-        setTimeout(() => {
-          resetBookingState(true);
-          navigate("/dashboard/appointments");
-        }, 1500);
+    // 3. Executa a confirmação no Spring Boot
+    try {
+      // ✨ CORREÇÃO FINAL E DEFINITIVA:
+      // Enviamos o `user` com cast para ClientProfile como 1º argumento.
+      // E a nota de lembrete como 2º argumento (notes?: string).
+      const success = await confirmBooking(
+        user as ClientProfile, // Cast force para ignorar restrições de herança do BaseUser
+        `Lembrete configurado para ${reminderMinutes} minutos antes.`,
+      );
+
+      // Como o novo confirmBooking retorna um Promise<Appointment> se der certo
+      // (ou atira um throw se der erro), a variável success terá um valor truthy.
+      if (success) {
+        if (paymentMethod === "pix") {
+          setShowPixModal(true);
+        } else {
+          toast.success("Agendamento confirmado!");
+          setTimeout(() => {
+            reset();
+            navigate("/dashboard/appointments");
+          }, 1500);
+        }
       }
+    } catch (error) {
+      // O erro já foi tratado com toast lá dentro do store
+      console.error("Falha ao confirmar agendamento", error);
     }
   };
 
@@ -209,23 +206,23 @@ export const Confirmation = () => {
       provider?.businessPhone ||
       ""
     ).replace(/\D/g, "");
-    
+
     if (!phone) return toast.error("WhatsApp indisponível.");
-    
-    const msg = `Olá! Agendei *${selectedServices
+
+    const msg = `Olá! Agendei *${services
       .map((s) => s.name)
       .join(", ")}* para *${
-      selectedDate ? format(selectedDate, "dd/MM", { locale: ptBR }) : ""
-    } às ${selectedTimeSlot}*. Segue o comprovante!`;
-    
+      date ? format(date, "dd/MM", { locale: ptBR }) : ""
+    } às ${time}*. Segue o comprovante!`;
+
     window.open(
       `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`,
-      "_blank"
+      "_blank",
     );
   };
 
-  const formattedDate = selectedDate
-    ? format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })
+  const formattedDate = date
+    ? format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })
     : "";
 
   return (
@@ -236,7 +233,9 @@ export const Confirmation = () => {
     >
       <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 px-2 md:px-0">
         <div className="text-center mb-4 md:mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Quase lá!</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
+            Quase lá!
+          </h2>
           <p className="text-gray-400 text-sm md:text-base">
             Confira os detalhes e escolha como pagar.
           </p>
@@ -263,10 +262,11 @@ export const Confirmation = () => {
             {/* Resumo do Serviço */}
             <div className="space-y-3 md:space-y-4">
               <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <Scissors size={12} className="md:w-[14px] md:h-[14px]" /> Serviços Selecionados
+                <Scissors size={12} className="md:w-[14px] md:h-[14px]" />{" "}
+                Serviços Selecionados
               </h3>
               <div className="bg-[#27272a] md:bg-black/20 rounded-xl p-3 md:p-4 space-y-3 border border-white/5">
-                {selectedServices.map((s) => (
+                {services.map((s) => (
                   <div
                     key={s.id}
                     className="flex justify-between items-center text-sm group"
@@ -287,14 +287,15 @@ export const Confirmation = () => {
               {/* Data */}
               <div className="space-y-2">
                 <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                  <Calendar size={12} className="md:w-[14px] md:h-[14px]" /> Quando?
+                  <Calendar size={12} className="md:w-[14px] md:h-[14px]" />{" "}
+                  Quando?
                 </h3>
                 <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5 h-full flex flex-col justify-center">
                   <div className="text-white font-bold capitalize text-base md:text-lg">
                     {formattedDate}
                   </div>
                   <div className="text-primary font-bold text-lg md:text-xl mt-1">
-                    às {selectedTimeSlot}
+                    às {time}
                   </div>
                 </div>
               </div>
@@ -302,13 +303,14 @@ export const Confirmation = () => {
               {/* Profissional */}
               <div className="space-y-2">
                 <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                  <User size={12} className="md:w-[14px] md:h-[14px]" /> Com quem?
+                  <User size={12} className="md:w-[14px] md:h-[14px]" /> Com
+                  quem?
                 </h3>
                 <div className="bg-[#27272a] md:bg-black/20 p-3 md:p-4 rounded-xl border border-white/5 flex items-center gap-3 md:gap-4 h-full">
                   <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 shrink-0 overflow-hidden">
-                    {selectedProfessional?.photoURL ? (
+                    {professional?.profilePictureUrl ? (
                       <img
-                        src={selectedProfessional.photoURL}
+                        src={professional.profilePictureUrl}
                         alt="Profissional"
                         className="w-full h-full object-cover"
                       />
@@ -317,32 +319,36 @@ export const Confirmation = () => {
                     )}
                   </div>
                   <span className="text-white font-bold text-base md:text-lg">
-                    {selectedProfessional?.name || "Qualquer Profissional"}
+                    {professional?.name || "Qualquer Profissional"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* --- SEÇÃO DE LEMBRETE (Melhorada) --- */}
+            {/* --- SEÇÃO DE LEMBRETE --- */}
             <div className="space-y-2">
               <h3 className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <Bell size={12} className="md:w-[14px] md:h-[14px]" /> Notificação de Lembrete
+                <Bell size={12} className="md:w-[14px] md:h-[14px]" />{" "}
+                Notificação de Lembrete
               </h3>
-              
+
               <div className="bg-[#27272a] md:bg-black/20 rounded-xl border border-white/5 overflow-hidden transition-colors hover:border-white/10">
-                 <Select value={reminderMinutes} onValueChange={setReminderMinutes}>
+                <Select
+                  value={reminderMinutes}
+                  onValueChange={setReminderMinutes}
+                >
                   <SelectTrigger className="w-full bg-transparent border-none text-white focus:ring-0 focus:ring-offset-0 h-auto p-4 md:p-4">
                     <div className="flex items-center gap-4 w-full">
                       <div className="bg-primary/10 p-2.5 rounded-lg text-primary shrink-0">
                         <Clock size={20} />
                       </div>
                       <div className="flex flex-col items-start text-left flex-1">
-                          <span className="text-white font-bold text-sm md:text-base">
-                             <SelectValue placeholder="Selecione..." />
-                          </span>
-                          <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">
-                            Tempo de antecedência do aviso
-                          </span>
+                        <span className="text-white font-bold text-sm md:text-base">
+                          <SelectValue placeholder="Selecione..." />
+                        </span>
+                        <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">
+                          Tempo de antecedência do aviso
+                        </span>
                       </div>
                     </div>
                   </SelectTrigger>
@@ -369,8 +375,11 @@ export const Confirmation = () => {
                 <div className="flex items-start gap-3 text-red-400 text-xs md:text-sm bg-red-400/10 p-3 md:p-4 rounded-xl border border-red-400/20">
                   <AlertCircle size={18} className="shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold block mb-1">Pagamento Indisponível</span>
-                    Este prestador ainda não configurou métodos de pagamento. Entre em contato diretamente.
+                    <span className="font-bold block mb-1">
+                      Pagamento Indisponível
+                    </span>
+                    Este prestador ainda não configurou métodos de pagamento.
+                    Entre em contato diretamente.
                   </div>
                 </div>
               )}
@@ -384,7 +393,7 @@ export const Confirmation = () => {
                       "h-auto p-4 md:p-5 justify-start border-2 relative hover:bg-gray-800 transition-all active:scale-[0.98]",
                       paymentMethod === "pix"
                         ? "border-primary bg-primary/10 shadow-[0_0_20px_-10px_rgba(255,255,255,0.3)]"
-                        : "border-gray-700 bg-[#27272a] md:bg-gray-900/50"
+                        : "border-gray-700 bg-[#27272a] md:bg-gray-900/50",
                     )}
                     onClick={() => setPaymentMethod("pix")}
                   >
@@ -394,7 +403,7 @@ export const Confirmation = () => {
                           "p-2 md:p-3 rounded-full transition-colors",
                           paymentMethod === "pix"
                             ? "bg-primary text-black"
-                            : "bg-gray-800 text-gray-400"
+                            : "bg-gray-800 text-gray-400",
                         )}
                       >
                         <QrCode size={20} className="md:w-6 md:h-6" />
@@ -408,7 +417,10 @@ export const Confirmation = () => {
                         </div>
                       </div>
                       {paymentMethod === "pix" && (
-                        <CheckCircle2 className="text-primary md:w-6 md:h-6" size={20} />
+                        <CheckCircle2
+                          className="text-primary md:w-6 md:h-6"
+                          size={20}
+                        />
                       )}
                     </div>
                   </Button>
@@ -422,7 +434,7 @@ export const Confirmation = () => {
                       "h-auto p-4 md:p-5 justify-start border-2 hover:bg-gray-800 transition-all active:scale-[0.98]",
                       paymentMethod === "cash"
                         ? "border-primary bg-primary/10 shadow-[0_0_20px_-10px_rgba(255,255,255,0.3)]"
-                        : "border-gray-700 bg-[#27272a] md:bg-gray-900/50"
+                        : "border-gray-700 bg-[#27272a] md:bg-gray-900/50",
                     )}
                     onClick={() => setPaymentMethod("cash")}
                   >
@@ -432,7 +444,7 @@ export const Confirmation = () => {
                           "p-2 md:p-3 rounded-full transition-colors",
                           paymentMethod === "cash"
                             ? "bg-primary text-black"
-                            : "bg-gray-800 text-gray-400"
+                            : "bg-gray-800 text-gray-400",
                         )}
                       >
                         <CreditCard size={20} className="md:w-6 md:h-6" />
@@ -443,15 +455,20 @@ export const Confirmation = () => {
                         </div>
                         <div className="text-[10px] md:text-xs text-gray-400 mt-0.5 truncate max-w-[120px] md:max-w-none">
                           {[
-                            provider?.paymentMethods?.includes("cash") && "Dinheiro",
-                            provider?.paymentMethods?.includes("credit_card") && "Cartão",
+                            provider?.paymentMethods?.includes("cash") &&
+                              "Dinheiro",
+                            provider?.paymentMethods?.includes("credit_card") &&
+                              "Cartão",
                           ]
                             .filter(Boolean)
                             .join(" ou ") || "No balcão"}
                         </div>
                       </div>
                       {paymentMethod === "cash" && (
-                        <CheckCircle2 className="text-primary md:w-6 md:h-6" size={20} />
+                        <CheckCircle2
+                          className="text-primary md:w-6 md:h-6"
+                          size={20}
+                        />
                       )}
                     </div>
                   </Button>
@@ -463,9 +480,9 @@ export const Confirmation = () => {
             <div className="hidden md:flex gap-4 pt-6">
               <Button
                 variant="ghost"
-                onClick={goToPreviousStep}
+                onClick={prevStep}
                 className="flex-1 border border-white/5 hover:bg-white/5"
-                disabled={status.isConfirming}
+                disabled={isConfirming}
               >
                 Voltar
               </Button>
@@ -473,11 +490,11 @@ export const Confirmation = () => {
                 onClick={handleConfirm}
                 className="flex-[2] font-bold text-base h-12 shadow-lg shadow-primary/20 bg-primary text-black hover:bg-primary/90"
                 disabled={
-                  status.isConfirming ||
+                  isConfirming ||
                   (!availableMethods.hasPix && !availableMethods.hasOnSite)
                 }
               >
-                {status.isConfirming ? (
+                {isConfirming ? (
                   <Loader2 className="animate-spin mr-2" />
                 ) : (
                   <CheckCircle2 className="mr-2" />
@@ -492,11 +509,11 @@ export const Confirmation = () => {
       {/* Footer Fixo Mobile */}
       <div className="md:hidden fixed bottom-0 left-0 w-full z-50 p-2 pointer-events-none">
         <div className="max-w-4xl mx-auto pointer-events-auto bg-[#121214] border-t border-white/10 shadow-2xl p-3 flex justify-between items-center gap-3 ring-1 ring-white/5 rounded-xl">
-           <Button
+          <Button
             variant="ghost"
-            onClick={goToPreviousStep}
+            onClick={prevStep}
             className="hover:bg-white/5 px-2"
-            disabled={status.isConfirming}
+            disabled={isConfirming}
           >
             <ChevronLeft size={20} />
           </Button>
@@ -504,15 +521,15 @@ export const Confirmation = () => {
             onClick={handleConfirm}
             className="flex-1 font-bold text-sm h-10 shadow-lg shadow-primary/10 bg-primary text-black hover:bg-primary/90"
             disabled={
-              status.isConfirming ||
+              isConfirming ||
               (!availableMethods.hasPix && !availableMethods.hasOnSite)
             }
           >
-             {status.isConfirming ? (
-                  <Loader2 className="animate-spin mr-2 w-4 h-4" />
-                ) : (
-                  <CheckCircle2 className="mr-2 w-4 h-4" />
-                )}
+            {isConfirming ? (
+              <Loader2 className="animate-spin mr-2 w-4 h-4" />
+            ) : (
+              <CheckCircle2 className="mr-2 w-4 h-4" />
+            )}
             Confirmar
           </Button>
         </div>
@@ -526,7 +543,9 @@ export const Confirmation = () => {
               <div className="h-14 w-14 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center border border-green-500/20">
                 <CheckCircle2 size={32} />
               </div>
-              <span className="text-lg md:text-xl font-bold text-white">Agendamento Realizado!</span>
+              <span className="text-lg md:text-xl font-bold text-white">
+                Agendamento Realizado!
+              </span>
             </DialogTitle>
             <DialogDescription className="text-center text-gray-400 text-sm">
               Escaneie o QR Code abaixo para pagar.
@@ -569,7 +588,7 @@ export const Confirmation = () => {
               variant="ghost"
               className="w-full h-8 text-xs text-gray-500 hover:text-gray-300"
               onClick={() => {
-                resetBookingState(true);
+                reset();
                 navigate("/dashboard");
               }}
             >
@@ -582,7 +601,7 @@ export const Confirmation = () => {
   );
 };
 
-// ... Funções auxiliares mantidas intactas para funcionar ...
+// ... Funções auxiliares ...
 interface PixData {
   key: string;
   name: string;
@@ -637,10 +656,9 @@ function calculateCRC16(payload: string): string {
     crc ^= payload.charCodeAt(i) << 8;
     for (let j = 0; j < 8; j++) {
       if ((crc & 0x8000) !== 0) {
-        // Aplique o & 0xFFFF aqui para manter o valor em 16 bits
-        crc = ((crc << 1) ^ polynomial) & 0xFFFF;
+        crc = ((crc << 1) ^ polynomial) & 0xffff;
       } else {
-        crc = (crc << 1) & 0xFFFF;
+        crc = (crc << 1) & 0xffff;
       }
     }
   }

@@ -13,23 +13,29 @@ import { Badge } from "../ui/badge";
 
 export const ProfessionalSelection = () => {
   const {
-    professionals,
-    selectedServices,
-    selectedProfessional,
-    selectProfessional,
-    goToNextStep,
-    goToPreviousStep,
+    provider,
+    services: selectedServices,
+    professional: selectedProfessional,
+    setProfessional,
+    nextStep,
+    prevStep,
   } = useBookingProcessStore();
 
   const availableProfessionals = useMemo(() => {
-    if (!selectedServices || selectedServices.length === 0) return [];
+    // Se não há provedor, serviços ou profissionais cadastrados, retorna vazio
+    if (!provider || !provider.professionals || !selectedServices || selectedServices.length === 0) {
+      return [];
+    }
+    
     const selectedServiceIds = selectedServices.map((s) => s.id);
-    return professionals.filter((prof) =>
+    
+    // Filtra os profissionais da Barbearia para ver quem faz TODOS os serviços escolhidos
+    return provider.professionals.filter((prof) =>
       selectedServiceIds.every((serviceId) =>
-        prof.services.some((ps) => ps.id === serviceId)
+        prof.services?.some((ps) => ps.id === serviceId)
       )
     );
-  }, [professionals, selectedServices]);
+  }, [provider, selectedServices]);
 
   if (availableProfessionals.length === 0) {
     return (
@@ -51,7 +57,7 @@ export const ProfessionalSelection = () => {
           </p>
           <Button
             variant="outline"
-            onClick={goToPreviousStep}
+            onClick={prevStep}
             className="w-full border-white/10 hover:bg-white/5"
           >
             Voltar e alterar serviços
@@ -87,7 +93,7 @@ export const ProfessionalSelection = () => {
               className="touch-manipulation"
             >
               <Card
-                onClick={() => selectProfessional(professional)}
+                onClick={() => setProfessional(professional)}
                 className={cn(
                   "cursor-pointer flex flex-col items-center gap-4 md:gap-5 p-4 md:p-6 transition-all duration-200 border relative overflow-hidden",
                   isSelected
@@ -110,7 +116,7 @@ export const ProfessionalSelection = () => {
                     )}
                   >
                     <AvatarImage
-                      src={professional.photoURL || ""}
+                      src={professional.profilePictureUrl || ""}
                       alt={professional.name}
                       className="object-cover"
                     />
@@ -159,13 +165,13 @@ export const ProfessionalSelection = () => {
         <div className="max-w-4xl mx-auto pointer-events-auto bg-[#121214] border-t border-white/10 md:bg-gray-900/90 md:backdrop-blur-xl md:border md:rounded-2xl shadow-2xl p-4 flex justify-between items-center gap-4 ring-1 ring-white/5 rounded-xl md:rounded-2xl">
           <Button
             variant="ghost"
-            onClick={goToPreviousStep}
+            onClick={prevStep}
             className="hover:bg-white/5"
           >
             Voltar
           </Button>
           <Button
-            onClick={goToNextStep}
+            onClick={nextStep}
             disabled={!selectedProfessional}
             className="w-full sm:w-auto px-6 md:px-8 font-bold shadow-lg shadow-primary/10 transition-all active:scale-95"
           >

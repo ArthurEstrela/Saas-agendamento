@@ -11,8 +11,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { useProfileStore } from "../../store/profileStore";
-import { useNotificationStore } from "../../store/notificationsStore";
+import { useNotificationsStore } from "../../store/notificationsStore"; // ✨ CORREÇÃO: Com 's' no final
 import { motion } from "framer-motion";
 
 // UI Components
@@ -29,11 +28,13 @@ interface ClientSideNavProps {
 export const ClientSideNav = ({ isOpen, setIsOpen }: ClientSideNavProps) => {
   const { logout, user } = useAuthStore();
   const location = useLocation();
-  const { userProfile } = useProfileStore();
-  const { unreadCount, fetchNotifications } = useNotificationStore();
+  
+  // ✨ CORREÇÃO: Usar o nome correto com 's'
+  const { fetchNotifications, unreadCount } = useNotificationsStore();
 
   useEffect(() => {
-    if (user?.uid) fetchNotifications(user.uid);
+    // Busca notificações se o usuário estiver logado.
+    if (user?.id) fetchNotifications();
   }, [user, fetchNotifications]);
 
   const navItems = [
@@ -138,6 +139,7 @@ export const ClientSideNav = ({ isOpen, setIsOpen }: ClientSideNavProps) => {
                     {item.label}
                   </span>
 
+                  {/* Mostra badge apenas se tiver notificações não lidas */}
                   {item.path === "/dashboard/notifications" &&
                     unreadCount > 0 && (
                       <Badge
@@ -174,7 +176,7 @@ export const ClientSideNav = ({ isOpen, setIsOpen }: ClientSideNavProps) => {
               )}
             >
               <AvatarImage
-                src={userProfile?.profilePictureUrl}
+                src={user?.profilePictureUrl}
                 alt="Perfil"
                 className="object-cover"
               />
@@ -192,7 +194,7 @@ export const ClientSideNav = ({ isOpen, setIsOpen }: ClientSideNavProps) => {
                     : "text-gray-200 group-hover:text-white"
                 )}
               >
-                {userProfile?.name?.split(" ")[0] || "Usuário"}
+                {user?.name?.split(" ")[0] || "Usuário"}
               </p>
               <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mt-0.5">
                 Ver Perfil

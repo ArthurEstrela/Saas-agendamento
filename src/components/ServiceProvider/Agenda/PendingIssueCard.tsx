@@ -1,4 +1,3 @@
-import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,8 +16,15 @@ import { motion } from "framer-motion";
 import { Card, CardContent } from "../../ui/card";
 import { Button } from "../../ui/button";
 
+// ✨ Estendemos a interface oficial de forma segura para cobrir eventuais dados legados sem usar 'any'
+type PendingAppointment = Appointment & {
+  client?: {
+    phoneNumber?: string;
+  };
+};
+
 interface CardProps {
-  appointment: EnrichedProviderAppointment;
+  appointment: PendingAppointment;
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
@@ -26,9 +32,14 @@ export const PendingIssueCard = ({
   appointment,
   onAppointmentSelect,
 }: CardProps) => {
-  const { client, startTime, services } = appointment;
+  // Lemos os dados planificados do Appointment
+  const { clientName, clientPhone, items, startTime: rawStartTime, endTime: rawEndTime } = appointment;
 
-  const timeAgo = formatDistanceToNow(appointment.endTime, {
+  // Convertemos as datas
+  const startTime = new Date(rawStartTime);
+  const endTime = new Date(rawEndTime);
+
+  const timeAgo = formatDistanceToNow(endTime, {
     addSuffix: true,
     locale: ptBR,
   });
@@ -37,14 +48,20 @@ export const PendingIssueCard = ({
     onAppointmentSelect(appointment);
   };
 
+  // ✨ Fallback totalmente tipado
+  const phoneToUse = clientPhone || appointment.client?.phoneNumber;
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!client?.phoneNumber) return;
+    
+    if (!phoneToUse) return;
 
-    const cleanPhone = client.phoneNumber.replace(/\D/g, "");
+    const cleanPhone = phoneToUse.replace(/\D/g, "");
     const dateString = format(startTime, "dd/MM", { locale: ptBR });
     const timeString = format(startTime, "HH:mm");
-    const message = `Olá ${client.name}, sobre nosso agendamento de ${dateString} às ${timeString}. Tudo certo por aí?`;
+    const nameToUse = clientName || "Cliente";
+    
+    const message = `Olá ${nameToUse}, sobre nosso agendamento de ${dateString} às ${timeString}. Tudo certo por aí?`;
 
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
@@ -53,6 +70,9 @@ export const PendingIssueCard = ({
   };
 
   const MotionCard = motion(Card);
+  
+  // Tratamento de preço
+  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
 
   return (
     <MotionCard
@@ -84,7 +104,7 @@ export const PendingIssueCard = ({
 
           <div className="text-right">
             <span className="font-bold text-lg text-primary block leading-none">
-              R$ {appointment.totalPrice.toFixed(0)}
+              R$ {displayPrice.toFixed(0)}
             </span>
             <span className="text-[10px] text-gray-500 uppercase">Total</span>
           </div>
@@ -102,7 +122,7 @@ export const PendingIssueCard = ({
                 Cliente
               </span>
               <span className="text-sm font-medium text-gray-200 truncate">
-                {client?.name || "Cliente"}
+                {clientName || "Cliente Particular"}
               </span>
             </div>
           </div>
@@ -132,7 +152,9 @@ export const PendingIssueCard = ({
                 Serviços
               </span>
               <span className="text-xs text-gray-300 truncate leading-tight">
-                {services.map((s) => s.name).join(", ")}
+                {items && items.length > 0 
+                  ? items.map((s) => s.name).join(", ") 
+                  : "Serviço não especificado"}
               </span>
             </div>
           </div>
@@ -140,7 +162,8 @@ export const PendingIssueCard = ({
 
         {/* Ações - Botões Grandes para Mobile */}
         <div className="flex gap-3">
-          {client?.phoneNumber && (
+          {/* ✨ Usamos a variável limpa e processada lá em cima */}
+          {phoneToUse && (
             <Button
               variant="outline"
               className="flex-1 border-green-900/40 text-green-500 hover:bg-green-900/20 hover:text-green-400 h-10"

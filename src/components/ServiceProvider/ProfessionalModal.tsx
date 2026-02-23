@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import type { Professional, Service } from "../../types";
-import { Loader2, User, Image as ImageIcon, Mail, Key, ShieldAlert } from "lucide-react";
+import type { ProfessionalProfile, Service } from "../../types";
+import {
+  Loader2,
+  User,
+  Image as ImageIcon,
+  Mail,
+  Key,
+  ShieldAlert,
+} from "lucide-react";
 
 // UI Components
 import {
@@ -36,11 +43,17 @@ const professionalEditSchema = professionalSchema.extend({
 
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
 
+// Extensão local para suportar a flag visual e a imagem (se o nome da prop variar)
+type EnrichedProfessional = ProfessionalProfile & {
+  isOwner?: boolean;
+  photoURL?: string; // Fallback se o estado antigo ainda estiver em cache
+};
+
 interface ProfessionalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: ProfessionalFormData, photoFile: File | null) => void;
-  professional?: Professional | null;
+  professional?: EnrichedProfessional | null;
   availableServices: Service[];
   isLoading: boolean;
 }
@@ -54,12 +67,13 @@ export const ProfessionalModal = ({
   isLoading,
 }: ProfessionalModalProps) => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(
-    professional?.photoURL || null
-  );
+
+  // Usa a propriedade nova ou a antiga se estiver em cache local
+  const initialPhoto = professional?.profilePictureUrl || professional?.photoURL || null;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(initialPhoto);
+
   const isEditMode = !!professional;
-  // Verifica se é o dono para bloquear edição de email/senha
-  const isOwner = professional?.isOwner; 
+  const isOwner = professional?.isOwner;
 
   const {
     register,
@@ -69,19 +83,26 @@ export const ProfessionalModal = ({
     formState: { errors },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(
-      isEditMode ? professionalEditSchema : professionalSchema
+      isEditMode ? professionalEditSchema : professionalSchema,
     ),
   });
 
   useEffect(() => {
     if (isOpen) {
       if (professional) {
+        // ✨ O Java devolve a lista de serviços em "services". Mapeamos para a array de IDs que o Form espera.
+        let selectedServiceIds: string[] = [];
+        if (professional.services && professional.services.length > 0) {
+          selectedServiceIds = professional.services.map((s) => s.id);
+        }
+
         reset({
-          name: professional.name,
-          serviceIds: professional.services.map((s) => s.id),
+          name: professional.name || "",
+          serviceIds: selectedServiceIds,
           email: professional.email || "",
         });
-        setPreviewUrl(professional.photoURL || null);
+
+        setPreviewUrl(professional.profilePictureUrl || professional.photoURL || null);
       } else {
         reset({ name: "", email: "", password: "", serviceIds: [] });
         setPreviewUrl(null);
@@ -119,7 +140,9 @@ export const ProfessionalModal = ({
           <Alert className="bg-yellow-500/10 border-yellow-500/20 text-yellow-500 py-2">
             <ShieldAlert className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              Para alterar seu e-mail de acesso ou senha, utilize as configurações da sua conta. Aqui você edita apenas seus dados públicos de atendimento.
+              Para alterar seu e-mail de acesso ou senha, utilize as
+              configurações da sua conta. Aqui você edita apenas seus dados
+              públicos de atendimento.
             </AlertDescription>
           </Alert>
         )}
@@ -169,7 +192,7 @@ export const ProfessionalModal = ({
                   <Input
                     id="name"
                     {...register("name")}
-                    className="pl-9 bg-gray-950/50 border-gray-800"
+                    className="pl-9 bg-gray-950/50 border-gray-800 text-white focus:ring-primary"
                     error={errors.name?.message}
                     placeholder="Ex: João Silva"
                   />
@@ -186,15 +209,19 @@ export const ProfessionalModal = ({
                       <Input
                         id="email"
                         {...register("email")}
-                        className="pl-9 bg-gray-950/50 border-gray-800"
+                        className="pl-9 bg-gray-950/50 border-gray-800 text-white focus:ring-primary disabled:opacity-50"
                         placeholder="email@exemplo.com"
                         error={errors.email?.message}
-                        disabled={isEditMode} // Email não editável após criação para evitar conflitos de Auth
+                        disabled={isEditMode}
                       />
                     </div>
-                    {isEditMode && <p className="text-[10px] text-gray-500">O e-mail não pode ser alterado após a criação.</p>}
+                    {isEditMode && (
+                      <p className="text-[10px] text-gray-500">
+                        O e-mail não pode ser alterado após a criação.
+                      </p>
+                    )}
                   </div>
-                  
+
                   {/* Senha só aparece na criação */}
                   {!isEditMode && (
                     <div className="space-y-2">
@@ -205,7 +232,7 @@ export const ProfessionalModal = ({
                           id="password"
                           type="password"
                           {...register("password")}
-                          className="pl-9 bg-gray-950/50 border-gray-800"
+                          className="pl-9 bg-gray-950/50 border-gray-800 text-white focus:ring-primary"
                           placeholder="••••••••"
                           error={errors.password?.message}
                         />
@@ -221,9 +248,11 @@ export const ProfessionalModal = ({
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <Label>Serviços Realizados</Label>
-              <span className="text-xs text-gray-500">Selecione o que este profissional faz</span>
+              <span className="text-xs text-gray-500">
+                Selecione o que este profissional faz
+              </span>
             </div>
-            
+
             {availableServices.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-950/30 p-3 rounded-xl border border-gray-800 max-h-48 overflow-y-auto custom-scrollbar">
                 <Controller
@@ -246,8 +275,8 @@ export const ProfessionalModal = ({
                                 ? field.onChange([...field.value, service.id])
                                 : field.onChange(
                                     field.value.filter(
-                                      (value) => value !== service.id
-                                    )
+                                      (value) => value !== service.id,
+                                    ),
                                   );
                             }}
                           />
@@ -284,10 +313,20 @@ export const ProfessionalModal = ({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            disabled={isLoading}
+            className="text-gray-400 hover:text-white"
+          >
             Cancelar
           </Button>
-          <Button type="submit" form="pro-form" disabled={isLoading} className="shadow-lg shadow-primary/10">
+          <Button
+            type="submit"
+            form="pro-form"
+            disabled={isLoading}
+            className="bg-primary text-black font-bold shadow-lg shadow-primary/10"
+          >
             {isLoading ? (
               <Loader2 className="animate-spin h-4 w-4 mr-2" />
             ) : null}

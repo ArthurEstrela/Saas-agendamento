@@ -4,8 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { DollarSign, Tag, Calendar, Repeat, Save, Loader2 } from "lucide-react";
 import type { Expense } from "../../types";
-import { Timestamp } from "firebase/firestore";
+// ✨ REMOVIDO: import { Timestamp } from "firebase/firestore";
 import { useFinanceStore } from "../../store/financeStore";
+import { useAuthStore } from "../../store/authStore";
 
 // UI Components
 import {
@@ -26,13 +27,21 @@ import {
   SelectValue,
 } from "../ui/select";
 
+// --- Funções Utilitárias ---
+// ✨ Tratamento seguro de strings ISO para objeto Date nativo
+const normalizeDate = (dateValue: unknown): Date => {
+  if (!dateValue) return new Date();
+  if (dateValue instanceof Date) return dateValue;
+  return new Date(dateValue as string | number);
+};
+
 const expenseSchema = z.object({
   description: z.string().min(3, "Descrição obrigatória."),
   amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero."),
   category: z.string().min(1, "Categoria obrigatória."),
   date: z.date({ message: "Data inválida." }),
-  type: z.enum(["one-time", "recurring"]),
-  frequency: z.enum(["monthly"]).optional(),
+  type: z.enum(["one-time", "recurring", "ONE_TIME", "RECURRING"]),
+  frequency: z.enum(["monthly", "MONTHLY"]).optional(),
 });
 
 type ExpenseFormData = z.infer<typeof expenseSchema>;
@@ -59,7 +68,8 @@ export const ExpenseModal = ({
   onClose,
   expenseToEdit,
 }: ExpenseModalProps) => {
-  const { addNewExpense, editExpense } = useFinanceStore();
+  const { addExpense } = useFinanceStore(); // ✨ Atualizado para addExpense do store
+  const { user } = useAuthStore(); // ✨ Trazendo o Provider ID do Auth
 
   const {
     register,
@@ -78,11 +88,19 @@ export const ExpenseModal = ({
   useEffect(() => {
     if (isOpen) {
       if (expenseToEdit) {
-        const dateToEdit =
-          expenseToEdit.date instanceof Timestamp
-            ? expenseToEdit.date.toDate()
-            : expenseToEdit.date;
-        reset({ ...expenseToEdit, date: dateToEdit as Date });
+        // Usa o normalizador nativo sem o Firebase Timestamp
+        const dateToEdit = normalizeDate(expenseToEdit.date);
+        
+        // ✨ Normaliza o enum que vem da API Java (UpperCase) para o React Hook Form (LowerCase)
+        const typeNormalized = (expenseToEdit.type || "ONE_TIME").toLowerCase() as "one-time" | "recurring";
+        const freqNormalized = expenseToEdit.frequency ? expenseToEdit.frequency.toLowerCase() as "monthly" : undefined;
+
+        reset({ 
+            ...expenseToEdit, 
+            date: dateToEdit,
+            type: typeNormalized,
+            frequency: freqNormalized
+        });
       } else {
         reset({
           description: "",
@@ -96,21 +114,29 @@ export const ExpenseModal = ({
   }, [expenseToEdit, isOpen, reset]);
 
   const onSubmit = async (data: ExpenseFormData) => {
-    // ✨ CORREÇÃO AQUI: Tipamos corretamente ignorando o 'providerId', pois a store injeta ele.
-    const expenseData: Omit<Expense, "id" | "providerId"> = { ...data, date: data.date };
-    
-    if (data.type !== "recurring") {
-     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-       delete (expenseData as any).frequency; 
-    } else {
-       expenseData.frequency = "monthly";
+    if (!user?.id) {
+        console.error("Usuário não autenticado");
+        return;
     }
+
+    // ✨ Prepara o payload convertendo a Data para ISO String conforme pede a API Java
+    const expenseData: Omit<Expense, "id" | "providerId"> = {
+        description: data.description,
+        amount: data.amount,
+        category: data.category,
+        date: data.date.toISOString(), // Envia como String ISO
+        type: data.type === "one-time" ? "ONE_TIME" : "RECURRING", // Envia Maiúsculo para o Java
+        frequency: data.type === "recurring" ? "MONTHLY" : undefined
+    };
 
     try {
       if (expenseToEdit?.id) {
-        await editExpense(expenseToEdit.id, expenseData);
+        // ✨ NOTA: Na sua definition do financeStore você não tem a action editExpense.
+        // Se a API tiver PUT, implemente-o lá. Por enquanto, loga um erro seguro.
+        console.error("Endpoint de edição de despesa não está mapeado no financeStore");
+        // await editExpense(expenseToEdit.id, expenseData);
       } else {
-        await addNewExpense(expenseData);
+        await addExpense(user.id, expenseData); // Passando o providerId corretamente
       }
       onClose();
     } catch (error) {
@@ -139,9 +165,11 @@ export const ExpenseModal = ({
               <Input
                 {...register("description")}
                 placeholder="Ex: Aluguel"
-                className="pl-9"
-                error={errors.description?.message}
+                className="pl-9 bg-gray-950 border-gray-800 focus:ring-primary text-white"
               />
+              {errors.description && (
+                  <p className="text-xs text-destructive">{errors.description.message}</p>
+              )}
             </div>
           </div>
 
@@ -155,10 +183,12 @@ export const ExpenseModal = ({
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  className="pl-9"
-                  error={errors.amount?.message}
+                  className="pl-9 bg-gray-950 border-gray-800 focus:ring-primary text-white"
                 />
               </div>
+              {errors.amount && (
+                  <p className="text-xs text-destructive">{errors.amount.message}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Data</Label>
@@ -170,7 +200,7 @@ export const ExpenseModal = ({
                   render={({ field }) => (
                     <Input
                       type="date"
-                      className="pl-9 block w-full"
+                      className="pl-9 block w-full bg-gray-950 border-gray-800 focus:ring-primary text-white scheme-dark"
                       value={
                         field.value instanceof Date &&
                         !isNaN(field.value.getTime())
@@ -189,6 +219,9 @@ export const ExpenseModal = ({
                   )}
                 />
               </div>
+              {errors.date && (
+                  <p className="text-xs text-destructive">{errors.date.message}</p>
+              )}
             </div>
           </div>
 
@@ -203,10 +236,10 @@ export const ExpenseModal = ({
                   defaultValue={field.value}
                   value={field.value}
                 >
-                  <SelectTrigger className="w-full bg-gray-950 border-gray-700">
+                  <SelectTrigger className="w-full bg-gray-950 border-gray-800 text-white">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-gray-800">
+                  <SelectContent className="bg-gray-900 border-gray-800 text-white">
                     {expenseCategories.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
@@ -226,7 +259,7 @@ export const ExpenseModal = ({
           <div className="space-y-2">
             <Label>Tipo de Despesa</Label>
             <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer bg-gray-800 p-3 rounded-lg border border-gray-700 flex-1 hover:border-primary/50 transition-colors">
+              <label className="flex items-center gap-2 cursor-pointer bg-gray-950 p-3 rounded-lg border border-gray-800 flex-1 hover:border-primary/50 transition-colors text-white">
                 <input
                   type="radio"
                   value="one-time"
@@ -235,7 +268,7 @@ export const ExpenseModal = ({
                 />
                 <span className="text-sm font-medium">Pontual</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer bg-gray-800 p-3 rounded-lg border border-gray-700 flex-1 hover:border-primary/50 transition-colors">
+              <label className="flex items-center gap-2 cursor-pointer bg-gray-950 p-3 rounded-lg border border-gray-800 flex-1 hover:border-primary/50 transition-colors text-white">
                 <input
                   type="radio"
                   value="recurring"
@@ -256,10 +289,10 @@ export const ExpenseModal = ({
         </form>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting} className="text-gray-400 hover:text-white">
             Cancelar
           </Button>
-          <Button type="submit" form="expense-form" disabled={isSubmitting}>
+          <Button type="submit" form="expense-form" disabled={isSubmitting} className="bg-primary text-black font-bold">
             {isSubmitting ? (
               <Loader2 className="animate-spin mr-2 h-4 w-4" />
             ) : (

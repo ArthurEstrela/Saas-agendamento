@@ -1,10 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
-import { useProfileStore } from "../../store/profileStore";
-import type {
-  ServiceProviderProfile,
-  ProviderDashboardView,
-  Professional,
-} from "../../types";
+import { useAuthStore } from "../../store/authStore";
+import { useProviderProfileStore } from "../../store/providerProfileStore";
+import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
+import type { ServiceProviderProfile } from "../../types";
 import {
   CheckCircle2,
   Circle,
@@ -14,15 +12,24 @@ import {
   Trophy,
   PartyPopper,
   X,
-  Users, // Importação do novo ícone
+  Users,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../lib/utils/cn";
-import { collection, getDocs, query } from "firebase/firestore";
-import { db } from "../../firebase/config";
 import confetti from "canvas-confetti";
+
+// ✨ Definido localmente para não depender de exportações faltantes no types.ts
+export type ProviderDashboardView =
+  | "agenda"
+  | "financial"
+  | "professionals"
+  | "services"
+  | "profile"
+  | "subscription"
+  | "availability"
+  | "reviews";
 
 interface OnboardingChecklistProps {
   onChangeView: (view: ProviderDashboardView) => void;
@@ -31,85 +38,59 @@ interface OnboardingChecklistProps {
 export const OnboardingChecklist = ({
   onChangeView,
 }: OnboardingChecklistProps) => {
-  const { userProfile, updateUserProfile } = useProfileStore();
+  // Lemos o utilizador do store unificado de Auth
+  const { user } = useAuthStore();
+  const provider = user as ServiceProviderProfile;
 
-  // Estados de verificação
-  const [hasAvailability, setHasAvailability] = useState(false);
-  const [hasProfessionals, setHasProfessionals] = useState(false); // Novo estado
-  const [isLoadingCheck, setIsLoadingCheck] = useState(true);
+  // Trazemos a função de update do perfil
+  const { updateProfile } = useProviderProfileStore();
+
+  // Trazemos a lista de profissionais que já foi carregada pela Dashboard
+  const { professionals } = useProfessionalsManagementStore();
+
   const [isDismissed, setIsDismissed] = useState(false);
 
-  // 1. Sincroniza com o banco: Se já estiver marcado como dispensado no perfil, esconde.
+  // 1. Sincroniza estado inicial se já foi dispensado no backend
   useEffect(() => {
-    if (userProfile && userProfile.role === "serviceProvider") {
-      const profile = userProfile as ServiceProviderProfile;
-      if (profile.onboardingDismissed) {
+    if (provider && provider.role?.toUpperCase() === "SERVICE_PROVIDER") {
+      if (provider.onboardingDismissed) {
         setIsDismissed(true);
       }
     }
-  }, [userProfile]);
+  }, [provider]);
 
-  // 2. Verificações de Perfil e Serviços (Síncronas / Memória)
+  // 2. Verificação de Perfil Completo (Logo + Endereço)
   const isProfileComplete = useMemo(() => {
-    if (!userProfile || userProfile.role !== "serviceProvider") return false;
-    const profile = userProfile as ServiceProviderProfile;
+    if (!provider || provider.role?.toUpperCase() !== "SERVICE_PROVIDER")
+      return false;
     // Consideramos completo se tiver logo E endereço
-    return !!(profile.logoUrl && profile.businessAddress?.street);
-  }, [userProfile]);
+    return !!(provider.profilePictureUrl && provider.businessAddress?.street);
+  }, [provider]);
 
+  // 3. Verificação de Serviços Cadastrados
   const hasServices = useMemo(() => {
-    if (!userProfile || userProfile.role !== "serviceProvider") return false;
-    const profile = userProfile as ServiceProviderProfile;
-    return profile.services && profile.services.length > 0;
-  }, [userProfile]);
+    if (!provider || provider.role?.toUpperCase() !== "SERVICE_PROVIDER")
+      return false;
+    return provider.services && provider.services.length > 0;
+  }, [provider]);
 
-  // 3. Verificação de Profissionais e Disponibilidade (Assíncrona / Firestore)
-  useEffect(() => {
-    const checkData = async () => {
-      if (!userProfile) return;
-      
-      try {
-        const professionalsRef = collection(
-          db,
-          "serviceProviders",
-          userProfile.id,
-          "professionals"
-        );
-        
-        // Buscamos os profissionais
-        const q = query(professionalsRef);
-        const snap = await getDocs(q);
+  // 4. Verificação de Equipe (Profissionais)
+  const hasProfessionals = useMemo(() => {
+    return professionals && professionals.length > 0;
+  }, [professionals]);
 
-        // A. Verifica se tem profissionais (equipe)
-        const hasTeam = !snap.empty;
-        setHasProfessionals(hasTeam);
+  // 5. Verificação de Disponibilidade configurada (em qualquer profissional)
+  const hasAvailability = useMemo(() => {
+    if (!professionals || professionals.length === 0) return false;
 
-        // B. Verifica se algum deles tem disponibilidade configurada
-        let availabilityConfigured = false;
-        if (hasTeam) {
-            snap.forEach((doc) => {
-            const prof = doc.data() as Professional;
-            if (
-                prof.availability &&
-                prof.availability.some((d) => d.isAvailable)
-            ) {
-                availabilityConfigured = true;
-            }
-            });
-        }
-        setHasAvailability(availabilityConfigured);
+    // Verifica se algum profissional tem ao menos um dia marcado como 'isAvailable: true'
+    return professionals.some(
+      (prof) =>
+        prof.availability && prof.availability.some((d) => d.isAvailable),
+    );
+  }, [professionals]);
 
-      } catch (error) {
-        console.error("Erro ao verificar dados do onboarding:", error);
-      } finally {
-        setIsLoadingCheck(false);
-      }
-    };
-
-    checkData();
-  }, [userProfile]);
-
-  // 4. Definição dos Passos
+  // Definição dos Passos
   const steps = [
     {
       id: "profile",
@@ -153,15 +134,15 @@ export const OnboardingChecklist = ({
   const progress = (completedCount / steps.length) * 100;
   const isAllDone = completedCount === steps.length;
 
-  // 5. Função para fechar e salvar no banco
+  // Função para fechar e salvar no banco via API Java
   const handleDismiss = async () => {
     setIsDismissed(true);
 
-    if (userProfile && userProfile.role === "serviceProvider") {
+    if (provider && provider.role?.toUpperCase() === "SERVICE_PROVIDER") {
       try {
-        await updateUserProfile(userProfile.id, {
+        await updateProfile(provider.id, {
           onboardingDismissed: true,
-        } as Partial<ServiceProviderProfile>);
+        });
       } catch (error) {
         console.error("Erro ao salvar status do onboarding:", error);
       }
@@ -178,12 +159,8 @@ export const OnboardingChecklist = ({
   }, [isAllDone, isDismissed]);
 
   // Renderizações Condicionais
-  if (isDismissed) return null;
-
-  if (isLoadingCheck && !isAllDone)
-    return (
-      <div className="w-full h-32 mb-8 bg-gray-900/50 rounded-xl animate-pulse border border-gray-800" />
-    );
+  if (isDismissed || provider?.role?.toUpperCase() !== "SERVICE_PROVIDER")
+    return null;
 
   return (
     <AnimatePresence>
@@ -243,7 +220,7 @@ export const OnboardingChecklist = ({
                     Complete {steps.length} passos para ativar sua agenda.
                   </p>
                 </div>
-                
+
                 <button
                   onClick={handleDismiss}
                   className="text-gray-600 hover:text-gray-300 transition-colors p-1 hover:bg-gray-800 rounded-full"
@@ -262,7 +239,7 @@ export const OnboardingChecklist = ({
                       "relative p-4 rounded-xl border transition-all duration-300 flex flex-col justify-between h-full group",
                       step.isCompleted
                         ? "bg-green-900/10 border-green-500/20"
-                        : "bg-gray-800/40 border-gray-700 hover:border-gray-600"
+                        : "bg-gray-800/40 border-gray-700 hover:border-gray-600",
                     )}
                   >
                     <div>
@@ -272,7 +249,7 @@ export const OnboardingChecklist = ({
                             "p-2 rounded-lg transition-colors",
                             step.isCompleted
                               ? "bg-green-500/20 text-green-400"
-                              : "bg-gray-700 text-gray-400 group-hover:bg-gray-600 group-hover:text-gray-200"
+                              : "bg-gray-700 text-gray-400 group-hover:bg-gray-600 group-hover:text-gray-200",
                           )}
                         >
                           <step.icon size={18} />
@@ -280,13 +257,16 @@ export const OnboardingChecklist = ({
                         {step.isCompleted ? (
                           <CheckCircle2 className="text-green-500" size={20} />
                         ) : (
-                          <Circle className="text-gray-600 group-hover:text-gray-500" size={20} />
+                          <Circle
+                            className="text-gray-600 group-hover:text-gray-500"
+                            size={20}
+                          />
                         )}
                       </div>
                       <h3
                         className={cn(
                           "font-bold text-sm",
-                          step.isCompleted ? "text-green-50" : "text-gray-200"
+                          step.isCompleted ? "text-green-50" : "text-gray-200",
                         )}
                       >
                         {step.title}

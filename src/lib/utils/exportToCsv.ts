@@ -1,13 +1,11 @@
 import { format } from 'date-fns';
-import { Timestamp } from 'firebase/firestore';
 import type { Appointment, Expense } from '../../types';
 
-// Função auxiliar para garantir que estamos lidando com objetos Date
-const normalizeTimestamp = (dateValue: unknown): Date => {
-  if (dateValue instanceof Timestamp) {
-    return dateValue.toDate();
-  }
-  return new Date(dateValue as string | number | Date);
+// Função auxiliar para parsear ISO Strings de forma segura
+const normalizeDate = (dateValue: unknown): Date => {
+  if (!dateValue) return new Date();
+  if (dateValue instanceof Date) return dateValue;
+  return new Date(dateValue as string | number);
 };
 
 // Função para escapar caracteres que podem quebrar o CSV
@@ -36,6 +34,11 @@ const downloadCsv = (filename: string, headers: string[], rows: string[]) => {
   document.body.removeChild(link);
 };
 
+// --- Type Guards
+const isExpenseType = (item: Appointment | Expense): item is Expense => {
+  return (item as Expense).amount !== undefined;
+};
+
 /**
  * Exporta transações financeiras (Receitas e Despesas)
  */
@@ -48,12 +51,20 @@ export const exportTransactionsToCsv = (filename: string, data: (Appointment | E
   const headers = ['Data', 'Descrição', 'Tipo', 'Categoria', 'Valor (BRL)'];
   
   const csvRows = data.map(item => {
-    const isExpense = 'amount' in item;
-    const date = format(normalizeTimestamp(isExpense ? item.date : item.startTime), 'yyyy-MM-dd');
-    const description = isExpense ? item.description : `Serviço: ${item.serviceName}`;
+    const isExpense = isExpenseType(item);
+    const date = format(normalizeDate(isExpense ? item.date : item.startTime), 'yyyy-MM-dd');
+    
+    // Tratamento de properties que mudaram no Spring Boot
+    const description = isExpense 
+        ? item.description 
+        : `Serviço: ${item.items && item.items.length > 0 ? item.items[0].name : "Indefinido"}`;
+    
     const type = isExpense ? 'Despesa' : 'Receita';
     const category = isExpense ? item.category : 'N/A';
-    const value = isExpense ? -item.amount : item.totalPrice;
+    
+    // Fallback para totalAmount/finalAmount
+    const incomeValue = (item as Appointment).finalAmount || (item as Appointment).totalAmount || 0;
+    const value = isExpense ? -item.amount : incomeValue;
 
     return [
       escapeCsvCell(date),
@@ -70,33 +81,40 @@ export const exportTransactionsToCsv = (filename: string, data: (Appointment | E
 /**
  * Exporta a agenda do dia com Dia e Horário na frente e status em Português
  */
-export const exportDailyAgendaToCsv = (filename: string, data: any[]) => {
+export const exportDailyAgendaToCsv = (filename: string, data: Appointment[]) => {
   if (!data || data.length === 0) {
     alert("Não há agendamentos para exportar.");
     return;
   }
 
-  // Colunas: Dia e Horário na frente, sem a parte de pagamento
   const headers = ['Dia', 'Horário', 'Cliente', 'Serviço', 'Status'];
   
-  // Mapeamento de traduções para os status do sistema
+  // Mapeamento de traduções (lidando com UPPERCASE da API)
   const statusTranslations: Record<string, string> = {
-    pending: 'Pendente',
-    scheduled: 'Agendado',
-    completed: 'Concluído',
-    cancelled: 'Cancelado',
-    free: 'Disponível'
+    PENDING: 'Pendente',
+    SCHEDULED: 'Agendado',
+    CONFIRMED: 'Confirmado',
+    COMPLETED: 'Concluído',
+    CANCELLED: 'Cancelado',
+    NO_SHOW: 'Faltou',
+    BLOCKED: 'Bloqueado'
   };
 
   const csvRows = data.map(item => {
-    const isVacant = item.isVacant; 
-    const dateObj = normalizeTimestamp(item.startTime);
+    const isVacant = item.status.toUpperCase() === "BLOCKED"; // Exemplo de uso
+    const dateObj = normalizeDate(item.startTime);
     
     const dia = format(dateObj, 'dd/MM/yyyy');
     const horario = format(dateObj, 'HH:mm');
-    const cliente = isVacant ? 'LIVRE' : (item.clientName || 'N/A');
-    const servico = isVacant ? '-' : (item.serviceName || 'N/A');
-    const status = isVacant ? 'Disponível' : (statusTranslations[item.status] || item.status);
+    const cliente = isVacant ? 'LIVRE' : (item.clientName || 'Particular');
+    
+    const servico = isVacant 
+        ? '-' 
+        : (item.items && item.items.length > 0 ? item.items.map(i => i.name).join(", ") : "Indefinido");
+        
+    const status = isVacant 
+        ? 'Disponível' 
+        : (statusTranslations[item.status.toUpperCase()] || item.status);
 
     return [
       escapeCsvCell(dia),

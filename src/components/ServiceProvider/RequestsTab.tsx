@@ -1,4 +1,3 @@
-import type { EnrichedProviderAppointment } from "../../store/providerAppointmentsStore";
 import type { Appointment } from "../../types";
 import { AppointmentRequestCard } from "./AppointmentRequestCard";
 import { Inbox } from "lucide-react";
@@ -7,9 +6,16 @@ import { motion, AnimatePresence } from "framer-motion";
 // UI
 import { Card, CardContent } from "../ui/card";
 
+// ✨ Função auxiliar para converter ISO Strings para Date com segurança
+const normalizeDate = (dateValue: string | Date): Date => {
+  if (dateValue instanceof Date) return dateValue;
+  return new Date(dateValue);
+};
+
 interface RequestsTabProps {
-  appointments: EnrichedProviderAppointment[];
-  onUpdateStatus: (id: string, status: "scheduled" | "cancelled") => void;
+  appointments: Appointment[];
+  // ✨ Flexibilizando a tipagem para suportar os Enums do Java (Maiúsculas)
+  onUpdateStatus: (id: string, status: "SCHEDULED" | "CANCELLED" | "scheduled" | "cancelled") => void;
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
@@ -19,8 +25,10 @@ export const RequestsTab = ({
   onAppointmentSelect,
 }: RequestsTabProps) => {
   const sortedAppointments = appointments
-    .filter((a) => a.status === "pending")
-    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    // ✨ Padronizando para MAIÚSCULO, que é o padrão do Spring Boot
+    .filter((a) => a.status.toUpperCase() === "PENDING")
+    // ✨ Usando a função normalizeDate para evitar crash com o .getTime()
+    .sort((a, b) => normalizeDate(a.startTime).getTime() - normalizeDate(b.startTime).getTime());
 
   if (sortedAppointments.length === 0) {
     return (

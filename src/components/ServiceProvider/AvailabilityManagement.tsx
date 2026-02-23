@@ -1,7 +1,7 @@
-// src/components/ServiceProvider/AvailabilityManagement.tsx
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useProfileStore } from "../../store/profileStore";
-import { useAvailabilityStore } from "../../store/availabilityStore";
+import { useState, useEffect, useMemo } from "react";
+import { useAuthStore } from "../../store/authStore";
+import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
+import { useProviderProfileStore } from "../../store/providerProfileStore";
 import {
   Loader2,
   Plus,
@@ -13,13 +13,11 @@ import {
   Settings,
   CalendarClock,
 } from "lucide-react";
-import { useToast } from "../../hooks/useToast";
+import { toast } from "react-hot-toast";
 import type {
   DailyAvailability,
   TimeSlot,
   ServiceProviderProfile,
-  ProfessionalProfile,
-  Professional,
 } from "../../types";
 
 // UI Components
@@ -60,22 +58,26 @@ import { motion, AnimatePresence } from "framer-motion";
 const DAYS_OF_WEEK: {
   key: DailyAvailability["dayOfWeek"];
   label: string;
-  short: string;
 }[] = [
-  { key: "Monday", label: "Segunda-feira", short: "Seg" },
-  { key: "Tuesday", label: "Terça-feira", short: "Ter" },
-  { key: "Wednesday", label: "Quarta-feira", short: "Qua" },
-  { key: "Thursday", label: "Quinta-feira", short: "Qui" },
-  { key: "Friday", label: "Sexta-feira", short: "Sex" },
-  { key: "Saturday", label: "Sábado", short: "Sáb" },
-  { key: "Sunday", label: "Domingo", short: "Dom" },
+  { key: "Monday", label: "Segunda-feira" },
+  { key: "Tuesday", label: "Terça-feira" },
+  { key: "Wednesday", label: "Quarta-feira" },
+  { key: "Thursday", label: "Quinta-feira" },
+  { key: "Friday", label: "Sexta-feira" },
+  { key: "Saturday", label: "Sábado" },
+  { key: "Sunday", label: "Domingo" },
 ];
 
 export const AvailabilityManagement = () => {
-  const { userProfile, professionals, updateUserProfile } = useProfileStore();
-  const { availability, isLoading, fetchAvailability, updateAvailability } =
-    useAvailabilityStore();
-  const { showSuccess, showError } = useToast();
+  const { user } = useAuthStore();
+  const {
+    professionals,
+    updateAvailability,
+    loading: profLoading,
+  } = useProfessionalsManagementStore();
+
+  // Settings do estabelecimento (Janela de dias, intervalo de slots)
+  const { updateProfile, loading: settingsLoading } = useProviderProfileStore();
 
   const [localAvailability, setLocalAvailability] = useState<
     DailyAvailability[]
@@ -83,158 +85,79 @@ export const AvailabilityManagement = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedProfId, setSelectedProfId] = useState<string>("");
 
-  // Estados de Configuração Global (Dono)
+  // Estados de Configuração Global
   const [bookingWindow, setBookingWindow] = useState<number>(30);
   const [slotInterval, setSlotInterval] = useState<number>(15);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const isOwner = userProfile?.role === "serviceProvider";
+  const isOwner = user?.role?.toUpperCase() === "SERVICE_PROVIDER";
 
-  // --- Helpers para ID de Provider ---
-  // Função segura para pegar o ID do Dono (Provider)
-  // Envolvido em useCallback para ser usado como dependência
-  const getProviderId = useCallback(() => {
-    if (!userProfile) return null;
-    if (isOwner) return userProfile.id;
-    // Se for profissional, retorna o serviceProviderId vinculado
-    return (userProfile as ProfessionalProfile).serviceProviderId;
-  }, [userProfile, isOwner]);
-
-  // --- INICIALIZAÇÃO E DADOS DO PROFISSIONAL ---
-
+  // --- SINCRONIZAÇÃO DE CONFIGURAÇÕES ---
   useEffect(() => {
-    if (isOwner && userProfile) {
-      const profile = userProfile as ServiceProviderProfile;
-      setBookingWindow(profile.bookingWindowDays || 30);
-      setSlotInterval(profile.slotInterval || 15);
+    if (isOwner && user) {
+      const provider = user as ServiceProviderProfile;
+      setBookingWindow(provider.bookingWindowDays || 30);
+      setSlotInterval(provider.slotInterval || 15);
     }
-  }, [userProfile, isOwner]);
+  }, [user, isOwner]);
 
-  const handleSaveGlobalSettings = async () => {
-    if (!userProfile?.id) return;
-    setIsSavingSettings(true);
-    try {
-      await updateUserProfile(userProfile.id, {
-        bookingWindowDays: bookingWindow,
-        slotInterval: slotInterval as 15 | 30 | 60, // Cast explícito para tipos literais
-      });
-      showSuccess("Configurações atualizadas!");
-      setIsSettingsOpen(false);
-    } catch (error) {
-      console.error(error); // Log do erro
-      showError("Erro ao salvar configurações.");
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const sortedProfessionals = useMemo(() => {
-    if (!professionals) return [];
-    return [...professionals].sort((a, b) => {
-      if (a.isOwner) return -1;
-      if (b.isOwner) return 1;
-      return 0;
-    });
-  }, [professionals]);
-
-  // Lógica Robusta para Identificar o Profissional Atual (Visualização)
-  const currentProfessional = useMemo((): Professional | null => {
-    // 1. Tenta achar na lista de profissionais carregada
-    const found = sortedProfessionals.find((p) => p.id === selectedProfId);
-    if (found) return found;
-
-    // 2. Se não achou e o ID selecionado é o do próprio usuário logado
-    if (userProfile && userProfile.id === selectedProfId) {
-      return {
-        id: userProfile.id,
-        name: userProfile.name,
-        email: userProfile.email,
-        photoURL: userProfile.profilePictureUrl,
-        isOwner: isOwner,
-        // Preenchendo campos obrigatórios do Professional com valores dummy ou derivados
-        serviceIds: [],
-        phone: "",
-      } as unknown as Professional;
-    }
-    return null;
-  }, [selectedProfId, sortedProfessionals, userProfile, isOwner]);
-
-  // Inicialização Inteligente da Seleção e Busca
+  // --- SELEÇÃO DE PROFISSIONAL INTELIGENTE ---
   useEffect(() => {
-    if (!userProfile?.id) return;
+    if (!user) return;
 
-    // Se já temos um selecionado, não faz nada (evita loop)
-    if (selectedProfId) return;
+    if (!isOwner) {
+      // Se for profissional, trava no próprio ID
+      setSelectedProfId(user.id);
+    } else if (!selectedProfId && professionals.length > 0) {
+      // Se for dono e nada selecionado, pega o dono se houver, ou o primeiro
+      const ownerProf = professionals.find((p) => p.id === user.id);
+      setSelectedProfId(ownerProf ? ownerProf.id : professionals[0].id);
+    }
+  }, [user, isOwner, professionals, selectedProfId]);
 
-    const providerId = getProviderId();
+  // --- CARREGAR DISPONIBILIDADE DO PROFISSIONAL SELECIONADO ---
+  useEffect(() => {
+    if (!selectedProfId) return;
 
-    if (isOwner) {
-      // CENÁRIO DONO: Seleciona o primeiro da lista ou ele mesmo
-      if (sortedProfessionals.length > 0) {
-        const ownerProfile = sortedProfessionals.find((p) => p.isOwner);
-        const targetId = ownerProfile
-          ? ownerProfile.id
-          : sortedProfessionals[0].id;
+    const prof = professionals.find((p) => p.id === selectedProfId);
 
-        setSelectedProfId(targetId);
-        if (providerId) fetchAvailability(providerId, targetId);
-      } else {
-        // Fallback: seleciona a si mesmo se a lista estiver vazia
-        setSelectedProfId(userProfile.id);
-        if (providerId) fetchAvailability(providerId, userProfile.id);
-      }
+    // Fallback: Mesmo se a API mandar vazio, construímos a semana padrão
+    if (prof?.availability && prof.availability.length > 0) {
+      setLocalAvailability(prof.availability);
     } else {
-      // CENÁRIO PROFISSIONAL: Seleciona a si mesmo obrigatoriamente
-      // Mas o ID do "resource" professional pode ser diferente do ID de usuário
-      // Aqui assumimos que professionalId no perfil é o ID do documento, ou fallback para user.id
-      const profUser = userProfile as ProfessionalProfile;
-      const targetDocId = profUser.professionalId || profUser.id;
-
-      setSelectedProfId(targetDocId);
-
-      if (providerId) {
-        fetchAvailability(providerId, targetDocId);
-      }
+      setLocalAvailability(
+        DAYS_OF_WEEK.map((d) => ({
+          dayOfWeek: d.key,
+          isAvailable: false,
+          slots: [{ start: "09:00", end: "18:00" }],
+        })),
+      );
     }
-  }, [
-    isOwner,
-    selectedProfId,
-    sortedProfessionals,
-    fetchAvailability,
-    userProfile,
-    getProviderId, // Adicionado às dependências
-  ]);
-
-  useEffect(() => {
-    if (availability.length > 0) {
-      setLocalAvailability(availability);
-    } else {
-      const initial = DAYS_OF_WEEK.map((d) => ({
-        dayOfWeek: d.key,
-        isAvailable: false,
-        slots: [{ start: "09:00", end: "18:00" }],
-      }));
-      setLocalAvailability(initial);
-    }
-  }, [availability]);
-
-  // --- HANDLERS ---
-
-  const handleProfessionalChange = (profId: string) => {
-    const providerId = getProviderId();
-    if (!providerId) return;
-
-    setSelectedProfId(profId);
     setHasChanges(false);
-    fetchAvailability(providerId, profId);
+  }, [selectedProfId, professionals]);
+
+  // --- AÇÕES DO DONO ---
+  const handleSaveGlobalSettings = async () => {
+    if (!user?.id) return;
+    try {
+      await updateProfile(user.id, {
+        bookingWindowDays: bookingWindow,
+        // ✨ Literal type para remover o "any"
+        slotInterval: slotInterval as 15 | 30 | 45 | 60,
+      });
+      toast.success("Configurações da agenda atualizadas!");
+      setIsSettingsOpen(false);
+    } catch {
+      // ✨ O erro já é tratado e exibe um toast dentro da função updateProfile no store
+    }
   };
 
+  // --- MANIPULAÇÃO DE HORÁRIOS ---
   const handleDayToggle = (dayKey: string, checked: boolean) => {
     setLocalAvailability((prev) =>
       prev.map((day) =>
-        day.dayOfWeek === dayKey ? { ...day, isAvailable: checked } : day
-      )
+        day.dayOfWeek === dayKey ? { ...day, isAvailable: checked } : day,
+      ),
     );
     setHasChanges(true);
   };
@@ -243,7 +166,7 @@ export const AvailabilityManagement = () => {
     dayKey: string,
     index: number,
     field: keyof TimeSlot,
-    value: string
+    value: string,
   ) => {
     setLocalAvailability((prev) =>
       prev.map((day) => {
@@ -251,7 +174,7 @@ export const AvailabilityManagement = () => {
         const newSlots = [...day.slots];
         newSlots[index] = { ...newSlots[index], [field]: value };
         return { ...day, slots: newSlots };
-      })
+      }),
     );
     setHasChanges(true);
   };
@@ -261,26 +184,25 @@ export const AvailabilityManagement = () => {
       prev.map((day) => {
         if (day.dayOfWeek !== dayKey) return day;
         const lastSlot = day.slots[day.slots.length - 1];
-        let newStart = "13:00";
-        let newEnd = "17:00";
+
+        // Lógica amigável: se terminar às 12:00, o novo começa às 13:00
+        let newStart = "14:00";
+        let newEnd = "18:00";
+
         if (lastSlot && lastSlot.end) {
           const [h, m] = lastSlot.end.split(":").map(Number);
           const nextH = h + 1;
           if (nextH < 23) {
-            newStart = `${String(nextH).padStart(2, "0")}:${String(m).padStart(
-              2,
-              "0"
-            )}`;
-            newEnd = `${String(nextH + 4).padStart(2, "0")}:${String(
-              m
-            ).padStart(2, "0")}`;
+            newStart = `${String(nextH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+            newEnd = `${String(nextH + 4).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
           }
         }
+
         return {
           ...day,
           slots: [...day.slots, { start: newStart, end: newEnd }],
         };
-      })
+      }),
     );
     setHasChanges(true);
   };
@@ -290,14 +212,15 @@ export const AvailabilityManagement = () => {
       prev.map((day) => {
         if (day.dayOfWeek !== dayKey) return day;
         return { ...day, slots: day.slots.filter((_, i) => i !== index) };
-      })
+      }),
     );
     setHasChanges(true);
   };
 
+  // --- AÇÕES EM MASSA ---
   const copyToWeekdays = (sourceDayKey: string) => {
     const sourceDay = localAvailability.find(
-      (d) => d.dayOfWeek === sourceDayKey
+      (d) => d.dayOfWeek === sourceDayKey,
     );
     if (!sourceDay) return;
     setLocalAvailability((prev) =>
@@ -306,22 +229,23 @@ export const AvailabilityManagement = () => {
           day.dayOfWeek === "Saturday" ||
           day.dayOfWeek === "Sunday" ||
           day.dayOfWeek === sourceDayKey
-        )
+        ) {
           return day;
+        }
         return {
           ...day,
           isAvailable: sourceDay.isAvailable,
           slots: [...sourceDay.slots],
         };
-      })
+      }),
     );
     setHasChanges(true);
-    showSuccess(`Copiado para dias úteis!`);
+    toast.success(`Copiado para dias úteis!`);
   };
 
   const copyToAll = (sourceDayKey: string) => {
     const sourceDay = localAvailability.find(
-      (d) => d.dayOfWeek === sourceDayKey
+      (d) => d.dayOfWeek === sourceDayKey,
     );
     if (!sourceDay) return;
     setLocalAvailability((prev) =>
@@ -332,65 +256,61 @@ export const AvailabilityManagement = () => {
           isAvailable: sourceDay.isAvailable,
           slots: [...sourceDay.slots],
         };
-      })
+      }),
     );
     setHasChanges(true);
-    showSuccess(`Replicado para a semana toda!`);
+    toast.success(`Replicado para a semana toda!`);
   };
 
   const handleReset = () => {
-    setLocalAvailability(availability);
+    const prof = professionals.find((p) => p.id === selectedProfId);
+    if (prof?.availability) {
+      setLocalAvailability(prof.availability);
+    }
     setHasChanges(false);
   };
 
-  const handleSave = async () => {
-    if (!selectedProfId || !userProfile?.id) return;
-    const providerId = getProviderId();
-
-    if (!providerId) {
-      showError("Erro: ID do provedor não encontrado.");
-      return;
-    }
+  const handleSaveAvailability = async () => {
+    if (!selectedProfId) return;
 
     const hasErrors = localAvailability.some(
-      (day) =>
-        day.isAvailable && day.slots.some((slot) => slot.start >= slot.end)
+      (d) => d.isAvailable && d.slots.some((s) => s.start >= s.end),
     );
 
     if (hasErrors) {
-      showError("Corrija os horários inválidos antes de salvar.");
+      toast.error("Existem horários de início maiores que o fim.");
       return;
     }
 
     try {
-      await updateAvailability(providerId, selectedProfId, localAvailability);
+      await updateAvailability(selectedProfId, localAvailability);
       setHasChanges(false);
-    } catch (error) {
-      console.error(error);
+      toast.success("Disponibilidade salva com sucesso!");
+    } catch {
+      // ✨ Erro tratado silenciosamente, o store já cuida do feedback visual
     }
   };
 
-  if (!userProfile)
-    return (
-      <div className="flex justify-center p-10">
-        <Loader2 className="animate-spin text-primary" />
-      </div>
-    );
-
-  // Dados para UI seguros
-  const displayName =
-    currentProfessional?.name || userProfile.name || "Profissional";
-  // Tenta photoURL (Professional) ou profilePictureUrl (UserProfile)
+  const currentProf = professionals.find((p) => p.id === selectedProfId);
+  const displayName = currentProf?.name || user?.name || "Profissional";
   const displayPhoto =
-    currentProfessional?.photoURL || userProfile.profilePictureUrl || "";
+    currentProf?.profilePictureUrl || user?.profilePictureUrl;
   const displayInitials = displayName.substring(0, 2).toUpperCase();
+
+  // Organiza profissionais para o dropdown colocando o dono (se houver) no topo
+  const sortedProfessionals = useMemo(() => {
+    return [...professionals].sort((a, b) => {
+      // Assumindo que o profissional com o mesmo ID do user é o dono logado
+      if (a.id === user?.id) return -1;
+      if (b.id === user?.id) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [professionals, user]);
 
   return (
     <div className="space-y-6 pb-20">
-      {/* --- HEADER UNIFICADO E LIMPO --- */}
       <div className="bg-gray-900/80 backdrop-blur-md rounded-2xl border border-gray-800 shadow-xl p-4 sticky top-4 z-20">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          {/* Esquerda: Identificação do Profissional */}
           <div className="flex items-center gap-4 w-full md:w-auto">
             <Avatar className="h-12 w-12 border-2 border-primary/20">
               <AvatarImage src={displayPhoto} className="object-cover" />
@@ -401,27 +321,24 @@ export const AvailabilityManagement = () => {
 
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-primary mb-0.5 uppercase tracking-wider">
-                Gerenciando Horários
+                Horários de Atendimento
               </p>
-
-              {isOwner && sortedProfessionals.length > 0 ? (
-                <div className="w-full md:w-64">
-                  <Select
-                    value={selectedProfId}
-                    onValueChange={handleProfessionalChange}
-                  >
-                    <SelectTrigger className="bg-transparent border-0 p-0 h-auto text-lg font-bold text-white focus:ring-0 hover:text-gray-300 transition-colors w-auto gap-2">
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-900 border-gray-700 text-white">
-                      {sortedProfessionals.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} {p.isOwner && "(Você)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {isOwner ? (
+                <Select
+                  value={selectedProfId}
+                  onValueChange={setSelectedProfId}
+                >
+                  <SelectTrigger className="bg-transparent border-0 p-0 h-auto text-lg font-bold text-white focus:ring-0 w-auto gap-2">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                    {sortedProfessionals.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} {p.id === user?.id && "(Você)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
                 <h2 className="text-lg font-bold text-white truncate">
                   {displayName}
@@ -430,21 +347,19 @@ export const AvailabilityManagement = () => {
             </div>
           </div>
 
-          {/* Direita: Ações e Configurações */}
           <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-            {/* Botão de Settings (Só para Dono) - Agora em um Modal Limpo */}
             {isOwner && (
               <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <DialogTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    className="border-gray-700 bg-gray-800/50 hover:bg-gray-800 text-gray-300"
+                    className="bg-gray-800 border-gray-700 hover:text-white hover:bg-gray-700"
                   >
                     <Settings size={18} />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-950 border-gray-800 text-white sm:max-w-md">
+                <DialogContent className="bg-gray-950 border-gray-800 text-white">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <CalendarClock className="text-primary" /> Configurações
@@ -454,39 +369,28 @@ export const AvailabilityManagement = () => {
                       Defina regras globais para os agendamentos online.
                     </DialogDescription>
                   </DialogHeader>
-
-                  <div className="space-y-6 py-4">
-                    <div className="space-y-3">
-                      <Label className="text-white">
-                        Janela de Agendamento
-                      </Label>
-                      <div className="flex items-center gap-3">
-                        <Input
-                          type="number"
-                          value={bookingWindow}
-                          onChange={(e) =>
-                            setBookingWindow(Number(e.target.value))
-                          }
-                          className="bg-gray-900 border-gray-700 text-white w-24"
-                        />
-                        <span className="text-sm text-gray-400">
-                          dias de antecedência
-                        </span>
-                      </div>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Janela de Agendamento (Dias)</Label>
+                      <Input
+                        type="number"
+                        value={bookingWindow}
+                        onChange={(e) =>
+                          setBookingWindow(Number(e.target.value))
+                        }
+                        className="bg-gray-900 border-gray-700 focus:ring-primary"
+                      />
                       <p className="text-xs text-gray-500">
                         Até quando os clientes podem ver horários livres.
                       </p>
                     </div>
-
-                    <div className="space-y-3">
-                      <Label className="text-white">
-                        Duração do Slot (Intervalo)
-                      </Label>
+                    <div className="space-y-2">
+                      <Label>Intervalo entre Slots</Label>
                       <Select
                         value={slotInterval.toString()}
                         onValueChange={(v) => setSlotInterval(Number(v))}
                       >
-                        <SelectTrigger className="bg-gray-900 border-gray-700 text-white w-full">
+                        <SelectTrigger className="bg-gray-900 border-gray-700 focus:ring-primary">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-gray-900 border-gray-700 text-white">
@@ -501,7 +405,6 @@ export const AvailabilityManagement = () => {
                       </p>
                     </div>
                   </div>
-
                   <DialogFooter>
                     <Button
                       variant="ghost"
@@ -512,20 +415,19 @@ export const AvailabilityManagement = () => {
                     </Button>
                     <Button
                       onClick={handleSaveGlobalSettings}
-                      disabled={isSavingSettings}
-                      className="bg-primary text-black hover:bg-primary/90"
+                      disabled={settingsLoading}
+                      className="bg-primary text-black font-bold"
                     >
-                      {isSavingSettings && (
+                      {settingsLoading ? (
                         <Loader2 className="animate-spin mr-2" size={16} />
-                      )}
-                      Salvar Configurações
+                      ) : null}
+                      Salvar
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             )}
 
-            {/* Ações de Salvar/Descartar */}
             {hasChanges && (
               <Button
                 variant="ghost"
@@ -538,16 +440,16 @@ export const AvailabilityManagement = () => {
             )}
 
             <Button
-              onClick={handleSave}
-              disabled={!hasChanges || isLoading}
+              onClick={handleSaveAvailability}
+              disabled={!hasChanges || profLoading}
               className={cn(
-                "gap-2 font-bold px-6 h-10 transition-all shadow-lg min-w-[140px]",
+                "gap-2 font-bold px-6 h-10 min-w-[140px]",
                 hasChanges
-                  ? "shadow-primary/20 bg-primary text-black hover:bg-primary/90"
-                  : "bg-gray-800 text-gray-400 cursor-not-allowed hover:bg-gray-800"
+                  ? "bg-primary text-black hover:bg-primary/90"
+                  : "bg-gray-800 text-gray-400",
               )}
             >
-              {isLoading ? (
+              {profLoading ? (
                 <Loader2 className="animate-spin" size={18} />
               ) : (
                 <Save size={18} />
@@ -558,184 +460,165 @@ export const AvailabilityManagement = () => {
         </div>
       </div>
 
-      {/* --- GRID DE DIAS --- */}
-      {isLoading && localAvailability.length === 0 ? (
-        <div className="flex justify-center p-20">
-          <Loader2 className="animate-spin text-primary" size={40} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {DAYS_OF_WEEK.map(({ key, label }) => {
-            const dayData = localAvailability.find(
-              (d) => d.dayOfWeek === key
-            ) || { isAvailable: false, slots: [] };
-
-            return (
-              <Card
-                key={key}
-                className={cn(
-                  "transition-all duration-300 border relative group overflow-hidden",
-                  dayData.isAvailable
-                    ? "border-gray-700 bg-gray-900 shadow-md"
-                    : "border-gray-800 bg-gray-900/30 opacity-60 hover:opacity-100"
-                )}
-              >
-                <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0 bg-black/20">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      checked={dayData.isAvailable}
-                      onCheckedChange={(checked) =>
-                        handleDayToggle(key, checked)
-                      }
-                      className="data-[state=checked]:bg-primary"
-                    />
-                    <div>
-                      <Label
-                        className={cn(
-                          "text-base font-bold block cursor-pointer",
-                          dayData.isAvailable ? "text-white" : "text-gray-500"
-                        )}
-                      >
-                        {label}
-                      </Label>
-                      {dayData.isAvailable ? (
-                        <div className="flex gap-2 mt-0.5">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 px-1 bg-gray-800 border-gray-700 text-gray-400 font-normal"
-                          >
-                            {dayData.slots.length} turnos
-                          </Badge>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-600 block mt-0.5">
-                          Indisponível
-                        </span>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {DAYS_OF_WEEK.map(({ key, label }) => {
+          const dayData = localAvailability.find(
+            (d) => d.dayOfWeek === key,
+          ) || { isAvailable: false, slots: [] };
+          return (
+            <Card
+              key={key}
+              className={cn(
+                "border bg-gray-900",
+                !dayData.isAvailable && "opacity-60",
+              )}
+            >
+              <CardHeader className="flex flex-row items-center justify-between pb-2 bg-black/20">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={dayData.isAvailable}
+                    onCheckedChange={(v) => handleDayToggle(key, v)}
+                    className="data-[state=checked]:bg-primary"
+                  />
+                  <div>
+                    <Label
+                      className={cn(
+                        "font-bold block cursor-pointer",
+                        dayData.isAvailable ? "text-white" : "text-gray-500",
                       )}
-                    </div>
+                    >
+                      {label}
+                    </Label>
+                    {dayData.isAvailable ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-5 px-1 bg-gray-800 border-gray-700 text-gray-400 font-normal mt-1"
+                      >
+                        {dayData.slots.length} turnos
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-gray-600 block mt-0.5">
+                        Indisponível
+                      </span>
+                    )}
                   </div>
+                </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-gray-500 hover:text-white"
+                    >
+                      <MoreVertical size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-gray-900 border-gray-800 text-gray-200"
+                  >
+                    <DropdownMenuLabel>Ações em Massa</DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-gray-800" />
+                    <DropdownMenuItem
+                      onClick={() => copyToWeekdays(key)}
+                      className="gap-2 cursor-pointer focus:bg-gray-800"
+                    >
+                      <Copy size={14} /> Replicar em dias úteis
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => copyToAll(key)}
+                      className="gap-2 cursor-pointer focus:bg-gray-800"
+                    >
+                      <Copy size={14} /> Replicar na semana toda
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardHeader>
+
+              <AnimatePresence>
+                {dayData.isAvailable && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <CardContent className="space-y-3 pt-4">
+                      {dayData.slots.map((slot, idx) => {
+                        const isInvalid = slot.start >= slot.end;
+                        return (
+                          <div
+                            key={idx}
+                            className={cn(
+                              "flex items-center gap-2 p-1.5 rounded-lg border transition-colors",
+                              isInvalid
+                                ? "border-red-500/50 bg-red-900/10"
+                                : "border-gray-800 bg-gray-950/50",
+                            )}
+                          >
+                            <Input
+                              type="time"
+                              value={slot.start}
+                              onChange={(e) =>
+                                handleSlotChange(
+                                  key,
+                                  idx,
+                                  "start",
+                                  e.target.value,
+                                )
+                              }
+                              className="h-9 text-center bg-transparent border-transparent text-sm font-mono p-0 focus:ring-0 hover:bg-gray-800/50 rounded transition-colors"
+                            />
+                            <span className="text-gray-600 text-xs font-medium">
+                              às
+                            </span>
+                            <Input
+                              type="time"
+                              value={slot.end}
+                              onChange={(e) =>
+                                handleSlotChange(
+                                  key,
+                                  idx,
+                                  "end",
+                                  e.target.value,
+                                )
+                              }
+                              className={cn(
+                                "h-9 text-center bg-transparent border-transparent text-sm font-mono p-0 focus:ring-0 hover:bg-gray-800/50 rounded transition-colors",
+                                isInvalid && "text-red-400",
+                              )}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSlot(key, idx)}
+                              className="h-7 w-7 text-gray-600 hover:text-red-400 hover:bg-red-950/30 shrink-0 rounded-full"
+                              disabled={dayData.slots.length === 1}
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                    <CardFooter className="pt-0 pb-4">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-white"
+                        size="sm"
+                        onClick={() => addSlot(key)}
+                        className="w-full border-dashed border border-gray-800 text-gray-500 hover:text-primary hover:border-primary/50 hover:bg-primary/5 h-8 text-xs transition-all"
                       >
-                        <MoreVertical size={16} />
+                        <Plus size={14} className="mr-1" /> Adicionar Intervalo
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="bg-gray-900 border-gray-800 text-gray-200"
-                    >
-                      <DropdownMenuLabel>Ações em Massa</DropdownMenuLabel>
-                      <DropdownMenuSeparator className="bg-gray-800" />
-                      <DropdownMenuItem
-                        onClick={() => copyToWeekdays(key)}
-                        className="gap-2 cursor-pointer focus:bg-gray-800"
-                      >
-                        <Copy size={14} /> Replicar em dias úteis
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => copyToAll(key)}
-                        className="gap-2 cursor-pointer focus:bg-gray-800"
-                      >
-                        <Copy size={14} /> Replicar na semana toda
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardHeader>
-
-                <AnimatePresence>
-                  {dayData.isAvailable && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <CardContent className="space-y-3 pt-4">
-                        {dayData.slots.map((slot, idx) => {
-                          const isInvalid = slot.start >= slot.end;
-                          return (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "flex items-center gap-2 p-1.5 rounded-lg border transition-colors",
-                                isInvalid
-                                  ? "border-red-500/50 bg-red-900/10"
-                                  : "border-gray-800 bg-gray-950/50"
-                              )}
-                            >
-                              <div className="relative flex-1 group/input">
-                                <Input
-                                  type="time"
-                                  value={slot.start}
-                                  onChange={(e) =>
-                                    handleSlotChange(
-                                      key,
-                                      idx,
-                                      "start",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="h-9 text-center bg-transparent border-transparent text-sm font-mono p-0 focus:ring-0 group-hover/input:bg-gray-800/50 rounded transition-colors"
-                                />
-                              </div>
-                              <span className="text-gray-600 text-xs font-medium">
-                                às
-                              </span>
-                              <div className="relative flex-1 group/input">
-                                <Input
-                                  type="time"
-                                  value={slot.end}
-                                  onChange={(e) =>
-                                    handleSlotChange(
-                                      key,
-                                      idx,
-                                      "end",
-                                      e.target.value
-                                    )
-                                  }
-                                  className={cn(
-                                    "h-9 text-center bg-transparent border-transparent text-sm font-mono p-0 focus:ring-0 group-hover/input:bg-gray-800/50 rounded transition-colors",
-                                    isInvalid && "text-red-400"
-                                  )}
-                                />
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeSlot(key, idx)}
-                                className="h-7 w-7 text-gray-600 hover:text-red-400 hover:bg-red-950/30 shrink-0 rounded-full"
-                                disabled={dayData.slots.length === 1}
-                              >
-                                <Trash2 size={13} />
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </CardContent>
-                      <CardFooter className="pt-0 pb-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => addSlot(key)}
-                          className="w-full border-dashed border border-gray-800 text-gray-500 hover:text-primary hover:border-primary/50 hover:bg-primary/5 h-8 text-xs transition-all"
-                        >
-                          <Plus size={14} className="mr-1" /> Adicionar
-                          Intervalo
-                        </Button>
-                      </CardFooter>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                    </CardFooter>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -10,7 +10,6 @@ import {
   User,
   Calendar,
 } from "lucide-react";
-import type { EnrichedProviderAppointment } from "../../store/providerAppointmentsStore";
 import type { Appointment } from "../../types";
 
 // UI Components
@@ -26,19 +25,28 @@ import {
 } from "../ui/select";
 import { Badge } from "../ui/badge";
 
-type HistoryFilterStatus = "all" | "completed" | "cancelled";
+type HistoryFilterStatus = "ALL" | "COMPLETED" | "CANCELLED";
 
 const ITEMS_PER_PAGE = 10;
+
+// ✨ Função auxiliar para converter ISO Strings para Date (seguro contra falhas de tipagem)
+const normalizeDate = (dateValue: string | Date): Date => {
+  if (dateValue instanceof Date) return dateValue;
+  return new Date(dateValue);
+};
 
 const HistoryCard = ({
   appt,
   onClick,
 }: {
-  appt: EnrichedProviderAppointment;
+  appt: Appointment;
   onClick: () => void;
 }) => {
-  // ✅ LÓGICA CORRIGIDA: Prioriza o nome salvo no agendamento (blindagem)
-  const clientName = appt.clientName || appt.client?.name || "Cliente desconhecido";
+  // LÓGICA CORRIGIDA: Prioriza o nome salvo no agendamento (blindagem)
+  // Nota: A API Java planifica os dados de cliente
+  const clientName = appt.clientName || "Cliente desconhecido";
+  const status = appt.status.toUpperCase();
+  const startTime = normalizeDate(appt.startTime);
 
   return (
     <Card
@@ -54,20 +62,23 @@ const HistoryCard = ({
             </p>
           </div>
           <p className="text-sm text-gray-400 pl-6">
-            {appt.services.map((s) => s.name).join(", ")}
+            {appt.items && appt.items.length > 0 
+                ? appt.items.map((s) => s.name).join(", ")
+                : "Serviço não especificado"
+            }
           </p>
           <p className="text-xs text-gray-500 pl-6 mt-0.5">
-            com {appt.professionalName}
+            com {appt.professionalName || "Profissional"}
           </p>
         </div>
 
         <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end gap-2 sm:gap-1 border-t sm:border-none border-gray-800 pt-3 sm:pt-0">
           <div className="flex items-center gap-1.5 text-sm font-medium text-gray-300">
             <Calendar size={14} className="text-gray-500" />
-            {format(appt.startTime, "dd MMM, HH:mm", { locale: ptBR })}
+            {format(startTime, "dd MMM, HH:mm", { locale: ptBR })}
           </div>
 
-          {appt.status === "completed" ? (
+          {status === "COMPLETED" ? (
             <Badge
               variant="success"
               className="gap-1.5 bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20"
@@ -89,7 +100,7 @@ const HistoryCard = ({
 };
 
 interface HistoryTabProps {
-  appointments: EnrichedProviderAppointment[];
+  appointments: Appointment[];
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
@@ -98,7 +109,7 @@ export const HistoryTab = ({
   onAppointmentSelect,
 }: HistoryTabProps) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<HistoryFilterStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<HistoryFilterStatus>("ALL");
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => setCurrentPage(1), [searchTerm, statusFilter]);
@@ -106,14 +117,18 @@ export const HistoryTab = ({
   const filteredAppointments = useMemo(() => {
     return appointments
       .filter((appt) => {
-        // ✅ BUSCA CORRIGIDA: Usa a mesma lógica do card para filtrar
-        const nameToSearch = appt.clientName || appt.client?.name || "";
+        const nameToSearch = appt.clientName || "";
         return nameToSearch.toLowerCase().includes(searchTerm.toLowerCase());
       })
-      .filter((appt) =>
-        statusFilter === "all" ? true : appt.status === statusFilter
-      )
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      .filter((appt) => {
+        const apptStatus = appt.status.toUpperCase();
+        if (statusFilter === "ALL") {
+           // O Histórico exibe apenas o que já passou/foi fechado
+           return apptStatus === "COMPLETED" || apptStatus === "CANCELLED" || apptStatus === "NO_SHOW";
+        }
+        return apptStatus === statusFilter;
+      })
+      .sort((a, b) => normalizeDate(b.startTime).getTime() - normalizeDate(a.startTime).getTime());
   }, [appointments, searchTerm, statusFilter]);
 
   const totalPages = Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE);
@@ -143,9 +158,9 @@ export const HistoryTab = ({
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="completed">Concluídos</SelectItem>
-                <SelectItem value="cancelled">Cancelados</SelectItem>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="COMPLETED">Concluídos</SelectItem>
+                <SelectItem value="CANCELLED">Cancelados</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -191,7 +206,7 @@ export const HistoryTab = ({
             size="icon"
             onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
             disabled={currentPage === 1}
-            className="h-9 w-9"
+            className="h-9 w-9 border-gray-700 hover:bg-gray-800"
           >
             <ChevronLeft size={16} />
           </Button>
@@ -203,7 +218,7 @@ export const HistoryTab = ({
             size="icon"
             onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
             disabled={currentPage === totalPages}
-            className="h-9 w-9"
+            className="h-9 w-9 border-gray-700 hover:bg-gray-800"
           >
             <ChevronRight size={16} />
           </Button>

@@ -1,6 +1,6 @@
-// src/components/ServiceProvider/ProfileManagement.tsx
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useProfileStore } from "../../store/profileStore";
+import { useAuthStore } from "../../store/authStore";
+import { useProviderProfileStore } from "../../store/providerProfileStore";
 import type { ServiceProviderProfile } from "../../types";
 import {
   Camera,
@@ -27,10 +27,6 @@ import {
   Map as MapIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import {
-  uploadProviderLogo,
-  uploadProviderBanner,
-} from "../../firebase/userService";
 import {
   useForm,
   type SubmitHandler,
@@ -86,27 +82,24 @@ import { Badge } from "../ui/badge";
 // @ts-expect-error - Fix for Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
 
 // --- HELPER: Inferir Tipo de Pix ---
-// Ajuda a corrigir perfis antigos que salvaram a chave sem o tipo
 const inferPixType = (
   key: string | undefined | null,
 ): "cpf" | "cnpj" | "email" | "phone" | "random" => {
-  if (!key) return "cpf"; // Padrão seguro
+  if (!key) return "cpf";
   if (key.includes("@")) return "email";
   
   const cleanKey = key.replace(/\D/g, "");
-  // Lógica aproximada para chaves numéricas
-  if (cleanKey.length === 11) return "cpf"; // 11 dígitos = CPF ou Celular (CPF é mais comum como padrão)
+  if (cleanKey.length === 11) return "cpf"; 
   if (cleanKey.length === 14) return "cnpj";
-  if (cleanKey.length > 20) return "random"; // Chaves aleatórias são longas
+  if (cleanKey.length > 20) return "random";
   
-  return "cpf"; // Fallback final
+  return "cpf"; 
 };
 
 const ChangeView = ({
@@ -174,8 +167,6 @@ const profileSchema = z.object({
   email: z.string().email("Email inválido"),
   documentType: z.enum(["cpf", "cnpj"]),
   documentNumber: z.string(),
-  logoUrl: z.string().optional(),
-  bannerUrl: z.string().optional(),
   cancellationMinHours: z.coerce
     .number()
     .min(0, "Não pode ser negativo")
@@ -204,7 +195,10 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export const ProfileManagement = () => {
-  const { userProfile, updateUserProfile } = useProfileStore();
+  const { user } = useAuthStore();
+  const providerProfile = user as ServiceProviderProfile;
+  const { updateProfile, uploadLogo, uploadBanner, loading: isSavingStore } = useProviderProfileStore();
+  
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -217,8 +211,7 @@ export const ProfileManagement = () => {
   const [logoToCrop, setLogoToCrop] = useState<string | null>(null);
   const [logoCrop, setLogoCrop] = useState({ x: 0, y: 0 });
   const [logoZoom, setLogoZoom] = useState(1);
-  const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] =
-    useState<Area | null>(null);
+  const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(null);
 
   const {
     register,
@@ -239,9 +232,7 @@ export const ProfileManagement = () => {
   });
 
   const [position, setPosition] = useState<L.LatLng | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([
-    -15.79, -47.88,
-  ]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([-15.79, -47.88]);
   const [mapZoom, setMapZoom] = useState(4);
   const lastSearchedAddressRef = useRef("");
 
@@ -249,54 +240,69 @@ export const ProfileManagement = () => {
   const streetValue = watch("businessAddress.street");
   const numberValue = watch("businessAddress.number");
   const cityValue = watch("businessAddress.city");
-
   const documentType = watch("documentType") || "cpf";
 
   const { address, loading: cepLoading, fetchAddress } = useViaCep();
 
   useEffect(() => {
-    if (userProfile && userProfile.role === "serviceProvider") {
-      const profile = userProfile as ServiceProviderProfile;
-      const docType = profile.documentType || (profile.cpf ? "cpf" : "cnpj");
-      const docNumber = profile.cpf || profile.cnpj || "";
+    if (providerProfile && providerProfile.role?.toUpperCase() === "SERVICE_PROVIDER") {
+      // Normaliza para lowercase (o react-hook-form espera "cpf" ou "cnpj")
+      const docType = (providerProfile.documentType?.toLowerCase() === "cnpj" ? "cnpj" : "cpf") as "cpf" | "cnpj";
+      
+      // Lê de 'document' ou usa fallbacks legacy sem 'any'
+      const legacyProfile = providerProfile as unknown as Record<string, string>;
+      const docNumber = providerProfile.document || legacyProfile.cpf || legacyProfile.cnpj || "";
+      
+      const whatsapp = providerProfile.socialLinks?.whatsapp || "";
 
-      const whatsapp = profile.socialLinks?.whatsapp || "";
-
-      // 🔥 Lógica Inteligente para Pix
-      // Se não tiver tipo salvo, tenta inferir pela chave existente
-      let finalPixType = profile.pixKeyType;
+      let finalPixType = providerProfile.pixKeyType as "cpf" | "cnpj" | "email" | "phone" | "random" | undefined;
       if (!finalPixType) {
-        finalPixType = inferPixType(profile.pixKey);
+        finalPixType = inferPixType(providerProfile.pixKey);
       }
 
-      const defaultValues = {
-        ...profile,
+      reset({
+        businessName: providerProfile.businessName || "",
+        name: providerProfile.name || "",
+        email: providerProfile.email || "",
+        publicProfileSlug: providerProfile.publicProfileSlug || "",
+        businessPhone: providerProfile.businessPhone || "",
         documentType: docType,
         documentNumber: docNumber,
-        cancellationMinHours: profile.cancellationMinHours ?? 2,
-        pixKeyType: finalPixType, // Usa o tipo recuperado ou inferido
+        cancellationMinHours: providerProfile.cancellationMinHours ?? 2,
+        pixKey: providerProfile.pixKey || "",
+        pixKeyType: finalPixType, 
         socialLinks: {
-          ...profile.socialLinks,
+          instagram: providerProfile.socialLinks?.instagram || "",
+          facebook: providerProfile.socialLinks?.facebook || "",
+          website: providerProfile.socialLinks?.website || "",
           whatsapp: whatsapp,
         },
-      };
+        businessAddress: {
+          zipCode: providerProfile.businessAddress?.zipCode || "",
+          street: providerProfile.businessAddress?.street || "",
+          number: providerProfile.businessAddress?.number || "",
+          neighborhood: providerProfile.businessAddress?.neighborhood || "",
+          city: providerProfile.businessAddress?.city || "",
+          state: providerProfile.businessAddress?.state || "",
+        }
+      });
 
-      reset(defaultValues);
-
-      setLogoPreview(profile.logoUrl || null);
-      setBannerPreview(profile.bannerUrl || null);
-      const { lat, lng } = profile.businessAddress;
+      setLogoPreview(providerProfile.profilePictureUrl || providerProfile.logoUrl || null);
+      setBannerPreview(providerProfile.bannerUrl || null);
+      
+      const { lat, lng } = providerProfile.businessAddress || {};
       if (lat && lng) {
         const initialPos = new L.LatLng(lat, lng);
         setPosition(initialPos);
         setMapCenter([lat, lng]);
         setMapZoom(17);
-        const addrNumber =
-          (profile.businessAddress as { number?: string }).number || "";
-        lastSearchedAddressRef.current = `${profile.businessAddress.street}, ${addrNumber}, ${profile.businessAddress.city}`;
+        const addrNumber = (providerProfile.businessAddress as { number?: string }).number || "";
+        const street = providerProfile.businessAddress?.street || "";
+        const city = providerProfile.businessAddress?.city || "";
+        lastSearchedAddressRef.current = `${street}, ${addrNumber}, ${city}`;
       }
     }
-  }, [userProfile, reset]);
+  }, [providerProfile, reset]);
 
   const fetchCoordinates = useCallback(async () => {
     if (streetValue && numberValue && cityValue) {
@@ -317,8 +323,8 @@ export const ProfileManagement = () => {
           setMapZoom(17);
           lastSearchedAddressRef.current = currentQuery;
         }
-      } catch (error) {
-        console.error("Erro ao buscar geolocalização:", error);
+      } catch {
+        // Silenced error
       }
     }
   }, [streetValue, numberValue, cityValue]);
@@ -331,6 +337,7 @@ export const ProfileManagement = () => {
   }, [streetValue, numberValue, cityValue, fetchCoordinates]);
 
   const handleMapClick = (latlng: L.LatLng) => setPosition(latlng);
+  
   const handleCepSearch = useCallback(() => {
     const cleanedCep = cepValue?.replace(/\D/g, "");
     if (cleanedCep && cleanedCep.length === 8) fetchAddress(cleanedCep);
@@ -338,15 +345,9 @@ export const ProfileManagement = () => {
 
   useEffect(() => {
     if (address) {
-      setValue("businessAddress.street", address.logradouro, {
-        shouldValidate: true,
-      });
-      setValue("businessAddress.neighborhood", address.bairro, {
-        shouldValidate: true,
-      });
-      setValue("businessAddress.city", address.localidade, {
-        shouldValidate: true,
-      });
+      setValue("businessAddress.street", address.logradouro, { shouldValidate: true });
+      setValue("businessAddress.neighborhood", address.bairro, { shouldValidate: true });
+      setValue("businessAddress.city", address.localidade, { shouldValidate: true });
       setValue("businessAddress.state", address.uf, { shouldValidate: true });
     }
   }, [address, setValue]);
@@ -363,7 +364,7 @@ export const ProfileManagement = () => {
   };
 
   const saveCroppedLogo = useCallback(async () => {
-    if (!logoToCrop || !logoCroppedAreaPixels || !userProfile) return;
+    if (!logoToCrop || !logoCroppedAreaPixels || !providerProfile) return;
     setIsUploadingLogo(true);
     const loadingToast = toast.loading("Processando logo...");
 
@@ -376,19 +377,17 @@ export const ProfileManagement = () => {
         512,
       );
 
-      const photoURL = await uploadProviderLogo(userProfile.id, croppedFile);
-      await updateUserProfile(userProfile.id, { logoUrl: photoURL });
-      setLogoPreview(photoURL);
+      await uploadLogo(providerProfile.id, croppedFile);
+      
       setLogoToCrop(null);
       toast.success("Logo atualizada com sucesso! 🎯");
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Erro ao carregar logo.");
     } finally {
       setIsUploadingLogo(false);
       toast.dismiss(loadingToast);
     }
-  }, [logoToCrop, logoCroppedAreaPixels, userProfile, updateUserProfile]);
+  }, [logoToCrop, logoCroppedAreaPixels, providerProfile, uploadLogo]);
 
   const onBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0)
@@ -396,7 +395,7 @@ export const ProfileManagement = () => {
   };
 
   const showCroppedImage = useCallback(async () => {
-    if (!bannerToCrop || !croppedAreaPixels || !userProfile) return;
+    if (!bannerToCrop || !croppedAreaPixels || !providerProfile) return;
     setIsUploadingBanner(true);
     const loadingToast = toast.loading("Processando imagem...");
 
@@ -409,24 +408,17 @@ export const ProfileManagement = () => {
         400,
       );
 
-      const bannerUrl = await uploadProviderBanner(
-        userProfile.id,
-        croppedImageFile,
-      );
-
-      await updateUserProfile(userProfile.id, { bannerUrl });
-      setBannerPreview(bannerUrl);
+      await uploadBanner(providerProfile.id, croppedImageFile);
+      
       setBannerToCrop(null);
-      toast.dismiss(loadingToast);
       toast.success("Banner atualizado com sucesso! 🖼️");
-    } catch (e) {
-      console.error("Erro ao processar imagem:", e);
-      toast.dismiss(loadingToast);
+    } catch {
       toast.error("Erro ao guardar o banner.");
     } finally {
       setIsUploadingBanner(false);
+      toast.dismiss(loadingToast);
     }
-  }, [bannerToCrop, croppedAreaPixels, userProfile, updateUserProfile]);
+  }, [bannerToCrop, croppedAreaPixels, providerProfile, uploadBanner]);
 
   const formatSocialLink = (
     input: string | undefined,
@@ -440,45 +432,49 @@ export const ProfileManagement = () => {
   };
 
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
-    if (!userProfile || !isDirty) return;
+    if (!providerProfile || !isDirty) return;
     setIsSaving(true);
+    
     try {
-      const formattedInstagram = formatSocialLink(
-        data.socialLinks?.instagram,
-        "https://www.instagram.com",
-      );
-      const formattedFacebook = formatSocialLink(
-        data.socialLinks?.facebook,
-        "https://www.facebook.com",
-      );
-      const formattedWebsite =
-        data.socialLinks?.website &&
-        !data.socialLinks.website.startsWith("http")
+      const formattedInstagram = formatSocialLink(data.socialLinks?.instagram, "https://www.instagram.com");
+      const formattedFacebook = formatSocialLink(data.socialLinks?.facebook, "https://www.facebook.com");
+      const formattedWebsite = data.socialLinks?.website && !data.socialLinks.website.startsWith("http")
           ? `https://${data.socialLinks.website}`
           : data.socialLinks?.website;
 
-      const updatedData = {
-        ...data,
-        cpf: data.documentType === "cpf" ? data.documentNumber : undefined,
-        cnpj: data.documentType === "cnpj" ? data.documentNumber : undefined,
+      const updatedData: Partial<ServiceProviderProfile> = {
+        name: data.name,
+        businessName: data.businessName,
+        publicProfileSlug: data.publicProfileSlug,
+        documentType: data.documentType, // "cpf" | "cnpj"
+        document: data.documentNumber,   // O Spring Boot espera "document"
+        businessPhone: data.businessPhone,
+        cancellationMinHours: data.cancellationMinHours,
+        pixKey: data.pixKey,
+        pixKeyType: data.pixKeyType,
         socialLinks: {
-          ...data.socialLinks,
-          instagram: formattedInstagram,
-          facebook: formattedFacebook,
-          website: formattedWebsite,
+          instagram: formattedInstagram || "",
+          facebook: formattedFacebook || "",
+          website: formattedWebsite || "",
+          whatsapp: data.socialLinks?.whatsapp || "",
         },
         businessAddress: {
-          ...data.businessAddress,
+          zipCode: data.businessAddress.zipCode,
+          street: data.businessAddress.street,
+          number: data.businessAddress.number,
+          neighborhood: data.businessAddress.neighborhood,
+          city: data.businessAddress.city,
+          state: data.businessAddress.state,
           lat: position?.lat,
           lng: position?.lng,
         },
       };
-      await updateUserProfile(userProfile.id, updatedData);
+
+      await updateProfile(providerProfile.id, updatedData);
       toast.success("Perfil salvo com sucesso!");
-      reset(updatedData);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erro ao salvar alterações.");
+      reset(data); // Reseta os dados limpos no form
+    } catch {
+      // Store handles UI errors
     } finally {
       setIsSaving(false);
     }
@@ -491,12 +487,14 @@ export const ProfileManagement = () => {
     "disabled:cursor-not-allowed disabled:opacity-50 pl-10",
   );
 
-  if (!userProfile)
+  if (!providerProfile)
     return (
       <div className="flex justify-center p-12">
         <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
+
+  const isUIBlocked = isSaving || isSavingStore || isUploadingLogo || isUploadingBanner;
 
   return (
     <motion.div
@@ -565,7 +563,7 @@ export const ProfileManagement = () => {
             <Button variant="secondary" onClick={() => setLogoToCrop(null)}>
               Cancelar
             </Button>
-            <Button onClick={saveCroppedLogo} className="font-bold">
+            <Button onClick={saveCroppedLogo} className="font-bold bg-primary text-black">
               Salvar Logo
             </Button>
           </div>
@@ -599,7 +597,7 @@ export const ProfileManagement = () => {
 
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
 
-            <label className="absolute top-4 right-4 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full cursor-pointer transition-all border border-white/10 shadow-lg group-hover:opacity-100 md:opacity-0 opacity-100">
+            <label className="absolute top-4 right-4 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full cursor-pointer transition-all border border-white/10 shadow-lg group-hover:opacity-100 md:opacity-0 opacity-100 z-30">
               <Camera size={20} />
               <input
                 type="file"
@@ -718,9 +716,13 @@ export const ProfileManagement = () => {
                       className="pl-10"
                       {...register("publicProfileSlug")}
                       placeholder="ex: barbearia-estilo"
-                      error={errors.publicProfileSlug?.message}
                     />
                   </div>
+                  {errors.publicProfileSlug && (
+                      <span className="text-xs text-red-500">
+                        {errors.publicProfileSlug.message}
+                      </span>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -975,8 +977,7 @@ export const ProfileManagement = () => {
             <Card className="bg-gray-900/50 border-gray-800">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock size={18} className="text-primary" /> Regras de
-                  Cancelamento
+                  <Clock size={18} className="text-primary" /> Regras de Cancelamento
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1009,7 +1010,6 @@ export const ProfileManagement = () => {
                 <div className="space-y-2">
                   <Label>Tipo da Chave</Label>
                   <div className="relative">
-                    {/* Ícone para o Select (Simulado com div wrapper pois SelectTrigger é complexo de estilizar internamente) */}
                     <Controller
                       name="pixKeyType"
                       control={control}
@@ -1019,10 +1019,10 @@ export const ProfileManagement = () => {
                           value={field.value}
                           defaultValue={field.value}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="bg-gray-950 border-gray-700">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-gray-900 border-gray-800 text-white">
                             <SelectItem value="cpf">CPF</SelectItem>
                             <SelectItem value="cnpj">CNPJ</SelectItem>
                             <SelectItem value="email">E-mail</SelectItem>
@@ -1080,14 +1080,14 @@ export const ProfileManagement = () => {
                   <Label>Nome Completo</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                    <Input className="pl-10" {...register("name")} />
+                    <Input className="pl-10 bg-gray-950/50" {...register("name")} />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>E-mail de Acesso</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                    <Input className="pl-10" {...register("email")} disabled />
+                    <Input className="pl-10 bg-gray-950/50 text-gray-500 cursor-not-allowed" {...register("email")} disabled />
                   </div>
                 </div>
               </CardContent>
@@ -1096,7 +1096,7 @@ export const ProfileManagement = () => {
             <div className="sticky bottom-4 z-10 pt-4">
               <Button
                 type="submit"
-                disabled={isSaving || !isDirty}
+                disabled={isUIBlocked || !isDirty}
                 className={cn(
                   "w-full h-12 text-lg font-bold shadow-xl transition-all",
                   isDirty
@@ -1104,12 +1104,12 @@ export const ProfileManagement = () => {
                     : "bg-gray-800 text-gray-500",
                 )}
               >
-                {isSaving ? (
+                {isUIBlocked ? (
                   <Loader2 className="animate-spin mr-2" />
                 ) : (
                   <Save className="mr-2" />
                 )}
-                {isSaving ? "Salvando..." : "Salvar Alterações"}
+                {isUIBlocked ? "Salvando..." : "Salvar Alterações"}
               </Button>
             </div>
           </div>

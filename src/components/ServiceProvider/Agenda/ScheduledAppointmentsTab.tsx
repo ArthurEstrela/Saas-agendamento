@@ -1,11 +1,10 @@
-import type { EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 import type { Appointment } from "../../../types";
 import { ScheduledAppointmentCard } from "./ScheduledAppointmentCard";
 import { CalendarX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ScheduledAppointmentsTabProps {
-  appointments: EnrichedProviderAppointment[];
+  appointments: Appointment[]; // ✨ Tipagem oficial e limpa
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
@@ -13,10 +12,14 @@ export const ScheduledAppointmentsTab = ({
   appointments,
   onAppointmentSelect,
 }: ScheduledAppointmentsTabProps) => {
-  // Filtra e Ordena
+  
+  // ✨ Filtra e Ordena lidando com Status em Maiúsculas e Datas em String
   const scheduledAppointments = appointments
-    .filter((a) => a.status === "scheduled")
-    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    .filter((a) => {
+      const status = a.status.toUpperCase();
+      return status === "SCHEDULED" || status === "CONFIRMED";
+    })
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
   // Empty State Moderno
   if (scheduledAppointments.length === 0) {
@@ -36,8 +39,6 @@ export const ScheduledAppointmentsTab = ({
 
   return (
     <div className="pb-24 sm:pb-8">
-      {" "}
-      {/* Padding extra para mobile */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <AnimatePresence mode="popLayout">
           {scheduledAppointments.map((appt, index) => (

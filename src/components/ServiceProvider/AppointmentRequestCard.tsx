@@ -1,4 +1,4 @@
-import type { EnrichedProviderAppointment } from '../../store/providerAppointmentsStore';
+import type { Appointment, AppointmentItem } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Clock, Scissors, Check, X, MessageCircle } from 'lucide-react';
@@ -10,22 +10,42 @@ import { Button } from '../ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 
+// ✨ Extensão da interface para suportar dados planificados da API Java sem 'any'
+interface RequestAppointment extends Appointment {
+  clientAvatarUrl?: string;
+  totalDuration?: number;
+}
+
 interface AppointmentRequestCardProps {
-  appointment: EnrichedProviderAppointment;
-  onAccept: (id: string, status: 'scheduled') => void;
-  onReject: (id: string, status: 'cancelled') => void;
+  appointment: RequestAppointment;
+  onAccept: (id: string, status: 'SCHEDULED') => void;
+  onReject: (id: string, status: 'CANCELLED') => void;
 }
 
 export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: AppointmentRequestCardProps) => {
-  const { client, startTime, services, professionalName } = appointment;
+  // Extraímos os dados planificados da API Java
+  const { 
+    clientName, 
+    clientPhone, 
+    startTime: rawStartTime, 
+    items, 
+    professionalName,
+    clientAvatarUrl,
+    totalDuration = 30 // Fallback padrão
+  } = appointment;
+  
+  // Conversão segura da data
+  const startTime = new Date(rawStartTime);
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Isso já estava correto
-    if (!client?.phoneNumber) return;
-    const cleanPhone = client.phoneNumber.replace(/\D/g, '');
+    e.stopPropagation();
+    if (!clientPhone) return;
+    
+    const cleanPhone = clientPhone.replace(/\D/g, '');
     const dateString = format(startTime, "dd/MM", { locale: ptBR });
     const timeString = format(startTime, "HH:mm");
-    const message = `Olá ${client.name}, vi sua solicitação para ${dateString} às ${timeString}. Posso confirmar?`;
+    const message = `Olá ${clientName}, vi sua solicitação para ${dateString} às ${timeString}. Posso confirmar?`;
+    
     window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -41,19 +61,21 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-4">
-          {/* Avatar */}
+          {/* Avatar com tipagem reconhecida */}
           <Avatar className="h-12 w-12 border border-gray-700">
-            <AvatarImage src={client?.profilePictureUrl} alt={client?.name} />
-            <AvatarFallback>{client?.name?.substring(0, 2).toUpperCase() || 'CL'}</AvatarFallback>
+            <AvatarImage src={clientAvatarUrl} alt={clientName} />
+            <AvatarFallback className="bg-gray-800 text-primary">
+              {(clientName || 'C').substring(0, 2).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
           
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start">
                 <div>
-                    <h4 className="font-bold text-gray-100 truncate">{client?.name || 'Cliente'}</h4>
+                    <h4 className="font-bold text-gray-100 truncate">{clientName || 'Cliente Particular'}</h4>
                     <p className="text-xs text-gray-500">Solicitado com <span className="text-primary">{professionalName}</span></p>
                 </div>
-                {client?.phoneNumber && (
+                {clientPhone && (
                     <Button 
                         size="icon" 
                         variant="ghost" 
@@ -74,19 +96,19 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
                 </div>
                 <div className="flex items-center gap-2 text-gray-300 bg-black/20 p-2 rounded-lg border border-gray-800/50">
                     <Clock size={14} className="text-primary" /> 
-                    <span>{format(startTime, "HH:mm")}</span>
+                    <span className="font-mono">{format(startTime, "HH:mm")}</span>
                 </div>
             </div>
 
             <div className="mt-3 flex items-start gap-2">
                 <Scissors size={14} className="mt-1 text-gray-500 shrink-0"/>
                 <div className="flex flex-wrap gap-1">
-                    {services.map(s => (
-                        <Badge key={s.id} variant="secondary" className="text-xs font-normal">
-                            {s.name}
+                    {(items || []).map((item: AppointmentItem) => (
+                        <Badge key={item.referenceId} variant="secondary" className="text-xs font-normal bg-gray-800 text-gray-300">
+                            {item.name}
                         </Badge>
                     ))}
-                     <span className="text-xs text-gray-500 self-center ml-1">({appointment.totalDuration} min)</span>
+                     <span className="text-xs text-gray-500 self-center ml-1">({totalDuration} min)</span>
                 </div>
             </div>
           </div>
@@ -96,22 +118,20 @@ export const AppointmentRequestCard = ({ appointment, onAccept, onReject }: Appo
       <CardFooter className="p-2 bg-black/20 grid grid-cols-2 gap-3 border-t border-gray-800">
         <Button 
           variant="ghost"
-          // ADICIONADO: e.stopPropagation()
           onClick={(e) => {
             e.stopPropagation();
-            onReject(appointment.id, 'cancelled');
+            onReject(appointment.id, 'CANCELLED');
           }} 
           className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
         >
           <X size={16} className="mr-2" /> Recusar
         </Button>
         <Button 
-          // ADICIONADO: e.stopPropagation()
           onClick={(e) => {
             e.stopPropagation();
-            onAccept(appointment.id, 'scheduled');
+            onAccept(appointment.id, 'SCHEDULED');
           }} 
-          className="w-full bg-green-600 hover:bg-green-500 text-white"
+          className="w-full bg-green-600 hover:bg-green-500 text-white font-bold"
         >
           <Check size={16} className="mr-2" /> Aceitar
         </Button>

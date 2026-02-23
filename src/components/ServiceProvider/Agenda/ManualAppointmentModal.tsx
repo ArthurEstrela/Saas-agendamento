@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { useProfileStore } from "../../../store/profileStore";
-import { createManualAppointment } from "../../../firebase/bookingService";
+// Lemos o utilizador através do AuthStore
+import { useAuthStore } from "../../../store/authStore";
+import { useProfessionalsManagementStore } from "../../../store/professionalsManagementStore";
+import { useServiceManagementStore } from "../../../store/serviceManagementStore";
+import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
+
 import type {
   Service,
-  Professional,
-  Appointment,
+  ProfessionalProfile,
   ServiceProviderProfile,
 } from "../../../types";
 import {
@@ -18,7 +21,7 @@ import {
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
-import { Textarea } from "../../ui/textarea"; // Certifique-se de ter esse componente UI
+import { Textarea } from "../../ui/textarea";
 import {
   Select,
   SelectContent,
@@ -38,6 +41,8 @@ import {
   Phone,
 } from "lucide-react";
 import { format, addMinutes } from "date-fns";
+// Importamos o cliente da API para fazer a chamada que ainda não está no store (se necessário)
+import { api } from "../../../lib/api";
 
 interface ManualAppointmentModalProps {
   isOpen: boolean;
@@ -50,9 +55,14 @@ export const ManualAppointmentModal = ({
   onClose,
   defaultDate,
 }: ManualAppointmentModalProps) => {
-  const { userProfile, professionals } = useProfileStore();
-  const provider = userProfile as ServiceProviderProfile;
-  const services = provider?.services || [];
+  // 🔥 Lemos dados separados dos seus stores corretos
+  const { user } = useAuthStore();
+  const provider = user as ServiceProviderProfile;
+  const { professionals } = useProfessionalsManagementStore();
+  const { services } = useServiceManagementStore();
+
+  // No Spring Boot, nós atualizamos o store local após criar, ou mandamos re-fetch.
+  const { fetchAppointments } = useProviderAppointmentsStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isBlockMode, setIsBlockMode] = useState(false);
@@ -62,14 +72,15 @@ export const ManualAppointmentModal = ({
   const [clientPhone, setClientPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
-  const [selectedProfessionalId, setSelectedProfessionalId] = useState<string>("");
-  
+  const [selectedProfessionalId, setSelectedProfessionalId] =
+    useState<string>("");
+
   // Data e Hora
   const [appointmentDate, setAppointmentDate] = useState(
-    format(defaultDate || new Date(), "yyyy-MM-dd")
+    format(defaultDate || new Date(), "yyyy-MM-dd"),
   );
   const [startTime, setStartTime] = useState(
-    format(defaultDate || new Date(), "HH:mm")
+    format(defaultDate || new Date(), "HH:mm"),
   );
   const [duration, setDuration] = useState("30");
 
@@ -81,54 +92,80 @@ export const ManualAppointmentModal = ({
       setNotes("");
       setIsBlockMode(false);
       setSelectedServiceId("");
+
+      // Auto-seleciona o profissional se o usuário logado for um profissional
+      if (user?.role?.toUpperCase() === "PROFESSIONAL") {
+        setSelectedProfessionalId(user.id);
+      } else {
+        setSelectedProfessionalId("");
+      }
+
       if (defaultDate) {
         setAppointmentDate(format(defaultDate, "yyyy-MM-dd"));
         setStartTime(format(defaultDate, "HH:mm"));
       }
     }
-  }, [isOpen, defaultDate]);
+  }, [isOpen, defaultDate, user]);
 
   const handleSave = async () => {
-    if (!selectedProfessionalId || !startTime || (!isBlockMode && !clientName)) {
+    if (
+      !selectedProfessionalId ||
+      !startTime ||
+      (!isBlockMode && !clientName)
+    ) {
       toast.error("Preencha os campos obrigatórios.");
       return;
     }
 
     setIsLoading(true);
     try {
-      // Combina a string de data (YYYY-MM-DD) com a de hora (HH:mm)
-      const start = new Date(`${appointmentDate}T${startTime}`);
+      // Combina a string de data (YYYY-MM-DD) com a de hora (HH:mm) para enviar ao backend
+      const start = new Date(`${appointmentDate}T${startTime}:00`);
       const end = addMinutes(start, parseInt(duration));
 
-      const selectedService = services.find((s: Service) => s.id === selectedServiceId);
-      const selectedProfessional = professionals?.find((p: Professional) => p.id === selectedProfessionalId);
+      // ✨ Nova Lógica Baseada nos Endpoints do Spring Boot
+      if (isBlockMode) {
+        // Envia um BlockRequest
+        await api.post("/professionals/block-time", {
+          professionalId: selectedProfessionalId,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          reason: notes || clientName || "Bloqueio Manual",
+        });
+        toast.success("Agenda bloqueada!");
+      } else {
+        // Envia um CreateManualAppointmentRequest
+        const selectedService = services.find(
+          (s: Service) => s.id === selectedServiceId,
+        );
+        if (!selectedService) throw new Error("Serviço inválido");
 
-      const appointmentData: Omit<Appointment, "id"> = {
-        providerId: provider.id,
-        professionalId: selectedProfessionalId,
-        professionalName: selectedProfessional?.name || "Profissional",
-        clientId: "manual-entry",
-        clientName: isBlockMode ? `BLOQUEIO: ${clientName || "Compromisso"}` : clientName,
-        clientPhone: clientPhone || "",
-        services: selectedService ? [selectedService] : [],
-        serviceName: isBlockMode ? "Bloqueio de Agenda" : (selectedService?.name || "Serviço Manual"),
-        startTime: start,
-        endTime: end,
-        status: "scheduled",
-        isPersonalBlock: isBlockMode,
-        totalPrice: isBlockMode ? 0 : (selectedService?.price || 0),
-        totalDuration: parseInt(duration),
-        createdAt: new Date(),
-        paymentMethod: "cash",
-        notes: notes || (isBlockMode ? "Bloqueio manual." : "Agendamento via WhatsApp/Manual."),
-      };
+        await api.post("/appointments/manual", {
+          professionalId: selectedProfessionalId,
+          clientName: clientName,
+          clientPhone: clientPhone || null,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          notes: notes || "Agendamento via WhatsApp/Manual.",
+          items: [
+            {
+              referenceId: selectedService.id,
+              type: "SERVICE",
+              quantity: 1,
+            },
+          ],
+        });
+        toast.success("Agendamento realizado!");
+      }
 
-      await createManualAppointment(appointmentData);
-      toast.success(isBlockMode ? "Agenda bloqueada!" : "Agendamento realizado!");
+      // Atualiza a vista por baixo (pedindo os dados de novo)
+      const startDateStr = format(start, "yyyy-MM-dd"); // Exemplo simples
+      await fetchAppointments(provider.id, startDateStr, startDateStr);
+
       onClose();
     } catch (err) {
       console.error("Erro ao salvar agendamento manual:", err);
-      toast.error("Erro ao salvar. Verifique os dados.");
+      toast.error("Erro ao salvar. Verifique os dados e a disponibilidade.");
     } finally {
       setIsLoading(false);
     }
@@ -139,17 +176,29 @@ export const ManualAppointmentModal = ({
       <DialogContent className="sm:max-w-[480px] bg-gray-900 border-gray-800 text-white max-h-[95vh] overflow-y-auto custom-scrollbar">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            {isBlockMode ? <Clock className="text-yellow-500" /> : <CalendarIcon className="text-primary" />}
+            {isBlockMode ? (
+              <Clock className="text-yellow-500" />
+            ) : (
+              <CalendarIcon className="text-primary" />
+            )}
             {isBlockMode ? "Bloquear Horário" : "Novo Agendamento Manual"}
           </DialogTitle>
           <DialogDescription className="text-gray-400">
-            Preencha os detalhes do {isBlockMode ? 'bloqueio' : 'cliente'} abaixo.
+            Preencha os detalhes do {isBlockMode ? "bloqueio" : "cliente"}{" "}
+            abaixo.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center space-x-2 py-3 border-y border-gray-800 my-2">
-          <Switch id="block-mode" checked={isBlockMode} onCheckedChange={setIsBlockMode} />
-          <Label htmlFor="block-mode" className="text-sm font-medium cursor-pointer">
+          <Switch
+            id="block-mode"
+            checked={isBlockMode}
+            onCheckedChange={setIsBlockMode}
+          />
+          <Label
+            htmlFor="block-mode"
+            className="text-sm font-medium cursor-pointer"
+          >
             Modo Bloqueio (Almoço, Particular, Indisponível)
           </Label>
         </div>
@@ -170,7 +219,9 @@ export const ManualAppointmentModal = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label className="text-gray-300 text-xs italic">Hora de Início</Label>
+              <Label className="text-gray-300 text-xs italic">
+                Hora de Início
+              </Label>
               <Input
                 type="time"
                 value={startTime}
@@ -179,7 +230,9 @@ export const ManualAppointmentModal = ({
               />
             </div>
             <div className="grid gap-2">
-              <Label className="text-gray-300 text-xs italic">Duração (minutos)</Label>
+              <Label className="text-gray-300 text-xs italic">
+                Duração (minutos)
+              </Label>
               <Input
                 type="number"
                 value={duration}
@@ -191,10 +244,15 @@ export const ManualAppointmentModal = ({
 
           <div className="grid gap-2">
             <Label className="flex items-center gap-2 text-gray-300">
-              <User size={14} /> {isBlockMode ? "Motivo do Bloqueio" : "Nome do Cliente"}
+              <User size={14} />{" "}
+              {isBlockMode ? "Motivo do Bloqueio" : "Nome do Cliente"}
             </Label>
             <Input
-              placeholder={isBlockMode ? "Ex: Almoço / Médico" : "Nome do cliente que chamou"}
+              placeholder={
+                isBlockMode
+                  ? "Ex: Almoço / Médico"
+                  : "Nome do cliente que chamou"
+              }
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               className="bg-gray-800 border-gray-700 focus:ring-primary"
@@ -216,14 +274,21 @@ export const ManualAppointmentModal = ({
           )}
 
           <div className="grid gap-2">
-            <Label className="text-gray-300 text-xs italic text-gray-500">Profissional Responsável</Label>
-            <Select onValueChange={setSelectedProfessionalId} value={selectedProfessionalId}>
+            <Label className="text-gray-300 text-xs italic text-gray-500">
+              Profissional Responsável
+            </Label>
+            <Select
+              onValueChange={setSelectedProfessionalId}
+              value={selectedProfessionalId}
+            >
               <SelectTrigger className="bg-gray-800 border-gray-700">
                 <SelectValue placeholder="Selecione o profissional" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700 text-white">
-                {professionals?.map((pro: Professional) => (
-                  <SelectItem key={pro.id} value={pro.id}>{pro.name}</SelectItem>
+              <SelectContent className="bg-gray-800 border-gray-700 text-white z-[60]">
+                {professionals?.map((pro: ProfessionalProfile) => (
+                  <SelectItem key={pro.id} value={pro.id}>
+                    {pro.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -244,7 +309,7 @@ export const ManualAppointmentModal = ({
                 <SelectTrigger className="bg-gray-800 border-gray-700">
                   <SelectValue placeholder="Selecione o serviço" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                <SelectContent className="bg-gray-800 border-gray-700 text-white z-[60]">
                   {services.map((s: Service) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name} ({s.duration} min)
@@ -269,7 +334,11 @@ export const ManualAppointmentModal = ({
         </div>
 
         <DialogFooter className="gap-2 pt-4">
-          <Button variant="ghost" onClick={onClose} className="text-gray-400 hover:text-white">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+          >
             Cancelar
           </Button>
           <Button
@@ -277,7 +346,7 @@ export const ManualAppointmentModal = ({
             disabled={isLoading}
             className="bg-primary text-black font-bold hover:bg-primary/90"
           >
-            {isLoading ? <Loader2 className="animate-spin" /> : "Confirmar Agendamento"}
+            {isLoading ? <Loader2 className="animate-spin" /> : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>

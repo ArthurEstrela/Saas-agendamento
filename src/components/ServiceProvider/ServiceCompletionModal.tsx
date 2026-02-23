@@ -31,8 +31,10 @@ export const ServiceCompletionModal = ({
   isLoading,
 }: ServiceCompletionModalProps) => {
   const [priceString, setPriceString] = useState("");
+  
+  // ✨ Usando totalAmount (padrão do Spring Boot) como valor base sugerido
   const initialPrice = useMemo(
-    () => appointment?.totalPrice ?? 0,
+    () => appointment?.totalAmount ?? 0,
     [appointment]
   );
 

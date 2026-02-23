@@ -1,4 +1,4 @@
-import type { Professional } from '../../types';
+import type { ProfessionalProfile, Service } from '../../types';
 import { Edit, Trash2, Crown, Shield } from 'lucide-react';
 import { Card, CardContent, CardFooter } from '../ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
@@ -6,15 +6,21 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils/cn';
 
+// ✨ Estendemos localmente para aceitar a array de Serviços populada (não apenas IDs) e a flag visual isOwner
+type EnrichedProfessional = ProfessionalProfile & {
+  services?: Service[];
+  isOwner?: boolean;
+};
+
 interface ProfessionalCardProps {
-  professional: Professional;
+  professional: EnrichedProfessional;
   onEdit: () => void;
   onDelete: () => void;
 }
 
 export const ProfessionalCard = ({ professional, onEdit, onDelete }: ProfessionalCardProps) => {
   const services = professional.services || [];
-  const initials = professional.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+  const initials = (professional.name || "P").split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
   const isOwner = professional.isOwner;
 
   return (
@@ -28,7 +34,7 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
     >
       {/* Background Decorativo para o Dono */}
       {isOwner && (
-        <div className="absolute top-0 right-0 p-3 opacity-10">
+        <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
           <Crown size={64} />
         </div>
       )}
@@ -40,7 +46,7 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
               "h-16 w-16 border-2 transition-colors",
               isOwner ? "border-primary" : "border-gray-800 group-hover:border-primary"
             )}>
-              <AvatarImage src={professional.photoURL} alt={professional.name} className="object-cover" />
+              <AvatarImage src={professional.profilePictureUrl} alt={professional.name} className="object-cover" />
               <AvatarFallback className="bg-gray-800 text-lg font-bold text-primary">
                 {initials}
               </AvatarFallback>
@@ -95,14 +101,12 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
         </div>
       </CardContent>
       
-      <CardFooter className="p-3 bg-black/20 border-t border-gray-800/50 flex justify-end gap-2">
-        {/* CORREÇÃO: Removida a condicional !isOwner. Agora o botão aparece para todos. */}
+      <CardFooter className="p-3 bg-black/20 border-t border-gray-800/50 flex justify-end gap-2 relative z-10">
         <Button 
           variant="ghost" 
           size="sm" 
           onClick={onDelete} 
           className="text-gray-500 hover:text-destructive hover:bg-destructive/10"
-          // O título muda dinamicamente para fazer mais sentido
           title={isOwner ? "Desativar Perfil" : "Remover Profissional"}
         >
           <Trash2 size={16} />

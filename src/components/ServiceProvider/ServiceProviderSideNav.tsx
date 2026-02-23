@@ -14,9 +14,8 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { useProfileStore } from "../../store/profileStore";
 import type { ServiceProviderProfile } from "../../types";
-import { useNotificationStore } from "../../store/notificationsStore";
+import { useNotificationsStore } from "../../store/notificationsStore";
 import { motion } from "framer-motion";
 
 // UI Components
@@ -36,12 +35,12 @@ export const ServiceProviderSideNav = ({
   setIsOpen,
   disableNav,
 }: SideNavProps) => {
-  const { userProfile } = useProfileStore();
-  const { logout } = useAuthStore();
-  const { unreadCount } = useNotificationStore();
+  // ✨ Trazendo o perfil via AuthStore
+  const { user, logout } = useAuthStore();
+  const { unreadCount } = useNotificationsStore();
   const location = useLocation();
 
-  const providerProfile = userProfile as ServiceProviderProfile;
+  const providerProfile = user as ServiceProviderProfile;
 
   const navItems = [
     { path: "/dashboard/agenda", label: "Agenda", icon: LayoutDashboard },
@@ -187,7 +186,8 @@ export const ServiceProviderSideNav = ({
               )}
             >
               <AvatarImage
-                src={providerProfile?.logoUrl}
+                // ✨ Fallback seguro para as duas propriedades possíveis
+                src={providerProfile?.profilePictureUrl || providerProfile?.logoUrl}
                 alt={providerProfile?.businessName}
                 className="object-cover"
               />

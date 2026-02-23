@@ -5,15 +5,12 @@ import { User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../../lib/utils/cn";
 import type { Appointment } from "../../../types";
-import { type EnrichedProviderAppointment } from "../../../store/providerAppointmentsStore";
 
 // --- Configurações de Layout ---
-const START_HOUR = 6; // Começando um pouco mais cedo para garantir (opcional)
-const END_HOUR = 23; // Indo até um pouco mais tarde
+const START_HOUR = 6;
+const END_HOUR = 23;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
-
-// AUMENTADO: De 70 para 120px por hora para dar respiro visual
-const ROW_HEIGHT = 120;
+const ROW_HEIGHT = 120; // 120px por hora
 
 // --- Hook Mobile ---
 function useMediaQuery(query: string) {
@@ -39,47 +36,47 @@ const AppointmentCard = ({
   appointment,
   onSelect,
 }: {
-  appointment: EnrichedProviderAppointment;
+  appointment: Appointment;
   onSelect: (appointment: Appointment) => void;
 }) => {
-  const top = (getMinutesFromStart(appointment.startTime) / 60) * ROW_HEIGHT;
+  // ✨ Conversão crucial para a nova API (Strings ISO para Date)
+  const startDate = new Date(appointment.startTime);
+  const endDate = new Date(appointment.endTime);
+
+  const top = (getMinutesFromStart(startDate) / 60) * ROW_HEIGHT;
   const durationInMinutes =
-    (appointment.endTime.getTime() - appointment.startTime.getTime()) /
-    (1000 * 60);
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60);
 
-  // Altura calculada baseada no novo ROW_HEIGHT
-  const calculatedHeight = (durationInMinutes / 60) * ROW_HEIGHT;
-  // Mínimo de 45px para garantir clique fácil no dedo (mobile)
-  const height = Math.max(calculatedHeight, 45);
+  const height = Math.max((durationInMinutes / 60) * ROW_HEIGHT, 45);
 
-  const isPending = appointment.status === "pending";
-  const isCompleted = appointment.status === "completed";
-  const isPastTime =
-    !isPending && !isCompleted && !isFuture(appointment.endTime);
-  const isBlock = appointment.serviceName?.includes("BLOQUEIO") || appointment.clientId === "manual-entry" && appointment.services.length === 0;
+  const status = appointment.status.toUpperCase();
+  const isPending = status === "PENDING";
+  const isCompleted = status === "COMPLETED";
+  const isPastTime = !isPending && !isCompleted && !isFuture(endDate);
+
+  // ✨ Lógica de detecção de bloqueio alinhada com o backend
+  const isBlock =
+    status === "BLOCKED" || appointment.notes?.includes("Bloqueio");
 
   const statusClasses = cn(
     "border-l-[3px] sm:border-l-[4px] shadow-md backdrop-blur-sm transition-all",
-
     isPending &&
       "bg-blue-600/30 border-blue-400 text-blue-50 hover:bg-blue-600/40",
-
     isCompleted &&
       "bg-emerald-600/30 border-emerald-400 text-emerald-50 hover:bg-emerald-600/40",
-
-      isBlock && "bg-amber-600/20 border-amber-500/50 text-amber-100 italic",
-
+    isBlock && "bg-amber-600/20 border-amber-500/50 text-amber-100 italic",
     !isPending &&
       !isCompleted &&
       !isPastTime &&
+      !isBlock &&
       "bg-gray-800 border-primary text-white hover:bg-gray-700 shadow-lg shadow-black/30",
-
     isPastTime &&
+      !isBlock &&
       "bg-gray-800/60 border-gray-600 text-gray-400 grayscale opacity-80",
   );
 
-  // Define se o card é "curto" para esconder detalhes secundários
   const isShort = height < 60;
+  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
 
   return (
     <motion.div
@@ -91,38 +88,33 @@ const AppointmentCard = ({
         e.stopPropagation();
         onSelect(appointment);
       }}
-      style={{
-        top: `${top}px`,
-        height: `${height}px`,
-      }}
+      style={{ top: `${top}px`, height: `${height}px` }}
       className={cn(
         "absolute left-1 right-1 sm:left-2 sm:right-2 rounded-md sm:rounded-lg overflow-hidden cursor-pointer z-10 select-none group",
         statusClasses,
       )}
     >
       <div className="h-full w-full px-2 sm:px-3 py-1.5 flex flex-col justify-center relative">
-        {/* Horário e Serviço */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden w-full">
           <span className="text-[10px] sm:text-xs font-mono font-bold opacity-80 shrink-0 bg-black/20 px-1 rounded w-fit">
-            {format(appointment.startTime, "HH:mm")} -{" "}
-            {format(appointment.endTime, "HH:mm")}
+            {format(startDate, "HH:mm")} - {format(endDate, "HH:mm")}
           </span>
           <span className="text-xs sm:text-sm font-bold truncate leading-tight mt-0.5 sm:mt-0">
-            {appointment.services?.[0]?.name || appointment.serviceName || "Compromisso"}
+            {appointment.items?.[0]?.name ||
+              (isBlock ? "Horário Bloqueado" : "Compromisso")}
           </span>
         </div>
 
-        {/* Detalhes (Cliente e Preço) - Só mostra se tiver altura suficiente */}
-        {!isShort && (
+        {!isShort && !isBlock && (
           <div className="flex items-center justify-between mt-1 pt-1 border-t border-white/10 w-full">
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs opacity-90 truncate max-w-[75%]">
               <User size={12} className="shrink-0" />
               <span className="truncate font-medium">
-                {appointment.clientName || appointment.client?.name || "Particular"}
+                {appointment.clientName || "Particular"}
               </span>
             </div>
             <span className="text-[10px] sm:text-xs font-bold bg-white/10 px-1.5 py-0.5 rounded text-white/90">
-              R${appointment.totalPrice.toFixed(0)}
+              R${displayPrice.toFixed(0)}
             </span>
           </div>
         )}
@@ -144,7 +136,7 @@ const CurrentTimeIndicator = () => {
       }
     };
     updatePosition();
-    const interval = setInterval(updatePosition, 60000); // Atualiza a cada minuto
+    const interval = setInterval(updatePosition, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -162,7 +154,7 @@ const CurrentTimeIndicator = () => {
 };
 
 interface TimeGridCalendarProps {
-  appointments: EnrichedProviderAppointment[];
+  appointments: Appointment[]; // ✨ Tipagem estrita
   currentDate: Date;
   onAppointmentSelect: (appointment: Appointment) => void;
 }
@@ -176,7 +168,6 @@ export const TimeGridCalendar = ({
   const timeColumnRef = useRef<HTMLDivElement>(null);
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  // Sincronia de Scroll
   useEffect(() => {
     const scrollContainer = containerRef.current;
     const timeColumn = timeColumnRef.current;
@@ -200,10 +191,12 @@ export const TimeGridCalendar = ({
   }, []);
 
   const appointmentsByDay = useMemo(() => {
-    const map = new Map<string, EnrichedProviderAppointment[]>();
+    const map = new Map<string, Appointment[]>();
     weekDays.forEach((day) => map.set(format(day, "yyyy-MM-dd"), []));
+
     appointments.forEach((appt) => {
-      const dayKey = format(appt.startTime, "yyyy-MM-dd");
+      // ✨ Conversão para Date antes de formatar a chave do Map
+      const dayKey = format(new Date(appt.startTime), "yyyy-MM-dd");
       if (map.has(dayKey)) {
         map.get(dayKey)!.push(appt);
       }
@@ -212,7 +205,7 @@ export const TimeGridCalendar = ({
   }, [appointments, weekDays]);
 
   const gridColsClass = isDesktop ? "grid-cols-7" : "grid-cols-1";
-  const timeColWidthClass = "w-11 sm:w-16"; // Levemente mais largo no mobile para caber a hora melhor
+  const timeColWidthClass = "w-11 sm:w-16";
 
   return (
     <div className="flex flex-col h-full bg-gray-950 rounded-lg sm:rounded-xl border border-gray-800 shadow-xl overflow-hidden select-none w-full">
@@ -267,7 +260,6 @@ export const TimeGridCalendar = ({
 
       {/* Corpo com Scroll */}
       <div className="flex-1 flex overflow-hidden relative bg-gray-950">
-        {/* Coluna de Horas (Sticky) */}
         <div
           ref={timeColumnRef}
           className={cn(
@@ -293,7 +285,6 @@ export const TimeGridCalendar = ({
           </div>
         </div>
 
-        {/* Grid de Agendamentos */}
         <div
           ref={containerRef}
           className={cn(
@@ -314,17 +305,12 @@ export const TimeGridCalendar = ({
                   key={dayKey}
                   className="relative h-full group bg-[url('/grid-pattern.png')]"
                 >
-                  {/* Linhas de Grade e Guias Visuais */}
                   {timeLabels.map((hour) => (
                     <div key={`grid-block-${hour}`}>
-                      {/* Linha da Hora Cheia */}
                       <div
                         className="absolute w-full border-t border-gray-800/40"
-                        style={{
-                          top: `${(hour - START_HOUR) * ROW_HEIGHT}px`,
-                        }}
+                        style={{ top: `${(hour - START_HOUR) * ROW_HEIGHT}px` }}
                       />
-                      {/* Linha da Meia Hora (Pontilhada) - Ajuda muito no visual alongado */}
                       <div
                         className="absolute w-full border-t border-gray-800/20 border-dashed"
                         style={{
@@ -334,10 +320,8 @@ export const TimeGridCalendar = ({
                     </div>
                   ))}
 
-                  {/* Indicador de Hora Atual */}
                   {isToday(day) && <CurrentTimeIndicator />}
 
-                  {/* Renderização dos Agendamentos */}
                   <AnimatePresence mode="popLayout">
                     {dailyAppointments.map((appt) => (
                       <AppointmentCard

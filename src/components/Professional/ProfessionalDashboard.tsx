@@ -3,8 +3,8 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Menu } from "lucide-react";
 import logo from "../../assets/stylo-logo.png";
+import { subDays, addDays } from "date-fns"; // ✨ Importado para calcular as datas limites
 
-import { useProfileStore } from "../../store/profileStore";
 import { useAuthStore } from "../../store/authStore"; 
 import { useProviderAppointmentsStore } from "../../store/providerAppointmentsStore"; 
 import type { ProfessionalProfile } from "../../types";
@@ -14,32 +14,27 @@ import { Button } from "../ui/button";
 import { ProfessionalSideNav } from "./ProfessionalSideNav";
 
 const ProfessionalDashboard = () => {
-  const { user } = useAuthStore(); // Pega o usuário logado
-  const { userProfile, fetchUserProfile, isLoadingProfile } = useProfileStore();
-  const { fetchAppointments } = useProviderAppointmentsStore(); // Pega a função de buscar agendamentos
+  const { user, loading: isAuthLoading } = useAuthStore(); 
+  const { fetchAppointments } = useProviderAppointmentsStore(); 
   
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const location = useLocation();
 
-  const profile = userProfile as ProfessionalProfile | null;
+  const profile = user as ProfessionalProfile | null;
 
-  // ✅ 1. Busca o perfil do profissional ao carregar o dashboard
-  useEffect(() => {
-    if (user?.uid && !userProfile) {
-      fetchUserProfile(user.uid);
-    }
-  }, [user, userProfile, fetchUserProfile]);
-
-  // ✅ 2. Busca os agendamentos assim que o perfil estiver disponível
+  // ✅ Busca os agendamentos usando um intervalo de datas razoável para a Dashboard
   useEffect(() => {
     if (profile?.serviceProviderId) {
-      // Aqui usamos o ID do estabelecimento vinculado ao profissional
-      fetchAppointments(profile.serviceProviderId);
+      // Carrega 30 dias para trás e 60 dias para a frente como padrão inicial
+      const startDate = subDays(new Date(), 30).toISOString();
+      const endDate = addDays(new Date(), 60).toISOString();
+      
+      // ✨ Passando os 3 argumentos exigidos pela API Java
+      fetchAppointments(profile.serviceProviderId, startDate, endDate);
     }
-  }, [profile, fetchAppointments]);
+  }, [profile?.serviceProviderId, fetchAppointments]);
 
-  // Enquanto estiver carregando o perfil essencial, mostra o loader
-  if (isLoadingProfile || !profile) {
+  if (isAuthLoading || !profile) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <Loader2 className="animate-spin text-primary" size={64} />
@@ -49,7 +44,7 @@ const ProfessionalDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 relative overflow-x-hidden">
-      {/* --- BACKGROUND (Efeito Aurora Sutil - Igual ao Client) --- */}
+      {/* --- BACKGROUND (Efeito Aurora Sutil) --- */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-primary/5 rounded-full blur-[100px] opacity-40" />
         <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] opacity-30" />
@@ -57,10 +52,6 @@ const ProfessionalDashboard = () => {
       </div>
 
       {/* --- SIDENAV --- */}
-      {/* Observação: Certifique-se de que o seu ProfessionalSideNav 
-          agora use componentes <Link to="..."> em vez de onClick={() => setActiveView(...)}
-          e aceite apenas as props de controle de abertura mobile.
-      */}
       <ProfessionalSideNav
         isOpen={isMobileNavOpen}
         setIsOpen={setIsMobileNavOpen}

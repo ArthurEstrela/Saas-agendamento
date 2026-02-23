@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   CheckCheck,
 } from "lucide-react";
-import { useNotificationStore } from "../../store/notificationsStore";
+// ✨ Correção do nome da store para o padrão plural adotado
+import { useNotificationsStore } from "../../store/notificationsStore";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +23,7 @@ import { type Notification } from "../../types";
 interface NotificationCardProps {
   notification: Notification;
   onMarkAsRead: (id: string) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>; // ✨ Adicionada a prop onDelete
 }
 
 function hasToDateMethod(value: unknown): value is { toDate: () => Date } {
@@ -35,8 +36,10 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: Notification
   
   const dateObj = useMemo(() => {
     if (!createdAt) return new Date();
+    // Fallback para Firestore timestamps (se ainda houver em cache)
     if (hasToDateMethod(createdAt)) return createdAt.toDate();
-    if (createdAt instanceof Date) return createdAt;
+    // Resolvido o erro do instanceof utilizando 'unknown' casting
+    if ((createdAt as unknown) instanceof Date) return createdAt as unknown as Date;
     if (typeof createdAt === "string" || typeof createdAt === "number") return new Date(createdAt);
     return new Date();
   }, [createdAt]);
@@ -86,10 +89,11 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: Notification
                 <CheckCircle2 size={18} />
               </Button>
             )}
+            {/* ✨ Botão de Delete Recolocado! */}
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }} // ✅ Stop Propagation
+              onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }} // ✅ Chama o onDelete passando o ID
               className="flex-1 sm:flex-none w-full sm:w-auto h-9 sm:h-8 px-3 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
             >
               <Trash2 size={18} />
@@ -101,15 +105,15 @@ const NotificationCard = ({ notification, onMarkAsRead, onDelete }: Notification
   );
 };
 
-// ... O resto do componente Notifications (export const Notifications) permanece igual ...
 export const Notifications = () => {
+  // ✨ Pegando dados do store atualizado para o Java
   const {
     notifications,
-    isLoading,
+    loading, 
     markAsRead,
     markAllAsRead,
-    deleteNotification,
-  } = useNotificationStore();
+    deleteNotification, // ✨ Puxando o deleteNotification do store
+  } = useNotificationsStore();
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
@@ -120,6 +124,7 @@ export const Notifications = () => {
     if (markAllAsRead) {
       markAllAsRead();
     } else {
+      // Garantia caso a função unificada falhe
       notifications.forEach((n) => {
         if (!n.isRead) markAsRead(n.id);
       });
@@ -145,7 +150,7 @@ export const Notifications = () => {
         )}
       </div>
 
-      {isLoading ? (
+      {loading && notifications.length === 0 ? (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="animate-spin text-primary" size={48} />
         </div>
@@ -153,7 +158,12 @@ export const Notifications = () => {
         <div className="grid gap-4 w-full">
           <AnimatePresence mode="popLayout">
             {notifications.map((n) => (
-              <NotificationCard key={n.id} notification={n} onMarkAsRead={markAsRead} onDelete={deleteNotification} />
+              <NotificationCard 
+                key={n.id} 
+                notification={n} 
+                onMarkAsRead={markAsRead} 
+                onDelete={deleteNotification} // ✨ Passando a função como prop para o card
+              />
             ))}
           </AnimatePresence>
         </div>

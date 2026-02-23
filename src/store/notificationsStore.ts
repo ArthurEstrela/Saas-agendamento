@@ -22,6 +22,7 @@ interface NotificationsState {
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -89,6 +90,27 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     } catch (error) {
       await get().fetchNotifications();
       set({ error: extractErrorMessage(error, 'Erro ao limpar notificações.') });
+    }
+  },
+  // ==========================================================================
+  // 4. DELETAR NOTIFICAÇÃO
+  // ==========================================================================
+  deleteNotification: async (id: string) => {
+    // ⭐️ OPTIMISTIC UPDATE: Remove da tela na mesma hora para parecer instantâneo
+    const { notifications } = get();
+    const updated = notifications.filter(n => n.id !== id);
+    set({ 
+      notifications: updated, 
+      unreadCount: updated.filter(n => !n.isRead).length 
+    });
+
+    try {
+      // Confirma a exclusão no backend (Java)
+      await api.delete(`/notifications/${id}`);
+    } catch (error) {
+      // Se der erro na rede, busca tudo de novo e volta a notificação pra tela
+      await get().fetchNotifications();
+      set({ error: extractErrorMessage(error, 'Erro ao deletar notificação.') });
     }
   },
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useProfileStore } from "../../store/profileStore";
+import { useAuthStore } from "../../store/authStore";
+import { useSubscriptionStore } from "../../store/subscriptionStore"; // ✨ Seu novo store perfeito
 import type { ServiceProviderProfile } from "../../types";
 import {
   Loader2,
@@ -11,11 +12,6 @@ import {
   Sparkles,
   Crown,
 } from "lucide-react";
-import toast from "react-hot-toast";
-import {
-  createCheckoutSession,
-  createCustomerPortalSession,
-} from "../../firebase/subscriptionService";
 
 // UI
 import { Button } from "../ui/button";
@@ -162,45 +158,47 @@ const PlanCard = ({
 };
 
 export const SubscriptionManagement = () => {
-  const { userProfile } = useProfileStore();
+  const { user } = useAuthStore();
+  
+  // ✨ Usando as Actions do Store
+  const { createCheckoutSession, createPortalSession } = useSubscriptionStore();
+  
+  // Estados locais apenas para feedback visual nos botões
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [isPortalLoading, setIsPortalLoading] = useState(false);
 
-  if (!userProfile)
+  // Consideramos que só ServiceProviders acessam esta tela
+  const profile = user as ServiceProviderProfile;
+
+  if (!profile)
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
 
-  const profile = userProfile as ServiceProviderProfile;
   const status = profile.subscriptionStatus || "free";
   
   // Lógica de Status Inteligente
-  const isTrial = status === "trial" || status === "trialing";
-  const isLifetime = status === "lifetime";
-  const isActive = status === "active" || isTrial || isLifetime;
+  const isTrial = status === "trial" || status === "trialing" || status === "TRIALING";
+  const isLifetime = status === "lifetime" || status === "LIFETIME";
+  const isActive = status === "active" || status === "ACTIVE" || isTrial || isLifetime;
 
+  // ✨ Checkout chama a ação do Store
   const handleCheckout = async (priceId: string) => {
     setLoadingPlan(priceId);
-    try {
-      const { url } = await createCheckoutSession(priceId);
-      if (url) window.location.href = url;
-    } catch {
-      toast.error("Erro ao iniciar checkout.");
-      setLoadingPlan(null);
-    }
+    await createCheckoutSession(priceId);
+    // Se a função acima der sucesso, a página vai redirecionar antes desta linha rodar.
+    // Se der erro, o catch lá no store segura o erro, mostra o toast, e o código segue pra cá destravando o botão.
+    setLoadingPlan(null);
   };
 
+  // ✨ Portal chama a ação do Store
   const handlePortal = async () => {
     setIsPortalLoading(true);
-    try {
-      const { url } = await createCustomerPortalSession();
-      if (url) window.location.href = url;
-    } catch {
-      toast.error("Erro ao acessar portal de assinatura.");
-      setIsPortalLoading(false);
-    }
+    await createPortalSession();
+    // Mesma lógica de redirecionamento acima
+    setIsPortalLoading(false);
   };
 
   // Definição visual baseada no status

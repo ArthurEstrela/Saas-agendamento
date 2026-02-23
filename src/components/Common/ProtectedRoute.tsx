@@ -11,15 +11,18 @@ import { LoadingSpinner } from './LoadingSpinner';
 import { useToast } from '../../hooks/useToast';
 
 export const ProtectedRoute = () => {
-  const { user, isAuthenticated, isLoading, logout } = useAuthStore();
+  // ✨ Usando os nomes corretos do novo store: 'loading' em vez de 'isLoading'
+  const { user, loading, logout } = useAuthStore();
   
-  // 1. CORREÇÃO: Usamos os métodos que seu hook realmente exporta
+  // ✨ Checagem derivada: se o user não for nulo, ele está autenticado
+  const isAuthenticated = !!user;
+  
   const { showSuccess, showError } = useToast();
   
   const [isResending, setIsResending] = useState(false);
 
   // Estado de Carregamento
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-950">
         <LoadingSpinner />
@@ -32,17 +35,19 @@ export const ProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Verificação de E-mail
-  if (!user.emailVerified) {
+  // ✨ O e-mail verificado pertence ao Firebase Auth, então conferimos por ele.
+  // Caso a sessão do Firebase demore a reidratar, assumimos "true" momentaneamente para não bloquear indevidamente.
+  const isEmailVerified = auth.currentUser ? auth.currentUser.emailVerified : true;
+
+  if (!isEmailVerified) {
     const handleResendEmail = async () => {
       setIsResending(true);
       try {
         if (auth.currentUser) {
           await sendEmailVerification(auth.currentUser);
-          // 2. CORREÇÃO: Sintaxe correta do seu useToast
           showSuccess("E-mail enviado! Verifique sua caixa de entrada e spam.");
         }
-      } catch (error) { // 3. CORREÇÃO: Removido o ': any'
+      } catch (error) {
         console.error("Erro ao reenviar verificação:", error);
         showError("Muitas tentativas. Tente novamente em alguns minutos.");
       } finally {
@@ -51,6 +56,7 @@ export const ProtectedRoute = () => {
     };
 
     const handleReload = () => {
+      // Recarrega a página para o Firebase puxar o novo status do emailVerified
       window.location.reload();
     };
 

@@ -3,31 +3,33 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, ShieldAlert, Clock, AlertTriangle } from "lucide-react";
 import { differenceInDays } from "date-fns";
-import { Timestamp } from "firebase/firestore";
 
 import logo from "../assets/stylo-logo.png";
-import { useProfileStore } from "../store/profileStore";
+// ✨ Substituído useProfileStore pelo useAuthStore
+import { useAuthStore } from "../store/authStore";
 import type { ServiceProviderProfile } from "../types";
 import { ServiceProviderSideNav } from "./ServiceProvider/ServiceProviderSideNav";
 import { OnboardingChecklist } from "./ServiceProvider/OnboardingChecklist";
 import { Button } from "./ui/button";
 
 const ServiceProviderDashboard = () => {
-  const { userProfile } = useProfileStore();
+  // ✨ Pega o usuário logado diretamente da AuthStore
+  const { user } = useAuthStore();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const profile = userProfile as ServiceProviderProfile | null;
+  // Cast seguro para o tipo Service Provider
+  const profile = user as ServiceProviderProfile | null;
   const status = profile?.subscriptionStatus;
 
   // Status Helpers
-  const isSubscriptionOk = status === "active" || status === "lifetime";
-  const isTrial = status === "trial";
-  const isExpired = status === "expired";
-  const subscriptionProblem = status === "past_due" || status === "cancelled";
+  const isSubscriptionOk = status === "active" || status === "ACTIVE" || status === "lifetime" || status === "LIFETIME";
+  const isTrial = status === "trial" || status === "TRIAL";
+  const isExpired = status === "expired" || status === "EXPIRED";
+  const subscriptionProblem = status === "past_due" || status === "PAST_DUE" || status === "cancelled" || status === "CANCELLED";
 
-  // Check English routes
+  // Check English routes (verifique se as suas rotas no App.tsx realmente usam /dashboard/... ou se usam /provider/...)
   const isSubscriptionPage = location.pathname.includes("/subscription");
   const isAgendaPage = location.pathname.includes("/agenda");
 
@@ -35,14 +37,11 @@ const ServiceProviderDashboard = () => {
   const getTrialDaysLeft = () => {
     if (!profile?.trialEndsAt) return 0;
 
-    let endDate: Date;
-    if (profile.trialEndsAt instanceof Timestamp) {
-      endDate = profile.trialEndsAt.toDate();
-    } else {
-      endDate = new Date(profile.trialEndsAt as Date | string);
-    }
-
+    // ✨ Como os dados vêm do Java, trialEndsAt é uma ISO String garantida (ex: "2026-02-21T10:00:00Z")
+    // Já não há mais necessidade de checar Timestamp do Firebase
+    const endDate = new Date(profile.trialEndsAt);
     const today = new Date();
+    
     const days = differenceInDays(endDate, today);
     if (days <= 0) return 1;
 
@@ -95,6 +94,7 @@ const ServiceProviderDashboard = () => {
           {isAgendaPage && (
             <OnboardingChecklist
               onChangeView={(view) => {
+                // Certifique-se de que estas rotas correspondem ao App.tsx
                 const routeMap: Record<string, string> = {
                   services: "/dashboard/services",
                   professionals: "/dashboard/professionals",

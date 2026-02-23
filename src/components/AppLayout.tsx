@@ -1,25 +1,29 @@
-// src/components/AppLayout.tsx
-
 import { useEffect } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom"; // Importe useLocation
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import Header from "./Header";
 import Footer from "./Footer";
+// ✨ Agora centralizamos tudo no AuthStore
 import { useAuthStore } from "../store/authStore";
-import { useProfileStore } from "../store/profileStore";
 import type { UserProfile } from "../types";
 
 const AppLayout = () => {
-  const { user, isLoading } = useAuthStore();
-  const { userProfile } = useProfileStore();
+  // ✨ Usando 'loading' em vez de 'isLoading'
+  const { user, loading } = useAuthStore();
   const navigate = useNavigate();
-  const location = useLocation(); // Hook para saber a rota atual
+  const location = useLocation();
 
-  // Verifica se a rota atual é parte do dashboard
-  const isDashboardRoute = location.pathname.startsWith("/dashboard");
+  // ✨ Atualizado para cobrir as rotas das diferentes roles
+  const isDashboardRoute = 
+    location.pathname.startsWith("/dashboard") ||
+    location.pathname.startsWith("/professional") ||
+    location.pathname.startsWith("/provider") ||
+    location.pathname.startsWith("/client");
 
   useEffect(() => {
-    if (!isLoading && user && userProfile) {
-      const profileWithBooking = userProfile as UserProfile & {
+    // Se terminou de carregar e o utilizador existe
+    if (!loading && user) {
+      // Cast para verificar a flag local de agendamento pendente
+      const profileWithBooking = user as UserProfile & {
         pendingBooking?: boolean;
       };
 
@@ -27,7 +31,7 @@ const AppLayout = () => {
         navigate("/booking");
       }
     }
-  }, [user, userProfile, isLoading, navigate]);
+  }, [user, loading, navigate]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-950 text-gray-200">

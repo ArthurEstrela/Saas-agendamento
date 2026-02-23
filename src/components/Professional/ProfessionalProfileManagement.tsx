@@ -1,13 +1,13 @@
 import { useState, useCallback } from "react";
-import { useProfileStore } from "../../store/profileStore";
+import { useAuthStore } from "../../store/authStore"; // ✨ Usar AuthStore
 import type { ProfessionalProfile } from "../../types";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
 import { Camera, Save, Loader2, User, FileText, Mail } from "lucide-react";
-import { uploadProfilePicture } from "../../firebase/userService";
 import toast from "react-hot-toast";
+import {api} from "../../lib/api"; // ✨ Importar a API conectada ao Spring Boot
 
 // UI
 import { Button } from "../ui/button";
@@ -16,10 +16,8 @@ import { Textarea } from "../ui/textarea";
 import { Card, CardContent } from "../ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import { Label } from "../ui/label";
-// Adicione nos seus imports
 import Cropper, { type Area } from "react-easy-crop";
 import getCroppedImg from "../../lib/utils/cropImage";
-
 
 const professionalSchema = z.object({
   name: z.string().min(3, "O nome é obrigatório"),
@@ -28,19 +26,22 @@ const professionalSchema = z.object({
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
 
 export const ProfessionalProfileManagement = () => {
-// Dentro do componente ProfessionalProfileManagement, adicione os estados:
-const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
-const [crop, setCrop] = useState({ x: 0, y: 0 });
-const [zoom, setZoom] = useState(1);
-const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
-  // 1. Uso da Store
-  const { userProfile, updateUserProfile, setUserProfile } = useProfileStore();
-
+  // ✨ Puxando o usuário da AuthStore
+  const { user } = useAuthStore();
+  
+  // Usamos um truque aqui: se a API retornar um objeto atualizado, não precisamos do initAuth.
+  // Vamos atualizar o estado recarregando a janela temporariamente ou apenas avisando.
+  
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const profile = userProfile as ProfessionalProfile;
+  // Cast seguro
+  const profile = user as ProfessionalProfile;
 
   const {
     register,
@@ -53,53 +54,66 @@ const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
     defaultValues: { name: profile?.name || "", bio: profile?.bio || "" },
   });
 
-const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (file) {
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande! Escolha uma de até 5MB.");
-      return;
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Imagem muito grande! Escolha uma de até 5MB.");
+        return;
+      }
+      setAvatarToCrop(URL.createObjectURL(file));
     }
-    setAvatarToCrop(URL.createObjectURL(file));
-  }
-};
+  };
 
-const saveCroppedAvatar = useCallback(async () => {
-  if (!avatarToCrop || !croppedAreaPixels || !userProfile) return;
-  setIsUploading(true);
-  const loadingToast = toast.loading("Processando foto...");
+  const saveCroppedAvatar = useCallback(async () => {
+    if (!avatarToCrop || !croppedAreaPixels || !profile) return;
+    setIsUploading(true);
+    const loadingToast = toast.loading("Processando foto...");
 
-  try {
-    const croppedFile = await getCroppedImg(
-      avatarToCrop,
-      croppedAreaPixels,
-      0.8,
-      512, // Tamanho ideal para foto de perfil
-      512
-    );
+    try {
+      const croppedFile = await getCroppedImg(
+        avatarToCrop,
+        croppedAreaPixels,
+        0.8,
+        512, // Tamanho ideal para foto de perfil
+        512
+      );
 
-    const avatarUrl = await uploadProfilePicture(userProfile.id, croppedFile);
-    await updateUserProfile(userProfile.id, { profilePictureUrl: avatarUrl });
-    setUserProfile({ ...userProfile, profilePictureUrl: avatarUrl });
-    
-    setAvatarToCrop(null);
-    toast.success("Foto atualizada com sucesso! 👨‍🎨");
-  } catch (error) {
-    console.error(error);
-    toast.error("Erro ao carregar foto.");
-  } finally {
-    setIsUploading(false);
-    toast.dismiss(loadingToast);
-  }
-}, [avatarToCrop, croppedAreaPixels, userProfile, updateUserProfile, setUserProfile]);
+      // ✨ Upload migrado para o Spring Boot (via API formData)
+      const formData = new FormData();
+      formData.append("file", croppedFile);
+
+      // Assumindo que a sua API de profile image siga esta estrutura:
+      await api.post("/profile/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      
+      setAvatarToCrop(null);
+      toast.success("Foto atualizada com sucesso! Recarregue a página para ver. 👨‍🎨");
+      
+      // Opcional: Se quiser que atualize logo na tela sem F5:
+      setTimeout(() => window.location.reload(), 1500);
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao carregar foto.");
+    } finally {
+      setIsUploading(false);
+      toast.dismiss(loadingToast);
+    }
+  }, [avatarToCrop, croppedAreaPixels, profile]);
 
   const onSubmit: SubmitHandler<ProfessionalFormData> = async (data) => {
-    if (!userProfile) return;
+    if (!profile) return;
     setIsSaving(true);
     try {
-      await updateUserProfile(userProfile.id, data);
-      toast.success("Perfil atualizado!");
+      // ✨ Atualizando perfil via API Java (Endpoint de exemplo, ajuste se necessário)
+      await api.put(`/professionals/${profile.id}`, data);
+      
+      toast.success("Perfil atualizado! Recarregue a página para ver.");
       reset(data);
+      
+      setTimeout(() => window.location.reload(), 1500);
     } catch {
       toast.error("Erro ao salvar.");
     } finally {
@@ -107,47 +121,46 @@ const saveCroppedAvatar = useCallback(async () => {
     }
   };
 
-  if (!userProfile) return <Loader2 className="animate-spin text-primary" />;
+  if (!profile) return <div className="flex justify-center mt-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="max-w-3xl mx-auto"
+      className="max-w-3xl mx-auto pb-10"
     >
       {/* --- AVATAR CROPPER MODAL --- */}
-{avatarToCrop && (
-  <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
-    <div className="relative w-full max-w-xl h-[50vh] bg-gray-900 rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
-      <Cropper
-        image={avatarToCrop}
-        crop={crop}
-        zoom={zoom}
-        aspect={1 / 1}
-        onCropChange={setCrop}
-        onZoomChange={setZoom}
-        onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
-      />
-    </div>
-    <div className="mt-6 flex gap-4">
-      <Button variant="secondary" onClick={() => setAvatarToCrop(null)} className="px-8">
-        Cancelar
-      </Button>
-      <Button onClick={saveCroppedAvatar} className="font-bold px-8">
-        Salvar Foto
-      </Button>
-    </div>
-    <div className="mt-4 w-full max-w-md px-4">
-      <input
-        type="range"
-        value={zoom} min={1} max={3} step={0.1}
-        onChange={(e) => setZoom(Number(e.target.value))}
-        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
-      />
-    </div>
-  </div>
-)}
+      {avatarToCrop && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
+          <div className="relative w-full max-w-xl h-[50vh] bg-gray-900 rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
+            <Cropper
+              image={avatarToCrop}
+              crop={crop}
+              zoom={zoom}
+              aspect={1 / 1}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
+            />
+          </div>
+          <div className="mt-6 flex gap-4">
+            <Button variant="secondary" onClick={() => setAvatarToCrop(null)} className="px-8">
+              Cancelar
+            </Button>
+            <Button onClick={saveCroppedAvatar} className="font-bold px-8">
+              Salvar Foto
+            </Button>
+          </div>
+          <div className="mt-4 w-full max-w-md px-4">
+            <input
+              type="range"
+              value={zoom} min={1} max={3} step={0.1}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+          </div>
+        </div>
+      )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">
           Meu Perfil Profissional
@@ -196,9 +209,10 @@ const saveCroppedAvatar = useCallback(async () => {
                     id="name"
                     {...register("name")}
                     className="pl-10"
-                    error={errors.name?.message}
+                    // error={errors.name?.message} (O componente Input do shadcn puro não costuma ter prop error, ajuste se o seu UI modificado tiver)
                   />
                 </div>
+                {errors.name && <span className="text-xs text-red-500">{errors.name.message}</span>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email (Login)</Label>

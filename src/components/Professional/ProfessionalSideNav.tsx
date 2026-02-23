@@ -10,10 +10,10 @@ import {
   Home,
   User as UserIcon,
 } from "lucide-react";
+// ✨ Substituímos o uso do profileStore apenas pelo authStore
 import { useAuthStore } from "../../store/authStore";
-import { useProfileStore } from "../../store/profileStore";
 import type { ProfessionalProfile } from "../../types";
-import { useNotificationStore } from "../../store/notificationsStore";
+import { useNotificationsStore } from "../../store/notificationsStore"; // ✨ Ajuste para o plural como fizemos antes
 import { motion } from "framer-motion";
 
 // UI Components
@@ -28,23 +28,23 @@ interface SideNavProps {
 }
 
 export const ProfessionalSideNav = ({ isOpen, setIsOpen }: SideNavProps) => {
-  const { userProfile } = useProfileStore();
-  const { logout } = useAuthStore();
-  const { unreadCount } = useNotificationStore();
+  // ✨ Pegamos o usuário diretamente do AuthStore
+  const { user, logout } = useAuthStore();
+  const { unreadCount } = useNotificationsStore();
   const location = useLocation();
 
-  const professionalProfile = userProfile as ProfessionalProfile;
+  const professionalProfile = user as ProfessionalProfile;
 
   const navItems = [
-    { path: "/dashboard/home", label: "Início", icon: Home },
+    { path: "/professional/dashboard", label: "Início", icon: Home },
     {
-      path: "/dashboard/my-agenda",
+      path: "/professional/agenda", // ✨ Ajuste típico para ficar igual ao ServiceProvider (verifique suas rotas)
       label: "Minha Agenda",
       icon: LayoutDashboard,
     },
-    { path: "/dashboard/my-availability", label: "Horários", icon: Clock },
-    { path: "/dashboard/my-reviews", label: "Avaliações", icon: Star },
-    { path: "/dashboard/notifications", label: "Notificações", icon: Bell },
+    { path: "/professional/availability", label: "Horários", icon: Clock },
+    { path: "/professional/reviews", label: "Avaliações", icon: Star },
+    { path: "/professional/notifications", label: "Notificações", icon: Bell },
   ];
 
   return (
@@ -134,7 +134,7 @@ export const ProfessionalSideNav = ({ isOpen, setIsOpen }: SideNavProps) => {
                     {item.label}
                   </span>
 
-                  {item.path === "/dashboard/notifications" &&
+                  {item.path.includes("notifications") &&
                     unreadCount > 0 && (
                       <Badge
                         variant="destructive"
@@ -152,11 +152,11 @@ export const ProfessionalSideNav = ({ isOpen, setIsOpen }: SideNavProps) => {
         {/* Rodapé do Perfil */}
         <div className="p-4 border-t border-white/5 bg-black/20 space-y-2">
           <Link
-            to="/dashboard/my-profile"
+            to="/professional/profile"
             onClick={() => setIsOpen(false)}
             className={cn(
               "flex items-center w-full p-2.5 text-left rounded-xl transition-all duration-200 group outline-none",
-              location.pathname === "/dashboard/my-profile"
+              location.pathname.includes("/profile")
                 ? "bg-white/10 border border-white/10"
                 : "hover:bg-white/5 border border-transparent"
             )}
@@ -164,7 +164,7 @@ export const ProfessionalSideNav = ({ isOpen, setIsOpen }: SideNavProps) => {
             <Avatar
               className={cn(
                 "h-10 w-10 border transition-all duration-300",
-                location.pathname === "/dashboard/my-profile"
+                location.pathname.includes("/profile")
                   ? "border-primary"
                   : "border-gray-700 group-hover:border-gray-500"
               )}
@@ -183,7 +183,7 @@ export const ProfessionalSideNav = ({ isOpen, setIsOpen }: SideNavProps) => {
               <p
                 className={cn(
                   "font-bold text-sm truncate transition-colors",
-                  location.pathname === "/dashboard/my-profile"
+                  location.pathname.includes("/profile")
                     ? "text-primary"
                     : "text-gray-200 group-hover:text-white"
                 )}

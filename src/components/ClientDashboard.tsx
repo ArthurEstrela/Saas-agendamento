@@ -6,9 +6,10 @@ import { toast } from "react-hot-toast";
 import logo from "../assets/stylo-logo.png";
 
 // Stores
-import { useProfileStore } from "../store/profileStore";
-import { useUserAppointmentsStore, type EnrichedAppointment } from "../store/userAppointmentsStore";
+import { useAuthStore } from "../store/authStore"; 
+import { useUserAppointmentsStore } from "../store/userAppointmentsStore";
 import { useReviewStore } from "../store/reviewStore";
+import type { Appointment } from "../types"; 
 
 // Componentes
 import { ClientSideNav } from "./Client/ClientSideNav";
@@ -23,14 +24,14 @@ export const ClientDashboard = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Hooks para a Lógica de Avaliação (Review)
-  const { userProfile } = useProfileStore();
-  const { appointments, fetchAppointments } = useUserAppointmentsStore();
-  const { submitReview, isSubmitting: isSubmittingReview } = useReviewStore();
+  // ✨ Hooks atualizados para as novas definições das Stores
+  const { user } = useAuthStore();
+  const { appointments, fetchUserAppointments } = useUserAppointmentsStore(); // ✨ Alterado de fetchAppointments
+  const { submitReview, loading: isSubmittingReview } = useReviewStore(); // ✨ Alterado de isSubmitting
 
   // Estados locais para o Modal de Avaliação
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [appointmentToReview, setAppointmentToReview] = useState<EnrichedAppointment | null>(null);
+  const [appointmentToReview, setAppointmentToReview] = useState<Appointment | null>(null);
   
   // Refs de controle
   const fetchInitiated = useRef(false);
@@ -48,16 +49,17 @@ export const ClientDashboard = () => {
     }
 
     // Só ativa se tivermos um ID e o perfil carregado
-    if (appointmentId && userProfile?.id) {
+    if (appointmentId && user?.id) {
       
       const foundAppointment = appointments.find((a) => a.id === appointmentId);
 
       if (foundAppointment) {
         
         // 🔒 TRAVA DE SEGURANÇA: Verifica se já existe avaliação
-        if (foundAppointment.review || foundAppointment.reviewId) {
+        // A API Java envia 'reviewId' se a avaliação já tiver sido feita
+        if ((foundAppointment as any).review || foundAppointment.reviewId) {
           
-          // ✅ FIX DEFINITIVO: O 'id' impede duplicidade visual mesmo que o React execute 2x
+          // O 'id' impede duplicidade visual mesmo que o React execute 2x (Strict Mode)
           toast.error("Você já avaliou este agendamento!", {
             id: "review-already-exists" 
           });
@@ -73,31 +75,31 @@ export const ClientDashboard = () => {
         setIsReviewModalOpen(true);
 
       } else if (appointments.length === 0 && !fetchInitiated.current) {
-        // Se a lista está vazia, busca os dados
+        // Se a lista está vazia, busca os dados da API Java
         fetchInitiated.current = true;
-        fetchAppointments(userProfile.id);
+        fetchUserAppointments(); // ✨ Usando a nova função sem argumentos
       }
     }
-  }, [searchParams, appointments, userProfile, fetchAppointments, setSearchParams]);
+  }, [searchParams, appointments, user, fetchUserAppointments, setSearchParams]);
 
   // Handler: Enviar a Avaliação
   const handleReviewSubmit = async (rating: number, comment: string) => {
-    if (!appointmentToReview || !userProfile) return;
+    if (!appointmentToReview || !user) return;
 
-    await submitReview(appointmentToReview.id, {
-      appointmentId: appointmentToReview.id,
-      clientId: userProfile.id,
-      clientName: userProfile.name,
-      serviceProviderId: appointmentToReview.providerId,
-      professionalId: appointmentToReview.professionalId,
-      professionalName: appointmentToReview.professionalName,
-      rating,
-      comment,
-    });
+    // ✨ Atualizado para os 3 argumentos exigidos pelo Java (o backend faz o resto sozinho)
+    await submitReview(
+      appointmentToReview.id, 
+      rating, 
+      comment
+    );
 
     setIsReviewModalOpen(false);
     setAppointmentToReview(null);
     setSearchParams({});
+    
+    // Opcional: fetchUserAppointments() já não é estritamente obrigatório porque o Store
+    // de avaliações (como vimos no código dele) já atualiza os appointments via Zustand setState!
+    // Mas não faz mal se quiser forçar o fetch novamente. Vamos confiar na "mágica do Zustand" lá do store.
   };
 
   // Handler: Cancelar/Fechar Modal
@@ -125,7 +127,7 @@ export const ClientDashboard = () => {
         
         {/* Header Mobile Otimizado */}
         <header className="md:hidden flex justify-between items-center p-4 border-b border-white/5 bg-background/95 backdrop-blur-sm sticky top-0 z-30">
-          <Link to="/dashboard">
+          <Link to="/client/dashboard">
             <img src={logo} alt="Stylo" className="h-8" />
           </Link>
           <Button

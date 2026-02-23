@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useProfileStore } from "../../store/profileStore";
+import { useState, useEffect } from "react";
+import { useAuthStore } from "../../store/authStore";
 import { useServiceManagementStore } from "../../store/serviceManagementStore";
 import { ServiceModal } from "./ServiceModal";
 import { ServiceCard } from "./ServiceCard";
@@ -12,13 +12,17 @@ import { Button } from "../ui/button";
 import { Typography } from "../ui/typography";
 
 export const ServicesManagement = () => {
-  const { userProfile } = useProfileStore();
+  const { user } = useAuthStore();
+  
   const {
-    isSubmitting: isLoading,
-    addService,
+    services,
+    loading: isLoading,
+    fetchServices,
+    createService,
     updateService,
-    removeService,
+    deleteService: removeService,
   } = useServiceManagementStore();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [confirmState, setConfirmState] = useState<{
@@ -26,35 +30,59 @@ export const ServicesManagement = () => {
     service: Service | null;
   }>({ isOpen: false, service: null });
 
-  const services =
-    userProfile?.role === "serviceProvider" && userProfile.services
-      ? userProfile.services
-      : [];
+  useEffect(() => {
+    if (user?.id) {
+      fetchServices(user.id);
+    }
+  }, [user?.id, fetchServices]);
 
   const handleOpenModal = (service: Service | null = null) => {
     setEditingService(service);
     setIsModalOpen(true);
   };
 
-  const handleSave = async (data: Omit<Service, "id">) => {
-    if (!userProfile) return;
-    if (editingService)
-      await updateService(userProfile.id, editingService.id, data);
-    else await addService(userProfile.id, data);
-    setIsModalOpen(false);
-    setEditingService(null);
+  const handleSave = async (data: { 
+    name: string; 
+    description: string; 
+    duration: number; 
+    price: number;
+    active?: boolean;
+  }) => {
+    if (!user?.id) return;
+    
+    try {
+      if (editingService) {
+        // No update, passamos o ID e os novos dados
+        await updateService(editingService.id, data);
+      } else {
+        // No create, passamos APENAS os dados. O store já omite 'id' e 'providerId'
+        await createService({
+          ...data,
+          active: true // Força como true ao criar, pois o Omit do store pode exigir
+        });
+      }
+      setIsModalOpen(false);
+      setEditingService(null);
+    } catch (error) {
+      console.error("Erro ao salvar serviço:", error);
+    }
   };
 
-  const confirmDelete = () => {
-    if (userProfile && confirmState.service)
-      removeService(userProfile.id, confirmState.service);
-    setConfirmState({ isOpen: false, service: null });
+  const confirmDelete = async () => {
+    if (confirmState.service) {
+      try {
+        await removeService(confirmState.service.id);
+        setConfirmState({ isOpen: false, service: null });
+      } catch (error) {
+        console.error("Erro ao excluir serviço:", error);
+      }
+    }
   };
 
-  if (!userProfile)
+  if (isLoading && services.length === 0)
     return (
-      <div className="flex justify-center p-10">
-        <Loader2 className="animate-spin" />
+      <div className="flex justify-center p-20">
+        <Loader2 className="animate-spin text-primary" size={40} />
       </div>
     );
 
@@ -71,7 +99,7 @@ export const ServicesManagement = () => {
         </div>
         <Button
           onClick={() => handleOpenModal()}
-          className="gap-2 font-bold shadow-lg shadow-primary/20"
+          className="gap-2 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 bg-primary text-black hover:bg-primary/90"
         >
           <ListPlus size={18} /> Adicionar Serviço
         </Button>
@@ -89,8 +117,8 @@ export const ServicesManagement = () => {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl">
-          <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500">
+        <div className="flex flex-col items-center justify-center py-20 bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl animate-fade-in">
+          <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-500 ring-4 ring-gray-900">
             <Wrench size={32} />
           </div>
           <h3 className="text-xl font-bold text-white mb-2">
@@ -100,7 +128,11 @@ export const ServicesManagement = () => {
             Adicione serviços para que seus clientes possam agendar horários com
             você.
           </p>
-          <Button variant="outline" onClick={() => handleOpenModal()}>
+          <Button 
+            variant="outline" 
+            onClick={() => handleOpenModal()}
+            className="border-gray-700 hover:bg-gray-800"
+          >
             Começar Agora
           </Button>
         </div>
@@ -108,7 +140,10 @@ export const ServicesManagement = () => {
 
       <ServiceModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingService(null);
+        }}
         onSave={handleSave}
         service={editingService}
         isLoading={isLoading}
@@ -121,6 +156,7 @@ export const ServicesManagement = () => {
         title="Excluir Serviço?"
         message={`Deseja realmente remover "${confirmState.service?.name}"? Isso não pode ser desfeito.`}
         confirmText="Excluir"
+        variant="danger"
       />
     </div>
   );

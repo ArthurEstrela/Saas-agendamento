@@ -1,9 +1,7 @@
 import { useMemo } from "react";
-import { useProfileStore } from "../../store/profileStore"; // Adicionado
-import {
-  useProviderAppointmentsStore,
-  type EnrichedProviderAppointment,
-} from "../../store/providerAppointmentsStore";
+// ✨ Usamos o authStore como fonte única da verdade para o perfil logado
+import { useAuthStore } from "../../store/authStore";
+import { useProviderAppointmentsStore } from "../../store/providerAppointmentsStore";
 import type { ProfessionalProfile, Appointment } from "../../types";
 import {
   TrendingUp,
@@ -25,88 +23,96 @@ import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
+// --- Função Utilitária para Datas ---
+const normalizeDate = (dateValue: unknown): Date => {
+  if (!dateValue) return new Date();
+  if (dateValue instanceof Date) return dateValue;
+  return new Date(dateValue as string | number);
+};
+
 export const ProfessionalHome = () => {
-  const { userProfile } = useProfileStore(); // Hook da Store
+  const { user } = useAuthStore(); // Hook do Auth (Novo padrão)
   const { appointments } = useProviderAppointmentsStore();
 
-  const profile = userProfile as ProfessionalProfile | null;
+  const profile = user as ProfessionalProfile | null;
 
   const tomorrowAppointments = useMemo(() => {
     if (!profile) return [];
     const tomorrow = addDays(new Date(), 1);
+    
     return appointments
       .filter(
         (app) =>
-          app.professionalId === profile.professionalId &&
-          app.status === "scheduled" &&
-          isSameDay(new Date(app.startTime), tomorrow)
+          // A propriedade status com letra maiúscula (padrão Java)
+          app.professionalId === profile.id &&
+          (app.status === "SCHEDULED" || app.status === "scheduled") &&
+          isSameDay(normalizeDate(app.startTime), tomorrow)
       )
       .sort(
         (a, b) =>
-          new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+          normalizeDate(a.startTime).getTime() - normalizeDate(b.startTime).getTime()
       );
   }, [appointments, profile]);
 
   const generateWhatsAppLink = (appointment: Appointment) => {
-    const phone =
-      appointment.clientPhone ||
-      (appointment as EnrichedProviderAppointment).client?.phoneNumber ||
-      "";
+    const phone = appointment.clientPhone || "";
     const cleanPhone = phone.replace(/\D/g, "");
     if (!cleanPhone) return null;
-    const time = format(new Date(appointment.startTime), "HH:mm");
+    const time = format(normalizeDate(appointment.startTime), "HH:mm");
     const message = `Olá ${appointment.clientName}, confirmando seu horário amanhã às ${time}. Tudo certo?`;
     return `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
-const metrics = useMemo(() => {
+  const metrics = useMemo(() => {
     if (!profile)
       return {
         todayCount: 0,
         completedCount: 0,
         revenue: 0,
         rating: 0,
-        nextAppointment: null,
+        nextAppointment: null as Appointment | null,
       };
 
     const myAppointments = appointments.filter(
-      (a) => a.professionalId === profile.professionalId
+      (a) => a.professionalId === profile.id
     );
     
     const today = new Date(); // Hora atual exata 🕒
-    const upcomingToday = myAppointments.filter(
-      (a) => 
-        isSameDay(new Date(a.startTime), today) && 
-        a.status === "scheduled" &&
-        new Date(a.startTime).getTime() > today.getTime() // Garante que só mostra os próximos
-    );
-
-    const completed = myAppointments.filter((a) => a.status === "completed");
     
+    const upcomingToday = myAppointments.filter((a) => {
+      const startTime = normalizeDate(a.startTime);
+      return (
+        isSameDay(startTime, today) && 
+        (a.status === "SCHEDULED" || a.status === "scheduled") &&
+        startTime.getTime() > today.getTime() // Garante que só mostra os que ainda não passaram da hora
+      );
+    });
+
+    // Filtra os concluídos
+    const completed = myAppointments.filter(
+      (a) => a.status === "COMPLETED" || a.status === "completed"
+    );
+    
+    // ✨ Usa o finalAmount que é a propriedade que vem do Spring Boot
     const estimatedRevenue = completed.reduce(
-      (acc, curr) => acc + (curr.totalPrice || 0),
+      (acc, curr) => acc + (curr.finalAmount || 0),
       0
     );
 
-    const reviewedAppts = myAppointments.filter((a) => a.review);
-    const avgRating =
-      reviewedAppts.length > 0
-        ? reviewedAppts.reduce(
-            (acc, curr) => acc + (curr.review?.rating || 0),
-            0
-          ) / reviewedAppts.length
-        : 5.0;
+    // O Java traz a nota média geral no perfil, se não houver, assume 5.0
+    // Em futuras iterações você pode puxar as avaliações individualmente se necessário.
+    const avgRating = (profile as any).averageRating || 5.0;
 
     return {
-      todayCount: upcomingToday.length, // Agora conta apenas os que faltam
+      todayCount: upcomingToday.length, // Conta apenas os que faltam hoje
       completedCount: completed.length,
       revenue: estimatedRevenue,
       rating: avgRating,
-      // Pega o primeiro da lista dos que ainda vão acontecer
+      // Pega o próximo agendamento imediato
       nextAppointment: upcomingToday.sort(
         (a, b) =>
-          new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      )[0],
+          normalizeDate(a.startTime).getTime() - normalizeDate(b.startTime).getTime()
+      )[0] || null,
     };
   }, [appointments, profile]);
 
@@ -115,10 +121,16 @@ const metrics = useMemo(() => {
   if (!profile) {
     return (
       <div className="flex justify-center p-10">
-        <Loader2 className="animate-spin text-primary" />
+        <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
   }
+
+  // ✨ Helper para extrair o nome do serviço
+  const getServiceName = (app: Appointment) => {
+     if (app.items && app.items.length > 0) return app.items[0].name;
+     return "Atendimento";
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -176,11 +188,11 @@ const metrics = useMemo(() => {
                           <Clock size={16} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-white font-bold text-sm truncate">
+                          <p className="text-white font-bold text-sm truncate" title={app.clientName}>
                             {app.clientName}
                           </p>
                           <p className="text-xs text-green-400 font-mono">
-                            {format(new Date(app.startTime), "HH:mm")}
+                            {format(normalizeDate(app.startTime), "HH:mm")}
                           </p>
                         </div>
                       </div>
@@ -188,7 +200,7 @@ const metrics = useMemo(() => {
                         <Button
                           size="sm"
                           asChild
-                          className="bg-green-600 hover:bg-green-500 text-white h-8 text-xs font-bold gap-2"
+                          className="bg-green-600 hover:bg-green-500 text-white h-8 text-xs font-bold gap-2 ml-2 shrink-0"
                         >
                           <a
                             href={waLink}
@@ -203,7 +215,7 @@ const metrics = useMemo(() => {
                           size="icon"
                           variant="ghost"
                           disabled
-                          className="h-8 w-8"
+                          className="h-8 w-8 ml-2 shrink-0"
                         >
                           <FaWhatsapp size={16} className="text-gray-600" />
                         </Button>
@@ -245,7 +257,7 @@ const metrics = useMemo(() => {
           },
           {
             title: "Sua Nota",
-            value: metrics.rating.toFixed(1),
+            value: Number(metrics.rating).toFixed(1),
             icon: TrendingUp,
             color: "text-yellow-500",
             bg: "bg-yellow-500/10",
@@ -291,24 +303,24 @@ const metrics = useMemo(() => {
             <div className="flex flex-col md:flex-row items-center gap-6 bg-black/20 p-6 rounded-xl border border-gray-700/50 backdrop-blur-sm relative z-10">
               <div className="text-center md:text-left min-w-[100px]">
                 <p className="text-4xl font-bold text-white">
-                  {format(new Date(metrics.nextAppointment.startTime), "HH:mm")}
+                  {format(normalizeDate(metrics.nextAppointment.startTime), "HH:mm")}
                 </p>
                 <p className="text-gray-400 text-xs uppercase font-bold tracking-widest mt-1">
-                  {format(new Date(metrics.nextAppointment.startTime), "EEEE", {
+                  {format(normalizeDate(metrics.nextAppointment.startTime), "EEEE", {
                     locale: ptBR,
                   })}
                 </p>
               </div>
               <div className="w-px h-16 bg-gray-700 hidden md:block"></div>
-              <div className="flex-1 text-center md:text-left">
-                <h3 className="text-xl font-bold text-white mb-1">
+              <div className="flex-1 text-center md:text-left min-w-0">
+                <h3 className="text-xl font-bold text-white mb-1 truncate" title={metrics.nextAppointment.clientName}>
                   {metrics.nextAppointment.clientName}
                 </h3>
                 <Badge
                   variant="secondary"
-                  className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                  className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20 max-w-full truncate block"
                 >
-                  {metrics.nextAppointment.serviceName}
+                  {getServiceName(metrics.nextAppointment)}
                 </Badge>
               </div>
               {(() => {
@@ -317,7 +329,7 @@ const metrics = useMemo(() => {
                   link && (
                     <Button
                       asChild
-                      className="bg-green-600 hover:bg-green-500 text-white font-bold gap-2"
+                      className="bg-green-600 hover:bg-green-500 text-white font-bold gap-2 shrink-0"
                     >
                       <a href={link} target="_blank" rel="noopener noreferrer">
                         <FaWhatsapp size={18} /> Confirmar

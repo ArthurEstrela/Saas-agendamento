@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { ServiceProviderProfile } from "../types";
-import { getProviderProfileBySlug } from "../firebase/userService";
-import { useAuthStore } from "../store/authStore"; // IMPORTANTE: Importar auth
+// ✨ Agora buscamos via API Java
+import { api } from "../lib/api"; 
+import { useAuthStore } from "../store/authStore"; 
+import { isAxiosError } from "axios"; // ✨ Importado para remover o 'any'
 import {
   Loader2,
   AlertCircle,
@@ -33,7 +35,7 @@ import { cn } from "../lib/utils/cn";
 const PublicBookingPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore(); // Pegar o estado do usuário
+  const { user } = useAuthStore(); // Pega o estado do usuário autenticado (se existir)
 
   const [provider, setProvider] = useState<ServiceProviderProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,34 +45,47 @@ const PublicBookingPage = () => {
   useEffect(() => {
     const fetchProvider = async () => {
       if (!slug) {
-        setError("Nenhum perfil especificado.");
+        setError("Nenhum perfil especificado na URL.");
         setIsLoading(false);
         return;
       }
       try {
-        const profile = await getProviderProfileBySlug(slug);
-        if (!profile) setError("Perfil não encontrado.");
-        else setProvider(profile);
-      } catch (err) {
-        console.error("Falha ao carregar:", err);
-        setError("Erro ao carregar o perfil.");
+        // ✨ Faz a requisição pública para a API Java usando o slug
+        const response = await api.get<ServiceProviderProfile>(`/service-providers/public/slug/${slug}`);
+        
+        if (!response.data) {
+           setError("Perfil não encontrado.");
+        } else {
+           setProvider(response.data);
+        }
+      } catch (err: unknown) { // ✨ Tipado como unknown
+        console.error("Falha ao carregar perfil público:", err);
+        
+        // ✨ Type Guard do Axios para verificar o status
+        if (isAxiosError(err) && err.response && err.response.status === 404) {
+           setError("Este estabelecimento não existe ou mudou de endereço.");
+        } else {
+           setError("Erro temporário ao carregar o perfil. Tente novamente mais tarde.");
+        }
       } finally {
         setIsLoading(false);
       }
     };
+    
     fetchProvider();
   }, [slug]);
 
-  // Lógica de verificação da assinatura
+  // Lógica de verificação da assinatura (Suporta camelCase e UPPER_CASE)
+  const status = provider?.subscriptionStatus?.toLowerCase();
   const isSubscriptionActive =
-    provider?.subscriptionStatus === "active" ||
-    provider?.subscriptionStatus === "trial" ||
-    provider?.subscriptionStatus === "lifetime";
+    status === "active" ||
+    status === "trial" ||
+    status === "lifetime";
 
   const handleGoToBooking = () => {
     if (!isSubscriptionActive) return;
     if (provider?.id) navigate(`/book/${provider.id}`);
-    else setError("ID inválido.");
+    else setError("ID do estabelecimento inválido.");
   };
 
   // --- LÓGICA INTELIGENTE DO BOTÃO VOLTAR ---
@@ -108,7 +123,7 @@ const PublicBookingPage = () => {
         <h1 className="text-2xl font-bold relative z-10">
           Perfil indisponível
         </h1>
-        <p className="text-gray-400 mt-2 relative z-10">
+        <p className="text-gray-400 mt-2 relative z-10 max-w-sm">
           {error || "Página não encontrada."}
         </p>
         <Button
@@ -123,6 +138,8 @@ const PublicBookingPage = () => {
   }
 
   const initials = provider.businessName.substring(0, 2).toUpperCase();
+  // Garante que array de serviços existe
+  const servicesList = provider.services || [];
 
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-100 pb-20 relative overflow-x-hidden selection:bg-primary/30 font-sans">
@@ -215,8 +232,9 @@ const PublicBookingPage = () => {
                   <div
                     className={cn(
                       "absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-5 h-5 rounded-full border-4 border-[#121214]",
-                      isSubscriptionActive ? "bg-green-500" : "bg-amber-500"
+                      isSubscriptionActive ? "bg-green-500 shadow-[0_0_10px_#22c55e]" : "bg-amber-500"
                     )}
+                    title={isSubscriptionActive ? "Disponível para Agendamento" : "Indisponível"}
                   />
                 </div>
 
@@ -235,6 +253,7 @@ const PublicBookingPage = () => {
                       <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
                         <MapPin size={13} className="text-primary" />
                         {provider.businessAddress.city}
+                        {provider.businessAddress.state && ` - ${provider.businessAddress.state}`}
                       </span>
                       {provider.businessPhone && (
                         <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
@@ -317,7 +336,7 @@ const PublicBookingPage = () => {
                   Agendamento Indisponível
                 </p>
                 <p className="text-xs opacity-80 text-amber-200/80 mt-1 leading-relaxed">
-                  Entre em contato por telefone ou WhatsApp para agendar.
+                  Entre em contato por telefone ou WhatsApp para agendar, pois o serviço online não se encontra ativo no momento.
                 </p>
               </div>
             </div>
@@ -334,7 +353,7 @@ const PublicBookingPage = () => {
                   onClick={() => setActiveTab(tab)}
                   className={cn(
                     "pb-3 pt-2 text-sm font-bold flex items-center justify-center gap-2 transition-colors relative px-4 flex-1 sm:flex-none outline-none",
-                    activeTab === tab ? "text-primary" : "text-zinc-500"
+                    activeTab === tab ? "text-primary" : "text-zinc-500 hover:text-zinc-300"
                   )}
                 >
                   {tab === "services" ? (
@@ -366,8 +385,8 @@ const PublicBookingPage = () => {
             >
               {activeTab === "services" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-24">
-                  {provider.services?.length > 0 ? (
-                    provider.services.map((service, index) => (
+                  {servicesList.length > 0 ? (
+                    servicesList.map((service, index) => (
                       <motion.div
                         key={service.id}
                         initial={{ opacity: 0, y: 15 }}
@@ -378,10 +397,10 @@ const PublicBookingPage = () => {
                           <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start gap-4">
                             <div className="space-y-1.5 flex-1 w-full">
                               <div className="flex justify-between items-start w-full sm:block">
-                                <h3 className="font-bold text-gray-100 text-base leading-tight">
+                                <h3 className="font-bold text-gray-100 text-base leading-tight pr-2">
                                   {service.name}
                                 </h3>
-                                <span className="sm:hidden font-bold text-primary text-base">
+                                <span className="sm:hidden font-bold text-primary text-base whitespace-nowrap">
                                   R$ {service.price.toFixed(2)}
                                 </span>
                               </div>
@@ -450,7 +469,7 @@ const PublicBookingPage = () => {
                         Nenhum serviço
                       </h3>
                       <p className="text-xs text-zinc-500 max-w-xs mx-auto">
-                        Ainda não há serviços cadastrados.
+                        O catálogo de serviços está sendo atualizado.
                       </p>
                     </div>
                   )}

@@ -5,7 +5,7 @@ import * as z from "zod";
 import { Link } from "react-router-dom";
 import { Mail, Loader2, Send, CheckCircle, ArrowLeft } from "lucide-react";
 import { sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "../firebase/config";
+import { auth } from "../firebase/config"; // Mantido pois Firebase ainda faz a auth subjacente
 import logo from "../assets/stylo-logo.png";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -45,15 +45,18 @@ const ForgotPasswordPage = () => {
     setError(null);
     setSuccess(false);
     try {
+      // Deixa o Firebase tratar o envio do email de reset
       await sendPasswordResetEmail(auth, data.email);
       setSuccess(true);
     } catch (err) {
-      // Correção: Removemos o 'any' e tipamos o erro
+      // Tipamos o erro do Firebase para evitar 'any'
       const firebaseError = err as FirebaseError;
       
       let msg = "Falha no envio. Tente novamente.";
       if (firebaseError.code === "auth/user-not-found") {
-        msg = "Usuário não encontrado.";
+        msg = "Não encontrámos uma conta associada a este e-mail.";
+      } else if (firebaseError.code === "auth/invalid-email") {
+        msg = "O formato do e-mail é inválido.";
       }
       setError(msg);
     } finally {
@@ -63,6 +66,7 @@ const ForgotPasswordPage = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-black text-white p-4 relative">
+      {/* Background Gradient */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black -z-10" />
 
       <motion.div
@@ -108,7 +112,7 @@ const ForgotPasswordPage = () => {
                       senha.
                     </p>
                   </div>
-                  <Link to="/login">
+                  <Link to="/login" className="block w-full">
                     <Button className="w-full font-bold">
                       <ArrowLeft size={18} className="mr-2" /> Voltar para Login
                     </Button>
@@ -137,10 +141,19 @@ const ForgotPasswordPage = () => {
                       <Input
                         {...register("email")}
                         placeholder="Seu e-mail cadastrado"
-                        className="pl-10 bg-gray-950 border-gray-700 h-11"
-                        error={errors.email?.message}
+                        // ✨ Removida a propriedade 'error' que não existe no HTML/Shadcn Input padrão
+                        className={cn(
+                          "pl-10 bg-gray-950 border-gray-700 h-11",
+                          errors.email ? "border-red-500 focus-visible:ring-red-500" : ""
+                        )}
                       />
                     </div>
+                    {/* ✨ O Erro de validação (Zod) agora aparece aqui baixo de forma limpa */}
+                    {errors.email && (
+                      <p className="text-red-500 text-xs mt-1 font-medium px-1">
+                        {errors.email.message}
+                      </p>
+                    )}
                   </div>
 
                   <Button
@@ -177,5 +190,13 @@ const ForgotPasswordPage = () => {
     </div>
   );
 };
+
+// Precisamos importar o 'cn' se você usá-lo na formatação (geralmente do utils)
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export default ForgotPasswordPage;

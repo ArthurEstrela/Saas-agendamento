@@ -1,16 +1,14 @@
 import React, { useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
 import { LoginForm } from "../components/auth/LoginForm";
-import { Link, useNavigate, useLocation } from "react-router-dom"; // Adicionado useLocation
-import { useBookingProcessStore } from "../store/bookingProcessStore";
+import { Link, useNavigate, useLocation } from "react-router-dom"; 
 import logo from "../assets/stylo-logo.png";
 import type { UserProfile } from "../types";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // Hook para acessar o estado da navegação
+  const location = useLocation(); 
   const { error: authError, clearError } = useAuthStore();
-  const { redirectUrlAfterLogin, setRedirectUrlAfterLogin } = useBookingProcessStore();
 
   // ✨ Limpa qualquer erro residual ao entrar na página
   useEffect(() => {
@@ -18,33 +16,33 @@ const LoginPage: React.FC = () => {
   }, [clearError]);
 
   const handleLoginSuccess = (user: UserProfile) => {
-    // 1. Prioridade: Redirecionamento vindo do state (Fluxo de Agendamento Interrompido)
-    // Se o usuário veio de uma página protegida (ex: /book/...), voltamos para lá.
+    // 1. Prioridade: Redirecionamento vindo do state (Fluxo Interrompido)
+    // Se o utilizador tentou aceder a uma página protegida sem estar logado, volta para lá.
     const from = location.state?.from?.pathname;
     if (from) {
       navigate(from, { replace: true });
       return;
     }
 
-    // 2. Prioridade: Redirecionamento vindo da store (Legado/Outros fluxos)
-    if (redirectUrlAfterLogin) {
-      const url = redirectUrlAfterLogin;
-      setRedirectUrlAfterLogin(null);
-      navigate(url);
-      return;
-    }
+    // 2. Padrão: Dashboard baseado no tipo de utilizador
+    // ✨ Normalizamos a string do role para evitar erros com o backend Java (ex: SERVICE_PROVIDER)
+    const role = user.role.toLowerCase();
 
-    // 3. Padrão: Dashboard baseado no tipo de usuário
-    switch (user.role) {
-      case "serviceProvider":
+    switch (role) {
+      case "serviceprovider":
+      case "service_provider":
         navigate("/dashboard/agenda");
+        break;
+      case "professional":
+        navigate("/dashboard/home");
         break;
       case "client":
         // Clientes vão para a busca/explorar para agendar novos serviços
         navigate("/dashboard/explore");
         break;
       default:
-        navigate("/dashboard/home");
+        // Fallback seguro
+        navigate("/");
         break;
     }
   };

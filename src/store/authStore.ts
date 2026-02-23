@@ -7,12 +7,12 @@ import {
   signInWithPopup,
   GoogleAuthProvider
 } from 'firebase/auth';
-import { isAxiosError } from 'axios'; // ✨ CORREÇÃO: Importamos o validador nativo do Axios
+import { isAxiosError } from 'axios';
 import { auth } from '../firebase/config';
 import type { UserProfile, RegisterData, ClientRegisterData, ProviderRegisterData } from '../types';
 import { api } from '../lib/api';
 
-// ✨ FUNÇÃO HELPER SÊNIOR: Trata qualquer tipo de erro sem usar 'any'
+// FUNÇÃO HELPER SÊNIOR: Trata qualquer tipo de erro com tipagem segura
 const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
   if (isAxiosError(error)) {
     // Se for um erro da sua API Java (ex: "E-mail já cadastrado")
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await signInWithEmailAndPassword(auth, email, password);
       const response = await api.get<UserProfile>('/auth/me');
       set({ user: response.data, loading: false });
-    } catch (error) { // ✨ Removido o ': any'
+    } catch (error) { 
       set({ 
         error: extractErrorMessage(error, 'Erro ao fazer login. Verifique as credenciais.'), 
         loading: false 
@@ -67,6 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null });
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password!);
+      // Força a atualização do token imediatamente
       await userCredential.user.getIdToken(true);
 
       let response;
@@ -91,8 +92,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       set({ user: response.data, loading: false });
-    } catch (error) { // ✨ Removido o ': any'
+    } catch (error) { 
+      // Em caso de falha no Java, remove o usuário criado no Firebase para evitar inconsistência
       if (auth.currentUser) await auth.currentUser.delete().catch(console.error);
+      
       set({ 
         error: extractErrorMessage(error, 'Erro ao criar conta. Verifique os dados e tente novamente.'), 
         loading: false 
@@ -113,8 +116,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         const response = await api.get<UserProfile>('/auth/me');
         set({ user: response.data, loading: false });
-      } catch (err) { // ✨ Removido o ': any'
-        if (isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 404)) {
+      } catch (err) { 
+        // ✨ CORREÇÃO: Adicionado o status 403 para a verificação caso o Spring bloqueie a rota indevidamente
+        if (isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 404 || err.response?.status === 403)) {
             const basePayload = {
                 name: result.user.displayName || 'Usuário Google',
                 email: result.user.email!,
@@ -139,7 +143,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             throw err;
         }
       }
-    } catch (error) { // ✨ Removido o ': any'
+    } catch (error) { 
       set({ error: extractErrorMessage(error, 'Erro na autenticação com o Google.'), loading: false });
       throw error;
     }
@@ -153,7 +157,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await signOut(auth);
       set({ user: null, loading: false });
-    } catch (error) { // ✨ Removido o ': any'
+    } catch (error) { 
       set({ error: extractErrorMessage(error, 'Erro ao sair da conta.'), loading: false });
     }
   },
@@ -168,8 +172,15 @@ export const useAuthStore = create<AuthState>((set) => ({
           const response = await api.get<UserProfile>('/auth/me');
           set({ user: response.data, loading: false });
         } catch (error) {
-          console.error("Usuário no Firebase desincronizado com a API Java. Forçando logout local.", error);
-          set({ user: null, loading: false });
+          // ✨ CORREÇÃO: Impede o logout automático caso receba 404 no momento em que a API Java 
+          // ainda está gravando o usuário no PostgreSQL
+          if (isAxiosError(error) && error.response?.status === 404) {
+             console.log("Aguardando sincronização do novo usuário no banco de dados...");
+             // Apenas mantemos o status loading, não deslogamos.
+          } else {
+             console.error("Usuário desincronizado ou token inválido. Forçando logout local.", error);
+             set({ user: null, loading: false }); 
+          }
         }
       } else {
         set({ user: null, loading: false });

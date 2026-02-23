@@ -1,5 +1,3 @@
-// src/pages/HomePage.tsx
-
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { 
@@ -14,13 +12,13 @@ import {
   Search,
   BriefcaseBusiness
 } from "lucide-react";
-import { httpsCallable } from "@firebase/functions";
+import { httpsCallable } from "firebase/functions"; // ✨ Ajuste da importação para evitar warnings em algumas configs
 import { useAuthStore } from "../store/authStore";
-import { useProfileStore } from "../store/profileStore";
 import { toast } from "react-hot-toast";
 import { functions } from "../firebase/config";
 import { Button } from "../components/ui/button";
 import type { ServiceProviderProfile } from "../types";
+// import { api } from "../lib/api"; // Descomente isto quando migrar o stripe para o Java
 
 // --- Interfaces ---
 interface AnimateOnScrollProps {
@@ -79,26 +77,32 @@ const AnimateOnScroll = ({
 const Home = () => {
   const [isLoading, setIsLoading] = useState(false);
   const location = useLocation();
+  // ✨ Trocámos o useProfileStore apenas por useAuthStore
   const { user } = useAuthStore();
-  const { userProfile } = useProfileStore();
   const navigate = useNavigate();
 
-  const isProvider = userProfile?.role === "serviceProvider";
+  // O user role pode vir com casing diferente do backend Java
+  const isProvider = user?.role === "SERVICE_PROVIDER" || user?.role === "serviceProvider";
+  
   const subscriptionStatus = isProvider
-    ? (userProfile as ServiceProviderProfile)?.subscriptionStatus
+    ? (user as ServiceProviderProfile)?.subscriptionStatus
     : undefined;
 
-  const isSubscribed = isProvider && subscriptionStatus === "active";
+  // Status de assinatura aceitos pelo backend
+  const isSubscribed = isProvider && 
+    (subscriptionStatus === "active" || subscriptionStatus === "ACTIVE" || subscriptionStatus === "lifetime");
 
   // --- Lógica de Pagamento ---
   const handleCheckout = async (priceId: string) => {
-    if (!user || !userProfile) {
+    if (!user) {
       // Redireciona direto para o cadastro de prestador para melhor UX nos planos
       navigate("/register/provider", { state: { from: location } });
       return;
     }
 
-    if (userProfile.role === "client") {
+    const role = user.role.toLowerCase();
+
+    if (role === "client") {
       toast.error("Nossos planos são exclusivos para Prestadores de Serviço.");
       return;
     }
@@ -113,13 +117,20 @@ const Home = () => {
     toast.loading("Preparando seu período de teste...");
 
     try {
-      const createStripeCheckout = httpsCallable(functions, "createStripeCheckout");
       const successUrl = `${window.location.origin}/dashboard?payment=success`;
       const cancelUrl = window.location.origin;
 
+      /* // 🚀 COMO FICARIA SE MUDASSE PARA API JAVA:
+        const response = await api.post('/subscriptions/checkout', { priceId, successUrl, cancelUrl });
+        window.location.href = response.data.sessionUrl;
+      */
+
+      // Mantemos o Firebase Functions enquanto a migração do Stripe para o Java não acontece
+      const createStripeCheckout = httpsCallable(functions, "createStripeCheckout");
       const result = await createStripeCheckout({ priceId, successUrl, cancelUrl });
       const { sessionUrl } = result.data as { sessionUrl: string };
       window.location.href = sessionUrl;
+      
     } catch (error) {
       console.error("Erro ao iniciar pagamento:", error);
       toast.dismiss();
@@ -130,7 +141,7 @@ const Home = () => {
 
   // --- Renderização dos Botões de Plano ---
   const renderPlanButton = (priceId: string, text: string, isPopular: boolean = false) => {
-    const isClient = userProfile && userProfile.role === "client";
+    const isClient = user && user.role.toLowerCase() === "client";
     
     if (isClient) {
       return (

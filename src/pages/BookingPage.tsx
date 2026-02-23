@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useBookingProcessStore } from "../store/bookingProcessStore";
 import { ServiceSelection } from "../components/booking/ServiceSelection";
 import { ProfessionalSelection } from "../components/booking/ProfessionalSelection";
 import { DateTimeSelection } from "../components/booking/DateTimeSelection";
 import { Confirmation } from "../components/booking/Confirmation";
+import type { ProfessionalProfile } from "../types"; // ✨ Tipo importado para resolver o any
 import {
   Loader2,
   Sparkles,
@@ -50,7 +51,10 @@ const BookingStepper = ({ currentStep }: { currentStep: number }) => {
           const isActive = currentStep === step.id;
 
           return (
-            <div key={step.id} className="flex flex-col items-center relative group">
+            <div
+              key={step.id}
+              className="flex flex-col items-center relative group"
+            >
               {/* Bolinha do Passo */}
               <motion.div
                 initial={false}
@@ -65,13 +69,15 @@ const BookingStepper = ({ currentStep }: { currentStep: number }) => {
                   "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-300",
                   isCompleted || isActive
                     ? "text-black shadow-[0_0_15px_rgba(218,165,32,0.4)]"
-                    : "text-gray-500 bg-zinc-900 border-zinc-800"
+                    : "text-gray-500 bg-zinc-900 border-zinc-800",
                 )}
               >
                 {isCompleted ? (
                   <Check size={16} strokeWidth={3} className="sm:w-5 sm:h-5" />
                 ) : (
-                  <span className="text-xs sm:text-sm font-bold">{step.id}</span>
+                  <span className="text-xs sm:text-sm font-bold">
+                    {step.id}
+                  </span>
                 )}
               </motion.div>
 
@@ -83,8 +89,8 @@ const BookingStepper = ({ currentStep }: { currentStep: number }) => {
                     isActive
                       ? "text-primary drop-shadow-sm"
                       : isCompleted
-                      ? "text-gray-400"
-                      : "text-gray-600"
+                        ? "text-gray-400"
+                        : "text-gray-600",
                   )}
                 >
                   {step.label}
@@ -118,7 +124,7 @@ const BookingSuccess = () => {
           Seu agendamento foi processado com sucesso. <br />
           Acompanhe os detalhes na sua dashboard.
         </p>
-        <Link to="/dashboard" className="w-full sm:w-auto">
+        <Link to="/client/dashboard" className="w-full sm:w-auto">
           <Button
             size="lg"
             className="w-full sm:w-auto font-bold gap-2 bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20 px-8 h-12 rounded-xl"
@@ -133,32 +139,36 @@ const BookingSuccess = () => {
 
 export const BookingPage = () => {
   const { providerId } = useParams<{ providerId: string }>();
-  
+
+  // Agora temos a store de booking centralizada com tudo!
   const {
     provider,
-    professionals, // Necessário para hidratar o profissional selecionado
-    currentStep,
-    status,
+    professionals,
+    step,
+    loading,
+    error,
     fetchProviderData,
-    resetBookingState,
+    reset,
   } = useBookingProcessStore();
+
+  const [bookingSuccess, setBookingSuccess] = useState(false);
 
   // 1. Carrega os dados do prestador
   useEffect(() => {
-    if (providerId) fetchProviderData(providerId);
-    
-    // Cleanup: Reseta o state ao sair, exceto se estivermos indo para o login 
-    // (A preservação é feita via localStorage no componente Confirmation, não aqui)
+    if (providerId) {
+      fetchProviderData(providerId);
+    }
+
+    // Cleanup: Reseta o state ao sair
     return () => {
-      // O reset é importante para não mostrar dados antigos ao entrar em outro perfil
-      resetBookingState(false);
+      reset();
     };
-  }, [providerId, fetchProviderData, resetBookingState]);
+  }, [providerId, fetchProviderData, reset]);
 
   // 2. Lógica de Restauração (Hydration) pós-login
   useEffect(() => {
     // Só tenta restaurar se os dados do prestador e profissionais já estiverem carregados
-    if (status.isLoading || !provider || !providerId) return;
+    if (loading || !provider || !providerId) return;
 
     const restoreBooking = () => {
       const savedDataString = localStorage.getItem("@stylo:pendingBooking");
@@ -167,31 +177,34 @@ export const BookingPage = () => {
       try {
         const savedData = JSON.parse(savedDataString);
 
-        // Verificações de segurança:
-        // 1. O agendamento é para o mesmo prestador?
-        // 2. O agendamento é recente (menos de 1 hora)?
         const isSameProvider = savedData.providerId === providerId;
-        const isRecent = (Date.now() - savedData.timestamp) < 1000 * 60 * 60; 
+        const isRecent = Date.now() - savedData.timestamp < 1000 * 60 * 60;
 
         if (isSameProvider && isRecent) {
-          // Precisamos reconstruir o objeto do profissional a partir do ID salvo
-          // para que o estado da store fique consistente (espera objeto, não string)
           let professionalToRestore = null;
+          // ✨ TIPAGEM CORRIGIDA AQUI: Substituído 'any' por 'ProfessionalProfile'
           if (savedData.professionalId && professionals.length > 0) {
-            professionalToRestore = professionals.find(p => p.id === savedData.professionalId) || null;
+            professionalToRestore =
+              professionals.find(
+                (p: ProfessionalProfile) => p.id === savedData.professionalId,
+              ) || null;
           }
 
-          // Hydration Atômica: Usamos setState direto da store para evitar que
-          // actions individuais resetem os passos seguintes.
+          let restoredDate = null;
+          if (savedData.date) {
+            const d = new Date(savedData.date);
+            if (!isNaN(d.getTime())) restoredDate = d;
+          }
+
+          // Hydration Atômica
           useBookingProcessStore.setState({
-            selectedServices: savedData.services || [],
-            selectedProfessional: professionalToRestore,
-            selectedDate: savedData.date ? new Date(savedData.date) : null,
-            selectedTimeSlot: savedData.time || null,
-            currentStep: 4, // Pula direto para a confirmação
+            services: savedData.services || [],
+            professional: professionalToRestore,
+            date: restoredDate,
+            time: savedData.time || null,
+            step: 4, // Pula direto para a confirmação
           });
 
-          // Limpa o storage para não restaurar novamente sem necessidade
           localStorage.removeItem("@stylo:pendingBooking");
         }
       } catch (e) {
@@ -200,14 +213,12 @@ export const BookingPage = () => {
       }
     };
 
-    // Pequeno delay para garantir que o Zustand e React terminaram de renderizar os profissionais
     const timer = setTimeout(restoreBooking, 100);
     return () => clearTimeout(timer);
-
-  }, [providerId, provider, professionals, status.isLoading]);
+  }, [providerId, provider, professionals, loading]);
 
   const renderCurrentStep = () => {
-    switch (currentStep) {
+    switch (step) {
       case 1:
         return <ServiceSelection />;
       case 2:
@@ -221,11 +232,24 @@ export const BookingPage = () => {
     }
   };
 
+  // Observa se o agendamento foi concluído na Store
+  useEffect(() => {
+    if (
+      step === 4 &&
+      !loading &&
+      !error &&
+      provider &&
+      professionals.length > 0 &&
+      useBookingProcessStore.getState().services.length === 0
+    ) {
+      setBookingSuccess(true);
+    }
+  }, [step, loading, error, provider, professionals]);
+
   // --- LOADING OTIMIZADO ---
-  if (status.isLoading) {
+  if (loading && !provider) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-[#09090b] relative overflow-hidden">
-        {/* Background Leve */}
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-20" />
         <Loader2
           className="animate-spin text-primary relative z-10"
@@ -236,7 +260,7 @@ export const BookingPage = () => {
   }
 
   // --- ERROR STATE OTIMIZADO ---
-  if (status.error) {
+  if (error && !provider) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-[#09090b] text-white p-4 relative overflow-hidden">
         <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-red-900/10 rounded-full blur-[80px]" />
@@ -248,14 +272,14 @@ export const BookingPage = () => {
           Ops! Algo deu errado
         </h1>
         <p className="text-gray-400 mb-8 max-w-md text-center relative z-10 text-sm sm:text-base">
-          {status.error}
+          {error}
         </p>
-        <Link to="/dashboard" className="relative z-10">
+        <Link to="/" className="relative z-10">
           <Button
             variant="outline"
             className="border-white/10 hover:bg-white/5 text-white"
           >
-            Voltar para a Dashboard
+            Voltar para o Início
           </Button>
         </Link>
       </div>
@@ -264,7 +288,6 @@ export const BookingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-100 pb-24 font-sans relative selection:bg-primary/30 overflow-x-hidden">
-      
       {/* --- BACKGROUND HÍBRIDO OTIMIZADO --- */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         {/* MOBILE BG */}
@@ -277,7 +300,7 @@ export const BookingPage = () => {
           <div className="absolute top-[10%] right-[-20%] w-[50vw] h-[50vw] bg-blue-600/5 rounded-full blur-[100px] opacity-40" />
           <div className="absolute bottom-[-20%] left-[10%] w-[70vw] h-[70vw] bg-purple-900/5 rounded-full blur-[150px] opacity-40" />
         </div>
-        
+
         {/* Noise Texture */}
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.02] mix-blend-overlay" />
       </div>
@@ -321,7 +344,7 @@ export const BookingPage = () => {
 
       {/* --- CONTEÚDO --- */}
       <div className="container mx-auto p-4 md:p-6 -mt-12 sm:-mt-16 relative z-20">
-        {status.isSuccess && currentStep !== 4 ? (
+        {bookingSuccess ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -330,11 +353,11 @@ export const BookingPage = () => {
           </motion.div>
         ) : (
           <>
-            <BookingStepper currentStep={currentStep} />
+            <BookingStepper currentStep={step} />
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={currentStep}
+                key={step}
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}

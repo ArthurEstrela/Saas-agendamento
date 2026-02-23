@@ -11,6 +11,17 @@ import {
   endOfDay,
 } from "date-fns";
 
+// --- Função Utilitária para Datas Seguras ---
+// Garante que, independentemente do que vem da API, transformamos num objeto Date válido
+const normalizeDate = (dateValue: unknown): Date => {
+  if (!dateValue) return new Date();
+  if (dateValue instanceof Date) return dateValue;
+  if (typeof dateValue === 'object' && dateValue !== null && 'toDate' in dateValue) {
+    return (dateValue as { toDate: () => Date }).toDate();
+  }
+  return new Date(dateValue as string | number);
+};
+
 /**
  * Hook customizado para aplicar a lógica de filtragem complexa da Agenda.
  * Inclui filtragem de segurança por role (Dono vs Profissional).
@@ -25,7 +36,9 @@ export const useFilteredAppointments = (
 ) => {
   // --- PASSO 1: FILTRO DE SEGURANÇA POR ROLE (FASE 4) ---
   const professionalFiltered = useMemo(() => {
-    const isOwner = userProfile.role === "serviceProvider";
+    // Normaliza o role para lidar com diferenças entre Firebase e Java (SERVICE_PROVIDER)
+    const role = userProfile.role.toLowerCase();
+    const isOwner = role === "serviceprovider" || role === "service_provider";
 
     if (isOwner) {
       if (selectedProfessionalId === "all") {
@@ -37,14 +50,16 @@ export const useFilteredAppointments = (
       );
     }
 
-    // Se não é dono, é um profissional. Filtra FORÇADAMENTE pelo seu próprio ID (uid).
-    const professionalId = (userProfile as ProfessionalProfile).professionalId;
+    // Se não é dono, é um profissional. Filtra FORÇADAMENTE pelo seu próprio ID.
+    const profProfile = userProfile as ProfessionalProfile;
+    const profId = profProfile.id || profProfile.professionalId;
+    
     return allAppointments.filter(
-      (appt) => appt.professionalId === professionalId
+      (appt) => appt.professionalId === profId
     );
   }, [allAppointments, userProfile, selectedProfessionalId]);
 
-  // --- PASSO 2: FILTRO POR TAB E DATA (A SUA LÓGICA ORIGINAL) ---
+  // --- PASSO 2: FILTRO POR TAB E DATA ---
   // Este 'useMemo' depende da lista JÁ FILTRADA POR ROLE
   return useMemo(() => {
     let filtered = professionalFiltered;
@@ -57,25 +72,30 @@ export const useFilteredAppointments = (
 
     switch (activeTab) {
       case "requests":
-        filtered = filtered.filter((a) => a.status === "pending");
+        // Fallback case-insensitive para os status do Java
+        filtered = filtered.filter((a) => a.status.toLowerCase() === "pending");
         break;
 
       case "pendingIssues":
-        filtered = filtered.filter(
-          (a) =>
-            a.status === "scheduled" &&
-            isPast(a.endTime) &&
-            a.endTime < beginningOfToday
-        );
+        filtered = filtered.filter((a) => {
+          const status = a.status.toLowerCase();
+          const endDate = normalizeDate(a.endTime); // Normaliza antes de comparar
+          return (
+            status === "scheduled" &&
+            isPast(endDate) &&
+            endDate < beginningOfToday
+          );
+        });
         break;
 
       case "scheduled":
-        filtered = filtered.filter(
-          (a) => a.status === "scheduled" || a.status === "pending"
-        );
+        filtered = filtered.filter((a) => {
+          const status = a.status.toLowerCase();
+          return status === "scheduled" || status === "pending";
+        });
         if (viewMode !== "calendar") {
           filtered = filtered.filter((a) =>
-            isWithinInterval(a.startTime, {
+            isWithinInterval(normalizeDate(a.startTime), {
               start: startOfSelectedDay,
               end: endOf30DaysForward,
             })
@@ -84,11 +104,12 @@ export const useFilteredAppointments = (
         break;
 
       case "history":
-        filtered = filtered.filter(
-          (a) => a.status === "completed" || a.status === "cancelled"
-        );
+        filtered = filtered.filter((a) => {
+          const status = a.status.toLowerCase();
+          return status === "completed" || status === "cancelled";
+        });
         filtered = filtered.filter((a) =>
-          isWithinInterval(a.startTime, {
+          isWithinInterval(normalizeDate(a.startTime), {
             start: startOf30DaysAgo,
             end: endOfSelectedDay,
           })
@@ -96,9 +117,9 @@ export const useFilteredAppointments = (
         break;
     }
 
-    // A sua ordenação original
+    // A sua ordenação original, mas agora protegida contra ISO Strings da API
     return filtered.sort(
-      (a, b) => a.startTime.getTime() - b.startTime.getTime()
+      (a, b) => normalizeDate(a.startTime).getTime() - normalizeDate(b.startTime).getTime()
     );
   }, [
     professionalFiltered, // <-- Depende da lista já filtrada

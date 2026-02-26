@@ -6,19 +6,15 @@ export type UserRoleType =
   | "CLIENT"
   | "SERVICE_PROVIDER"
   | "PROFESSIONAL"
-  | "ADMIN"
-  | "client"
-  | "serviceProvider"
-  | "professional";
+  | "ADMIN";
+
 export type PaymentMethod =
   | "PIX"
   | "CREDIT_CARD"
   | "DEBIT_CARD"
   | "CASH"
-  | "LINK"
-  | "pix"
-  | "credit_card"
-  | "cash";
+  | "LINK";
+
 export type AppointmentStatus =
   | "PENDING"
   | "SCHEDULED"
@@ -26,11 +22,8 @@ export type AppointmentStatus =
   | "COMPLETED"
   | "CANCELLED"
   | "NO_SHOW"
-  | "BLOCKED"
-  | "pending"
-  | "scheduled"
-  | "completed"
-  | "cancelled";
+  | "BLOCKED";
+
 export type DayOfWeek =
   | "SUNDAY"
   | "MONDAY"
@@ -38,19 +31,10 @@ export type DayOfWeek =
   | "WEDNESDAY"
   | "THURSDAY"
   | "FRIDAY"
-  | "SATURDAY"
-  | "Sunday"
-  | "Monday"
-  | "Tuesday"
-  | "Wednesday"
-  | "Thursday"
-  | "Friday"
-  | "Saturday";
-export type DiscountType =
-  | "PERCENTAGE"
-  | "FIXED_AMOUNT"
-  | "percentage"
-  | "fixed";
+  | "SATURDAY";
+
+export type DiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
+
 export type CashTransactionType =
   | "INCOME"
   | "EXPENSE"
@@ -113,7 +97,7 @@ export interface BaseUser {
 // ============================================================================
 
 export interface ClientProfile extends BaseUser {
-  role: "CLIENT" | "client";
+  role: "CLIENT";
   cpf?: string;
   dateOfBirth?: string;
   gender?: string;
@@ -122,7 +106,7 @@ export interface ClientProfile extends BaseUser {
 }
 
 export interface ServiceProviderProfile extends BaseUser {
-  role: "SERVICE_PROVIDER" | "serviceProvider";
+  role: "SERVICE_PROVIDER";
   businessName: string;
   businessAddress?: Address;
   documentType?: "cpf" | "cnpj" | "CPF" | "CNPJ";
@@ -164,7 +148,7 @@ export interface ServiceProviderProfile extends BaseUser {
 }
 
 export interface ProfessionalProfile extends BaseUser {
-  role: "PROFESSIONAL" | "professional";
+  role: "PROFESSIONAL";
   serviceProviderId: string;
   professionalId: string;
   bio?: string;

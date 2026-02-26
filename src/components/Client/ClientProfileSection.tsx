@@ -90,7 +90,7 @@ export const ClientProfileSection = () => {
 
   useEffect(() => {
     // Preenche o formulário com os dados do AuthStore quando o componente monta
-    if (user && (user.role === "CLIENT" || user.role === "client")) {
+    if (user && (user.role === "CLIENT")) {
       // ✨ SEM ANY: Cast tipado e seguro para ClientProfile
       const clientData = user as ClientProfile;
 

@@ -44,22 +44,24 @@ type BadgeVariant =
 
 // Mapeamento de Status para Componentes Badge
 const StatusBadge = ({ status }: { status: string }) => {
-  const normalizedStatus = status.toLowerCase() as keyof typeof statusConfig;
+  // ✨ Garantimos que sempre será maiúsculo para bater com a chave do objeto
+  const normalizedStatus = status.toUpperCase();
 
   const statusConfig: Record<
     string,
     { label: string; variant: BadgeVariant; icon: React.ElementType }
   > = {
-    scheduled: { label: "Confirmado", variant: "success", icon: CheckCircle },
-    pending: { label: "Pendente", variant: "warning", icon: MoreHorizontal },
-    completed: { label: "Concluído", variant: "secondary", icon: CheckCircle },
-    cancelled: { label: "Cancelado", variant: "destructive", icon: XCircle },
-    no_show: {
+    PENDING: { label: "Pendente", variant: "warning", icon: MoreHorizontal },
+    SCHEDULED: { label: "Agendado", variant: "success", icon: CheckCircle }, // ✨ Corrigido
+    CONFIRMED: { label: "Confirmado", variant: "success", icon: CheckCircle }, // ✨ Adicionado
+    COMPLETED: { label: "Concluído", variant: "secondary", icon: CheckCircle },
+    CANCELLED: { label: "Cancelado", variant: "destructive", icon: XCircle },
+    NO_SHOW: {
       label: "Não Compareceu",
       variant: "destructive",
       icon: AlertCircle,
     },
-    blocked: { label: "Bloqueado", variant: "outline", icon: XCircle },
+    BLOCKED: { label: "Bloqueado", variant: "outline", icon: XCircle },
   };
 
   const config = statusConfig[normalizedStatus] || {
@@ -70,7 +72,6 @@ const StatusBadge = ({ status }: { status: string }) => {
   const Icon = config.icon;
 
   return (
-    // ✨ REMOVIDO O 'as any' AQUI
     <Badge variant={config.variant} className="gap-1.5">
       <Icon size={12} /> {config.label}
     </Badge>
@@ -120,7 +121,7 @@ export const ClientAppointmentCard = ({
 
   // Parsing seguro da data da API Java
   const startTime = new Date(rawStartTime);
-  const status = rawStatus.toLowerCase();
+  const status = rawStatus.toUpperCase();
 
   const formattedDate = format(startTime, "EEEE, dd 'de' MMMM", {
     locale: ptBR,
@@ -176,15 +177,15 @@ export const ClientAppointmentCard = ({
   const now = new Date();
 
   const canCancel =
-    (status === "scheduled" ||
-      status === "pending" ||
-      status === "confirmed") &&
+    (status === "SCHEDULED" ||
+      status === "PENDING" ||
+      status === "CONFIRMED") &&
     isBefore(now, cancellationDeadline);
 
   const hasCancellationTimeExpired =
-    (status === "scheduled" ||
-      status === "pending" ||
-      status === "confirmed") &&
+    (status === "SCHEDULED" ||
+      status === "PENDING" ||
+      status === "CONFIRMED") &&
     !isBefore(now, cancellationDeadline) &&
     isBefore(now, startTime);
   // -----------------------------------------
@@ -330,9 +331,9 @@ export const ClientAppointmentCard = ({
             </div>
           </div>
 
-          {(status === "completed" && !hasReview) || canCancel ? (
+          {(status === "COMPLETED" && !hasReview) || canCancel ? (
             <div className="flex gap-3 w-full">
-              {status === "completed" && !hasReview && (
+              {status === "COMPLETED" && !hasReview && (
                 <Button
                   onClick={() => setReviewModalOpen(true)}
                   className="flex-1 gap-2 bg-amber-500 text-black hover:bg-amber-600"

@@ -88,6 +88,7 @@ export interface BaseUser {
   lastLogin?: string;
   phoneNumber?: string;
   profilePictureUrl?: string;
+  providerId?: string;
 }
 
 // ============================================================================

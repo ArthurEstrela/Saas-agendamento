@@ -13,7 +13,7 @@ import { Typography } from "../ui/typography";
 
 export const ServicesManagement = () => {
   const { user } = useAuthStore();
-  
+
   const {
     services,
     loading: isLoading,
@@ -31,25 +31,34 @@ export const ServicesManagement = () => {
   }>({ isOpen: false, service: null });
 
   useEffect(() => {
-    if (user?.id) {
-      fetchServices(user.id);
+    // Descobre qual é o ID correto do Estabelecimento dependendo de quem está logado
+    let targetProviderId: string | undefined;
+
+    if (user?.role === "PROFESSIONAL") {
+      targetProviderId = user.serviceProviderId;
+    } else if (user?.role === "SERVICE_PROVIDER") {
+      targetProviderId = user.providerId || user.id;
     }
-  }, [user?.id, fetchServices]);
+
+    if (targetProviderId) {
+      fetchServices(targetProviderId);
+    }
+  }, [user, fetchServices]);
 
   const handleOpenModal = (service: Service | null = null) => {
     setEditingService(service);
     setIsModalOpen(true);
   };
 
-  const handleSave = async (data: { 
-    name: string; 
-    description: string; 
-    duration: number; 
+  const handleSave = async (data: {
+    name: string;
+    description: string;
+    duration: number;
     price: number;
     active?: boolean;
   }) => {
     if (!user?.id) return;
-    
+
     try {
       if (editingService) {
         // No update, passamos o ID e os novos dados
@@ -58,7 +67,7 @@ export const ServicesManagement = () => {
         // No create, passamos APENAS os dados. O store já omite 'id' e 'providerId'
         await createService({
           ...data,
-          active: true // Força como true ao criar, pois o Omit do store pode exigir
+          active: true, // Força como true ao criar, pois o Omit do store pode exigir
         });
       }
       setIsModalOpen(false);
@@ -128,8 +137,8 @@ export const ServicesManagement = () => {
             Adicione serviços para que seus clientes possam agendar horários com
             você.
           </p>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => handleOpenModal()}
             className="border-gray-700 hover:bg-gray-800"
           >

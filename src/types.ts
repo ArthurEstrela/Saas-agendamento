@@ -348,6 +348,7 @@ export interface ClientRegisterData {
   email: string;
   password?: string; // Opcional se for Google Login
   phone?: string;
+  cpf: string;
 }
 
 export interface ProviderRegisterData {
@@ -358,6 +359,16 @@ export interface ProviderRegisterData {
   businessName: string;
   document: string; // CPF ou CNPJ
   phone?: string;
+  address: {
+    zipCode: string;
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    lat: number;
+    lng: number;
+  };
 }
 
 export type RegisterData = ClientRegisterData | ProviderRegisterData;

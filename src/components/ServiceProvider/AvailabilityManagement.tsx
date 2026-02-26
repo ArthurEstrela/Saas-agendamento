@@ -59,13 +59,13 @@ const DAYS_OF_WEEK: {
   key: DailyAvailability["dayOfWeek"];
   label: string;
 }[] = [
-  { key: "Monday", label: "Segunda-feira" },
-  { key: "Tuesday", label: "Terça-feira" },
-  { key: "Wednesday", label: "Quarta-feira" },
-  { key: "Thursday", label: "Quinta-feira" },
-  { key: "Friday", label: "Sexta-feira" },
-  { key: "Saturday", label: "Sábado" },
-  { key: "Sunday", label: "Domingo" },
+  { key: "MONDAY", label: "Segunda-feira" },
+  { key: "TUESDAY", label: "Terça-feira" },
+  { key: "WEDNESDAY", label: "Quarta-feira" },
+  { key: "THURSDAY", label: "Quinta-feira" },
+  { key: "FRIDAY", label: "Sexta-feira" },
+  { key: "SATURDAY", label: "Sábado" },
+  { key: "SUNDAY", label: "Domingo" },
 ];
 
 export const AvailabilityManagement = () => {
@@ -226,8 +226,8 @@ export const AvailabilityManagement = () => {
     setLocalAvailability((prev) =>
       prev.map((day) => {
         if (
-          day.dayOfWeek === "Saturday" ||
-          day.dayOfWeek === "Sunday" ||
+          day.dayOfWeek === "SATURDAY" ||
+          day.dayOfWeek === "SUNDAY" ||
           day.dayOfWeek === sourceDayKey
         ) {
           return day;

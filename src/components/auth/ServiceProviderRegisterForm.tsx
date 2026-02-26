@@ -283,9 +283,9 @@ const paymentOptions: {
   label: string;
   icon: React.ElementType;
 }[] = [
-  { id: "pix", label: "Pix", icon: Landmark },
-  { id: "credit_card", label: "Cartão", icon: CreditCard },
-  { id: "cash", label: "Dinheiro", icon: Banknote },
+  { id: "PIX", label: "Pix", icon: Landmark },
+  { id: "CREDIT_CARD", label: "Cartão", icon: CreditCard },
+  { id: "CASH", label: "Dinheiro", icon: Banknote },
 ];
 
 export const ServiceProviderRegisterForm = () => {
@@ -495,7 +495,6 @@ export const ServiceProviderRegisterForm = () => {
   const onSubmit: SubmitHandler<ProviderFormData> = async (data) => {
     if (currentStep !== 4) return;
 
-    // Validação Final de Segurança para o Mapa
     if (!position || !data.lat || !data.lng) {
       setError("lat", { message: "Selecione a localização no mapa" });
       return;
@@ -504,29 +503,33 @@ export const ServiceProviderRegisterForm = () => {
     setIsSubmittingForm(true);
 
     try {
-      // 1. Registo Base (AuthStore)
+      // 1. Registo Base (AuthStore) - AGORA COM O ENDEREÇO
       await registerProvider({
         role: "SERVICE_PROVIDER",
         name: data.name,
         email: data.email,
         password: data.password,
         businessName: data.businessName,
-        document: data.documentNumber.replace(/\D/g, ""), // Manda limpo
+        document: data.documentNumber.replace(/\D/g, ""),
         phone: data.businessPhone,
+        address: {
+          zipCode: data.zipCode.replace(/\D/g, ""), // Limpar pontuação do CEP
+          street: data.street,
+          number: data.number,
+          neighborhood: data.neighborhood,
+          city: data.city,
+          state: data.state,
+          lat: position.lat,
+          lng: position.lng,
+        }
       });
 
-      // 2. Atualização dos Dados Extras (ProfileStore)
+      // 2. Atualização dos Dados Extras (ProfileStore) - SEM O ENDEREÇO
       const newUser = useAuthStore.getState().user;
 
       if (newUser && newUser.id) {
-        const formattedInstagram = formatSocialLink(
-          data.instagram,
-          "https://www.instagram.com",
-        );
-        const formattedFacebook = formatSocialLink(
-          data.facebook,
-          "https://www.facebook.com",
-        );
+        const formattedInstagram = formatSocialLink(data.instagram, "https://www.instagram.com");
+        const formattedFacebook = formatSocialLink(data.facebook, "https://www.facebook.com");
 
         await updateProfile(newUser.id, {
           areaOfWork: data.areaOfWork,
@@ -539,16 +542,7 @@ export const ServiceProviderRegisterForm = () => {
             website: data.website,
           },
           paymentMethods: data.paymentMethods as PaymentMethod[],
-          businessAddress: {
-            zipCode: data.zipCode,
-            street: data.street,
-            number: data.number,
-            neighborhood: data.neighborhood,
-            city: data.city,
-            state: data.state,
-            lat: position.lat,
-            lng: position.lng,
-          },
+          // O endereço foi removido daqui porque já foi enviado na criação!
         });
       }
 
@@ -844,7 +838,7 @@ export const ServiceProviderRegisterForm = () => {
                                     (val) => val !== option.id,
                                   ),
                                 );
-                                if (option.id === "pix") clearErrors("pixKey");
+                                if (option.id === "PIX") clearErrors("pixKey");
                               }
                             }}
                             className="sr-only"

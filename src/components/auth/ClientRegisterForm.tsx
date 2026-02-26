@@ -107,27 +107,25 @@ export const ClientRegisterForm = () => {
   const onSubmit: SubmitHandler<ClientFormData> = async (data) => {
     setIsSubmittingForm(true);
     try {
-      // 1. Cria a conta no Firebase e na API Spring Boot
+      // 1. Cria a conta no Firebase e na API Spring Boot enviando o CPF
       await registerClient({
         role: "CLIENT",
         name: data.name,
         email: data.email,
         password: data.password,
         phone: data.phoneNumber,
+        cpf: data.cpf, // <-- Adicionando o CPF no payload de registro
       });
 
-      // 2. Recupera o ID do novo utilizador que acabou de ser criado e gravado no store
       const newUser = useAuthStore.getState().user;
       
       if (newUser && newUser.id) {
-        // 3. Atualiza os dados complementares de perfil
+        // 2. Atualiza os dados complementares de perfil (sem o CPF, que já foi enviado)
         await updateProfile(newUser.id, {
-          cpf: data.cpf,
           dateOfBirth: data.dateOfBirth,
           gender: data.gender,
         });
 
-        // 4. Se houver foto, faz o upload para a nova rota Multipart do Java
         if (profileImage) {
           await uploadAvatar(newUser.id, profileImage);
         }

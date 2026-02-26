@@ -92,18 +92,20 @@ export const useAuthStore = create<AuthState>((set) => ({
           email: clientData.email,
           phoneNumber: clientData.phone || '',
           password: clientData.password,
+          cpf: clientData.cpf,
           firebaseUid: userCredential.user.uid // ✨ O pulo do gato: Sincronizando os IDs
         });
         userProfile = response.data;
       } else {
         const providerData = data as ProviderRegisterData;
         const response = await api.post<UserProfile>('/service-providers/register', {
-          name: providerData.name,
-          email: providerData.email,
+          ownerName: providerData.name,             // ✨ Alinhado com o DTO Java
+          ownerEmail: providerData.email,           // ✨ Alinhado com o DTO Java
+          ownerPassword: providerData.password,     // ✨ Alinhado com o DTO Java
           businessName: providerData.businessName,
           document: providerData.document,
           phone: providerData.phone || '',
-          password: providerData.password,
+          address: providerData.address,
           firebaseUid: userCredential.user.uid // ✨ Sincronizando IDs
         });
         userProfile = response.data;
@@ -155,14 +157,27 @@ export const useAuthStore = create<AuthState>((set) => ({
             let userProfile: UserProfile;
 
             if (role === 'CLIENT') {
-                const regResponse = await api.post<UserProfile>('/auth/register/client', basePayload);
+                // O cliente também precisa do CPF agora! Envie um mock ou redirecione para completar o perfil
+                const regResponse = await api.post<UserProfile>('/auth/register/client', {
+                    ...basePayload,
+                    cpf: '00000000000' // Mock temporário para passar na API
+                });
                 userProfile = regResponse.data;
             } else {
+                // O Provedor precisa dos nomes corretos e do Endereço!
                 const regResponse = await api.post<UserProfile>('/service-providers/register', { 
-                    ...basePayload, 
+                    ownerName: basePayload.name,
+                    ownerEmail: basePayload.email,
+                    ownerPassword: basePayload.password,
                     businessName: basePayload.name, 
-                    document: '00000000000', // Mock temporário para provedores via Google
-                    phone: basePayload.phoneNumber 
+                    document: '00000000000', // Mock temporário
+                    phone: basePayload.phoneNumber || '00000000000',
+                    firebaseUid: basePayload.firebaseUid,
+                    // ✨ Endereço mockado para não estourar erro 400
+                    address: {
+                        zipCode: "00000000", street: "Pendente", number: "S/N", 
+                        neighborhood: "Pendente", city: "Pendente", state: "XX", lat: 0, lng: 0
+                    }
                 });
                 userProfile = regResponse.data;
             }

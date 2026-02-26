@@ -102,20 +102,22 @@ export const useSearchStore = create<SearchState>((set, get) => ({
       const response = await api.get<PagedResult<ServiceProviderProfile>>(
         "/service-providers/search",
         {
-          params: queryParams, // O Axios ignora automaticamente os campos que estão como 'undefined'
+          params: queryParams,
         },
       );
 
-      // Se for a página 0, substituímos a lista. Se for página > 0 (Infinite Scroll), adicionamos ao final.
+      // ✨ CORREÇÃO AQUI: Troque '.data' por '.items'
       set((state) => ({
         results:
           pageIndex === 0
-            ? response.data.data
-            : [...state.results, ...response.data.data],
+            ? response.data.items
+            : [...state.results, ...response.data.items],
         totalElements: response.data.totalElements,
         totalPages: response.data.totalPages,
-        currentPage: response.data.currentPage,
-        hasNext: response.data.hasNext,
+        // Atenção: o seu PagedResult.java não retorna currentPage nem hasNext.
+        // Ele retorna apenas 'page' e 'size'. Se você for usar esses dados, mude também:
+        currentPage: response.data.page,
+        // hasNext: response.data.hasNext, // Comente ou remova se o backend não envia
         loading: false,
       }));
     } catch (error) {

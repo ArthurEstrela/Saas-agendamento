@@ -50,13 +50,11 @@ export type WaitlistStatus = "WAITING" | "NOTIFIED" | "SCHEDULED" | "CANCELLED";
 
 // Espelha a classe PagedResult.java do backend
 export interface PagedResult<T> {
-  data: T[];
+  items: T[];
+  page: number;
+  size: number;
   totalElements: number;
   totalPages: number;
-  currentPage: number;
-  pageSize: number;
-  hasNext: boolean;
-  hasPrevious: boolean;
 }
 
 export interface Address {
@@ -349,6 +347,8 @@ export interface ClientRegisterData {
   password?: string; // Opcional se for Google Login
   phone?: string;
   cpf: string;
+  dateOfBirth?: string;
+  gender?: string;
 }
 
 export interface ProviderRegisterData {

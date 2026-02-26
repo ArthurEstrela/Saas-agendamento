@@ -76,11 +76,11 @@ type ClientFormData = z.infer<typeof schema>;
 
 export const ClientRegisterForm = () => {
   const navigate = useNavigate();
-  
+
   // Conectamos aos nossos Stores atualizados
   const registerClient = useAuthStore((state) => state.register);
   const authError = useAuthStore((state) => state.error);
-  const { updateProfile, uploadAvatar } = useProfileStore();
+  const { uploadAvatar } = useProfileStore();
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -107,25 +107,23 @@ export const ClientRegisterForm = () => {
   const onSubmit: SubmitHandler<ClientFormData> = async (data) => {
     setIsSubmittingForm(true);
     try {
-      // 1. Cria a conta no Firebase e na API Spring Boot enviando o CPF
+      // 1. Cria a conta no Firebase e na API Spring Boot com TUDO de uma vez!
       await registerClient({
         role: "CLIENT",
         name: data.name,
         email: data.email,
         password: data.password,
         phone: data.phoneNumber,
-        cpf: data.cpf, // <-- Adicionando o CPF no payload de registro
+        cpf: data.cpf,
+        dateOfBirth: data.dateOfBirth, // ✨ NOVO
+        gender: data.gender, // ✨ NOVO
       });
 
       const newUser = useAuthStore.getState().user;
-      
-      if (newUser && newUser.id) {
-        // 2. Atualiza os dados complementares de perfil (sem o CPF, que já foi enviado)
-        await updateProfile(newUser.id, {
-          dateOfBirth: data.dateOfBirth,
-          gender: data.gender,
-        });
 
+      if (newUser && newUser.id) {
+        // ✨ REMOVIDO: updateProfile() que enviava data e gênero separados!
+        // 2. Agora só fazemos upload da foto, se o usuário selecionou alguma
         if (profileImage) {
           await uploadAvatar(newUser.id, profileImage);
         }
@@ -217,7 +215,7 @@ export const ClientRegisterForm = () => {
                     "pl-10",
                     errors.phoneNumber
                       ? "border-destructive focus-visible:ring-destructive"
-                      : ""
+                      : "",
                   )}
                 />
               </div>
@@ -249,7 +247,7 @@ export const ClientRegisterForm = () => {
                     "pl-10",
                     errors.cpf
                       ? "border-destructive focus-visible:ring-destructive"
-                      : ""
+                      : "",
                   )}
                 />
               </div>
@@ -282,7 +280,7 @@ export const ClientRegisterForm = () => {
                       "pl-10",
                       errors.dateOfBirth
                         ? "border-destructive focus-visible:ring-destructive"
-                        : ""
+                        : "",
                     )}
                   />
                 </div>

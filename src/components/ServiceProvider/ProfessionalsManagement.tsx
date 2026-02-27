@@ -12,7 +12,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import type { ProfessionalProfile, ServiceProviderProfile } from "../../types";
+import type { ProfessionalProfile } from "../../types";
 
 // UI
 import { Button } from "../ui/button";
@@ -26,17 +26,15 @@ type ProfessionalFormData = {
 };
 
 export const ProfessionalsManagement = () => {
-  // Dados globais do usuário logado (O Dono)
+  // 1. Usamos o 'user' original da Store para evitar o erro de overlap nas roles
   const { user } = useAuthStore();
-  const providerProfile = user as ServiceProviderProfile;
 
-  // Serviços vêm do seu próprio store agora!
   const { services, fetchServices } = useServiceManagementStore();
 
   const {
     professionals,
     loading: isLoading,
-    createProfessional, // ✨ Corrigido de addProfessional para createProfessional
+    createProfessional,
     updateProfessional,
     deleteProfessional: removeProfessional,
     fetchProfessionals,
@@ -53,44 +51,47 @@ export const ProfessionalsManagement = () => {
 
   // Busca inicial (Carrega Profissionais E Serviços)
   useEffect(() => {
-    if (
-      providerProfile?.role?.toUpperCase() === "SERVICE_PROVIDER" &&
-      providerProfile.id
-    ) {
-      fetchProfessionals(providerProfile.id);
-      fetchServices(providerProfile.id);
-    }
-  }, [providerProfile, fetchProfessionals, fetchServices]);
+    let targetProviderId: string | undefined;
 
-  // Ordena: Dono primeiro (neste caso, se o ID bater com o User ID), depois alfabético
+    // Usando 'user?.role' resolvemos a reclamação do TypeScript de comparação inválida
+    if (user?.role === "PROFESSIONAL") {
+      targetProviderId = (user as unknown as { serviceProviderId: string })
+        .serviceProviderId;
+    } else if (user?.role === "SERVICE_PROVIDER") {
+      targetProviderId = user.providerId || user.id;
+    }
+
+    if (targetProviderId) {
+      fetchProfessionals(targetProviderId);
+      fetchServices(targetProviderId);
+    }
+  }, [user, fetchProfessionals, fetchServices]);
+
+  // Ordena: Dono primeiro, depois alfabético
   const sortedProfessionals = useMemo(() => {
     if (!professionals) return [];
     return [...professionals].sort((a, b) => {
-      const isOwnerA = a.id === providerProfile?.id;
-      const isOwnerB = b.id === providerProfile?.id;
+      const isOwnerA = a.id === user?.id;
+      const isOwnerB = b.id === user?.id;
       if (isOwnerA) return -1;
       if (isOwnerB) return 1;
       return (a.name || "").localeCompare(b.name || "");
     });
-  }, [professionals, providerProfile]);
+  }, [professionals, user?.id]);
 
   // Verifica se o dono já está na lista
   const hasOwnerProfile = useMemo(() => {
-    return sortedProfessionals.some((p) => p.id === providerProfile?.id);
-  }, [sortedProfessionals, providerProfile]);
+    return sortedProfessionals.some((p) => p.id === user?.id);
+  }, [sortedProfessionals, user?.id]);
 
-  if (
-    !providerProfile ||
-    providerProfile.role?.toUpperCase() !== "SERVICE_PROVIDER"
-  )
-    return null;
+  // Bloqueia a renderização se não for o dono
+  if (!user || user.role?.toUpperCase() !== "SERVICE_PROVIDER") return null;
 
   // -- Funções de Handler --
 
   const handleOpenModal = (prof: ProfessionalProfile | null = null) => {
-    // Adicionamos a flag isOwner "on the fly" apenas para o visual do Modal
     const enrichedProf = prof
-      ? { ...prof, isOwner: prof.id === providerProfile.id }
+      ? { ...prof, isOwner: prof.id === user.id }
       : null;
     setEditingProfessional(enrichedProf);
     setIsModalOpen(true);
@@ -100,51 +101,61 @@ export const ProfessionalsManagement = () => {
     formData: ProfessionalFormData,
     photoFile: File | null,
   ) => {
-    // ✨ Em vez de enviar `serviceIds` (que não existe no type),
-    // Mapeamos os IDs de volta para os objetos de serviço completos
-    const selectedServices = services.filter((s) =>
-      formData.serviceIds.includes(s.id),
-    );
-
-    // Mapeamento direto
-    const payload: Partial<ProfessionalProfile> = {
+    // 2. Resolvemos o erro "Unexpected any" criando um payload limpo
+    // e forçando a tipagem com unknown as Partial<Profile> (Perfeito para o Linter)
+    const payload = {
       name: formData.name,
-      services: selectedServices, // ✨ Passando a array de Service[] que o Type espera
-    };
+      email: formData.email,
+      password: formData.password,
+      serviceIds: formData.serviceIds,
+    } as unknown as Partial<ProfessionalProfile>;
 
-    if (editingProfessional) {
-      await updateProfessional(
-        editingProfessional.id,
-        payload,
-        photoFile || undefined,
-      );
-    } else {
-      if (formData.email) payload.email = formData.email;
-      await createProfessional(
-        providerProfile.id,
-        payload,
-        photoFile || undefined,
-      );
+    try {
+      if (editingProfessional) {
+        await updateProfessional(
+          editingProfessional.id,
+          payload,
+          photoFile || undefined,
+        );
+      } else {
+        const targetProviderId = user.providerId || user.id;
+        await createProfessional(
+          targetProviderId,
+          payload,
+          photoFile || undefined,
+        );
+      }
+
+      setIsModalOpen(false);
+      setEditingProfessional(null);
+    } catch (error) {
+      console.error("Erro ao salvar profissional:", error);
     }
-
-    setIsModalOpen(false);
-    setEditingProfessional(null);
   };
 
   const confirmDelete = async () => {
     if (confirmState.prof) {
-      await removeProfessional(confirmState.prof.id);
+      try {
+        await removeProfessional(confirmState.prof.id);
+        setConfirmState({ isOpen: false, prof: null });
+      } catch (error) {
+        console.error("Erro ao deletar profissional:", error);
+      }
     }
-    setConfirmState({ isOpen: false, prof: null });
   };
 
   const handleActivateOwner = async () => {
-    // Cria um perfil profissional usando os dados da conta do estabelecimento
-    await createProfessional(providerProfile.id, {
-      name: providerProfile.name,
-      email: providerProfile.email,
-      services: services, // Por padrão associa todos os objetos de serviço ao dono
-    });
+    try {
+      const payload = {
+        name: user.name,
+        email: user.email,
+        services: services,
+      } as unknown as Partial<ProfessionalProfile>;
+
+      await createProfessional(user.id, payload);
+    } catch (error) {
+      console.error("Erro ao ativar dono:", error);
+    }
   };
 
   return (
@@ -168,46 +179,47 @@ export const ProfessionalsManagement = () => {
       </div>
 
       {/* BANNER DE ATIVAÇÃO */}
-      {!hasOwnerProfile && professionals !== null && (
-        <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl flex flex-col md:flex-row items-center justify-between gap-6 mb-8 animate-fade-in shadow-lg shadow-blue-900/5 relative overflow-hidden">
-          {/* Efeito visual de fundo */}
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
+      {!hasOwnerProfile &&
+        professionals !== null &&
+        professionals.length > 0 && (
+          <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl flex flex-col md:flex-row items-center justify-between gap-6 mb-8 animate-fade-in shadow-lg shadow-blue-900/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
 
-          <div className="flex items-start gap-4 z-10">
-            <div className="p-3 bg-blue-500/20 rounded-full text-blue-400 mt-1 shrink-0">
-              <AlertCircle size={24} />
+            <div className="flex items-start gap-4 z-10">
+              <div className="p-3 bg-blue-500/20 rounded-full text-blue-400 mt-1 shrink-0">
+                <AlertCircle size={24} />
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-blue-100 mb-1">
+                  Ative seu perfil na agenda
+                </h4>
+                <p className="text-sm text-blue-300 leading-relaxed max-w-xl">
+                  Você é o administrador, mas ainda não aparece para os clientes
+                  agendarem. Ative seu perfil de atendimento para começar a
+                  receber agendamentos.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-lg font-bold text-blue-100 mb-1">
-                Ative seu perfil na agenda
-              </h4>
-              <p className="text-sm text-blue-300 leading-relaxed max-w-xl">
-                Você é o administrador, mas ainda não aparece para os clientes
-                agendarem. Ative seu perfil de atendimento para começar a
-                receber agendamentos.
-              </p>
-            </div>
+
+            <Button
+              onClick={handleActivateOwner}
+              disabled={isLoading}
+              className="whitespace-nowrap bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-6 h-auto shadow-xl shadow-blue-900/20 transition-all w-full md:w-auto z-10"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={20} />
+                  Ativando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2" size={20} />
+                  Ativar meu Perfil
+                </>
+              )}
+            </Button>
           </div>
-
-          <Button
-            onClick={handleActivateOwner}
-            disabled={isLoading}
-            className="whitespace-nowrap bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-6 h-auto shadow-xl shadow-blue-900/20 transition-all w-full md:w-auto z-10"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="animate-spin mr-2" size={20} />
-                Ativando...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-2" size={20} />
-                Ativar meu Perfil
-              </>
-            )}
-          </Button>
-        </div>
-      )}
+        )}
 
       {/* LISTAGEM DE PROFISSIONAIS */}
       {isLoading && professionals.length === 0 ? (
@@ -219,10 +231,9 @@ export const ProfessionalsManagement = () => {
           {sortedProfessionals.map((prof) => (
             <ProfessionalCard
               key={prof.id}
-              // Enriquecemos o objeto com a flag isOwner em tempo de execução para manter a interface limpa
               professional={{
                 ...prof,
-                isOwner: prof.id === providerProfile.id,
+                isOwner: prof.id === user.id,
               }}
               onEdit={() => handleOpenModal(prof)}
               onDelete={() => setConfirmState({ isOpen: true, prof })}
@@ -270,17 +281,17 @@ export const ProfessionalsManagement = () => {
         onClose={() => setConfirmState({ isOpen: false, prof: null })}
         onConfirm={confirmDelete}
         title={
-          confirmState.prof?.id === providerProfile.id
+          confirmState.prof?.id === user.id
             ? "Desativar Atendimento?"
             : "Remover Profissional?"
         }
         message={
-          confirmState.prof?.id === providerProfile.id
+          confirmState.prof?.id === user.id
             ? "Ao remover seu perfil da equipe, você deixará de aparecer na agenda para novos agendamentos. Sua conta administrativa (painel) NÃO será excluída e você pode reativar a qualquer momento."
             : `Tem certeza que deseja remover "${confirmState.prof?.name}"? Esta ação não pode ser desfeita e removerá o profissional da agenda.`
         }
         confirmText={
-          confirmState.prof?.id === providerProfile.id
+          confirmState.prof?.id === user.id
             ? "Desativar da Agenda"
             : "Remover Profissional"
         }

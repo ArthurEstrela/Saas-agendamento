@@ -86,22 +86,21 @@ export const useProfessionalsManagementStore =
     // ==========================================================================
     createProfessional: async (
       providerId: string,
-      data: Partial<ProfessionalProfile>,
+      data: ProfessionalPayload, // <-- USE AQUI
       photoFile?: File,
     ) => {
       set({ loading: true, error: null });
       try {
-        // Extrai os IDs dos serviços selecionados no array de objetos
-        const serviceIds = data.services?.map((service) => service.id) || [];
+        // 2. EXTRAIA DIRETAMENTE O ARRAY DE IDs DO PAYLOAD
+        const serviceIds = data.serviceIds || [];
 
-        // Cria o registro no banco de dados Java
         const response = await api.post<ProfessionalProfile>("/professionals", {
           providerId: providerId,
           name: data.name,
           email: data.email,
           bio: data.bio,
           commissionPercentage: data.commissionPercentage,
-          serviceIds: serviceIds, // ✨ AGORA ENVIAMOS OS SERVIÇOS NA CRIAÇÃO!
+          serviceIds: serviceIds, // Agora vai funcionar!
         });
 
         const newProfessionalId = response.data.id;
@@ -140,12 +139,12 @@ export const useProfessionalsManagementStore =
     // ==========================================================================
     updateProfessional: async (
       id: string,
-      data: Partial<ProfessionalProfile>,
+      data: ProfessionalPayload, // <-- USE AQUI
       photoFile?: File,
     ) => {
       set({ loading: true, error: null });
       try {
-        // 1. Atualiza os Dados Básicos (Nome, Bio)
+        // 1. Atualiza Dados Básicos
         const basicResponse = await api.put<ProfessionalProfile>(
           `/professionals/${id}`,
           {
@@ -154,14 +153,11 @@ export const useProfessionalsManagementStore =
           },
         );
 
-        // 2. ✨ O PULO DO GATO: Atualiza os Serviços Vinculados! ✨
-        if (data.services) {
-          // Extrai apenas os IDs dos serviços que vieram do modal
-          const serviceIds = data.services.map((service) => service.id);
-
-          // Bate na rota exclusiva de serviços que criamos no Java
+        // 2. VINCULA OS SERVIÇOS CORRETAMENTE
+        if (data.serviceIds) {
+          // <-- Verifique serviceIds, não services
           await api.put(`/professionals/${id}/services`, {
-            serviceIds: serviceIds,
+            serviceIds: data.serviceIds, // Envia direto
           });
         }
 
@@ -182,7 +178,7 @@ export const useProfessionalsManagementStore =
 
         // 4. Busca o profissional atualizado completo do backend para garantir que o state tenha os serviços reais
         const updatedProfessional = await api.get<ProfessionalProfile>(
-          `/professionals/${id}`,
+          `/professionals/${id}/profile`,
         );
 
         // 5. Atualiza a tabela na tela

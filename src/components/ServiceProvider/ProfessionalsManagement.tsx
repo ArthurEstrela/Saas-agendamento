@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
-import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
+import { useProfessionalsManagementStore, type ProfessionalPayload } from "../../store/professionalsManagementStore";
 import { useServiceManagementStore } from "../../store/serviceManagementStore";
 import { ProfessionalModal } from "./ProfessionalModal";
 import { ProfessionalCard } from "./ProfessionalCard";
@@ -71,18 +71,18 @@ export const ProfessionalsManagement = () => {
   const sortedProfessionals = useMemo(() => {
     if (!professionals) return [];
     return [...professionals].sort((a, b) => {
-      const isOwnerA = a.id === user?.id;
-      const isOwnerB = b.id === user?.id;
+      const isOwnerA = a.email === user?.email; // <-- USE EMAIL
+      const isOwnerB = b.email === user?.email; // <-- USE EMAIL
       if (isOwnerA) return -1;
       if (isOwnerB) return 1;
       return (a.name || "").localeCompare(b.name || "");
     });
-  }, [professionals, user?.id]);
+  }, [professionals, user?.email]); // <-- Dependência de email
 
-  // Verifica se o dono já está na lista
+  // 2. Na verificação do Banner:
   const hasOwnerProfile = useMemo(() => {
-    return sortedProfessionals.some((p) => p.id === user?.id);
-  }, [sortedProfessionals, user?.id]);
+    return sortedProfessionals.some((p) => p.email === user?.email); // <-- USE EMAIL
+  }, [sortedProfessionals, user?.email]);
 
   // Bloqueia a renderização se não for o dono
   if (!user || user.role?.toUpperCase() !== "SERVICE_PROVIDER") return null;
@@ -143,16 +143,16 @@ export const ProfessionalsManagement = () => {
       }
     }
   };
-
   const handleActivateOwner = async () => {
     try {
       const payload = {
         name: user.name,
         email: user.email,
-        services: services,
-      } as unknown as Partial<ProfessionalProfile>;
+        serviceIds: services.map((s) => s.id), // <-- Envie apenas os IDs das strings!
+      } as ProfessionalPayload;
 
-      await createProfessional(user.id, payload);
+      const targetProviderId = user.providerId || user.id;
+      await createProfessional(targetProviderId, payload);
     } catch (error) {
       console.error("Erro ao ativar dono:", error);
     }

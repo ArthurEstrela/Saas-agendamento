@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
-import { useProfessionalsManagementStore, type ProfessionalPayload } from "../../store/professionalsManagementStore";
+import {
+  useProfessionalsManagementStore,
+  type ProfessionalPayload,
+} from "../../store/professionalsManagementStore";
 import { useServiceManagementStore } from "../../store/serviceManagementStore";
 import { ProfessionalModal } from "./ProfessionalModal";
 import { ProfessionalCard } from "./ProfessionalCard";
@@ -71,18 +74,17 @@ export const ProfessionalsManagement = () => {
   const sortedProfessionals = useMemo(() => {
     if (!professionals) return [];
     return [...professionals].sort((a, b) => {
-      const isOwnerA = a.email === user?.email; // <-- USE EMAIL
-      const isOwnerB = b.email === user?.email; // <-- USE EMAIL
-      if (isOwnerA) return -1;
-      if (isOwnerB) return 1;
+      if (a.isOwner) return -1;
+      if (b.isOwner) return 1;
       return (a.name || "").localeCompare(b.name || "");
     });
-  }, [professionals, user?.email]); // <-- Dependência de email
+  }, [professionals]);
 
   // 2. Na verificação do Banner:
   const hasOwnerProfile = useMemo(() => {
-    return sortedProfessionals.some((p) => p.email === user?.email); // <-- USE EMAIL
-  }, [sortedProfessionals, user?.email]);
+    if (!professionals) return false;
+    return professionals.some((p) => p.isOwner === true); // ✨ USA A FLAG OFICIAL DO BANCO
+  }, [professionals]);
 
   // Bloqueia a renderização se não for o dono
   if (!user || user.role?.toUpperCase() !== "SERVICE_PROVIDER") return null;

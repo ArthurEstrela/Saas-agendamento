@@ -154,6 +154,7 @@ export interface ProfessionalProfile extends BaseUser {
   services?: Service[];
   availability?: DailyAvailability[];
   commissionPercentage?: number;
+  isOwner: boolean;
 }
 
 export type UserProfile =

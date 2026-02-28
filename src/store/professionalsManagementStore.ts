@@ -140,26 +140,36 @@ export const useProfessionalsManagementStore =
     // ==========================================================================
     updateProfessional: async (
       id: string,
-      data: ProfessionalPayload, // ✨ Substituído any pelo Payload tipado
+      data: Partial<ProfessionalProfile>,
       photoFile?: File,
     ) => {
       set({ loading: true, error: null });
       try {
-        const response = await api.put<ProfessionalProfile>(
+        // 1. Atualiza os Dados Básicos (Nome, Bio)
+        const basicResponse = await api.put<ProfessionalProfile>(
           `/professionals/${id}`,
           {
             name: data.name,
-            password: data.password, // Envia só se o usuário digitou uma nova
-            serviceIds: data.serviceIds,
+            bio: data.bio,
           },
         );
 
-        const updatedProf = response.data;
+        // 2. ✨ O PULO DO GATO: Atualiza os Serviços Vinculados! ✨
+        if (data.services) {
+          // Extrai apenas os IDs dos serviços que vieram do modal
+          const serviceIds = data.services.map((service) => service.id);
 
-        // Atualizar foto, se enviada
+          // Bate na rota exclusiva de serviços que criamos no Java
+          await api.put(`/professionals/${id}/services`, {
+            serviceIds: serviceIds,
+          });
+        }
+
+        // 3. Atualiza a Foto (se houver)
         if (photoFile) {
           const formData = new FormData();
           formData.append("file", photoFile);
+
           const photoResponse = await api.put(
             `/profile-images/professional/${id}`,
             formData,
@@ -167,23 +177,23 @@ export const useProfessionalsManagementStore =
               headers: { "Content-Type": "multipart/form-data" },
             },
           );
-          updatedProf.profilePictureUrl = photoResponse.data.url;
+          basicResponse.data.profilePictureUrl = photoResponse.data.url;
         }
 
+        // 4. Busca o profissional atualizado completo do backend para garantir que o state tenha os serviços reais
+        const updatedProfessional = await api.get<ProfessionalProfile>(
+          `/professionals/${id}`,
+        );
+
+        // 5. Atualiza a tabela na tela
         set((state) => ({
-          professionals: state.professionals.map((prof) =>
-            prof.id === id ? updatedProf : prof,
+          professionals: state.professionals.map((p) =>
+            p.id === id ? updatedProfessional.data : p,
           ),
           loading: false,
         }));
       } catch (error) {
-        set({
-          error: extractErrorMessage(
-            error,
-            "Erro ao atualizar dados do profissional.",
-          ),
-          loading: false,
-        });
+        set({ error: "Erro ao atualizar profissional.", loading: false });
         throw error;
       }
     },

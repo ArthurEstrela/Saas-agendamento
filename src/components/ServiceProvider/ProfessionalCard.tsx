@@ -6,7 +6,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils/cn';
 
-// ✨ Estendemos localmente para aceitar a array de Serviços populada (não apenas IDs) e a flag visual isOwner
+// Estendemos localmente para aceitar a array de Serviços populada e a flag visual isOwner
 type EnrichedProfessional = ProfessionalProfile & {
   services?: Service[];
   isOwner?: boolean;
@@ -18,10 +18,18 @@ interface ProfessionalCardProps {
   onDelete: () => void;
 }
 
+// Função segura para extrair as iniciais (Ex: "João da Silva" -> "JS")
+const getInitials = (name?: string) => {
+  if (!name || name.trim() === '') return 'P';
+  const nameParts = name.trim().split(/\s+/);
+  if (nameParts.length === 1) return nameParts[0].substring(0, 2).toUpperCase();
+  return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+};
+
 export const ProfessionalCard = ({ professional, onEdit, onDelete }: ProfessionalCardProps) => {
   const services = professional.services || [];
-  const initials = (professional.name || "P").split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
-  const isOwner = professional.isOwner;
+  const isOwner = Boolean(professional.isOwner);
+  const initials = getInitials(professional.name);
 
   return (
     <Card 
@@ -46,13 +54,18 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
               "h-16 w-16 border-2 transition-colors",
               isOwner ? "border-primary" : "border-gray-800 group-hover:border-primary"
             )}>
-              <AvatarImage src={professional.profilePictureUrl} alt={professional.name} className="object-cover" />
+              <AvatarImage src={professional.profilePictureUrl} alt={`Foto de ${professional.name}`} className="object-cover" />
               <AvatarFallback className="bg-gray-800 text-lg font-bold text-primary">
                 {initials}
               </AvatarFallback>
             </Avatar>
+            
+            {/* Selo de Proprietário no Avatar */}
             {isOwner && (
-              <div className="absolute -bottom-1 -right-1 bg-primary text-black rounded-full p-1 shadow-lg" title="Proprietário">
+              <div 
+                className="absolute -bottom-1 -right-1 bg-primary text-black rounded-full p-1 shadow-lg" 
+                title="Proprietário"
+              >
                 <Crown size={12} fill="currentColor" />
               </div>
             )}
@@ -60,7 +73,7 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
           
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold text-gray-100 group-hover:text-primary transition-colors truncate">
+              <h3 className="text-lg font-bold text-gray-100 group-hover:text-primary transition-colors truncate" title={professional.name}>
                 {professional.name}
               </h3>
             </div>
@@ -79,23 +92,34 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
 
         <div className="space-y-2">
           <h4 className="text-xs uppercase tracking-wider font-semibold text-gray-500 flex justify-between items-center">
-            Especialidades
+            Serviços Realizados
           </h4>
+          
           <div className="flex flex-wrap gap-2">
             {services.length > 0 ? (
-              services.slice(0, 3).map(service => (
-                <Badge key={service.id} variant="secondary" className="bg-gray-800 text-gray-300 font-normal hover:bg-gray-700">
-                  {service.name}
-                </Badge>
-              ))
+              <>
+                {services.slice(0, 3).map(service => (
+                  <Badge 
+                    key={service.id} 
+                    variant="secondary" 
+                    className="bg-gray-800 text-gray-300 font-normal hover:bg-gray-700"
+                  >
+                    {service.name}
+                  </Badge>
+                ))}
+                
+                {services.length > 3 && (
+                  <Badge 
+                    variant="outline" 
+                    className="text-primary border-primary/20 bg-primary/5 cursor-default"
+                    title={services.slice(3).map(s => s.name).join(', ')} // Mostra os ocultos no hover
+                  >
+                    +{services.length - 3}
+                  </Badge>
+                )}
+              </>
             ) : (
               <span className="text-sm text-gray-600 italic">Nenhum serviço atribuído</span>
-            )}
-            
-            {services.length > 3 && (
-              <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5">
-                +{services.length - 3}
-              </Badge>
             )}
           </div>
         </div>
@@ -108,6 +132,7 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
           onClick={onDelete} 
           className="text-gray-500 hover:text-destructive hover:bg-destructive/10"
           title={isOwner ? "Desativar Perfil" : "Remover Profissional"}
+          aria-label="Remover profissional"
         >
           <Trash2 size={16} />
         </Button>
@@ -118,6 +143,7 @@ export const ProfessionalCard = ({ professional, onEdit, onDelete }: Professiona
           onClick={onEdit}
           className="text-gray-400 hover:text-primary hover:bg-primary/10"
           title="Editar Dados"
+          aria-label="Editar profissional"
         >
           <Edit size={16} /> <span className="ml-2 text-xs">Editar</span>
         </Button>

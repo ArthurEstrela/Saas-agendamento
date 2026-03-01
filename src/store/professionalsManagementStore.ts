@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import { isAxiosError } from "axios";
-import type { ProfessionalProfile, DailyAvailability } from "../types";
+import type {
+  ProfessionalProfile,
+  DailyAvailability,
+  ServiceProviderProfile,
+} from "../types"; // ✨ Adicionado ServiceProviderProfile aqui
 import { api } from "../lib/api";
+import { useAuthStore } from "./authStore";
 
 // Helper de erro sênior
 const extractErrorMessage = (
@@ -204,8 +209,46 @@ export const useProfessionalsManagementStore =
     ) => {
       set({ loading: true, error: null });
       try {
-        await api.put(`/professionals/${id}/availability`, { availability });
+        // ✨ Transformação dos dados para o formato que a API Spring Boot espera
+        const formattedAvailabilities = [];
 
+        // O front tem 'slots' como array dentro de cada dia.
+        // A API espera uma lista linear de DailyAvailabilityRequest.
+        for (const day of availability) {
+          if (day.isAvailable && day.slots && day.slots.length > 0) {
+            for (const slot of day.slots) {
+              formattedAvailabilities.push({
+                dayOfWeek: day.dayOfWeek,
+                isWorkingDay: true, // A API Java mapeia do isWorkingDay
+                startTime: slot.start,
+                endTime: slot.end,
+              });
+            }
+          } else {
+            // Se o dia não estiver disponível, manda um registro bloqueado
+            formattedAvailabilities.push({
+              dayOfWeek: day.dayOfWeek,
+              isWorkingDay: false,
+              startTime: "00:00",
+              endTime: "00:00",
+            });
+          }
+        }
+
+        // ✨ CORREÇÃO TS: Usa o casting seguro para acessar slotInterval
+        const currentUser = useAuthStore.getState().user;
+        const slotInterval =
+          (currentUser as ServiceProviderProfile)?.slotInterval || 30;
+
+        // O payload exato que o UpdateAvailabilityRequest do Java pede:
+        const payload = {
+          availabilities: formattedAvailabilities, // plural, como no Java
+          slotInterval: slotInterval, // obrigatório no Java
+        };
+
+        await api.put(`/professionals/${id}/availability`, payload);
+
+        // Atualiza o estado local (mantém o formato do front para a UI não quebrar)
         set((state) => ({
           professionals: state.professionals.map((prof) =>
             prof.id === id ? { ...prof, availability } : prof,

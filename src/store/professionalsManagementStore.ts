@@ -22,6 +22,7 @@ const extractErrorMessage = (
 export type ProfessionalPayload = Partial<ProfessionalProfile> & {
   password?: string;
   serviceIds?: string[];
+  isOwner?: boolean;
 };
 
 interface ProfessionalsManagementState {
@@ -86,12 +87,11 @@ export const useProfessionalsManagementStore =
     // ==========================================================================
     createProfessional: async (
       providerId: string,
-      data: ProfessionalPayload, // <-- USE AQUI
+      data: ProfessionalPayload,
       photoFile?: File,
     ) => {
       set({ loading: true, error: null });
       try {
-        // 2. EXTRAIA DIRETAMENTE O ARRAY DE IDs DO PAYLOAD
         const serviceIds = data.serviceIds || [];
 
         const response = await api.post<ProfessionalProfile>("/professionals", {
@@ -100,7 +100,8 @@ export const useProfessionalsManagementStore =
           email: data.email,
           bio: data.bio,
           commissionPercentage: data.commissionPercentage,
-          serviceIds: serviceIds, // Agora vai funcionar!
+          serviceIds: serviceIds,
+          isOwner: data.isOwner || false,
         });
 
         const newProfessionalId = response.data.id;

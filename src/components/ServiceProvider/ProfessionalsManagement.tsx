@@ -150,7 +150,8 @@ export const ProfessionalsManagement = () => {
       const payload = {
         name: user.name,
         email: user.email,
-        serviceIds: services.map((s) => s.id), // <-- Envie apenas os IDs das strings!
+        serviceIds: services.map((s) => s.id),
+        isOwner: true,
       } as ProfessionalPayload;
 
       const targetProviderId = user.providerId || user.id;

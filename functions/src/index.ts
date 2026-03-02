@@ -14,7 +14,6 @@ import Stripe from "stripe";
 import { Resend } from "resend";
 import * as React from "react";
 import { StyloNotification } from "./emails/StyloNotification";
-import { WelcomeStylo } from "./emails/WelcomeStylo";
 import { setGlobalOptions } from "firebase-functions/v2";
 
 // Limita o uso de recursos para evitar sustos na fatura
@@ -1106,49 +1105,6 @@ export const checkExpiredTrials = onSchedule(
     await Promise.all(notificationPromises);
 
     logger.info(`${count} contas de trial foram expiradas e notificadas.`);
-  },
-);
-
-export const onUserCreate = onDocumentCreated(
-  {
-    document: "users/{userId}",
-    region: REGION,
-    secrets: ["RESEND_API_KEY"], // Necessário para acessar o Resend
-  },
-  async (event) => {
-    const userData = event.data?.data();
-
-    // Validações básicas
-    if (!userData || !userData.email) {
-      logger.info("Usuário criado sem e-mail ou dados inválidos.");
-      return;
-    }
-
-    const { email, name } = userData;
-
-    // Inicializa o Resend aqui dentro (Seguro)
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
-      logger.error("RESEND_API_KEY não configurada.");
-      return;
-    }
-    const resend = new Resend(resendApiKey);
-
-    try {
-      await resend.emails.send({
-        from: "Stylo <boasvindas@stylo.app.br>", // Dica: Use um remetente amigável
-        to: email,
-        subject: `Bem-vindo ao Stylo, ${name || "Membro"}! 🚀`,
-        react: React.createElement(WelcomeStylo, {
-          userName: name || "Novo Membro",
-          actionLink: `${YOUR_APP_URL}/dashboard`, // Leva direto pro painel
-        }),
-      });
-
-      logger.info(`E-mail de boas-vindas enviado para: ${email}`);
-    } catch (error) {
-      logger.error(`Erro ao enviar boas-vindas para ${email}:`, error);
-    }
   },
 );
 

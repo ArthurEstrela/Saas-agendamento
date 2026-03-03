@@ -43,7 +43,7 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
   }, [reviews]);
 
   // Verifica se o utilizador logado é um cliente
-  const isClientProfile = user?.role === "CLIENT" || user?.role === "client";
+  const isClientProfile = user?.role === "CLIENT";
   
   // ✨ CORREÇÃO 3: Usa a função isFavorite do store que verifica a array global
   const isFavorited = isClientProfile ? isFavorite(provider.id) : false;
@@ -62,9 +62,21 @@ export const ClientProfessionalCard = ({ provider }: Props) => {
   const category = provider.categories?.[0] || provider.areaOfWork || "Geral";
   const initials = provider.businessName.substring(0, 2).toUpperCase();
 
+  // ✨ EXTRAÇÃO SEGURA DO SLUG (Sem usar 'any')
+  // Verifica se veio como objeto { value: "slug" } devido à serialização do Java, 
+  // ou se é uma string limpa.
+  const rawSlug = provider.publicProfileSlug;
+  const slugStr = 
+    typeof rawSlug === 'object' && rawSlug !== null 
+      ? (rawSlug as { value: string }).value 
+      : (rawSlug as string | undefined);
+
+  // Link de destino robusto
+  const profileLink = slugStr ? `/schedule/${slugStr}` : `/schedule/${provider.id}`;
+
   return (
     <Link
-      to={`/schedule/${provider.publicProfileSlug || provider.id}`}
+      to={profileLink}
       className="block h-full group touch-manipulation"
     >
       <Card

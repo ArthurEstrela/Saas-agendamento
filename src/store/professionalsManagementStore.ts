@@ -4,11 +4,14 @@ import type {
   ProfessionalProfile,
   DailyAvailability,
   ServiceProviderProfile,
-} from "../types"; // ✨ Adicionado ServiceProviderProfile aqui
+} from "../types";
 import { api } from "../lib/api";
 import { useAuthStore } from "./authStore";
 
-// Helper de erro sênior
+// ============================================================================
+// TIPAGENS AUXILIARES
+// ============================================================================
+
 const extractErrorMessage = (
   error: unknown,
   defaultMessage: string,
@@ -22,33 +25,109 @@ const extractErrorMessage = (
   return defaultMessage;
 };
 
-// ✨ Tipo customizado para o Payload de criação/atualização
-// Ele pega tudo que é opcional do ProfessionalProfile e adiciona as propriedades do Form
 export type ProfessionalPayload = Partial<ProfessionalProfile> & {
   password?: string;
   serviceIds?: string[];
   isOwner?: boolean;
 };
 
+// ✨ ATUALIZADO: Agora reflete exatamente o DailyAvailabilityDTO limpo do Java
+export interface BackendAvailabilityDTO {
+  dayOfWeek: DailyAvailability["dayOfWeek"];
+  isAvailable?: boolean;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface ProfessionalApiResponse extends Omit<
+  ProfessionalProfile,
+  "availability"
+> {
+  availability?: BackendAvailabilityDTO[] | DailyAvailability[];
+  availabilities?: BackendAvailabilityDTO[];
+}
+
+// ============================================================================
+// PARSERS TIPADOS
+// ============================================================================
+
+// ✨ ATUALIZADO: Sem gambiarras! O backend já manda tudo no formato certo.
+const parseBackendAvailabilities = (
+  backendAvailabilities:
+    | BackendAvailabilityDTO[]
+    | DailyAvailability[]
+    | undefined
+    | null,
+): DailyAvailability[] => {
+  if (!backendAvailabilities || !Array.isArray(backendAvailabilities)) {
+    return [];
+  }
+
+  if (backendAvailabilities.length > 0 && "slots" in backendAvailabilities[0]) {
+    return backendAvailabilities as DailyAvailability[];
+  }
+
+  const grouped: Record<string, DailyAvailability> = {};
+  const dtoList = backendAvailabilities as BackendAvailabilityDTO[];
+
+  dtoList.forEach((item) => {
+    const day = item.dayOfWeek;
+    // Pega direto o isAvailable que padronizamos no DTO do Java
+    const isAvailable = item.isAvailable ?? false;
+
+    if (!grouped[day]) {
+      grouped[day] = {
+        dayOfWeek: day,
+        isAvailable: isAvailable,
+        slots: [],
+      };
+    }
+
+    if (
+      isAvailable &&
+      item.startTime &&
+      item.endTime &&
+      item.startTime !== "00:00"
+    ) {
+      // O Java agora já manda "HH:mm" graças ao @JsonFormat, não precisa de substring!
+      grouped[day].slots.push({ start: item.startTime, end: item.endTime });
+    }
+  });
+
+  return Object.values(grouped);
+};
+
+const mapToProfessionalProfile = (
+  apiData: ProfessionalApiResponse,
+): ProfessionalProfile => {
+  const { availabilities, availability, ...rest } = apiData;
+  return {
+    ...rest,
+    availability: parseBackendAvailabilities(availabilities || availability),
+  } as ProfessionalProfile;
+};
+
+// ============================================================================
+// ESTADO E ACTIONS (ZUSTAND STORE)
+// ============================================================================
+
 interface ProfessionalsManagementState {
   professionals: ProfessionalProfile[];
   loading: boolean;
   error: string | null;
 
-  // Ações Principais
   fetchProfessionals: (providerId: string) => Promise<void>;
   createProfessional: (
     providerId: string,
-    data: ProfessionalPayload, // ✨ Tipagem correta ao invés de 'any'
+    data: ProfessionalPayload,
     photoFile?: File,
   ) => Promise<void>;
   updateProfessional: (
     id: string,
-    data: ProfessionalPayload, // ✨ Tipagem correta ao invés de 'any'
+    data: ProfessionalPayload,
     photoFile?: File,
   ) => Promise<void>;
 
-  // Ações Específicas (Alinhadas com os Endpoints do Java)
   updateAvailability: (
     id: string,
     availability: DailyAvailability[],
@@ -66,16 +145,15 @@ export const useProfessionalsManagementStore =
     loading: false,
     error: null,
 
-    // ==========================================================================
-    // 1. BUSCAR TODOS OS PROFISSIONAIS DO ESTABELECIMENTO
-    // ==========================================================================
     fetchProfessionals: async (providerId: string) => {
       set({ loading: true, error: null });
       try {
-        const response = await api.get<ProfessionalProfile[]>(
+        const response = await api.get<ProfessionalApiResponse[]>(
           `/professionals/provider/${providerId}`,
         );
-        set({ professionals: response.data, loading: false });
+
+        const mappedProfessionals = response.data.map(mapToProfessionalProfile);
+        set({ professionals: mappedProfessionals, loading: false });
       } catch (error) {
         set({
           error: extractErrorMessage(
@@ -87,9 +165,6 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    // ==========================================================================
-    // 2. CRIAR UM NOVO PROFISSIONAL
-    // ==========================================================================
     createProfessional: async (
       providerId: string,
       data: ProfessionalPayload,
@@ -99,19 +174,21 @@ export const useProfessionalsManagementStore =
       try {
         const serviceIds = data.serviceIds || [];
 
-        const response = await api.post<ProfessionalProfile>("/professionals", {
-          providerId: providerId,
-          name: data.name,
-          email: data.email,
-          bio: data.bio,
-          commissionPercentage: data.commissionPercentage,
-          serviceIds: serviceIds,
-          isOwner: data.isOwner || false,
-        });
+        const response = await api.post<ProfessionalApiResponse>(
+          "/professionals",
+          {
+            providerId: providerId,
+            name: data.name,
+            email: data.email,
+            bio: data.bio,
+            commissionPercentage: data.commissionPercentage,
+            serviceIds: serviceIds,
+            isOwner: data.isOwner || false,
+          },
+        );
 
         const newProfessionalId = response.data.id;
 
-        // Se houver foto, faz o upload
         if (photoFile && newProfessionalId) {
           const formData = new FormData();
           formData.append("file", photoFile);
@@ -127,8 +204,10 @@ export const useProfessionalsManagementStore =
           response.data.profilePictureUrl = photoResponse.data.url;
         }
 
+        const newProf = mapToProfessionalProfile(response.data);
+
         set((state) => ({
-          professionals: [...state.professionals, response.data],
+          professionals: [...state.professionals, newProf],
           loading: false,
         }));
       } catch (error) {
@@ -140,18 +219,14 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    // ==========================================================================
-    // 3. ATUALIZAR DADOS BÁSICOS DO PROFISSIONAL E FOTO
-    // ==========================================================================
     updateProfessional: async (
       id: string,
-      data: ProfessionalPayload, // <-- USE AQUI
+      data: ProfessionalPayload,
       photoFile?: File,
     ) => {
       set({ loading: true, error: null });
       try {
-        // 1. Atualiza Dados Básicos
-        const basicResponse = await api.put<ProfessionalProfile>(
+        const basicResponse = await api.put<ProfessionalApiResponse>(
           `/professionals/${id}`,
           {
             name: data.name,
@@ -159,15 +234,12 @@ export const useProfessionalsManagementStore =
           },
         );
 
-        // 2. VINCULA OS SERVIÇOS CORRETAMENTE
         if (data.serviceIds) {
-          // <-- Verifique serviceIds, não services
           await api.put(`/professionals/${id}/services`, {
-            serviceIds: data.serviceIds, // Envia direto
+            serviceIds: data.serviceIds,
           });
         }
 
-        // 3. Atualiza a Foto (se houver)
         if (photoFile) {
           const formData = new FormData();
           formData.append("file", photoFile);
@@ -182,15 +254,15 @@ export const useProfessionalsManagementStore =
           basicResponse.data.profilePictureUrl = photoResponse.data.url;
         }
 
-        // 4. Busca o profissional atualizado completo do backend para garantir que o state tenha os serviços reais
-        const updatedProfessional = await api.get<ProfessionalProfile>(
+        const updatedProfessional = await api.get<ProfessionalApiResponse>(
           `/professionals/${id}/profile`,
         );
 
-        // 5. Atualiza a tabela na tela
+        const mappedProf = mapToProfessionalProfile(updatedProfessional.data);
+
         set((state) => ({
           professionals: state.professionals.map((p) =>
-            p.id === id ? updatedProfessional.data : p,
+            p.id === id ? mappedProf : p,
           ),
           loading: false,
         }));
@@ -200,32 +272,26 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    // ==========================================================================
-    // 4. ATUALIZAR HORÁRIOS (AVAILABILITY)
-    // ==========================================================================
     updateAvailability: async (
       id: string,
       availability: DailyAvailability[],
     ) => {
       set({ loading: true, error: null });
       try {
-        // ✨ Transformação dos dados para o formato que a API Spring Boot espera
         const formattedAvailabilities = [];
 
-        // O front tem 'slots' como array dentro de cada dia.
-        // A API espera uma lista linear de DailyAvailabilityRequest.
+        // Mantemos "isWorkingDay" aqui porque o DTO de Entrada (DailyAvailabilityRequest) do Java ainda usa esse nome.
         for (const day of availability) {
           if (day.isAvailable && day.slots && day.slots.length > 0) {
             for (const slot of day.slots) {
               formattedAvailabilities.push({
                 dayOfWeek: day.dayOfWeek,
-                isWorkingDay: true, // A API Java mapeia do isWorkingDay
+                isWorkingDay: true,
                 startTime: slot.start,
                 endTime: slot.end,
               });
             }
           } else {
-            // Se o dia não estiver disponível, manda um registro bloqueado
             formattedAvailabilities.push({
               dayOfWeek: day.dayOfWeek,
               isWorkingDay: false,
@@ -235,20 +301,17 @@ export const useProfessionalsManagementStore =
           }
         }
 
-        // ✨ CORREÇÃO TS: Usa o casting seguro para acessar slotInterval
         const currentUser = useAuthStore.getState().user;
         const slotInterval =
           (currentUser as ServiceProviderProfile)?.slotInterval || 30;
 
-        // O payload exato que o UpdateAvailabilityRequest do Java pede:
         const payload = {
-          availabilities: formattedAvailabilities, // plural, como no Java
-          slotInterval: slotInterval, // obrigatório no Java
+          availabilities: formattedAvailabilities,
+          slotInterval: slotInterval,
         };
 
         await api.put(`/professionals/${id}/availability`, payload);
 
-        // Atualiza o estado local (mantém o formato do front para a UI não quebrar)
         set((state) => ({
           professionals: state.professionals.map((prof) =>
             prof.id === id ? { ...prof, availability } : prof,
@@ -267,15 +330,10 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    // ==========================================================================
-    // 5. VINCULAR SERVIÇOS AO PROFISSIONAL
-    // ==========================================================================
     updateServices: async (id: string, serviceIds: string[]) => {
       set({ loading: true, error: null });
       try {
         await api.put(`/professionals/${id}/services`, { serviceIds });
-
-        // Apenas fechamos o loading, pois na listagem geral já teremos as alterações visualmente ou forçaremos um re-fetch
         set({ loading: false });
       } catch (error) {
         set({
@@ -286,9 +344,6 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    // ==========================================================================
-    // 6. ATUALIZAR COMISSÃO
-    // ==========================================================================
     updateCommission: async (id: string, commissionPercentage: number) => {
       set({ loading: true, error: null });
       try {
@@ -311,9 +366,6 @@ export const useProfessionalsManagementStore =
       }
     },
 
-    // ==========================================================================
-    // 7. EXCLUIR PROFISSIONAL
-    // ==========================================================================
     deleteProfessional: async (id: string) => {
       set({ loading: true, error: null });
       try {

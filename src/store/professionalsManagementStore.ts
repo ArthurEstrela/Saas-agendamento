@@ -8,10 +8,6 @@ import type {
 import { api } from "../lib/api";
 import { useAuthStore } from "./authStore";
 
-// ============================================================================
-// TIPAGENS AUXILIARES
-// ============================================================================
-
 const extractErrorMessage = (
   error: unknown,
   defaultMessage: string,
@@ -31,10 +27,13 @@ export type ProfessionalPayload = Partial<ProfessionalProfile> & {
   isOwner?: boolean;
 };
 
-// ✨ ATUALIZADO: Agora reflete exatamente o DailyAvailabilityDTO limpo do Java
+// ✨ CORREÇÃO AQUI: Adicionado "available". O Jackson do Java corta o "is" do "isAvailable" no JSON!
 export interface BackendAvailabilityDTO {
   dayOfWeek: DailyAvailability["dayOfWeek"];
   isAvailable?: boolean;
+  available?: boolean; // <-- Este é o cara que o Java realmente manda
+  isOpen?: boolean;
+  isWorkingDay?: boolean;
   startTime?: string;
   endTime?: string;
 }
@@ -47,11 +46,6 @@ export interface ProfessionalApiResponse extends Omit<
   availabilities?: BackendAvailabilityDTO[];
 }
 
-// ============================================================================
-// PARSERS TIPADOS
-// ============================================================================
-
-// ✨ ATUALIZADO: Sem gambiarras! O backend já manda tudo no formato certo.
 const parseBackendAvailabilities = (
   backendAvailabilities:
     | BackendAvailabilityDTO[]
@@ -72,8 +66,14 @@ const parseBackendAvailabilities = (
 
   dtoList.forEach((item) => {
     const day = item.dayOfWeek;
-    // Pega direto o isAvailable que padronizamos no DTO do Java
-    const isAvailable = item.isAvailable ?? false;
+
+    // ✨ CORREÇÃO AQUI: Agora ele procura o `item.available` primeiro!
+    const isAvailable =
+      item.available ??
+      item.isAvailable ??
+      item.isOpen ??
+      item.isWorkingDay ??
+      false;
 
     if (!grouped[day]) {
       grouped[day] = {
@@ -89,7 +89,6 @@ const parseBackendAvailabilities = (
       item.endTime &&
       item.startTime !== "00:00"
     ) {
-      // O Java agora já manda "HH:mm" graças ao @JsonFormat, não precisa de substring!
       grouped[day].slots.push({ start: item.startTime, end: item.endTime });
     }
   });
@@ -106,10 +105,6 @@ const mapToProfessionalProfile = (
     availability: parseBackendAvailabilities(availabilities || availability),
   } as ProfessionalProfile;
 };
-
-// ============================================================================
-// ESTADO E ACTIONS (ZUSTAND STORE)
-// ============================================================================
 
 interface ProfessionalsManagementState {
   professionals: ProfessionalProfile[];
@@ -196,9 +191,7 @@ export const useProfessionalsManagementStore =
           const photoResponse = await api.put(
             `/profile-images/professional/${newProfessionalId}`,
             formData,
-            {
-              headers: { "Content-Type": "multipart/form-data" },
-            },
+            { headers: { "Content-Type": "multipart/form-data" } },
           );
 
           response.data.profilePictureUrl = photoResponse.data.url;
@@ -228,10 +221,7 @@ export const useProfessionalsManagementStore =
       try {
         const basicResponse = await api.put<ProfessionalApiResponse>(
           `/professionals/${id}`,
-          {
-            name: data.name,
-            bio: data.bio,
-          },
+          { name: data.name, bio: data.bio },
         );
 
         if (data.serviceIds) {
@@ -247,9 +237,7 @@ export const useProfessionalsManagementStore =
           const photoResponse = await api.put(
             `/profile-images/professional/${id}`,
             formData,
-            {
-              headers: { "Content-Type": "multipart/form-data" },
-            },
+            { headers: { "Content-Type": "multipart/form-data" } },
           );
           basicResponse.data.profilePictureUrl = photoResponse.data.url;
         }
@@ -280,7 +268,6 @@ export const useProfessionalsManagementStore =
       try {
         const formattedAvailabilities = [];
 
-        // Mantemos "isWorkingDay" aqui porque o DTO de Entrada (DailyAvailabilityRequest) do Java ainda usa esse nome.
         for (const day of availability) {
           if (day.isAvailable && day.slots && day.slots.length > 0) {
             for (const slot of day.slots) {

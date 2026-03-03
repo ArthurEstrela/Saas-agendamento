@@ -102,11 +102,18 @@ export const AvailabilityManagement = () => {
     }
   }, [user, isOwner]);
 
+  // --- BUSCAR DADOS AO ENTRAR DIRETO NA ABA ---
   useEffect(() => {
-    if (user?.id && professionals.length === 0) {
-      fetchProfessionals(user.id);
+    if (!user) return;
+
+    // ✨ CORREÇÃO: Pega SEMPRE o ID do Salão, nunca o ID do usuário!
+    const providerId =
+      (user as any).providerId || (user as any).serviceProviderId;
+
+    if (providerId && professionals.length === 0) {
+      fetchProfessionals(providerId);
     }
-  }, [user?.id, professionals.length, fetchProfessionals]);
+  }, [user, professionals.length, fetchProfessionals]);
 
   // --- SELEÇÃO DE PROFISSIONAL INTELIGENTE ---
   useEffect(() => {
@@ -149,13 +156,12 @@ export const AvailabilityManagement = () => {
     try {
       await updateProfile(user.id, {
         bookingWindowDays: bookingWindow,
-        // ✨ Literal type para remover o "any"
         slotInterval: slotInterval as 15 | 30 | 45 | 60,
       });
       toast.success("Configurações da agenda atualizadas!");
       setIsSettingsOpen(false);
     } catch {
-      // ✨ O erro já é tratado e exibe um toast dentro da função updateProfile no store
+      // Erro já é tratado no store
     }
   };
 
@@ -294,7 +300,7 @@ export const AvailabilityManagement = () => {
       setHasChanges(false);
       toast.success("Disponibilidade salva com sucesso!");
     } catch {
-      // ✨ Erro tratado silenciosamente, o store já cuida do feedback visual
+      // Erro tratado silenciosamente, o store já cuida do feedback visual
     }
   };
 
@@ -307,7 +313,6 @@ export const AvailabilityManagement = () => {
   // Organiza profissionais para o dropdown colocando o dono (se houver) no topo
   const sortedProfessionals = useMemo(() => {
     return [...professionals].sort((a, b) => {
-      // Assumindo que o profissional com o mesmo ID do user é o dono logado
       if (a.id === user?.id) return -1;
       if (b.id === user?.id) return 1;
       return a.name.localeCompare(b.name);

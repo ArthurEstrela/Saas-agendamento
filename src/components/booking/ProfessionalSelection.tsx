@@ -13,7 +13,8 @@ import { Badge } from "../ui/badge";
 
 export const ProfessionalSelection = () => {
   const {
-    provider,
+    // ✨ Lemos a lista de profissionais DIRETAMENTE da raiz do Store
+    professionals: storeProfessionals, 
     services: selectedServices,
     professional: selectedProfessional,
     setProfessional,
@@ -22,20 +23,21 @@ export const ProfessionalSelection = () => {
   } = useBookingProcessStore();
 
   const availableProfessionals = useMemo(() => {
-    // Se não há provedor, serviços ou profissionais cadastrados, retorna vazio
-    if (!provider || !provider.professionals || !selectedServices || selectedServices.length === 0) {
+    // Se a lista de profissionais do Store não existir, ou não houver serviços selecionados, retorna vazio
+    if (!storeProfessionals || !selectedServices || selectedServices.length === 0) {
       return [];
     }
     
     const selectedServiceIds = selectedServices.map((s) => s.id);
     
-    // Filtra os profissionais da Barbearia para ver quem faz TODOS os serviços escolhidos
-    return provider.professionals.filter((prof) =>
+    // ✨ Filtra iterando sobre a lista correta de profissionais
+    return storeProfessionals.filter((prof) =>
       selectedServiceIds.every((serviceId) =>
+        // O `some` com optional chaining `?.` evita erros caso um profissional não tenha serviços no array
         prof.services?.some((ps) => ps.id === serviceId)
       )
     );
-  }, [provider, selectedServices]);
+  }, [storeProfessionals, selectedServices]);
 
   if (availableProfessionals.length === 0) {
     return (
@@ -58,7 +60,7 @@ export const ProfessionalSelection = () => {
           <Button
             variant="outline"
             onClick={prevStep}
-            className="w-full border-white/10 hover:bg-white/5"
+            className="w-full border-white/10 hover:bg-white/5 text-white"
           >
             Voltar e alterar serviços
           </Button>
@@ -74,10 +76,10 @@ export const ProfessionalSelection = () => {
       className="pb-32 md:pb-32"
     >
       <div className="text-center mb-6 md:mb-10">
-        <Typography variant="h2" className="drop-shadow-sm text-2xl md:text-3xl">
+        <Typography variant="h2" className="drop-shadow-sm text-2xl md:text-3xl text-white">
           Escolha o Profissional
         </Typography>
-        <Typography variant="muted" className="text-sm md:text-base">
+        <Typography variant="muted" className="text-sm md:text-base mt-2">
           Quem você prefere que te atenda?
         </Typography>
       </div>
@@ -128,7 +130,7 @@ export const ProfessionalSelection = () => {
                     <motion.div
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      className="absolute -top-1 -right-1 bg-background rounded-full p-1 shadow-lg"
+                      className="absolute -top-1 -right-1 bg-[#121214] rounded-full p-1 shadow-lg"
                     >
                       <CheckCircle
                         size={20}
@@ -166,14 +168,14 @@ export const ProfessionalSelection = () => {
           <Button
             variant="ghost"
             onClick={prevStep}
-            className="hover:bg-white/5"
+            className="hover:bg-white/5 text-white"
           >
             Voltar
           </Button>
           <Button
             onClick={nextStep}
             disabled={!selectedProfessional}
-            className="w-full sm:w-auto px-6 md:px-8 font-bold shadow-lg shadow-primary/10 transition-all active:scale-95"
+            className="w-full sm:w-auto px-6 md:px-8 font-bold shadow-lg shadow-primary/10 transition-all active:scale-95 text-black bg-primary hover:bg-primary/90"
           >
             Ver Horários
           </Button>

@@ -81,30 +81,22 @@ export const useBookingProcessStore = create<BookingState>((set, get) => ({
   couponCode: null,
 
   // ==========================================================================
-  // BUSCA DADOS PÚBLICOS DO PRESTADOR PARA O AGENDAMENTO
+  // BUSCA DADOS PÚBLICOS DO PRESTADOR PARA O AGENDAMENTO (OPÇÃO A - ALTA PERFORMANCE)
   // ==========================================================================
   fetchProviderData: async (providerId: string) => {
     set({ loading: true, error: null });
     try {
-      // 1. Busca os dados do Salão
-      const providerRes = await api.get<ServiceProviderProfile>(
-        `/service-providers/public/${providerId}`,
-      );
-
-      // 2. Tenta buscar os profissionais e serviços desse salão.
-      // Se a sua API retorna tudo num único objeto, você pode ajustar isto.
-      // Assumindo rotas comuns baseadas no padrão anterior:
-      const professionalsRes = await api.get<ProfessionalProfile[]>(
-        `/service-providers/public/${providerId}/professionals`,
-      );
-      const servicesRes = await api.get<Service[]>(
-        `/service-providers/public/${providerId}/services`,
-      );
+      // Faz apenas UMA requisição que traz tudo de uma vez do Java
+      const response = await api.get<{
+        provider: ServiceProviderProfile;
+        professionals: ProfessionalProfile[];
+        services: Service[];
+      }>(`/service-providers/public/${providerId}/booking-data`);
 
       set({
-        provider: providerRes.data,
-        professionals: professionalsRes.data,
-        availableServices: servicesRes.data,
+        provider: response.data.provider,
+        professionals: response.data.professionals,
+        availableServices: response.data.services,
         loading: false,
       });
     } catch (error) {

@@ -12,7 +12,7 @@ import { Typography } from "../ui/typography";
 export const ServiceSelection = () => {
   // 🔥 Lemos o estado diretamente do nosso novo Store Refatorado
   const { 
-    provider, 
+    availableServices, // ✨ Lemos a lista de serviços corretos do estado global
     services: selectedServices, 
     toggleService, 
     nextStep,
@@ -20,11 +20,12 @@ export const ServiceSelection = () => {
     getTotalDuration 
   } = useBookingProcessStore();
 
-  // 🔥 Adeus `useMemo` com `reduce` complexo! O Zustand já nos dá as respostas prontas.
+  // 🔥 O Zustand já nos dá as respostas prontas.
   const totalDuration = getTotalDuration();
   const totalPrice = getTotalPrice();
 
-  const hasServices = (provider?.services?.length ?? 0) > 0;
+  // Verifica se existem serviços disponíveis
+  const hasServices = availableServices && availableServices.length > 0;
   const isServiceSelected = selectedServices.length > 0;
 
   return (
@@ -34,10 +35,10 @@ export const ServiceSelection = () => {
       className="pb-32 md:pb-32" // Padding inferior para não esconder conteúdo atrás do footer
     >
       <div className="text-center mb-6 md:mb-10">
-        <Typography variant="h2" className="drop-shadow-sm text-2xl md:text-3xl">
+        <Typography variant="h2" className="drop-shadow-sm text-2xl md:text-3xl text-white">
           Selecione os Serviços
         </Typography>
-        <Typography variant="muted" className="text-sm md:text-base">
+        <Typography variant="muted" className="text-sm md:text-base mt-2">
           Escolha um ou mais serviços para continuar.
         </Typography>
       </div>
@@ -45,7 +46,8 @@ export const ServiceSelection = () => {
       <div className="max-w-6xl mx-auto px-2 md:px-4">
         {hasServices ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
-            {provider!.services!.map((service) => {
+            {/* ✨ Iteramos sobre availableServices */}
+            {availableServices.map((service) => {
               const isSelected = selectedServices.some(
                 (s) => s.id === service.id
               );

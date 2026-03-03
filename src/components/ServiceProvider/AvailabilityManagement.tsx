@@ -73,6 +73,7 @@ export const AvailabilityManagement = () => {
   const {
     professionals,
     updateAvailability,
+    fetchProfessionals,
     loading: profLoading,
   } = useProfessionalsManagementStore();
 
@@ -100,6 +101,12 @@ export const AvailabilityManagement = () => {
       setSlotInterval(provider.slotInterval || 15);
     }
   }, [user, isOwner]);
+
+  useEffect(() => {
+    if (user?.id && professionals.length === 0) {
+      fetchProfessionals(user.id);
+    }
+  }, [user?.id, professionals.length, fetchProfessionals]);
 
   // --- SELEÇÃO DE PROFISSIONAL INTELIGENTE ---
   useEffect(() => {

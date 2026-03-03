@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { ServiceProviderProfile } from "../types";
+import type { ServiceProviderProfile, Service } from "../types"; // ✨ Adicionado Service
 // ✨ Agora buscamos via API Java
-import { api } from "../lib/api"; 
-import { useAuthStore } from "../store/authStore"; 
+import { api } from "../lib/api";
+import { useAuthStore } from "../store/authStore";
 import { isAxiosError } from "axios"; // ✨ Importado para remover o 'any'
 import {
   Loader2,
@@ -38,12 +38,16 @@ const PublicBookingPage = () => {
   const { user } = useAuthStore(); // Pega o estado do usuário autenticado (se existir)
 
   const [provider, setProvider] = useState<ServiceProviderProfile | null>(null);
+
+  // ✨ NOVO: Estado específico e reativo para a lista de serviços
+  const [servicesList, setServicesList] = useState<Service[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("services");
 
   useEffect(() => {
-    const fetchProvider = async () => {
+    const fetchProviderData = async () => {
       if (!slug) {
         setError("Nenhum perfil especificado na URL.");
         setIsLoading(false);
@@ -51,36 +55,52 @@ const PublicBookingPage = () => {
       }
       try {
         // ✨ Faz a requisição pública para a API Java usando o slug
-        const response = await api.get<ServiceProviderProfile>(`/service-providers/public/slug/${slug}`);
-        
+        const response = await api.get<ServiceProviderProfile>(
+          `/service-providers/public/slug/${slug}`,
+        );
+
         if (!response.data) {
-           setError("Perfil não encontrado.");
+          setError("Perfil não encontrado.");
         } else {
-           setProvider(response.data);
+          setProvider(response.data);
+
+          // ✨ NOVO: Logo após pegar o provedor, busca explicitamente os serviços ativos dele
+          try {
+            const servicesRes = await api.get<Service[]>(
+              `/services/provider/${response.data.id}/active`,
+            );
+            setServicesList(servicesRes.data || []);
+          } catch (srvErr) {
+            console.error(
+              "Erro não crítico: Falha ao carregar catálogo de serviços",
+              srvErr,
+            );
+          }
         }
-      } catch (err: unknown) { // ✨ Tipado como unknown
+      } catch (err: unknown) {
+        // ✨ Tipado como unknown
         console.error("Falha ao carregar perfil público:", err);
-        
+
         // ✨ Type Guard do Axios para verificar o status
         if (isAxiosError(err) && err.response && err.response.status === 404) {
-           setError("Este estabelecimento não existe ou mudou de endereço.");
+          setError("Este estabelecimento não existe ou mudou de endereço.");
         } else {
-           setError("Erro temporário ao carregar o perfil. Tente novamente mais tarde.");
+          setError(
+            "Erro temporário ao carregar o perfil. Tente novamente mais tarde.",
+          );
         }
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchProvider();
+
+    fetchProviderData();
   }, [slug]);
 
   // Lógica de verificação da assinatura (Suporta camelCase e UPPER_CASE)
   const status = provider?.subscriptionStatus?.toLowerCase();
   const isSubscriptionActive =
-    status === "active" ||
-    status === "trial" ||
-    status === "lifetime";
+    status === "active" || status === "trial" || status === "lifetime";
 
   const handleGoToBooking = () => {
     if (!isSubscriptionActive) return;
@@ -138,8 +158,6 @@ const PublicBookingPage = () => {
   }
 
   const initials = provider.businessName.substring(0, 2).toUpperCase();
-  // Garante que array de serviços existe
-  const servicesList = provider.services || [];
 
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-100 pb-20 relative overflow-x-hidden selection:bg-primary/30 font-sans">
@@ -169,7 +187,7 @@ const PublicBookingPage = () => {
           />
         </Helmet>
       )}
-      
+
       {/* --- BACKGROUND OTIMIZADO --- */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#121214] via-[#09090b] to-black md:hidden" />
@@ -186,7 +204,6 @@ const PublicBookingPage = () => {
       <div className="max-w-5xl mx-auto md:p-6 p-0 relative z-10">
         {/* --- HEADER / BANNER --- */}
         <header className="relative h-64 md:h-80 md:rounded-3xl overflow-hidden bg-zinc-900 shadow-2xl group border-b md:border border-white/5">
-          
           {/* BOTÃO VOLTAR INTELIGENTE */}
           <Button
             variant="ghost"
@@ -218,7 +235,6 @@ const PublicBookingPage = () => {
           >
             <Card className="bg-[#121214]/95 md:bg-[#121214]/60 backdrop-blur-none md:backdrop-blur-xl border-white/10 shadow-xl overflow-visible">
               <CardContent className="p-5 pt-0 sm:pt-6 flex flex-col sm:flex-row items-center sm:items-end gap-5">
-                
                 <div className="-mt-16 sm:-mt-24 relative group shrink-0">
                   <Avatar className="h-28 w-28 sm:h-40 sm:w-40 border-[4px] sm:border-[6px] border-[#121214] shadow-2xl bg-zinc-800">
                     <AvatarImage
@@ -232,9 +248,15 @@ const PublicBookingPage = () => {
                   <div
                     className={cn(
                       "absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-5 h-5 rounded-full border-4 border-[#121214]",
-                      isSubscriptionActive ? "bg-green-500 shadow-[0_0_10px_#22c55e]" : "bg-amber-500"
+                      isSubscriptionActive
+                        ? "bg-green-500 shadow-[0_0_10px_#22c55e]"
+                        : "bg-amber-500",
                     )}
-                    title={isSubscriptionActive ? "Disponível para Agendamento" : "Indisponível"}
+                    title={
+                      isSubscriptionActive
+                        ? "Disponível para Agendamento"
+                        : "Indisponível"
+                    }
                   />
                 </div>
 
@@ -253,7 +275,8 @@ const PublicBookingPage = () => {
                       <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
                         <MapPin size={13} className="text-primary" />
                         {provider.businessAddress.city}
-                        {provider.businessAddress.state && ` - ${provider.businessAddress.state}`}
+                        {provider.businessAddress.state &&
+                          ` - ${provider.businessAddress.state}`}
                       </span>
                       {provider.businessPhone && (
                         <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
@@ -307,7 +330,7 @@ const PublicBookingPage = () => {
                       "w-full sm:w-auto font-bold h-12 px-8 text-base rounded-xl shadow-lg",
                       isSubscriptionActive
                         ? "bg-primary text-black hover:bg-primary/90 shadow-primary/20"
-                        : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
+                        : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5",
                     )}
                   >
                     {!isSubscriptionActive ? (
@@ -336,7 +359,8 @@ const PublicBookingPage = () => {
                   Agendamento Indisponível
                 </p>
                 <p className="text-xs opacity-80 text-amber-200/80 mt-1 leading-relaxed">
-                  Entre em contato por telefone ou WhatsApp para agendar, pois o serviço online não se encontra ativo no momento.
+                  Entre em contato por telefone ou WhatsApp para agendar, pois o
+                  serviço online não se encontra ativo no momento.
                 </p>
               </div>
             </div>
@@ -353,7 +377,9 @@ const PublicBookingPage = () => {
                   onClick={() => setActiveTab(tab)}
                   className={cn(
                     "pb-3 pt-2 text-sm font-bold flex items-center justify-center gap-2 transition-colors relative px-4 flex-1 sm:flex-none outline-none",
-                    activeTab === tab ? "text-primary" : "text-zinc-500 hover:text-zinc-300"
+                    activeTab === tab
+                      ? "text-primary"
+                      : "text-zinc-500 hover:text-zinc-300",
                   )}
                 >
                   {tab === "services" ? (
@@ -406,7 +432,8 @@ const PublicBookingPage = () => {
                               </div>
 
                               <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
-                                {service.description || "Serviço especializado."}
+                                {service.description ||
+                                  "Serviço especializado."}
                               </p>
 
                               <div className="flex items-center gap-2 pt-1">
@@ -432,7 +459,7 @@ const PublicBookingPage = () => {
                                   "h-8 text-xs w-full",
                                   isSubscriptionActive
                                     ? "bg-white/5 text-white hover:bg-primary hover:text-black"
-                                    : "bg-zinc-800 text-zinc-600 border border-zinc-700"
+                                    : "bg-zinc-800 text-zinc-600 border border-zinc-700",
                                 )}
                                 onClick={handleGoToBooking}
                               >
@@ -448,7 +475,7 @@ const PublicBookingPage = () => {
                                 "w-full sm:hidden h-9 text-xs mt-1 border-white/10",
                                 isSubscriptionActive
                                   ? "text-primary hover:bg-primary hover:text-black"
-                                  : "text-zinc-600 bg-zinc-800/50"
+                                  : "text-zinc-600 bg-zinc-800/50",
                               )}
                               onClick={handleGoToBooking}
                             >

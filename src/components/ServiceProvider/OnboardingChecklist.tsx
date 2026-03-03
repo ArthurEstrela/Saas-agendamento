@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useProviderProfileStore } from "../../store/providerProfileStore";
 import { useProfessionalsManagementStore } from "../../store/professionalsManagementStore";
+// ✨ ADICIONADO: Importação do store de serviços para reatividade imediata
+import { useServiceManagementStore } from "../../store/serviceManagementStore"; 
 import type { ServiceProviderProfile } from "../../types";
 import {
   CheckCircle2,
@@ -48,6 +50,9 @@ export const OnboardingChecklist = ({
   // Trazemos a lista de profissionais que já foi carregada pela Dashboard
   const { professionals } = useProfessionalsManagementStore();
 
+  // ✨ Trazemos a lista de serviços do store reativo
+  const { services } = useServiceManagementStore();
+
   const [isDismissed, setIsDismissed] = useState(false);
 
   // 1. Sincroniza estado inicial se já foi dispensado no backend
@@ -67,12 +72,13 @@ export const OnboardingChecklist = ({
     return !!(provider.profilePictureUrl && provider.businessAddress?.street);
   }, [provider]);
 
-  // 3. Verificação de Serviços Cadastrados
+  // 3. Verificação de Serviços Cadastrados (✨ Atualizado para Reatividade Máxima)
   const hasServices = useMemo(() => {
     if (!provider || provider.role?.toUpperCase() !== "SERVICE_PROVIDER")
       return false;
-    return provider.services && provider.services.length > 0;
-  }, [provider]);
+    // Verifica tanto o Store de Serviços (se acabou de criar) quanto os dados do Provider (no login inicial)
+    return (services && services.length > 0) || (provider.services && provider.services.length > 0);
+  }, [provider, services]);
 
   // 4. Verificação de Equipe (Profissionais)
   const hasProfessionals = useMemo(() => {

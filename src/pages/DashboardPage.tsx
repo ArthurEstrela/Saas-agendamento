@@ -1,14 +1,13 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-// ✨ Substituído useProfileStore pelo useAuthStore
 import { useAuthStore } from "../store/authStore";
 import ServiceProviderDashboard from "../components/ServiceProviderDashboard";
 import { DashboardSkeleton } from "../components/Common/LoadingSpinner";
 import { ClientDashboard } from "../components/ClientDashboard";
 import ProfessionalDashboard from "../components/Professional/ProfessionalDashboard";
+import { Loader2 } from "lucide-react";
 
 const DashboardPage = () => {
-  // ✨ Agora tudo vem da store de autenticação unificada
   const { user, loading, error } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,15 +18,14 @@ const DashboardPage = () => {
       // Capturamos os parâmetros atuais (ex: ?action=review&appointmentId=123)
       const targetSearch = location.search; 
 
-      // Normaliza o role para lidar com o Enum do Java (ex: 'SERVICE_PROVIDER' -> 'service_provider')
-      const role = user.role.toLowerCase();
+      // ✨ Lemos direto do Enum oficial em UPPERCASE
+      const role = user.role;
 
-      if (role === "client") {
-        // Passamos o 'search' junto com o pathname para não perder os dados de deep link (ex: avaliações)
+      if (role === "CLIENT") {
         navigate({ pathname: "/dashboard/explore", search: targetSearch }, { replace: true });
-      } else if (role === "serviceprovider" || role === "service_provider") {
+      } else if (role === "SERVICE_PROVIDER") {
         navigate({ pathname: "/dashboard/agenda", search: targetSearch }, { replace: true });
-      } else if (role === "professional") {
+      } else if (role === "PROFESSIONAL") {
         navigate({ pathname: "/dashboard/home", search: targetSearch }, { replace: true });
       }
     }
@@ -50,20 +48,24 @@ const DashboardPage = () => {
 
   // Renderiza o Dashboard correto baseado no User Role
   if (user) {
-    const role = user.role.toLowerCase();
+    // ✨ Comparações diretas. Se 'role' estiver ausente (undefined) durante um recarregamento, não quebra a tela.
+    const role = user.role;
     
-    if (role === "client") {
+    if (role === "CLIENT") {
       return <ClientDashboard />;
     }
-    if (role === "serviceprovider" || role === "service_provider") {
+    if (role === "SERVICE_PROVIDER") {
       return <ServiceProviderDashboard />;
     }
-    if (role === "professional") {
+    if (role === "PROFESSIONAL") {
       return <ProfessionalDashboard />;
     }
+    
+    // Fallback amigável caso o role venha vazio por um microsegundo na atualização de estado
     return (
-      <div className="flex justify-center items-center h-screen text-gray-400">
-        Tipo de utilizador desconhecido: {user.role}
+      <div className="flex flex-col justify-center items-center h-screen bg-[#09090b] text-gray-400">
+        <Loader2 className="animate-spin text-primary mb-4" size={40} />
+        <p>Atualizando informações do perfil...</p>
       </div>
     );
   }

@@ -82,7 +82,8 @@ import { Badge } from "../ui/badge";
 // @ts-expect-error - Fix for Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
@@ -93,13 +94,13 @@ const inferPixType = (
 ): "cpf" | "cnpj" | "email" | "phone" | "random" => {
   if (!key) return "cpf";
   if (key.includes("@")) return "email";
-  
+
   const cleanKey = key.replace(/\D/g, "");
-  if (cleanKey.length === 11) return "cpf"; 
+  if (cleanKey.length === 11) return "cpf";
   if (cleanKey.length === 14) return "cnpj";
   if (cleanKey.length > 20) return "random";
-  
-  return "cpf"; 
+
+  return "cpf";
 };
 
 const ChangeView = ({
@@ -197,8 +198,13 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 export const ProfileManagement = () => {
   const { user } = useAuthStore();
   const providerProfile = user as ServiceProviderProfile;
-  const { updateProfile, uploadLogo, uploadBanner, loading: isSavingStore } = useProviderProfileStore();
-  
+  const {
+    updateProfile,
+    uploadLogo,
+    uploadBanner,
+    loading: isSavingStore,
+  } = useProviderProfileStore();
+
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -211,7 +217,8 @@ export const ProfileManagement = () => {
   const [logoToCrop, setLogoToCrop] = useState<string | null>(null);
   const [logoCrop, setLogoCrop] = useState({ x: 0, y: 0 });
   const [logoZoom, setLogoZoom] = useState(1);
-  const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] = useState<Area | null>(null);
+  const [logoCroppedAreaPixels, setLogoCroppedAreaPixels] =
+    useState<Area | null>(null);
 
   const {
     register,
@@ -232,7 +239,9 @@ export const ProfileManagement = () => {
   });
 
   const [position, setPosition] = useState<L.LatLng | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([-15.79, -47.88]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([
+    -15.79, -47.88,
+  ]);
   const [mapZoom, setMapZoom] = useState(4);
   const lastSearchedAddressRef = useRef("");
 
@@ -245,17 +254,35 @@ export const ProfileManagement = () => {
   const { address, loading: cepLoading, fetchAddress } = useViaCep();
 
   useEffect(() => {
-    if (providerProfile && providerProfile.role?.toUpperCase() === "SERVICE_PROVIDER") {
+    if (
+      providerProfile &&
+      providerProfile.role?.toUpperCase() === "SERVICE_PROVIDER"
+    ) {
       // Normaliza para lowercase (o react-hook-form espera "cpf" ou "cnpj")
-      const docType = (providerProfile.documentType?.toLowerCase() === "cnpj" ? "cnpj" : "cpf") as "cpf" | "cnpj";
-      
+      const docType = (
+        providerProfile.documentType?.toLowerCase() === "cnpj" ? "cnpj" : "cpf"
+      ) as "cpf" | "cnpj";
+
       // Lê de 'document' ou usa fallbacks legacy sem 'any'
-      const legacyProfile = providerProfile as unknown as Record<string, string>;
-      const docNumber = providerProfile.document || legacyProfile.cpf || legacyProfile.cnpj || "";
-      
+      const legacyProfile = providerProfile as unknown as Record<
+        string,
+        string
+      >;
+      const docNumber =
+        providerProfile.document ||
+        legacyProfile.cpf ||
+        legacyProfile.cnpj ||
+        "";
+
       const whatsapp = providerProfile.socialLinks?.whatsapp || "";
 
-      let finalPixType = providerProfile.pixKeyType as "cpf" | "cnpj" | "email" | "phone" | "random" | undefined;
+      let finalPixType = providerProfile.pixKeyType as
+        | "cpf"
+        | "cnpj"
+        | "email"
+        | "phone"
+        | "random"
+        | undefined;
       if (!finalPixType) {
         finalPixType = inferPixType(providerProfile.pixKey);
       }
@@ -270,7 +297,7 @@ export const ProfileManagement = () => {
         documentNumber: docNumber,
         cancellationMinHours: providerProfile.cancellationMinHours ?? 2,
         pixKey: providerProfile.pixKey || "",
-        pixKeyType: finalPixType, 
+        pixKeyType: finalPixType,
         socialLinks: {
           instagram: providerProfile.socialLinks?.instagram || "",
           facebook: providerProfile.socialLinks?.facebook || "",
@@ -284,19 +311,22 @@ export const ProfileManagement = () => {
           neighborhood: providerProfile.businessAddress?.neighborhood || "",
           city: providerProfile.businessAddress?.city || "",
           state: providerProfile.businessAddress?.state || "",
-        }
+        },
       });
 
-      setLogoPreview(providerProfile.profilePictureUrl || providerProfile.logoUrl || null);
+      setLogoPreview(
+        providerProfile.profilePictureUrl || providerProfile.logoUrl || null,
+      );
       setBannerPreview(providerProfile.bannerUrl || null);
-      
+
       const { lat, lng } = providerProfile.businessAddress || {};
       if (lat && lng) {
         const initialPos = new L.LatLng(lat, lng);
         setPosition(initialPos);
         setMapCenter([lat, lng]);
         setMapZoom(17);
-        const addrNumber = (providerProfile.businessAddress as { number?: string }).number || "";
+        const addrNumber =
+          (providerProfile.businessAddress as { number?: string }).number || "";
         const street = providerProfile.businessAddress?.street || "";
         const city = providerProfile.businessAddress?.city || "";
         lastSearchedAddressRef.current = `${street}, ${addrNumber}, ${city}`;
@@ -337,7 +367,7 @@ export const ProfileManagement = () => {
   }, [streetValue, numberValue, cityValue, fetchCoordinates]);
 
   const handleMapClick = (latlng: L.LatLng) => setPosition(latlng);
-  
+
   const handleCepSearch = useCallback(() => {
     const cleanedCep = cepValue?.replace(/\D/g, "");
     if (cleanedCep && cleanedCep.length === 8) fetchAddress(cleanedCep);
@@ -345,9 +375,15 @@ export const ProfileManagement = () => {
 
   useEffect(() => {
     if (address) {
-      setValue("businessAddress.street", address.logradouro, { shouldValidate: true });
-      setValue("businessAddress.neighborhood", address.bairro, { shouldValidate: true });
-      setValue("businessAddress.city", address.localidade, { shouldValidate: true });
+      setValue("businessAddress.street", address.logradouro, {
+        shouldValidate: true,
+      });
+      setValue("businessAddress.neighborhood", address.bairro, {
+        shouldValidate: true,
+      });
+      setValue("businessAddress.city", address.localidade, {
+        shouldValidate: true,
+      });
       setValue("businessAddress.state", address.uf, { shouldValidate: true });
     }
   }, [address, setValue]);
@@ -378,7 +414,7 @@ export const ProfileManagement = () => {
       );
 
       await uploadLogo(providerProfile.id, croppedFile);
-      
+
       setLogoToCrop(null);
       toast.success("Logo atualizada com sucesso! 🎯");
     } catch {
@@ -409,7 +445,7 @@ export const ProfileManagement = () => {
       );
 
       await uploadBanner(providerProfile.id, croppedImageFile);
-      
+
       setBannerToCrop(null);
       toast.success("Banner atualizado com sucesso! 🖼️");
     } catch {
@@ -434,11 +470,19 @@ export const ProfileManagement = () => {
   const onSubmit: SubmitHandler<ProfileFormData> = async (data) => {
     if (!providerProfile || !isDirty) return;
     setIsSaving(true);
-    
+
     try {
-      const formattedInstagram = formatSocialLink(data.socialLinks?.instagram, "https://www.instagram.com");
-      const formattedFacebook = formatSocialLink(data.socialLinks?.facebook, "https://www.facebook.com");
-      const formattedWebsite = data.socialLinks?.website && !data.socialLinks.website.startsWith("http")
+      const formattedInstagram = formatSocialLink(
+        data.socialLinks?.instagram,
+        "https://www.instagram.com",
+      );
+      const formattedFacebook = formatSocialLink(
+        data.socialLinks?.facebook,
+        "https://www.facebook.com",
+      );
+      const formattedWebsite =
+        data.socialLinks?.website &&
+        !data.socialLinks.website.startsWith("http")
           ? `https://${data.socialLinks.website}`
           : data.socialLinks?.website;
 
@@ -447,7 +491,7 @@ export const ProfileManagement = () => {
         businessName: data.businessName,
         publicProfileSlug: data.publicProfileSlug,
         documentType: data.documentType, // "cpf" | "cnpj"
-        document: data.documentNumber,   // O Spring Boot espera "document"
+        document: data.documentNumber, // O Spring Boot espera "document"
         businessPhone: data.businessPhone,
         cancellationMinHours: data.cancellationMinHours,
         pixKey: data.pixKey,
@@ -494,7 +538,8 @@ export const ProfileManagement = () => {
       </div>
     );
 
-  const isUIBlocked = isSaving || isSavingStore || isUploadingLogo || isUploadingBanner;
+  const isUIBlocked =
+    isSaving || isSavingStore || isUploadingLogo || isUploadingBanner;
 
   return (
     <motion.div
@@ -563,7 +608,10 @@ export const ProfileManagement = () => {
             <Button variant="secondary" onClick={() => setLogoToCrop(null)}>
               Cancelar
             </Button>
-            <Button onClick={saveCroppedLogo} className="font-bold bg-primary text-black">
+            <Button
+              onClick={saveCroppedLogo}
+              className="font-bold bg-primary text-black"
+            >
               Salvar Logo
             </Button>
           </div>
@@ -719,9 +767,9 @@ export const ProfileManagement = () => {
                     />
                   </div>
                   {errors.publicProfileSlug && (
-                      <span className="text-xs text-red-500">
-                        {errors.publicProfileSlug.message}
-                      </span>
+                    <span className="text-xs text-red-500">
+                      {errors.publicProfileSlug.message}
+                    </span>
                   )}
                 </div>
 
@@ -760,9 +808,11 @@ export const ProfileManagement = () => {
                     <Controller
                       name="businessPhone"
                       control={control}
-                      render={({ field }) => (
+                      render={({ field: { onChange, value, ref } }) => (
                         <IMaskInput
-                          {...field}
+                          inputRef={ref}
+                          value={value || ""}
+                          onAccept={(val) => onChange(val)}
                           mask="(00) 00000-0000"
                           className={imaskClass}
                           placeholder="(00) 00000-0000"
@@ -792,12 +842,14 @@ export const ProfileManagement = () => {
                       <Controller
                         name="businessAddress.zipCode"
                         control={control}
-                        render={({ field }) => (
+                        render={({ field: { onChange, value, ref } }) => (
                           <IMaskInput
-                            {...field}
+                            inputRef={ref}
+                            value={value || ""}
+                            onAccept={(val) => onChange(val)}
+                            onBlur={handleCepSearch}
                             mask="00000-000"
                             className={imaskClass}
-                            onBlur={handleCepSearch}
                             placeholder="00000-000"
                           />
                         )}
@@ -916,9 +968,11 @@ export const ProfileManagement = () => {
                       <Controller
                         name="socialLinks.whatsapp"
                         control={control}
-                        render={({ field }) => (
+                        render={({ field: { onChange, value, ref } }) => (
                           <IMaskInput
-                            {...field}
+                            inputRef={ref}
+                            value={value || ""}
+                            onAccept={(val) => onChange(val)} // <-- Essa é a chave do sucesso
                             mask="(00) 00000-0000"
                             className={cn(
                               imaskClass,
@@ -977,7 +1031,8 @@ export const ProfileManagement = () => {
             <Card className="bg-gray-900/50 border-gray-800">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock size={18} className="text-primary" /> Regras de Cancelamento
+                  <Clock size={18} className="text-primary" /> Regras de
+                  Cancelamento
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1080,14 +1135,21 @@ export const ProfileManagement = () => {
                   <Label>Nome Completo</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                    <Input className="pl-10 bg-gray-950/50" {...register("name")} />
+                    <Input
+                      className="pl-10 bg-gray-950/50"
+                      {...register("name")}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>E-mail de Acesso</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
-                    <Input className="pl-10 bg-gray-950/50 text-gray-500 cursor-not-allowed" {...register("email")} disabled />
+                    <Input
+                      className="pl-10 bg-gray-950/50 text-gray-500 cursor-not-allowed"
+                      {...register("email")}
+                      disabled
+                    />
                   </div>
                 </div>
               </CardContent>

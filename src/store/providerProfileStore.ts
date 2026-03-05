@@ -43,7 +43,14 @@ export const useProviderProfileStore = create<ProviderProfileState>((set) => ({
       const response = await api.put("/service-providers/profile", data);
 
       // Sincroniza o state global para que o menu lateral atualize o nome do negócio
-      useAuthStore.setState({ user: response.data });
+      const currentUser = useAuthStore.getState().user;
+
+      useAuthStore.setState({
+        user: {
+          ...currentUser,
+          ...response.data,
+        },
+      });
 
       toast.success("Configurações atualizadas com sucesso!");
       set({ loading: false });

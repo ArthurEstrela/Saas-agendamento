@@ -258,12 +258,10 @@ export const ProfileManagement = () => {
       providerProfile &&
       providerProfile.role?.toUpperCase() === "SERVICE_PROVIDER"
     ) {
-      // Normaliza para lowercase (o react-hook-form espera "cpf" ou "cnpj")
       const docType = (
         providerProfile.documentType?.toLowerCase() === "cnpj" ? "cnpj" : "cpf"
       ) as "cpf" | "cnpj";
 
-      // Lê de 'document' ou usa fallbacks legacy sem 'any'
       const legacyProfile = providerProfile as unknown as Record<
         string,
         string
@@ -490,8 +488,8 @@ export const ProfileManagement = () => {
         name: data.name,
         businessName: data.businessName,
         publicProfileSlug: data.publicProfileSlug,
-        documentType: data.documentType, // "cpf" | "cnpj"
-        document: data.documentNumber, // O Spring Boot espera "document"
+        documentType: data.documentType,
+        document: data.documentNumber,
         businessPhone: data.businessPhone,
         cancellationMinHours: data.cancellationMinHours,
         pixKey: data.pixKey,
@@ -747,8 +745,11 @@ export const ProfileManagement = () => {
                     Link Personalizado (Slug)
                     <TooltipProvider>
                       <Tooltip>
-                        <TooltipTrigger>
-                          <Info size={12} className="text-gray-500" />
+                        <TooltipTrigger asChild>
+                          <Info
+                            size={14}
+                            className="text-gray-500 cursor-help"
+                          />
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>
@@ -773,6 +774,7 @@ export const ProfileManagement = () => {
                   )}
                 </div>
 
+                {/* MODIFICAÇÃO 1 AQUI */}
                 <div className="space-y-2">
                   <Label>
                     Documento ({(documentType || "cpf").toUpperCase()})
@@ -782,9 +784,12 @@ export const ProfileManagement = () => {
                     <Controller
                       name="documentNumber"
                       control={control}
-                      render={({ field }) => (
+                      render={({ field: { onChange, onBlur, value, ref } }) => (
                         <IMaskInput
-                          {...field}
+                          inputRef={ref}
+                          value={value != null ? String(value) : ""}
+                          onAccept={(val) => onChange(val)}
+                          onBlur={onBlur}
                           mask={
                             (documentType || "cpf") === "cpf"
                               ? "000.000.000-00"
@@ -801,6 +806,7 @@ export const ProfileManagement = () => {
                   </div>
                 </div>
 
+                {/* MODIFICAÇÃO 2 AQUI */}
                 <div className="space-y-2">
                   <Label>Telefone Comercial / Pessoal</Label>
                   <div className="relative">
@@ -808,11 +814,12 @@ export const ProfileManagement = () => {
                     <Controller
                       name="businessPhone"
                       control={control}
-                      render={({ field: { onChange, value, ref } }) => (
+                      render={({ field: { onChange, onBlur, value, ref } }) => (
                         <IMaskInput
                           inputRef={ref}
-                          value={value || ""}
+                          value={value != null ? String(value) : ""}
                           onAccept={(val) => onChange(val)}
+                          onBlur={onBlur}
                           mask="(00) 00000-0000"
                           className={imaskClass}
                           placeholder="(00) 00000-0000"
@@ -835,6 +842,7 @@ export const ProfileManagement = () => {
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* MODIFICAÇÃO 3 AQUI */}
                   <div className="space-y-2">
                     <Label>CEP</Label>
                     <div className="relative">
@@ -842,12 +850,17 @@ export const ProfileManagement = () => {
                       <Controller
                         name="businessAddress.zipCode"
                         control={control}
-                        render={({ field: { onChange, value, ref } }) => (
+                        render={({
+                          field: { onChange, onBlur, value, ref },
+                        }) => (
                           <IMaskInput
                             inputRef={ref}
-                            value={value || ""}
+                            value={value != null ? String(value) : ""}
                             onAccept={(val) => onChange(val)}
-                            onBlur={handleCepSearch}
+                            onBlur={(e) => {
+                              onBlur(); // Notifica o react-hook-form
+                              handleCepSearch(); // Dispara a busca
+                            }}
                             mask="00000-000"
                             className={imaskClass}
                             placeholder="00000-000"
@@ -956,7 +969,7 @@ export const ProfileManagement = () => {
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* WhatsApp de Atendimento (Público) */}
+                  {/* MODIFICAÇÃO 4 AQUI */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-green-400">
                       <FaWhatsapp className="h-4 w-4" /> WhatsApp de Atendimento
@@ -968,11 +981,14 @@ export const ProfileManagement = () => {
                       <Controller
                         name="socialLinks.whatsapp"
                         control={control}
-                        render={({ field: { onChange, value, ref } }) => (
+                        render={({
+                          field: { onChange, onBlur, value, ref },
+                        }) => (
                           <IMaskInput
                             inputRef={ref}
-                            value={value || ""}
-                            onAccept={(val) => onChange(val)} // <-- Essa é a chave do sucesso
+                            value={value != null ? String(value) : ""}
+                            onAccept={(val) => onChange(val)}
+                            onBlur={onBlur}
                             mask="(00) 00000-0000"
                             className={cn(
                               imaskClass,
@@ -1089,6 +1105,8 @@ export const ProfileManagement = () => {
                     />
                   </div>
                 </div>
+
+                {/* MODIFICAÇÃO 5 AQUI */}
                 <div className="space-y-2">
                   <Label>Chave Pix</Label>
                   <div className="relative">
@@ -1096,7 +1114,7 @@ export const ProfileManagement = () => {
                     <Controller
                       name="pixKey"
                       control={control}
-                      render={({ field: { onChange, value, ref } }) => {
+                      render={({ field: { onChange, onBlur, value, ref } }) => {
                         const currentType = watch("pixKeyType") || "cpf";
                         const config =
                           pixConfig[currentType as keyof typeof pixConfig];
@@ -1104,12 +1122,13 @@ export const ProfileManagement = () => {
                           <IMaskInput
                             inputRef={ref}
                             className={imaskClass}
-                            value={value || ""}
+                            value={value != null ? String(value) : ""}
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             mask={config.mask as any}
                             placeholder={config.placeholder}
                             unmask={true}
                             onAccept={(val: string) => onChange(val)}
+                            onBlur={onBlur}
                           />
                         );
                       }}

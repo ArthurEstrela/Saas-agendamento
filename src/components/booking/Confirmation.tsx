@@ -69,28 +69,28 @@ export const Confirmation = () => {
   // --- Lógica de Métodos de Pagamento ---
   const availableMethods = useMemo(() => {
     const methods = provider?.paymentMethods || [];
-    const hasPix = methods.includes("pix") && !!provider?.pixKey;
+    const hasPix = methods.includes("PIX") && !!provider?.pixKey;
     const hasOnSite =
-      methods.includes("cash") || methods.includes("credit_card");
+      methods.includes("CASH") || methods.includes("CREDIT_CARD");
 
     return { hasPix, hasOnSite };
   }, [provider]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => {
-    if (availableMethods.hasPix) return "pix";
-    if (availableMethods.hasOnSite) return "cash";
-    return "cash";
+    if (availableMethods.hasPix) return "PIX";
+    if (availableMethods.hasOnSite) return "CASH";
+    return "CASH";
   });
 
   const [showPixModal, setShowPixModal] = useState(false);
 
   useEffect(() => {
     if (
-      paymentMethod === "pix" &&
+      paymentMethod === "PIX" &&
       !availableMethods.hasPix &&
       availableMethods.hasOnSite
     ) {
-      setPaymentMethod("cash");
+      setPaymentMethod("CASH");
     }
   }, [availableMethods, paymentMethod]);
 
@@ -158,7 +158,7 @@ export const Confirmation = () => {
     }
 
     // 2. Verifica se é cliente
-    if (user.role !== "CLIENT" && user.role !== "client") {
+    if (user.role !== "CLIENT") {
       toast.error("Apenas contas de 'Cliente' podem realizar agendamentos.");
       return;
     }
@@ -176,7 +176,7 @@ export const Confirmation = () => {
       // Como o novo confirmBooking retorna um Promise<Appointment> se der certo
       // (ou atira um throw se der erro), a variável success terá um valor truthy.
       if (success) {
-        if (paymentMethod === "pix") {
+        if (paymentMethod === "PIX") {
           setShowPixModal(true);
         } else {
           toast.success("Agendamento confirmado!");
@@ -391,17 +391,17 @@ export const Confirmation = () => {
                     variant="outline"
                     className={cn(
                       "h-auto p-4 md:p-5 justify-start border-2 relative hover:bg-gray-800 transition-all active:scale-[0.98]",
-                      paymentMethod === "pix"
+                      paymentMethod === "PIX"
                         ? "border-primary bg-primary/10 shadow-[0_0_20px_-10px_rgba(255,255,255,0.3)]"
                         : "border-gray-700 bg-[#27272a] md:bg-gray-900/50",
                     )}
-                    onClick={() => setPaymentMethod("pix")}
+                    onClick={() => setPaymentMethod("PIX")}
                   >
                     <div className="flex items-center gap-3 md:gap-4 w-full">
                       <div
                         className={cn(
                           "p-2 md:p-3 rounded-full transition-colors",
-                          paymentMethod === "pix"
+                          paymentMethod === "PIX"
                             ? "bg-primary text-black"
                             : "bg-gray-800 text-gray-400",
                         )}
@@ -416,7 +416,7 @@ export const Confirmation = () => {
                           Aprovação imediata
                         </div>
                       </div>
-                      {paymentMethod === "pix" && (
+                      {paymentMethod === "PIX" && (
                         <CheckCircle2
                           className="text-primary md:w-6 md:h-6"
                           size={20}
@@ -432,17 +432,17 @@ export const Confirmation = () => {
                     variant="outline"
                     className={cn(
                       "h-auto p-4 md:p-5 justify-start border-2 hover:bg-gray-800 transition-all active:scale-[0.98]",
-                      paymentMethod === "cash"
+                      paymentMethod === "CASH"
                         ? "border-primary bg-primary/10 shadow-[0_0_20px_-10px_rgba(255,255,255,0.3)]"
                         : "border-gray-700 bg-[#27272a] md:bg-gray-900/50",
                     )}
-                    onClick={() => setPaymentMethod("cash")}
+                    onClick={() => setPaymentMethod("CASH")}
                   >
                     <div className="flex items-center gap-3 md:gap-4 w-full">
                       <div
                         className={cn(
                           "p-2 md:p-3 rounded-full transition-colors",
-                          paymentMethod === "cash"
+                          paymentMethod === "CASH"
                             ? "bg-primary text-black"
                             : "bg-gray-800 text-gray-400",
                         )}
@@ -455,16 +455,16 @@ export const Confirmation = () => {
                         </div>
                         <div className="text-[10px] md:text-xs text-gray-400 mt-0.5 truncate max-w-[120px] md:max-w-none">
                           {[
-                            provider?.paymentMethods?.includes("cash") &&
+                            provider?.paymentMethods?.includes("CASH") &&
                               "Dinheiro",
-                            provider?.paymentMethods?.includes("credit_card") &&
+                            provider?.paymentMethods?.includes("CREDIT_CARD") &&
                               "Cartão",
                           ]
                             .filter(Boolean)
                             .join(" ou ") || "No balcão"}
                         </div>
                       </div>
-                      {paymentMethod === "cash" && (
+                      {paymentMethod === "CASH" && (
                         <CheckCircle2
                           className="text-primary md:w-6 md:h-6"
                           size={20}

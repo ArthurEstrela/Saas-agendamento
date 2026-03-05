@@ -16,7 +16,12 @@ const extractErrorMessage = (
   defaultMessage: string,
 ): string => {
   if (isAxiosError(error)) {
-    return error.response?.data?.message || defaultMessage;
+    // Adicionamos o "error.response?.data?.detail" aqui!
+    return (
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      defaultMessage
+    );
   }
   if (error instanceof Error) {
     return error.message;

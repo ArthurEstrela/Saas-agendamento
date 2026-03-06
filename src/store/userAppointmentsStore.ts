@@ -4,10 +4,10 @@ import { toast } from 'react-hot-toast';
 import type { Appointment, PagedResult } from '../types';
 import { api } from '../lib/api';
 
-// Helper de erro padronizado para extrair a mensagem exata do Spring Boot
+// Extrator de mensagens adaptado para o padrão ProblemDetail (RFC 7807) do Spring Boot
 const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
   if (isAxiosError(error)) {
-    return error.response?.data?.message || defaultMessage;
+    return error.response?.data?.detail || error.response?.data?.message || defaultMessage;
   }
   if (error instanceof Error) {
     return error.message;
@@ -15,8 +15,24 @@ const extractErrorMessage = (error: unknown, defaultMessage: string): string => 
   return defaultMessage;
 };
 
+// Tipagem para as métricas financeiras que a API retorna junto com o histórico
+interface ClientHistoryMetrics {
+  averageTicket: number;
+  topServices: Array<{ name: string; count: number }>;
+  favoriteProfessionals: Array<{ name: string; count: number }>;
+}
+
+// Tipagem da resposta real da nova rota do Java
+interface ClientHistoryResponse {
+  history: PagedResult<Appointment>;
+  averageTicket: number;
+  topServices: Array<{ name: string; count: number }>;
+  favoriteProfessionals: Array<{ name: string; count: number }>;
+}
+
 interface UserAppointmentsState {
   appointments: Appointment[];
+  metrics: ClientHistoryMetrics | null;
   loading: boolean;
   error: string | null;
 
@@ -28,6 +44,7 @@ interface UserAppointmentsState {
 
 export const useUserAppointmentsStore = create<UserAppointmentsState>((set) => ({
   appointments: [],
+  metrics: null,
   loading: false,
   error: null,
 
@@ -37,17 +54,28 @@ export const useUserAppointmentsStore = create<UserAppointmentsState>((set) => (
   fetchUserAppointments: async () => {
     set({ loading: true, error: null });
     try {
-      // O Spring Boot sabe de quem é o histórico através do Token (Bearer) no cabeçalho.
-      // Sem necessidade de passar o ID do utilizador na rota (maior segurança).
-      const response = await api.get<PagedResult<Appointment> | Appointment[]>('/appointments/client');
+      // O backend extrai o ID de forma 100% segura usando o Token JWT
+      const response = await api.get<ClientHistoryResponse>('/v1/clients/history', {
+        params: {
+          page: 0,
+          size: 50 // Busca os últimos 50 agendamentos (ajuste a paginação conforme precisar no futuro)
+        }
+      });
       
-      // Lida de forma inteligente consoante o backend retorne PagedResult ou uma Lista direta
-      const data = Array.isArray(response.data) ? response.data : response.data.data;
+      const { history, averageTicket, topServices, favoriteProfessionals } = response.data;
       
-      set({ appointments: data, loading: false });
+      set({ 
+        appointments: history.items, 
+        metrics: {
+          averageTicket,
+          topServices,
+          favoriteProfessionals
+        },
+        loading: false 
+      });
     } catch (error) {
       set({ 
-        error: extractErrorMessage(error, 'Erro ao carregar os teus agendamentos.'), 
+        error: extractErrorMessage(error, 'Erro ao carregar seus agendamentos.'), 
         loading: false 
       });
     }
@@ -59,10 +87,14 @@ export const useUserAppointmentsStore = create<UserAppointmentsState>((set) => (
   cancelAppointment: async (appointmentId: string, reason?: string) => {
     set({ loading: true, error: null });
     try {
-      // Chama o endpoint de cancelamento. A API Java irá validar as regras de tempo (ex: min 24h de antecedência)
-      await api.patch(`/appointments/${appointmentId}/cancel`, { reason });
+      // De acordo com o CancelAppointmentUseCase.java, é um DELETE que recebe a "reason" como parâmetro
+      await api.delete(`/v1/appointments/${appointmentId}`, { 
+        params: { 
+          reason: reason || 'Cancelado pelo cliente no app' 
+        } 
+      });
       
-      // Se a API permitir (Status 200 OK), atualizamos a UI instantaneamente (Optimistic Update)
+      // Atualização otimista da UI (Evita precisar fazer um novo fetch logo em seguida)
       set((state) => ({
         appointments: state.appointments.map((apt) => 
           apt.id === appointmentId 
@@ -74,7 +106,6 @@ export const useUserAppointmentsStore = create<UserAppointmentsState>((set) => (
 
       toast.success('Agendamento cancelado com sucesso.');
     } catch (error) {
-      // Se a API barrar o cancelamento (ex: "Já não pode cancelar com tão pouca antecedência"), mostra o Toast.
       const errorMessage = extractErrorMessage(error, 'Não foi possível cancelar o agendamento.');
       set({ error: errorMessage, loading: false });
       toast.error(errorMessage);

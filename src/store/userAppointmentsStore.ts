@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { isAxiosError } from "axios";
 import { toast } from "react-hot-toast";
-import type { Appointment, PagedResult } from "../types";
+// ✨ Adicionado ServiceProviderProfile para a tipagem do provider
+import type { Appointment, PagedResult, ServiceProviderProfile } from "../types";
 import { api } from "../lib/api";
 
 // Extrator de mensagens adaptado para o padrão ProblemDetail (RFC 7807) do Spring Boot
@@ -22,6 +23,16 @@ const extractErrorMessage = (
   return defaultMessage;
 };
 
+// ✨ NOVO: Tipagem exata do DTO que o Java está retornando agora!
+export type AppointmentDTO = Appointment & {
+  serviceNames?: string[];
+  totalPrice?: number;
+  endTime?: string | Date;
+  provider?: Partial<ServiceProviderProfile>;
+  professionalAvatarUrl?: string;
+  providerAvatarUrl?: string;
+};
+
 // Tipagem para as métricas financeiras que a API retorna junto com o histórico
 interface ClientHistoryMetrics {
   averageTicket: number;
@@ -29,16 +40,16 @@ interface ClientHistoryMetrics {
   favoriteProfessionals: Array<{ name: string; count: number }>;
 }
 
-// Tipagem da resposta real da nova rota do Java
+// ✨ ATUALIZADO: Agora o history recebe o AppointmentDTO
 interface ClientHistoryResponse {
-  history: PagedResult<Appointment>;
+  history: PagedResult<AppointmentDTO>;
   averageTicket: number;
   topServices: Array<{ name: string; count: number }>;
   favoriteProfessionals: Array<{ name: string; count: number }>;
 }
 
 interface UserAppointmentsState {
-  appointments: Appointment[];
+  appointments: AppointmentDTO[]; // ✨ ATUALIZADO: Estado agora guarda os DTOs enriquecidos
   metrics: ClientHistoryMetrics | null;
   loading: boolean;
   error: string | null;

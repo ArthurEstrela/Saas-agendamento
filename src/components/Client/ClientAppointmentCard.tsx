@@ -1,4 +1,4 @@
-import { format, isBefore, subHours } from "date-fns";
+import { format, isBefore, subHours, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Calendar,
@@ -26,14 +26,9 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 
-// ✨ IMPORTAÇÕES ESTRITAS
-import type {
-  Appointment,
-  AppointmentItem,
-  ServiceProviderProfile,
-} from "../../types";
+// IMPORTAÇÕES ESTRITAS
+import type { Appointment, ServiceProviderProfile } from "../../types";
 
-// Tipagem exata das variantes permitidas pelo componente Badge do Shadcn UI
 type BadgeVariant =
   | "default"
   | "secondary"
@@ -42,25 +37,19 @@ type BadgeVariant =
   | "success"
   | "warning";
 
-// Mapeamento de Status para Componentes Badge
 const StatusBadge = ({ status }: { status: string }) => {
-  // ✨ Garantimos que sempre será maiúsculo para bater com a chave do objeto
-  const normalizedStatus = status.toUpperCase();
+  const normalizedStatus = status?.toUpperCase() || "PENDING";
 
   const statusConfig: Record<
     string,
     { label: string; variant: BadgeVariant; icon: React.ElementType }
   > = {
     PENDING: { label: "Pendente", variant: "warning", icon: MoreHorizontal },
-    SCHEDULED: { label: "Agendado", variant: "success", icon: CheckCircle }, // ✨ Corrigido
-    CONFIRMED: { label: "Confirmado", variant: "success", icon: CheckCircle }, // ✨ Adicionado
+    SCHEDULED: { label: "Agendado", variant: "success", icon: CheckCircle },
+    CONFIRMED: { label: "Confirmado", variant: "success", icon: CheckCircle },
     COMPLETED: { label: "Concluído", variant: "secondary", icon: CheckCircle },
     CANCELLED: { label: "Cancelado", variant: "destructive", icon: XCircle },
-    NO_SHOW: {
-      label: "Não Compareceu",
-      variant: "destructive",
-      icon: AlertCircle,
-    },
+    NO_SHOW: { label: "Faltou", variant: "destructive", icon: AlertCircle },
     BLOCKED: { label: "Bloqueado", variant: "outline", icon: XCircle },
   };
 
@@ -79,6 +68,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 const formatDuration = (minutes: number) => {
+  if (minutes <= 0) return "0 min";
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
@@ -87,14 +77,28 @@ const formatDuration = (minutes: number) => {
     : `${hours}h`;
 };
 
-// ✨ TIPAGEM SUPER ESTRITA PARA O ENRICHED APPOINTMENT
-type EnrichedAppointment = Appointment & {
+const parseJavaDate = (dateString: string | Date | undefined): Date => {
+  if (!dateString) return new Date();
+  if (dateString instanceof Date) return dateString;
+  const safeString = dateString.endsWith("Z") ? dateString : `${dateString}Z`;
+  return new Date(safeString);
+};
+
+export type EnrichedAppointment = Appointment & {
   professionalAvatarUrl?: string;
   providerAvatarUrl?: string;
-  // ✨ REMOVIDO O 'any' AQUI. Usando Partial para aceitar que algumas props falhem no join.
-  provider?: Partial<ServiceProviderProfile>;
+  provider?: Partial<ServiceProviderProfile> & { address?: any };
   totalDuration?: number;
   totalPrice?: number;
+  serviceNames?: string[];
+  endTime?: string | Date;
+  finalPrice?: number;
+  price?: number;
+  services?: Array<{ id?: string; name: string; duration?: number }>;
+  totalAmount?: number;
+  finalAmount?: number;
+  items?: Array<{ id?: string; referenceId?: string; name: string }>;
+  address?: any;
 };
 
 export const ClientAppointmentCard = ({
@@ -102,14 +106,23 @@ export const ClientAppointmentCard = ({
 }: {
   appointment: EnrichedAppointment;
 }) => {
+  console.log("DADOS DO SALÃO VINDO DO JAVA:", appointment.provider);
   const {
     professionalName,
     startTime: rawStartTime,
+    endTime: rawEndTime,
+    serviceNames,
+    services,
     items,
     provider,
     professionalAvatarUrl,
     providerAvatarUrl,
     status: rawStatus,
+    totalPrice,
+    finalPrice,
+    price,
+    totalAmount,
+    finalAmount,
   } = appointment;
 
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
@@ -119,26 +132,18 @@ export const ClientAppointmentCard = ({
   const { cancelAppointment, loading: isCancelling } =
     useUserAppointmentsStore();
 
-  // Parsing seguro da data da API Java
-  const startTime = new Date(rawStartTime);
-  const status = rawStatus.toUpperCase();
+  const startTime = parseJavaDate(rawStartTime);
+  const status = rawStatus?.toUpperCase() || "PENDING";
 
   const formattedDate = format(startTime, "EEEE, dd 'de' MMMM", {
     locale: ptBR,
   });
   const formattedTime = format(startTime, "HH:mm");
 
-  const handleNavigation = () => {
-    if (provider?.businessAddress) {
-      const { street, city, state } = provider.businessAddress;
-      const query = encodeURIComponent(`${street}, ${city}, ${state}`);
-      window.open(
-        `https://www.google.com/maps/search/?api=1&query=${query}`,
-        "_blank",
-      );
-    }
-  };
+  const locationAddress =
+    provider?.address || provider?.businessAddress || appointment.address;
 
+  // ✨ FUNÇÕES RESTAURADAS AQUI!
   const handleReviewSubmit = async (rating: number, comment: string) => {
     await submitReview(appointment.id, rating, comment);
     setReviewModalOpen(false);
@@ -149,10 +154,41 @@ export const ClientAppointmentCard = ({
     setCancelModalOpen(false);
   };
 
+  // ✨ GOOGLE MAPS MELHORADO (Sua Ideia: Lat/Lng!)
+  const handleNavigation = () => {
+    if (locationAddress) {
+      // 1. Tentamos usar Lat/Lng primeiro (Mais preciso)
+      if (locationAddress.lat && locationAddress.lng) {
+        window.open(
+          `https://www.google.com/maps/search/?api=1&query=${locationAddress.lat},${locationAddress.lng}`,
+          "_blank",
+        );
+        return;
+      }
+
+      // 2. Fallback: Se não tiver coordenada, buscamos pelo texto
+      const street = locationAddress.street || locationAddress.logradouro || "";
+      const city = locationAddress.city || locationAddress.localidade || "";
+      const state = locationAddress.state || locationAddress.uf || "";
+      const number = locationAddress.number || locationAddress.numero || "";
+
+      const queryParts = [street, number, city, state].filter(Boolean);
+      const query = encodeURIComponent(queryParts.join(", "));
+
+      window.open(
+        `https://www.google.com/maps/search/?api=1&query=${query}`,
+        "_blank",
+      );
+    }
+  };
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const phone =
-      provider?.businessPhone || provider?.socialLinks?.whatsapp || "";
+      provider?.phone ||
+      provider?.businessPhone ||
+      provider?.socialLinks?.whatsapp ||
+      "";
     const cleanPhone = phone.replace(/\D/g, "");
 
     if (!cleanPhone) return;
@@ -168,10 +204,11 @@ export const ClientAppointmentCard = ({
   };
 
   const hasPhone = !!(
-    provider?.businessPhone || provider?.socialLinks?.whatsapp
+    provider?.phone ||
+    provider?.businessPhone ||
+    provider?.socialLinks?.whatsapp
   );
 
-  // --- LÓGICA DE CANCELAMENTO MELHORADA ---
   const minHoursNotice = provider?.cancellationMinHours ?? 2;
   const cancellationDeadline = subHours(startTime, minHoursNotice);
   const now = new Date();
@@ -188,187 +225,217 @@ export const ClientAppointmentCard = ({
       status === "CONFIRMED") &&
     !isBefore(now, cancellationDeadline) &&
     isBefore(now, startTime);
-  // -----------------------------------------
 
   const displayImage =
     professionalAvatarUrl || providerAvatarUrl || provider?.logoUrl;
-
   const initials =
     professionalName
       ?.split(" ")
-      .map((n: string) => n[0])
+      .map((n) => n[0])
       .slice(0, 2)
       .join("")
       .toUpperCase() || "PR";
 
-  const MotionCard = motion(Card);
-
   const hasReview = !!appointment.reviewId;
   const displayPrice =
-    appointment.totalAmount ||
-    appointment.finalAmount ||
-    appointment.totalPrice ||
-    0;
+    totalPrice ?? finalPrice ?? price ?? totalAmount ?? finalAmount ?? 0;
 
-  // Como EnrichedAppointment já traz o totalDuration, usamos direto.
-  const displayDuration = appointment.totalDuration || 30;
+  const displayServices: string[] = [];
+  if (serviceNames && Array.isArray(serviceNames) && serviceNames.length > 0) {
+    displayServices.push(...serviceNames);
+  } else if (services && Array.isArray(services) && services.length > 0) {
+    displayServices.push(...services.map((s) => s.name));
+  } else if (items && Array.isArray(items) && items.length > 0) {
+    displayServices.push(...items.map((i) => i.name));
+  }
+
+  let calculatedDuration = 30;
+  if (rawEndTime) {
+    calculatedDuration = differenceInMinutes(
+      parseJavaDate(rawEndTime),
+      startTime,
+    );
+  } else if (services && Array.isArray(services) && services.length > 0) {
+    calculatedDuration = services.reduce(
+      (acc, s) => acc + (s.duration || 0),
+      0,
+    );
+  }
+  const displayDuration = appointment.totalDuration ?? calculatedDuration;
+
+  const streetName =
+    locationAddress?.street ||
+    locationAddress?.logradouro ||
+    "Endereço não informado";
+  const cityName = locationAddress?.city || locationAddress?.localidade || "";
+  const displayAddressString = cityName
+    ? `${streetName}, ${cityName}`
+    : streetName;
 
   return (
     <>
-      <MotionCard
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="border-gray-800 bg-gray-900/40 hover:border-gray-700 transition-colors"
       >
-        <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-4 border-b border-gray-800/50 bg-gray-900/20">
-          <Avatar className="h-14 w-14 border border-gray-700">
-            <AvatarImage src={displayImage} alt={professionalName} />
-            <AvatarFallback>{initials}</AvatarFallback>
-          </Avatar>
+        <Card className="border-gray-800 bg-gray-900/40 hover:border-gray-700 transition-colors">
+          <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-4 border-b border-gray-800/50 bg-gray-900/20">
+            <Avatar className="h-14 w-14 border border-gray-700">
+              <AvatarImage src={displayImage} alt={professionalName} />
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
 
-          <div className="flex-1 space-y-1">
-            <div className="flex justify-between items-start">
-              <h3 className="font-bold text-lg text-gray-100">
-                {professionalName}
-              </h3>
+            <div className="flex-1 space-y-1">
+              <div className="flex justify-between items-start">
+                <h3 className="font-bold text-lg text-gray-100">
+                  {professionalName}
+                </h3>
 
-              <div className="flex items-center gap-2">
-                {hasPhone && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={handleWhatsAppClick}
-                    className="h-8 w-8 rounded-full text-green-500 hover:text-white hover:bg-green-600 transition-colors"
-                  >
-                    <FaWhatsapp size={18} />
-                  </Button>
-                )}
-                <StatusBadge status={rawStatus} />
+                <div className="flex items-center gap-2">
+                  {hasPhone && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleWhatsAppClick}
+                      className="h-8 w-8 rounded-full text-green-500 hover:text-white hover:bg-green-600 transition-colors"
+                    >
+                      <FaWhatsapp size={18} />
+                    </Button>
+                  )}
+                  <StatusBadge status={status} />
+                </div>
+              </div>
+              <p className="text-sm text-gray-400 flex items-center gap-1">
+                <span className="font-medium text-primary">
+                  {provider?.businessName || "Estabelecimento"}
+                </span>
+              </p>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">
+                  Data
+                </span>
+                <div className="flex items-center gap-2 text-gray-200">
+                  <Calendar size={16} className="text-primary" />
+                  <span className="text-sm capitalize font-medium">
+                    {formattedDate}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">
+                  Horário
+                </span>
+                <div className="flex items-center gap-2 text-gray-200">
+                  <Clock size={16} className="text-primary" />
+                  <span className="text-sm font-medium">{formattedTime}</span>
+                </div>
               </div>
             </div>
-            <p className="text-sm text-gray-400 flex items-center gap-1">
-              <span className="font-medium text-primary">
-                {provider?.businessName || "Estabelecimento"}
-              </span>
-            </p>
-          </div>
-        </CardHeader>
 
-        <CardContent className="pt-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">
-                Data
+            {locationAddress && (
+              <div className="bg-black/20 p-3 rounded-lg border border-gray-800 flex items-center justify-between">
+                <div className="flex items-center gap-3 text-sm text-gray-300 truncate mr-2">
+                  <MapPin size={16} className="text-primary shrink-0" />
+                  <span className="truncate">{displayAddressString}</span>
+                </div>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={handleNavigation}
+                  className="h-auto p-0 text-primary hover:text-primary-hover shrink-0"
+                >
+                  <Navigation size={14} className="mr-1" /> Mapa
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <span className="text-xs text-gray-500 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                <Scissors size={12} /> Serviços
               </span>
-              <div className="flex items-center gap-2 text-gray-200">
-                <Calendar size={16} className="text-primary" />
-                <span className="text-sm capitalize font-medium">
-                  {formattedDate}
+              <div className="flex flex-wrap gap-2">
+                {displayServices.length > 0 ? (
+                  displayServices.map((name, idx) => (
+                    <Badge
+                      key={`name-${idx}`}
+                      variant="secondary"
+                      className="bg-gray-800 text-gray-300 font-normal border-gray-700"
+                    >
+                      {name}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge
+                    variant="secondary"
+                    className="bg-gray-800 text-gray-500 font-normal border-gray-700"
+                  >
+                    Nenhum serviço
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+
+          <CardFooter className="flex flex-col gap-4 pt-4 border-t border-gray-800/50 bg-black/20">
+            <div className="w-full space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-400">Tempo estimado</span>
+                <span className="text-sm font-medium text-gray-200">
+                  {formatDuration(displayDuration)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-400">Total</span>
+                <span className="text-xl font-bold text-primary">
+                  R$ {Number(displayPrice).toFixed(2)}
                 </span>
               </div>
             </div>
-            <div className="space-y-1">
-              <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">
-                Horário
-              </span>
-              <div className="flex items-center gap-2 text-gray-200">
-                <Clock size={16} className="text-primary" />
-                <span className="text-sm font-medium">{formattedTime}</span>
+
+            {(status === "COMPLETED" && !hasReview) || canCancel ? (
+              <div className="flex gap-3 w-full">
+                {status === "COMPLETED" && !hasReview && (
+                  <Button
+                    onClick={() => setReviewModalOpen(true)}
+                    className="flex-1 gap-2 bg-amber-500 text-black hover:bg-amber-600"
+                  >
+                    <Star size={16} /> Avaliar
+                  </Button>
+                )}
+
+                {canCancel && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setCancelModalOpen(true)}
+                    className="flex-1 gap-2 bg-destructive/10 text-destructive hover:bg-destructive hover:text-white border border-destructive/20"
+                    disabled={isCancelling}
+                  >
+                    <XCircle size={16} /> Cancelar
+                  </Button>
+                )}
               </div>
-            </div>
-          </div>
+            ) : null}
 
-          {provider?.businessAddress && (
-            <div className="bg-black/20 p-3 rounded-lg border border-gray-800 flex items-center justify-between">
-              <div className="flex items-center gap-3 text-sm text-gray-300 truncate mr-2">
-                <MapPin size={16} className="text-primary shrink-0" />
-                <span className="truncate">{`${provider.businessAddress.street}, ${provider.businessAddress.city}`}</span>
+            {hasCancellationTimeExpired && (
+              <div className="w-full flex flex-col items-center justify-center gap-1 text-center p-2 rounded border border-yellow-500/20 bg-yellow-500/10">
+                <div className="flex items-center gap-2 text-xs text-yellow-500 font-bold">
+                  <AlertCircle size={14} /> Cancelamento online expirado
+                </div>
+                <span className="text-[10px] text-yellow-500/80 leading-tight">
+                  Necessário {minHoursNotice}h de antecedência.
+                  <br /> Entre em contato com o estabelecimento.
+                </span>
               </div>
-              <Button
-                variant="link"
-                size="sm"
-                onClick={handleNavigation}
-                className="h-auto p-0 text-primary hover:text-primary-hover shrink-0"
-              >
-                <Navigation size={14} className="mr-1" /> Mapa
-              </Button>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <span className="text-xs text-gray-500 uppercase font-bold tracking-wider flex items-center gap-1.5">
-              <Scissors size={12} /> Serviços
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {(items || []).map((item: AppointmentItem) => (
-                <Badge
-                  key={item.id || item.referenceId}
-                  variant="secondary"
-                  className="bg-gray-800 text-gray-300 font-normal border-gray-700"
-                >
-                  {item.name}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex flex-col gap-4 pt-4 border-t border-gray-800/50 bg-black/20">
-          <div className="w-full space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-400">Tempo estimado</span>
-              <span className="text-sm font-medium text-gray-200">
-                {formatDuration(displayDuration)}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-400">Total</span>
-              <span className="text-xl font-bold text-primary">
-                R$ {displayPrice.toFixed(2)}
-              </span>
-            </div>
-          </div>
-
-          {(status === "COMPLETED" && !hasReview) || canCancel ? (
-            <div className="flex gap-3 w-full">
-              {status === "COMPLETED" && !hasReview && (
-                <Button
-                  onClick={() => setReviewModalOpen(true)}
-                  className="flex-1 gap-2 bg-amber-500 text-black hover:bg-amber-600"
-                >
-                  <Star size={16} /> Avaliar
-                </Button>
-              )}
-
-              {canCancel && (
-                <Button
-                  variant="destructive"
-                  onClick={() => setCancelModalOpen(true)}
-                  className="flex-1 gap-2 bg-destructive/10 text-destructive hover:bg-destructive hover:text-white border border-destructive/20"
-                >
-                  <XCircle size={16} /> Cancelar
-                </Button>
-              )}
-            </div>
-          ) : null}
-
-          {/* Mensagem de Erro Melhorada */}
-          {hasCancellationTimeExpired && (
-            <div className="w-full flex flex-col items-center justify-center gap-1 text-center p-2 rounded border border-yellow-500/20 bg-yellow-500/10">
-              <div className="flex items-center gap-2 text-xs text-yellow-500 font-bold">
-                <AlertCircle size={14} /> Cancelamento online expirado
-              </div>
-              <span className="text-[10px] text-yellow-500/80 leading-tight">
-                Necessário {minHoursNotice}h de antecedência.
-                <br />
-                Entre em contato com o estabelecimento.
-              </span>
-            </div>
-          )}
-        </CardFooter>
-      </MotionCard>
+            )}
+          </CardFooter>
+        </Card>
+      </motion.div>
 
       <ReviewModal
         isOpen={isReviewModalOpen}

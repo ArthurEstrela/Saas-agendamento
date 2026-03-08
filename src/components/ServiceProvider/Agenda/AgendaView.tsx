@@ -4,6 +4,8 @@ import { useAuthStore } from "../../../store/authStore";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
 import { useAvailabilityStore } from "../../../store/availabilityStore";
+// ✨ NOVA IMPORTAÇÃO: Store de profissionais
+import { useProfessionalsManagementStore } from "../../../store/professionalsManagementStore";
 import type {
   ServiceProviderProfile,
   ProfessionalProfile,
@@ -19,7 +21,14 @@ import {
   Download,
   Plus,
 } from "lucide-react";
-import { startOfDay, isPast, format, parse, startOfWeek, endOfWeek } from "date-fns";
+import {
+  startOfDay,
+  isPast,
+  format,
+  parse,
+  startOfWeek,
+  endOfWeek,
+} from "date-fns";
 import { useAgendaModalStore } from "../../../store/useAgendaModalStore";
 import { useFilteredAppointments } from "../../../hooks/useFilteredAppointments";
 import { AgendaModalsWrapper } from "./AgendaModalsWrapper";
@@ -58,6 +67,10 @@ export const AgendaView = () => {
     cancelAppointment,
   } = useProviderAppointmentsStore();
 
+  // ✨ Puxando o estado e a função de fetch dos profissionais
+  const { professionals, fetchProfessionals } =
+    useProfessionalsManagementStore();
+
   const { availableSlots } = useAvailabilityStore();
   const { openModal } = useAgendaModalStore();
 
@@ -81,18 +94,32 @@ export const AgendaView = () => {
 
   useEffect(() => {
     if (!user) return;
-    
+
     const providerId = isOwner
       ? (user as ServiceProviderProfile).id
       : (user as ProfessionalProfile).serviceProviderId;
 
     if (providerId) {
-      // ✨ CORREÇÃO: Passando as datas corretamente (vamos buscar a semana toda ao redor da data selecionada)
+      // Passando as datas corretamente (vamos buscar a semana toda ao redor da data selecionada)
       const startDateStr = format(startOfWeek(selectedDay), "yyyy-MM-dd");
       const endDateStr = format(endOfWeek(selectedDay), "yyyy-MM-dd");
+
+      // Busca a agenda
       fetchAppointments(providerId, startDateStr, endDateStr);
+
+      // ✨ CORREÇÃO: Fazer o fetch dos profissionais caso a lista esteja vazia
+      if (isOwner && professionals.length === 0) {
+        fetchProfessionals(providerId);
+      }
     }
-  }, [isOwner, user, selectedDay, fetchAppointments]);
+  }, [
+    isOwner,
+    user,
+    selectedDay,
+    fetchAppointments,
+    fetchProfessionals,
+    professionals.length,
+  ]);
 
   // Cast seguro para a interface correta do Hook
   const providerUser = isOwner
@@ -208,7 +235,10 @@ export const AgendaView = () => {
     const normalizedStatus = newStatus.toUpperCase();
     if (normalizedStatus === "SCHEDULED" || normalizedStatus === "CONFIRMED") {
       await confirmAppointment(id);
-    } else if (normalizedStatus === "CANCELLED" || normalizedStatus === "REJECTED") {
+    } else if (
+      normalizedStatus === "CANCELLED" ||
+      normalizedStatus === "REJECTED"
+    ) {
       await cancelAppointment(id, "Rejeitado pelo profissional");
     }
   };
@@ -363,7 +393,7 @@ export const AgendaView = () => {
                   <RequestsTab
                     appointments={filteredAppointments}
                     onAppointmentSelect={handleOpenDetails}
-                    onUpdateStatus={handleUpdateStatusWrapper} // Agora com wrapper seguro!
+                    onUpdateStatus={handleUpdateStatusWrapper}
                   />
                 </div>
               )}

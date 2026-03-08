@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react"; // ✨ Adicionado useEffect
 import { useAuthStore } from "../../../store/authStore";
 import { useProfessionalsManagementStore } from "../../../store/professionalsManagementStore";
 import { Users } from "lucide-react";
@@ -15,8 +15,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "../../ui/avatar";
 
 // Estendemos a interface para suportar a flag visual 'isOwner' sem recorrer a 'any'
-type TeamMember = ProfessionalProfile & { 
-  isOwner?: boolean; 
+type TeamMember = ProfessionalProfile & {
+  isOwner?: boolean;
   photoURL?: string; // Fallback caso o cache local ainda tenha o padrão antigo
 };
 
@@ -31,11 +31,23 @@ export const ProfessionalFilter = ({
 }: ProfessionalFilterProps) => {
   // Lemos o utilizador do AuthStore (Nova arquitetura)
   const { user } = useAuthStore();
-  
-  // Lemos a lista de profissionais do store dedicado
-  const { professionals } = useProfessionalsManagementStore();
 
-  // ✨ Movido para DENTRO do useMemo para evitar re-renders desnecessários!
+  // ✨ Lemos a lista E a função de fetch do store dedicado
+  const { professionals, fetchProfessionals } =
+    useProfessionalsManagementStore();
+
+  // ✨ CORREÇÃO FASE 4: Garantia de fetch independente
+  // Se a lista estiver vazia, o próprio filtro tem a inteligência de ir buscar os dados
+  useEffect(() => {
+    if (user && user.role?.toUpperCase() === "SERVICE_PROVIDER") {
+      const providerId = (user as any).id; // Cast seguro pois sabemos que é dono
+      if (professionals.length === 0 && providerId) {
+        fetchProfessionals(providerId);
+      }
+    }
+  }, [user, professionals.length, fetchProfessionals]);
+
+  // Movido para DENTRO do useMemo para evitar re-renders desnecessários!
   const sortedTeam = useMemo(() => {
     // Garante que team é sempre um array válido sem quebrar as referências de dependência
     const team = (professionals as TeamMember[]) || [];
@@ -44,7 +56,7 @@ export const ProfessionalFilter = ({
       // Dono sempre primeiro
       if (a.isOwner && !b.isOwner) return -1;
       if (!a.isOwner && b.isOwner) return 1;
-      
+
       // Se não, organiza alfabeticamente
       return (a.name || "").localeCompare(b.name || "");
     });
@@ -75,7 +87,10 @@ export const ProfessionalFilter = ({
         </SelectTrigger>
 
         <SelectContent className="bg-gray-900 border-gray-800 max-h-[40vh] z-50">
-          <SelectItem value="all" className="focus:bg-gray-800 cursor-pointer py-3">
+          <SelectItem
+            value="all"
+            className="focus:bg-gray-800 cursor-pointer py-3"
+          >
             <span className="font-medium text-white pl-1">Todos da Equipe</span>
           </SelectItem>
 
@@ -85,7 +100,7 @@ export const ProfessionalFilter = ({
             // Usa o padrão novo da API, com fallback para o antigo
             const displayImage = prof.profilePictureUrl || prof.photoURL;
             const displayName = prof.name || "Profissional";
-            
+
             return (
               <SelectItem
                 key={prof.id}
@@ -104,7 +119,9 @@ export const ProfessionalFilter = ({
                       {displayName}
                     </span>
                     {prof.isOwner && (
-                      <span className="text-[10px] text-gray-500 -mt-0.5">Administrador</span>
+                      <span className="text-[10px] text-gray-500 -mt-0.5">
+                        Administrador
+                      </span>
                     )}
                   </div>
                 </div>

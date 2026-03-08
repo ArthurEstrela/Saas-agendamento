@@ -97,9 +97,10 @@ export const AgendaView = () => {
   useEffect(() => {
     if (!user) return;
 
-    const providerId = isOwner
-      ? (user as ServiceProviderProfile).id
-      : (user as ProfessionalProfile).serviceProviderId;
+    const providerId =
+      user.providerId ||
+      (user as ProfessionalProfile).serviceProviderId ||
+      user.id;
 
     if (providerId) {
       // Passando as datas corretamente (vamos buscar a semana toda ao redor da data selecionada)

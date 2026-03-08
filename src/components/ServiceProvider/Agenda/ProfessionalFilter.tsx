@@ -1,7 +1,7 @@
-import { useMemo, useEffect } from "react"; // ✨ Adicionado useEffect
+import { useMemo, useEffect } from "react";
 import { useAuthStore } from "../../../store/authStore";
 import { useProfessionalsManagementStore } from "../../../store/professionalsManagementStore";
-import { Users } from "lucide-react";
+import { Users, Loader2 } from "lucide-react"; // ✨ Adicionado Loader2
 import type { ProfessionalProfile } from "../../../types";
 
 // UI
@@ -32,20 +32,26 @@ export const ProfessionalFilter = ({
   // Lemos o utilizador do AuthStore (Nova arquitetura)
   const { user } = useAuthStore();
 
-  // ✨ Lemos a lista E a função de fetch do store dedicado
-  const { professionals, fetchProfessionals } =
+  // ✨ Lemos a lista, o loading E a função de fetch do store dedicado
+  const { professionals, loading, fetchProfessionals } =
     useProfessionalsManagementStore();
 
-  // ✨ CORREÇÃO FASE 4: Garantia de fetch independente
-  // Se a lista estiver vazia, o próprio filtro tem a inteligência de ir buscar os dados
+  // ✨ CORREÇÃO DEFINITIVA: Checagem segura contra NULL e ID correto
   useEffect(() => {
     if (user && user.role?.toUpperCase() === "SERVICE_PROVIDER") {
-      const providerId = (user as any).id; // Cast seguro pois sabemos que é dono
-      if (professionals.length === 0 && providerId) {
+      // Pega o providerId de forma segura (no novo Java Backend às vezes vem em providerId)
+      const providerId = (user as any).providerId || (user as any).id;
+
+      if ((!professionals || professionals.length === 0) && providerId) {
         fetchProfessionals(providerId);
       }
     }
-  }, [user, professionals.length, fetchProfessionals]);
+  }, [
+    user,
+    fetchProfessionals,
+    // ✨ Aqui estava o erro! Avaliação segura para não quebrar a tela:
+    professionals ? professionals.length : 0,
+  ]);
 
   // Movido para DENTRO do useMemo para evitar re-renders desnecessários!
   const sortedTeam = useMemo(() => {
@@ -60,7 +66,7 @@ export const ProfessionalFilter = ({
       // Se não, organiza alfabeticamente
       return (a.name || "").localeCompare(b.name || "");
     });
-  }, [professionals]); // A dependência agora é diretamente o estado bruto 'professionals'
+  }, [professionals]);
 
   // Se não for prestador/dono, não mostra o filtro
   const userRole = user?.role?.toUpperCase();
@@ -78,7 +84,12 @@ export const ProfessionalFilter = ({
         <SelectTrigger className="w-full h-11 bg-gray-900 border-gray-800 text-gray-200 hover:bg-gray-800 transition-colors focus:ring-1 focus:ring-primary/50 rounded-xl">
           <div className="flex items-center gap-3 overflow-hidden w-full">
             <div className="p-1.5 bg-gray-800 rounded-md shrink-0">
-              <Users size={16} className="text-primary" />
+              {/* ✨ Se estiver carregando pela primeira vez, mostra o spinner no lugar do ícone */}
+              {loading && (!professionals || professionals.length === 0) ? (
+                <Loader2 size={16} className="text-primary animate-spin" />
+              ) : (
+                <Users size={16} className="text-primary" />
+              )}
             </div>
             <span className="truncate text-sm font-medium flex-1 text-left">
               <SelectValue placeholder="Selecione um profissional" />

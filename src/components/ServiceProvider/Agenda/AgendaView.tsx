@@ -112,8 +112,8 @@ export const AgendaView = () => {
       // ✨ Busca as solicitações PENDENTES (Independente da data, Inbox Global)
       fetchPendingRequests(providerId);
 
-      // Fazer o fetch dos profissionais caso a lista esteja vazia
-      if (isOwner && professionals.length === 0) {
+      // ✨ CORREÇÃO: Fazer o fetch dos profissionais de forma segura contra estado null
+      if (isOwner && (!professionals || professionals.length === 0)) {
         fetchProfessionals(providerId);
       }
     }
@@ -122,9 +122,10 @@ export const AgendaView = () => {
     user,
     selectedDay,
     fetchAppointments,
-    fetchPendingRequests, // ✨ Adicionado nas dependências
+    fetchPendingRequests,
     fetchProfessionals,
-    professionals.length,
+    // ✨ CORREÇÃO: Avaliação segura na dependência para evitar o erro "Cannot read properties of null"
+    professionals ? professionals.length : 0,
   ]);
 
   // Cast seguro para a interface correta do Hook
@@ -393,7 +394,6 @@ export const AgendaView = () => {
               {activeTab === "requests" && (
                 <div className="p-2 sm:p-0">
                   <RequestsTab
-                    // ✨ Correção das propriedades que estavam com nomes errados!
                     pendingAppointments={pendingRequests}
                     onUpdateStatus={handleUpdateStatusWrapper}
                     onAppointmentSelect={handleOpenDetails}

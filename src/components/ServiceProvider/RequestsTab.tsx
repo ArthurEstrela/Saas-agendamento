@@ -13,19 +13,21 @@ const normalizeDate = (dateValue: string | Date): Date => {
 };
 
 interface RequestsTabProps {
-  appointments: Appointment[];
+  // ✨ Atualizado para receber diretamente os pendentes do novo estado
+  pendingAppointments: Appointment[]; 
   // ✨ Flexibilizando a tipagem para suportar os Enums do Java (Maiúsculas)
   onUpdateStatus: (id: string, status: "SCHEDULED" | "CANCELLED" | "scheduled" | "cancelled") => void;
   onAppointmentSelect: (appointment: Appointment) => void;
 }
 
 export const RequestsTab = ({
-  appointments,
+  pendingAppointments,
   onUpdateStatus,
   onAppointmentSelect,
 }: RequestsTabProps) => {
-  const sortedAppointments = appointments
-    // ✨ Padronizando para MAIÚSCULO, que é o padrão do Spring Boot
+  
+  // ✨ A lista já deve vir filtrada do backend, mas mantemos o filtro no frontend por dupla segurança
+  const sortedAppointments = pendingAppointments
     .filter((a) => a.status.toUpperCase() === "PENDING")
     // ✨ Usando a função normalizeDate para evitar crash com o .getTime()
     .sort((a, b) => normalizeDate(a.startTime).getTime() - normalizeDate(b.startTime).getTime());

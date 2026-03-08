@@ -4,7 +4,7 @@ import { useAuthStore } from "../../../store/authStore";
 import { useProviderAppointmentsStore } from "../../../store/providerAppointmentsStore";
 import { usePersistentState } from "../../../hooks/usePersistentState";
 import { useAvailabilityStore } from "../../../store/availabilityStore";
-// ✨ NOVA IMPORTAÇÃO: Store de profissionais
+// Store de profissionais
 import { useProfessionalsManagementStore } from "../../../store/professionalsManagementStore";
 import type {
   ServiceProviderProfile,
@@ -58,16 +58,18 @@ export const AgendaView = () => {
   // 🔥 Pegamos o usuário do Store Principal de Autenticação
   const { user } = useAuthStore();
 
-  // 🔥 Lemos funções corretas e estritas do provider store
+  // 🔥 Centralizamos a chamada do Provider Store (incluindo o pendingRequests e sua busca)
   const {
     appointments,
+    pendingRequests = [],
     loading: isLoading,
     fetchAppointments,
+    fetchPendingRequests, // ✨ Puxando a nova função que criamos
     confirmAppointment,
     cancelAppointment,
   } = useProviderAppointmentsStore();
 
-  // ✨ Puxando o estado e a função de fetch dos profissionais
+  // Puxando o estado e a função de fetch dos profissionais
   const { professionals, fetchProfessionals } =
     useProfessionalsManagementStore();
 
@@ -104,10 +106,13 @@ export const AgendaView = () => {
       const startDateStr = format(startOfWeek(selectedDay), "yyyy-MM-dd");
       const endDateStr = format(endOfWeek(selectedDay), "yyyy-MM-dd");
 
-      // Busca a agenda
+      // ✨ Busca a agenda da semana (para o calendário)
       fetchAppointments(providerId, startDateStr, endDateStr);
 
-      // ✨ CORREÇÃO: Fazer o fetch dos profissionais caso a lista esteja vazia
+      // ✨ Busca as solicitações PENDENTES (Independente da data, Inbox Global)
+      fetchPendingRequests(providerId);
+
+      // Fazer o fetch dos profissionais caso a lista esteja vazia
       if (isOwner && professionals.length === 0) {
         fetchProfessionals(providerId);
       }
@@ -117,6 +122,7 @@ export const AgendaView = () => {
     user,
     selectedDay,
     fetchAppointments,
+    fetchPendingRequests, // ✨ Adicionado nas dependências
     fetchProfessionals,
     professionals.length,
   ]);
@@ -163,12 +169,8 @@ export const AgendaView = () => {
   const handleOpenDetails = (appointment: Appointment) =>
     openModal("details", appointment);
 
-  // Status agora chegam em maiúsculas (PENDING)
-  const pendingCount = useMemo(
-    () =>
-      appointments.filter((a) => a.status.toUpperCase() === "PENDING").length,
-    [appointments],
-  );
+  // ✨ Otimizado: O pendingCount agora olha direto pro tamanho da nossa lista exclusiva de pendentes!
+  const pendingCount = pendingRequests?.length || 0;
 
   const pendingPastCount = useMemo(() => {
     const beginningOfToday = startOfDay(new Date());
@@ -391,9 +393,10 @@ export const AgendaView = () => {
               {activeTab === "requests" && (
                 <div className="p-2 sm:p-0">
                   <RequestsTab
-                    appointments={filteredAppointments}
-                    onAppointmentSelect={handleOpenDetails}
+                    // ✨ Correção das propriedades que estavam com nomes errados!
+                    pendingAppointments={pendingRequests}
                     onUpdateStatus={handleUpdateStatusWrapper}
+                    onAppointmentSelect={handleOpenDetails}
                   />
                 </div>
               )}

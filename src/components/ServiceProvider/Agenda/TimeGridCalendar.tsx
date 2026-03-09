@@ -39,7 +39,7 @@ const AppointmentCard = ({
   appointment: Appointment;
   onSelect: (appointment: Appointment) => void;
 }) => {
-  // ✨ Conversão crucial para a nova API (Strings ISO para Date)
+  // Conversão para Date
   const startDate = new Date(appointment.startTime);
   const endDate = new Date(appointment.endTime);
 
@@ -54,9 +54,26 @@ const AppointmentCard = ({
   const isCompleted = status === "COMPLETED";
   const isPastTime = !isPending && !isCompleted && !isFuture(endDate);
 
-  // ✨ Lógica de detecção de bloqueio alinhada com o backend
+  // ✨ Lógica de detecção de bloqueio alinhada com o backend Spring Boot
   const isBlock =
-    status === "BLOCKED" || appointment.notes?.includes("Bloqueio");
+    status === "BLOCKED" ||
+    appointment.notes?.includes("Bloqueio") ||
+    (appointment as any).isPersonalBlock;
+
+  // ✨ Lógica inteligente para extrair o nome dos serviços (API Java usa .services, antigo usa .items)
+  const serviceName = useMemo(() => {
+    if (isBlock) return "Horário Bloqueado";
+
+    // Suporta tanto o formato do Firebase quanto o do Spring Boot
+    const items = appointment.items || (appointment as any).services;
+
+    if (items && items.length > 0) {
+      // Se tiver mais de um serviço, concatena (ex: "Corte + Barba")
+      return items.map((item: any) => item.name).join(" + ");
+    }
+
+    return "Compromisso";
+  }, [appointment, isBlock]);
 
   const statusClasses = cn(
     "border-l-[3px] sm:border-l-[4px] shadow-md backdrop-blur-sm transition-all",
@@ -99,9 +116,12 @@ const AppointmentCard = ({
           <span className="text-[10px] sm:text-xs font-mono font-bold opacity-80 shrink-0 bg-black/20 px-1 rounded w-fit">
             {format(startDate, "HH:mm")} - {format(endDate, "HH:mm")}
           </span>
-          <span className="text-xs sm:text-sm font-bold truncate leading-tight mt-0.5 sm:mt-0">
-            {appointment.items?.[0]?.name ||
-              (isBlock ? "Horário Bloqueado" : "Compromisso")}
+          {/* ✨ Aplica o nome do serviço processado e adiciona um title tooltip para nomes muito grandes */}
+          <span
+            className="text-xs sm:text-sm font-bold truncate leading-tight mt-0.5 sm:mt-0"
+            title={serviceName}
+          >
+            {serviceName}
           </span>
         </div>
 
@@ -154,7 +174,7 @@ const CurrentTimeIndicator = () => {
 };
 
 interface TimeGridCalendarProps {
-  appointments: Appointment[]; // ✨ Tipagem estrita
+  appointments: Appointment[];
   currentDate: Date;
   onAppointmentSelect: (appointment: Appointment) => void;
 }
@@ -195,7 +215,6 @@ export const TimeGridCalendar = ({
     weekDays.forEach((day) => map.set(format(day, "yyyy-MM-dd"), []));
 
     appointments.forEach((appt) => {
-      // ✨ Conversão para Date antes de formatar a chave do Map
       const dayKey = format(new Date(appt.startTime), "yyyy-MM-dd");
       if (map.has(dayKey)) {
         map.get(dayKey)!.push(appt);

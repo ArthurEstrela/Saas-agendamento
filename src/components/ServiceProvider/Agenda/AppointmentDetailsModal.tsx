@@ -86,7 +86,16 @@ export const AppointmentDetailsModal = ({
   };
 
   // Trata o número de telemóvel e remove caracteres não numéricos
-  const rawPhone = appointment.clientPhone || "";
+  let rawPhone = "";
+  if (typeof appointment.clientPhone === "string") {
+    rawPhone = appointment.clientPhone;
+  } else if (
+    appointment.clientPhone &&
+    typeof appointment.clientPhone === "object"
+  ) {
+    rawPhone = (appointment.clientPhone as any).value || "";
+  }
+
   const cleanPhone = rawPhone.replace(/\D/g, "");
   const hasPhone = !!cleanPhone;
 

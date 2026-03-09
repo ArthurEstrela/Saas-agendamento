@@ -28,35 +28,56 @@ export const ScheduledAppointmentCard = ({
   onAppointmentSelect,
 }: ScheduledAppointmentCardProps) => {
   // Lemos os dados planificados e convertemos as datas
-  const { clientPhone, clientName, professionalName, startTime: rawStartTime, items, client } = appointment;
+  const {
+    clientPhone,
+    clientName,
+    professionalName,
+    startTime: rawStartTime,
+    items,
+    client,
+  } = appointment;
   const startTime = new Date(rawStartTime);
 
   // ✨ Fallback seguro para o telefone
   const phoneToUse = clientPhone || client?.phoneNumber || "";
 
+  // ✨ CORREÇÃO: Fallback Inteligente para Nomes de Serviços (Spring Boot vs Firebase Antigo)
+  const serviceNamesArr = (appointment as any).serviceNames;
+
+  // Pega apenas o primeiro serviço para a mensagem curta do WhatsApp
+  const serviceNameWhatsapp =
+    serviceNamesArr?.length > 0
+      ? serviceNamesArr[0]
+      : items && items.length > 0
+        ? items[0].name
+        : "serviço";
+
+  // Pega todos os serviços separados por vírgula para exibir na Badge visualmente
+  const serviceDisplayName =
+    serviceNamesArr?.length > 0
+      ? serviceNamesArr.join(", ")
+      : items && items.length > 0
+        ? items.map((i: any) => i.name).join(", ")
+        : "Serviço não especificado";
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     const cleanPhone = phoneToUse.replace(/\D/g, "");
     if (!cleanPhone) return;
 
     const timeStr = format(startTime, "HH:mm");
     const dateStr = format(startTime, "dd/MM");
-    const message = `Olá ${clientName}, confirmando seu horário dia ${dateStr} às ${timeStr}. Tudo certo?`;
-    
+    const message = `Olá ${clientName}, confirmando seu horário dia ${dateStr} às ${timeStr} para o seu ${serviceNameWhatsapp}. Tudo certo?`;
+
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
-      "_blank"
+      "_blank",
     );
   };
 
   const hasPhone = !!phoneToUse;
   const initials = (clientName || "C").substring(0, 2).toUpperCase();
-
-  // ✨ Tratamento seguro para os serviços
-  const serviceDisplayName = items && items.length > 0 
-    ? items.map(i => i.name).join(", ") 
-    : "Serviço não especificado";
 
   return (
     <motion.div

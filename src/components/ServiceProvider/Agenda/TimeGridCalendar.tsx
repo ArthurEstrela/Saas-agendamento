@@ -60,15 +60,20 @@ const AppointmentCard = ({
     appointment.notes?.includes("Bloqueio") ||
     (appointment as any).isPersonalBlock;
 
-  // ✨ Lógica inteligente para extrair o nome dos serviços (API Java usa .services, antigo usa .items)
+  // ✨ CORREÇÃO: Lógica inteligente para extrair o nome dos serviços (Spring Boot vs Firebase Antigo)
   const serviceName = useMemo(() => {
     if (isBlock) return "Horário Bloqueado";
 
-    // Suporta tanto o formato do Firebase quanto o do Spring Boot
-    const items = appointment.items || (appointment as any).services;
+    const anyAppt = appointment as any;
 
+    // Se o backend enviar a nova lista de serviceNames direto
+    if (anyAppt.serviceNames && anyAppt.serviceNames.length > 0) {
+      return anyAppt.serviceNames.join(" + ");
+    }
+
+    // Se tiver no formato antigo do frontend (items ou services)
+    const items = appointment.items || anyAppt.services;
     if (items && items.length > 0) {
-      // Se tiver mais de um serviço, concatena (ex: "Corte + Barba")
       return items.map((item: any) => item.name).join(" + ");
     }
 
@@ -93,7 +98,13 @@ const AppointmentCard = ({
   );
 
   const isShort = height < 60;
-  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
+
+  // ✨ CORREÇÃO: Fallback Inteligente para o Preço
+  const displayPrice =
+    (appointment as any).totalPrice ??
+    appointment.totalAmount ??
+    appointment.finalAmount ??
+    0;
 
   return (
     <motion.div

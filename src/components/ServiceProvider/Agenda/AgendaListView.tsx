@@ -32,8 +32,20 @@ const AppointmentRow = ({
   const startTime = new Date(appointment.startTime);
   const endTime = new Date(appointment.endTime);
 
-  // Fallback de Preço
-  const displayPrice = appointment.totalAmount || 0;
+  // ✨ CORREÇÃO DO PREÇO: Lê do Spring Boot (totalPrice) ou faz fallback pro formato antigo
+  const displayPrice =
+    (appointment as any).totalPrice ??
+    appointment.totalAmount ??
+    appointment.finalAmount ??
+    0;
+
+  // ✨ CORREÇÃO DOS SERVIÇOS: Lê do array de strings do Spring Boot ou extrai dos items antigos
+  const serviceNameDisplay =
+    (appointment as any).serviceNames?.length > 0
+      ? (appointment as any).serviceNames.join(", ")
+      : appointment.items && appointment.items.length > 0
+        ? appointment.items.map((i) => i.name).join(", ")
+        : "Serviço não especificado";
 
   return (
     <motion.li
@@ -80,11 +92,7 @@ const AppointmentRow = ({
             className="text-primary shrink-0 sm:w-3.5 sm:h-3.5"
           />
           <span className="font-semibold text-xs sm:text-sm text-gray-200 truncate leading-tight">
-            {/* ✨ CORREÇÃO: Lê de 'items' em vez de 'services' */}
-            {/* ✨ REMOVIDO O 'any': Lemos apenas do array de items */}
-            {appointment.items && appointment.items.length > 0
-              ? appointment.items.map((i) => i.name).join(", ")
-              : "Serviço não especificado"}
+            {serviceNameDisplay}
           </span>
         </div>
 

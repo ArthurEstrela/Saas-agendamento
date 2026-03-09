@@ -85,7 +85,7 @@ export const AppointmentDetailsModal = ({
     blocked: "Bloqueado",
   };
 
-  // Trata o número de telemóvel e remove caracteres não numéricos
+  // Trata o número de telefone e remove caracteres não numéricos
   let rawPhone = "";
   if (typeof appointment.clientPhone === "string") {
     rawPhone = appointment.clientPhone;
@@ -107,21 +107,36 @@ export const AppointmentDetailsModal = ({
   const endTime = new Date(appointment.endTime);
   const isTooEarlyToComplete = now < endTime;
 
-  // Tratamento seguro para os items/serviços
+  // ✨ CORREÇÃO: Tratamento seguro para os items/serviços com Fallback Inteligente (Spring Boot vs Legado)
+  const anyAppt = appointment as any;
   const serviceName =
-    appointment.items && appointment.items.length > 0
-      ? appointment.items.map((i) => i.name).join(", ")
-      : "Serviço não especificado";
+    anyAppt.serviceNames?.length > 0
+      ? anyAppt.serviceNames.join(", ")
+      : appointment.items && appointment.items.length > 0
+        ? appointment.items.map((i) => i.name).join(", ")
+        : "Serviço não especificado";
 
-  // Preço
-  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
+  // Identifica apenas o primeiro serviço para a mensagem de WhatsApp
+  const firstServiceName =
+    anyAppt.serviceNames?.length > 0
+      ? anyAppt.serviceNames[0]
+      : appointment.items && appointment.items.length > 0
+        ? appointment.items[0].name
+        : "serviço";
+
+  // ✨ CORREÇÃO: Preço puxando do novo formato Spring Boot ou fallback
+  const displayPrice =
+    anyAppt.totalPrice ??
+    appointment.totalAmount ??
+    appointment.finalAmount ??
+    0;
 
   const handleWhatsApp = () => {
     if (!hasPhone) return toast.error("Telefone indisponível");
     const timeStr = format(startTime, "HH:mm");
     const dateStr = format(startTime, "dd/MM");
     const clientName = appointment.clientName || "Cliente";
-    const message = `Olá ${clientName}, gostaria de confirmar nosso agendamento para ${dateStr} às ${timeStr}.`;
+    const message = `Olá ${clientName}, gostaria de confirmar nosso agendamento de ${firstServiceName} para ${dateStr} às ${timeStr}.`;
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
       "_blank",

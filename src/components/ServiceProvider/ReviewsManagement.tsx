@@ -37,7 +37,7 @@ const StarRating = ({ rating }: { rating: number }) => (
         key={i}
         size={14}
         className={cn(
-          i < rating ? "text-amber-400 fill-amber-400" : "text-gray-700"
+          i < rating ? "text-amber-400 fill-amber-400" : "text-gray-700",
         )}
       />
     ))}
@@ -47,16 +47,24 @@ const StarRating = ({ rating }: { rating: number }) => (
 const ReviewSummary = ({ reviews }: { reviews: Review[] }) => {
   const summary = useMemo(() => {
     if (reviews.length === 0)
-      return { total: 0, average: 0, counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<number, number> };
-      
+      return {
+        total: 0,
+        average: 0,
+        counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<number, number>,
+      };
+
     const total = reviews.length;
-    const average = reviews.reduce((acc, review) => acc + review.rating, 0) / total;
-    
-    const counts = reviews.reduce((acc, review) => {
-      acc[review.rating] = (acc[review.rating] || 0) + 1;
-      return acc;
-    }, {} as Record<number, number>);
-    
+    const average =
+      reviews.reduce((acc, review) => acc + review.rating, 0) / total;
+
+    const counts = reviews.reduce(
+      (acc, review) => {
+        acc[review.rating] = (acc[review.rating] || 0) + 1;
+        return acc;
+      },
+      {} as Record<number, number>,
+    );
+
     return { total, average, counts };
   }, [reviews]);
 
@@ -78,7 +86,8 @@ const ReviewSummary = ({ reviews }: { reviews: Review[] }) => {
         <div className="md:col-span-2 space-y-2">
           {[5, 4, 3, 2, 1].map((star) => {
             const count = summary.counts[star] || 0;
-            const percentage = summary.total > 0 ? (count / summary.total) * 100 : 0;
+            const percentage =
+              summary.total > 0 ? (count / summary.total) * 100 : 0;
             return (
               <div key={star} className="flex items-center gap-3">
                 <span className="text-xs font-bold text-gray-500 w-3">
@@ -112,22 +121,27 @@ export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
     const currentUser = userProfile || user;
     if (!currentUser) return;
 
-    if (currentUser.role?.toUpperCase() === "PROFESSIONAL") {
-      const professional = currentUser as ProfessionalProfile;
-      if (professional.id) {
-        fetchReviews(professional.id);
-      }
-    } else {
-      if (currentUser.id) {
-        fetchReviews(currentUser.id);
-      }
+    // Se for o dono do salão (SERVICE_PROVIDER) ou o cliente olhando a página pública
+    if (currentUser.providerId) {
+      fetchReviews(currentUser.providerId);
+    }
+    // Se for um funcionário olhando as suas próprias avaliações (e a sua API tiver o endpoint /professional/{id})
+    // Se não tiver esse endpoint, o funcionário também vai buscar pela do salão ou você terá que adaptar o store
+    else if (
+      currentUser.role?.toUpperCase() === "PROFESSIONAL" &&
+      (currentUser as ProfessionalProfile).id
+    ) {
+      // Idealmente, você chamaria um fetchReviewsByProfessional aqui
+      // Por enquanto, se o Professional tem um providerId, caímos no IF de cima.
     }
   }, [user, userProfile, fetchReviews]);
 
   const filteredReviews = useMemo(() => {
+    // Garante array
+    const safeReviews = reviews || [];
     return filter === "all"
-      ? reviews
-      : reviews.filter((r) => r.rating === filter);
+      ? safeReviews
+      : safeReviews.filter((r) => r.rating === filter);
   }, [reviews, filter]);
 
   return (
@@ -154,7 +168,7 @@ export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
             variant={filter === opt.v ? "default" : "outline"}
             className={cn(
               "cursor-pointer px-4 py-1.5 h-auto text-sm transition-colors whitespace-nowrap",
-              filter !== opt.v && "hover:bg-primary/20 hover:text-primary"
+              filter !== opt.v && "hover:bg-primary/20 hover:text-primary",
             )}
             onClick={() => setFilter(opt.v)}
           >
@@ -175,7 +189,8 @@ export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
                 // Cast seguro utilizando o tipo ExtendedReview
                 const review = baseReview as ExtendedReview;
                 const dateObj = normalizeDate(review.createdAt);
-                const clientAvatar = review.clientProfilePictureUrl || review.client?.photoURL;
+                const clientAvatar =
+                  review.clientProfilePictureUrl || review.client?.photoURL;
 
                 return (
                   <motion.div
@@ -210,11 +225,13 @@ export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
                               <StarRating rating={review.rating} />
                               <div className="flex items-center gap-1 text-xs text-gray-600 sm:mt-1">
                                 <Calendar size={10} />
-                                {format(dateObj, "dd MMM yyyy", { locale: ptBR })}
+                                {format(dateObj, "dd MMM yyyy", {
+                                  locale: ptBR,
+                                })}
                               </div>
                             </div>
                           </div>
-                          
+
                           {/* SÓ EXIBE SE TIVER TEXTO REAL */}
                           {review.comment && review.comment.trim() !== "" && (
                             <p className="text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-gray-800/50 mt-3 break-words">
@@ -230,11 +247,13 @@ export const ReviewsManagement = ({ userProfile }: ReviewsManagementProps) => {
             ) : (
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }} 
+                animate={{ opacity: 1 }}
                 className="text-center py-12 bg-gray-900/30 rounded-xl border border-dashed border-gray-800"
               >
                 <Star size={40} className="mx-auto text-gray-700 mb-3" />
-                <p className="text-gray-500 font-medium">Nenhuma avaliação encontrada com este filtro.</p>
+                <p className="text-gray-500 font-medium">
+                  Nenhuma avaliação encontrada com este filtro.
+                </p>
               </motion.div>
             )}
           </AnimatePresence>

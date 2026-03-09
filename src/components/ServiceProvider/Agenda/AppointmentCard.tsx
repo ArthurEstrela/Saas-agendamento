@@ -29,6 +29,27 @@ export const AppointmentCard = ({
   const phoneToUse = clientPhone;
   const nameToUse = clientName || "Particular";
 
+  // ✨ CORREÇÃO: Fallback Inteligente para Nomes de Serviços (Spring Boot vs Firebase Antigo)
+  const serviceNamesArr = (appointment as any).serviceNames;
+  
+  // Pega apenas o primeiro serviço para a mensagem curta do WhatsApp
+  const serviceNameWhatsapp = serviceNamesArr?.length > 0 
+    ? serviceNamesArr[0] 
+    : (items && items.length > 0 ? items[0].name : "serviço");
+    
+  // Pega todos os serviços separados por vírgula para exibir no Card visualmente
+  const serviceDisplayName = serviceNamesArr?.length > 0
+    ? serviceNamesArr.join(", ")
+    : items && items.length > 0
+    ? items.map((s) => s.name).join(", ")
+    : "Serviço não especificado";
+
+  // ✨ CORREÇÃO: Fallback Inteligente para o Preço
+  const displayPrice = (appointment as any).totalPrice ?? appointment.totalAmount ?? appointment.finalAmount ?? 0;
+  
+  // Duração (Usa uma duração fictícia caso a API ainda não a envie na listagem)
+  const displayDuration = (appointment as Appointment & { totalDuration?: number }).totalDuration || 30;
+
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -36,16 +57,14 @@ export const AppointmentCard = ({
 
     const cleanPhone = phoneToUse.replace(/\D/g, "");
     
-    // Tratamento seguro de items (lê o array oficial da API Java)
-    const serviceName = items && items.length > 0 ? items[0].name : "serviço";
-
     let message = "";
     if (isPast(startTime)) {
-      message = `Olá ${nameToUse}, faz tempo que não te vejo! Bora marcar aquele ${serviceName}?`;
+      message = `Olá ${nameToUse}, faz tempo que não te vejo! Bora marcar aquele ${serviceNameWhatsapp}?`;
     } else {
       const timeString = format(startTime, "HH:mm");
-      message = `Olá ${nameToUse}, passando para confirmar nosso agendamento de ${serviceName} às ${timeString}.`;
+      message = `Olá ${nameToUse}, passando para confirmar nosso agendamento de ${serviceNameWhatsapp} às ${timeString}.`;
     }
+    
     window.open(
       `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
       "_blank",
@@ -53,14 +72,6 @@ export const AppointmentCard = ({
   };
 
   const MotionCard = motion(Card);
-
-  // Duração (Usa uma duração fictícia caso a API ainda não a envie na listagem)
-  // Nota: Se a sua API Java não devolve totalDuration, mostramos 30min default.
-  // Idealmente, deve adicionar 'totalDuration' à interface Appointment no types.ts
-  const displayDuration = (appointment as Appointment & { totalDuration?: number }).totalDuration || 30;
-  
-  // Preço (Padrão API Spring Boot)
-  const displayPrice = appointment.totalAmount || appointment.finalAmount || 0;
 
   return (
     <MotionCard
@@ -102,9 +113,7 @@ export const AppointmentCard = ({
               <Scissors size={14} className="text-gray-500" />
             </div>
             <p className="text-xs text-gray-400 truncate leading-relaxed">
-              {items && items.length > 0
-                ? items.map((s) => s.name).join(", ")
-                : "Serviço não especificado"}
+              {serviceDisplayName}
             </p>
           </div>
         </div>

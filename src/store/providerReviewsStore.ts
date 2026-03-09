@@ -1,11 +1,18 @@
-import { create } from 'zustand';
-import { isAxiosError } from 'axios';
-import type { Review, PagedResult } from '../types';
-import { api } from '../lib/api';
+import { create } from "zustand";
+import { isAxiosError } from "axios";
+import type { Review, PagedResult } from "../types";
+import { api } from "../lib/api";
 
-const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+const extractErrorMessage = (
+  error: unknown,
+  defaultMessage: string,
+): string => {
   if (isAxiosError(error)) {
-    return error.response?.data?.message || defaultMessage;
+    return (
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      defaultMessage
+    );
   }
   if (error instanceof Error) {
     return error.message;
@@ -17,14 +24,18 @@ interface ProviderReviewsState {
   reviews: Review[];
   loading: boolean;
   error: string | null;
-  
+
   // Paginação
   totalElements: number;
   totalPages: number;
   currentPage: number;
   hasNext: boolean;
 
-  fetchReviews: (providerId: string, page?: number, size?: number) => Promise<void>;
+  fetchReviews: (
+    providerId: string,
+    page?: number,
+    size?: number,
+  ) => Promise<void>;
   clearError: () => void;
 }
 
@@ -32,7 +43,7 @@ export const useProviderReviewsStore = create<ProviderReviewsState>((set) => ({
   reviews: [],
   loading: false,
   error: null,
-  
+
   totalElements: 0,
   totalPages: 0,
   currentPage: 0,
@@ -44,29 +55,42 @@ export const useProviderReviewsStore = create<ProviderReviewsState>((set) => ({
   fetchReviews: async (providerId: string, page = 0, size = 10) => {
     set({ loading: true, error: null });
     try {
-      // Endpoint que lista as avaliações no backend. Assumindo que a sua API suporte paginação aqui
-      const response = await api.get<PagedResult<Review>>(`/reviews/provider/${providerId}`, {
-        params: { page, size }
-      });
-      
-      const { data, totalElements, totalPages, currentPage, hasNext } = response.data;
+      const response = await api.get<PagedResult<Review>>(
+        `/reviews/provider/${providerId}`,
+        {
+          params: { page, size },
+        },
+      );
 
-      set((state) => ({
-        // Se for a primeira página, substitui. Se não, adiciona (Infinite Scroll)
-        reviews: page === 0 ? data : [...state.reviews, ...data],
+      // ✨ CORREÇÃO AQUI: O backend envia 'items' e 'page', não 'data' e 'currentPage'
+      const {
+        items,
         totalElements,
         totalPages,
-        currentPage,
-        hasNext,
-        loading: false
+        page: responsePage,
+      } = response.data;
+
+      // Garante que é um array para não quebrar o .length no React
+      const fetchedReviews = items || [];
+
+      set((state) => ({
+        reviews:
+          page === 0 ? fetchedReviews : [...state.reviews, ...fetchedReviews],
+        totalElements: totalElements || 0,
+        totalPages: totalPages || 0,
+        currentPage: responsePage || 0,
+        // Calcula o hasNext (se a página atual for menor que o total de páginas - 1)
+        hasNext: responsePage < totalPages - 1,
+        loading: false,
       }));
     } catch (error) {
-      set({ 
-        error: extractErrorMessage(error, 'Erro ao carregar as avaliações.'), 
-        loading: false 
+      set({
+        error: extractErrorMessage(error, "Erro ao carregar as avaliações."),
+        loading: false,
+        reviews: [], // Fallback de segurança em caso de erro 404/500
       });
     }
   },
 
-  clearError: () => set({ error: null })
+  clearError: () => set({ error: null }),
 }));

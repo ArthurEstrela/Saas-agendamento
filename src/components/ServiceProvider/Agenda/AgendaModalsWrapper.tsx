@@ -18,12 +18,12 @@ export const AgendaModalsWrapper = () => {
     modalData,
   } = useAgendaModalStore();
 
-  const { 
+  const {
     confirmAppointment,
     cancelAppointment,
     markNoShow,
-    completeAppointment, 
-    loading: isLoading 
+    completeAppointment,
+    loading: isLoading,
   } = useProviderAppointmentsStore();
 
   return (
@@ -44,37 +44,48 @@ export const AgendaModalsWrapper = () => {
             appointment={selectedAppointment}
             onStatusChange={async (id, status) => {
               const normalizedStatus = status.toLowerCase();
-              
+
               try {
                 if (normalizedStatus === "cancelled") {
                   // ✨ Usamos openModal para transitar a view mantendo a marcação
                   openModal("cancel", selectedAppointment, modalData);
-                } else if (normalizedStatus === "confirmed" || normalizedStatus === "scheduled") {
+                } else if (
+                  normalizedStatus === "confirmed" ||
+                  normalizedStatus === "scheduled"
+                ) {
                   await confirmAppointment(id);
                   closeModal();
+                  toast.success("Agendamento confirmado!");
                 } else if (normalizedStatus === "no_show") {
                   await markNoShow(id);
                   closeModal();
+                  toast.success("Falta registrada (No-Show).");
                 }
               } catch (error) {
                 console.error("Erro ao mudar status do agendamento:", error);
+                toast.error("Falha ao atualizar o status.");
               }
             }}
             onComplete={async () => {
-              const price = selectedAppointment.totalAmount || 0;
+              // Pega o valor total, suportando tanto o padrão antigo (totalAmount) quanto o novo do backend (totalPrice)
+              const price = (selectedAppointment as any).totalPrice ?? (selectedAppointment as any).totalAmount ?? 0;
+              
               // ✨ Usamos apenas "BLOCKED" (maiúsculas) para bater certo com os types.ts
               const isBlock = selectedAppointment.status === "BLOCKED";
 
               if (price === 0 || isBlock) {
                 try {
                   await completeAppointment(selectedAppointment.id, {
-                    paymentMethod: "CASH", 
-                    finalAmount: 0,
+                    appointmentId: selectedAppointment.id, // OBRIGATÓRIO PARA O BACKEND
+                    paymentMethod: "CASH",
+                    serviceFinalPrice: 0,                  // SUBSTITUI O finalAmount
+                    soldProducts: [],                      // ARRAY VAZIO PARA EVITAR NULL POINTER
                   });
                   closeModal();
                   toast.success("Compromisso finalizado!");
                 } catch (error) {
-                  console.error(error);
+                  console.error("Erro ao finalizar compromisso:", error);
+                  toast.error("Falha ao finalizar o compromisso.");
                 }
               } else {
                 // ✨ Usamos openModal para ir para o ecrã de checkout
@@ -88,19 +99,35 @@ export const AgendaModalsWrapper = () => {
             onClose={closeModal}
             appointment={selectedAppointment}
             isLoading={isLoading}
-            onConfirm={async (payload: number | CompleteAppointmentRequest) => {
+            onConfirm={async (payload: number | any) => {
               try {
-                if (typeof payload === 'number') {
-                  await completeAppointment(selectedAppointment.id, {
-                    finalAmount: payload,
-                    paymentMethod: "CASH"
-                  });
+                let requestData: CompleteAppointmentRequest;
+
+                if (typeof payload === "number") {
+                  // Se o modal mandar apenas um número
+                  requestData = {
+                    appointmentId: selectedAppointment.id, // OBRIGATÓRIO
+                    serviceFinalPrice: payload,            // NOME CORRETO
+                    paymentMethod: "CASH",
+                    soldProducts: [],
+                  };
                 } else {
-                  await completeAppointment(selectedAppointment.id, payload);
+                  // Se o modal mandar um objeto, adaptamos para garantir a conformidade
+                  requestData = {
+                    appointmentId: selectedAppointment.id, // OBRIGATÓRIO
+                    paymentMethod: payload.paymentMethod || "CASH",
+                    // Aceita a nova tipagem, ou faz fallback se o modal ainda enviar "finalAmount" internamente
+                    serviceFinalPrice: payload.serviceFinalPrice ?? payload.finalAmount ?? 0,
+                    soldProducts: payload.soldProducts || [],
+                  };
                 }
+
+                await completeAppointment(selectedAppointment.id, requestData);
                 closeModal();
+                toast.success("Atendimento concluído com sucesso!");
               } catch (error) {
                 console.error("Falha ao concluir", error);
+                toast.error("Ocorreu um erro ao finalizar o atendimento.");
               }
             }}
           />
@@ -115,8 +142,10 @@ export const AgendaModalsWrapper = () => {
               try {
                 await cancelAppointment(selectedAppointment.id, reason);
                 closeModal();
+                toast.success("Agendamento cancelado.");
               } catch (error) {
                 console.error("Falha ao cancelar", error);
+                toast.error("Falha ao cancelar o agendamento.");
               }
             }}
           />

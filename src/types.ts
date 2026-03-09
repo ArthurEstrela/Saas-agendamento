@@ -379,7 +379,7 @@ export interface CreateAppointmentRequest {
   professionalId: string;
   clientId: string; // Em caso do provedor marcando para o cliente
   startTime: string; // ISO String
-  endTime: string; // ISO String
+  endTime?: string; // ISO String
   items: Array<{
     referenceId: string; // Service ID ou Product ID
     type: "SERVICE" | "PRODUCT";
@@ -390,10 +390,36 @@ export interface CreateAppointmentRequest {
 }
 
 export interface CompleteAppointmentRequest {
-  paymentMethod: PaymentMethod;
-  finalAmount: number;
-  discountAmount?: number;
+  appointmentId: string;
+  paymentMethod: PaymentMethod; // Pode usar o seu enum, pois os valores batem
+  serviceFinalPrice: number;
+  soldProducts?: Array<{
+    productId: string;
+    quantity: number;
+  }>;
+}
+
+export interface CreateManualAppointmentRequest {
+  professionalId: string;
+  clientName: string;
+  clientPhone: string;
+  serviceIds: string[]; // Lista de IDs dos serviços
+  startTime: string; // ISO String
   notes?: string;
+}
+
+// DTO retornado pelas listagens (GET) do backend
+export interface AppointmentResponse {
+  id: string;
+  clientName: string;
+  professionalName: string;
+  professionalAvatarUrl?: string;
+  serviceNames: string[]; // O backend envia um array de strings com os nomes dos serviços
+  startTime: string; // ISO String
+  endTime: string; // ISO String
+  totalPrice: number;
+  status: AppointmentStatus;
+  provider?: ServiceProviderProfile; // O backend aninha as informações do Provider aqui
 }
 
 export interface ProviderSearchCriteria {

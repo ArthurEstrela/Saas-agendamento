@@ -15,10 +15,10 @@ const extractErrorMessage = (error: unknown, defaultMessage: string): string => 
 
 interface ProviderAppointmentsState {
   appointments: Appointment[];
-  pendingRequests: Appointment[]; // ✨ Nova lista exclusiva para o Inbox/Solicitações
+  pendingRequests: Appointment[]; // ✨ Lista exclusiva para o Inbox/Solicitações pendentes
   
   loading: boolean;
-  loadingPending: boolean; // ✨ Loading separado para não travar a UI da agenda
+  loadingPending: boolean; // ✨ Loading separado para não travar a UI da agenda principal
   error: string | null;
   selectedDate: Date;
 
@@ -28,7 +28,7 @@ interface ProviderAppointmentsState {
 
   // Chamadas à API
   fetchAppointments: (providerId: string, startDate: string, endDate: string) => Promise<void>;
-  fetchPendingRequests: (providerId: string) => Promise<void>; // ✨ Nova chamada para os Pendentes
+  fetchPendingRequests: (providerId: string) => Promise<void>;
   confirmAppointment: (appointmentId: string) => Promise<void>;
   cancelAppointment: (appointmentId: string, reason?: string) => Promise<void>;
   markNoShow: (appointmentId: string) => Promise<void>;
@@ -57,7 +57,7 @@ export const useProviderAppointmentsStore = create<ProviderAppointmentsState>((s
         { params: { startDate, endDate } }
       );
       
-      // ✨ CORREÇÃO: Lendo 'items' ao invés de 'data' com base no PagedResult.java do seu Spring Boot
+      // Lê 'items' do PagedResult.java ou faz fallback se for um Array direto
       const data = Array.isArray(response.data) 
         ? response.data 
         : (response.data as PagedResult<Appointment>).items || [];
@@ -102,7 +102,7 @@ export const useProviderAppointmentsStore = create<ProviderAppointmentsState>((s
         appointments: state.appointments.map((apt) => 
           apt.id === appointmentId ? { ...apt, status: 'CONFIRMED' } : apt
         ),
-        // ✨ Remove instantaneamente da lista de pendentes (Inbox limpa sem recarregar a página)
+        // Remove instantaneamente da lista de pendentes (Inbox limpa sem recarregar a página)
         pendingRequests: state.pendingRequests.filter((apt) => apt.id !== appointmentId),
         loading: false
       }));
@@ -124,7 +124,7 @@ export const useProviderAppointmentsStore = create<ProviderAppointmentsState>((s
         appointments: state.appointments.map((apt) => 
           apt.id === appointmentId ? { ...apt, status: 'CANCELLED', rejectionReason: reason } : apt
         ),
-        // ✨ Remove instantaneamente da aba de solicitações pendentes
+        // Remove instantaneamente da aba de solicitações pendentes
         pendingRequests: state.pendingRequests.filter((apt) => apt.id !== appointmentId),
         loading: false
       }));
@@ -160,12 +160,21 @@ export const useProviderAppointmentsStore = create<ProviderAppointmentsState>((s
   completeAppointment: async (appointmentId: string, payload: CompleteAppointmentRequest) => {
     set({ loading: true, error: null });
     try {
-      await api.post(`/appointments/${appointmentId}/complete`, payload);
+      await api.patch(`/appointments/${appointmentId}/complete`, payload);
       
       set((state) => ({
         appointments: state.appointments.map((apt) => 
           apt.id === appointmentId 
-            ? { ...apt, status: 'COMPLETED', paymentMethod: payload.paymentMethod, finalAmount: payload.finalAmount } 
+            ? { 
+                ...apt, 
+                status: 'COMPLETED', 
+                paymentMethod: payload.paymentMethod as any, 
+                // ✨ CORREÇÃO: Utilizando a nova propriedade 'serviceFinalPrice' do DTO.
+                // Preenchemos tanto 'finalAmount' quanto 'totalPrice' no Frontend 
+                // para garantir compatibilidade com componentes que usem qualquer um dos dois.
+                finalAmount: payload.serviceFinalPrice,
+                totalPrice: payload.serviceFinalPrice 
+              } 
             : apt
         ),
         loading: false

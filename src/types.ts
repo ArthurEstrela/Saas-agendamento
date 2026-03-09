@@ -210,8 +210,11 @@ export interface Appointment {
   startTime: string; // ISO String
   endTime: string;
   status: AppointmentStatus;
-  items: AppointmentItem[]; // Lista de serviços/produtos (Ajustado com o backend)
-  totalAmount: number;
+  serviceNames?: string[];
+  totalPrice?: number;
+  provider?: ServiceProviderProfile;
+  items?: AppointmentItem[]; // Lista de serviços/produtos (Ajustado com o backend)
+  totalAmount?: number;
   discountAmount: number;
   finalAmount: number;
   paymentMethod?: PaymentMethod;

@@ -65,14 +65,14 @@ export const DateTimeSelection = () => {
       if (!selectedProfessional) return [];
       const dayOfWeek = weekDayMap[selectedDay.getDay()];
       const dayAvailability = selectedProfessional.availability.find(
-        (a) => a.dayOfWeek === dayOfWeek
+        (a) => a.dayOfWeek === dayOfWeek,
       );
 
       if (!dayAvailability || !dayAvailability.isAvailable) return [];
 
       const existingAppointments = await getAppointmentsForProfessionalOnDate(
         selectedProfessional.id,
-        selectedDay
+        selectedDay,
       );
       const slots: string[] = [];
       const now = new Date();
@@ -97,18 +97,40 @@ export const DateTimeSelection = () => {
 
         while (currentTime < endTime) {
           const potentialSlotEnd = new Date(
-            currentTime.getTime() + totalDuration * 60000
+            currentTime.getTime() + totalDuration * 60000,
           );
-          
+
           const isPast = isSelectedDateToday && currentTime < now;
           const fitsInWorkSlot = potentialSlotEnd <= endTime;
-          
-          const isOverlapping = existingAppointments.some(
-            (appt) =>
-              (currentTime >= appt.startTime && currentTime < appt.endTime) ||
-              (potentialSlotEnd > appt.startTime && potentialSlotEnd <= appt.endTime) ||
-              (currentTime <= appt.startTime && potentialSlotEnd >= appt.endTime)
-          );
+
+          const TOLERANCE_MS = 10 * 60000;
+
+          const isOverlapping = existingAppointments.some((appt) => {
+            // Aplica a tolerância encurtando virtualmente o começo e o fim do agendamento já existente
+            const apptStartWithTolerance = new Date(
+              appt.startTime.getTime() + TOLERANCE_MS,
+            );
+            const apptEndWithTolerance = new Date(
+              appt.endTime.getTime() - TOLERANCE_MS,
+            );
+
+            // 1. O novo horário começa dentro do agendamento (ignorando os últimos 5 min)
+            const startsInside =
+              currentTime >= appt.startTime &&
+              currentTime < apptEndWithTolerance;
+
+            // 2. O novo horário termina dentro do agendamento (ignorando os primeiros 5 min)
+            const endsInside =
+              potentialSlotEnd > apptStartWithTolerance &&
+              potentialSlotEnd <= appt.endTime;
+
+            // 3. O novo horário engloba totalmente o agendamento
+            const encompasses =
+              currentTime <= apptStartWithTolerance &&
+              potentialSlotEnd >= apptEndWithTolerance;
+
+            return startsInside || endsInside || encompasses;
+          });
 
           if (!isPast && fitsInWorkSlot && !isOverlapping) {
             slots.push(format(currentTime, "HH:mm"));
@@ -119,7 +141,7 @@ export const DateTimeSelection = () => {
       }
       return slots;
     },
-    [selectedProfessional, totalDuration, slotInterval]
+    [selectedProfessional, totalDuration, slotInterval],
   );
 
   useEffect(() => {
@@ -168,7 +190,10 @@ export const DateTimeSelection = () => {
       className="pb-32 md:pb-32"
     >
       <div className="text-center mb-6 md:mb-10">
-        <Typography variant="h2" className="drop-shadow-sm text-2xl md:text-3xl">
+        <Typography
+          variant="h2"
+          className="drop-shadow-sm text-2xl md:text-3xl"
+        >
           Data e Horário
         </Typography>
         <Typography variant="muted" className="text-sm md:text-base">
@@ -185,10 +210,7 @@ export const DateTimeSelection = () => {
               selected={date}
               onSelect={handleDateSelect}
               locale={ptBR}
-              disabled={[
-                { before: today },
-                { after: maxDate }
-              ]}
+              disabled={[{ before: today }, { after: maxDate }]}
               className="w-full"
             />
           </div>
@@ -228,7 +250,10 @@ export const DateTimeSelection = () => {
                   </div>
                 ) : !date ? (
                   <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-60">
-                    <ChevronLeft size={40} className="mb-4 text-gray-700 md:w-14 md:h-14" />
+                    <ChevronLeft
+                      size={40}
+                      className="mb-4 text-gray-700 md:w-14 md:h-14"
+                    />
                     <span className="text-sm md:text-base font-medium">
                       Escolha um dia no calendário
                     </span>
@@ -245,7 +270,7 @@ export const DateTimeSelection = () => {
                           "h-10 md:h-12 rounded-lg text-xs md:text-sm font-bold border transition-all duration-200 touch-manipulation",
                           timeSlot === slot
                             ? "bg-primary text-black border-primary md:shadow-[0_0_15px_rgba(218,165,32,0.4)] ring-2 ring-primary/20"
-                            : "bg-[#27272a] md:bg-gray-800/50 text-gray-300 border-white/5 hover:border-gray-500 hover:bg-gray-700 hover:text-white"
+                            : "bg-[#27272a] md:bg-gray-800/50 text-gray-300 border-white/5 hover:border-gray-500 hover:bg-gray-700 hover:text-white",
                         )}
                       >
                         {slot}
@@ -255,7 +280,10 @@ export const DateTimeSelection = () => {
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-gray-500">
                     <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
-                      <CalendarX size={24} className="text-gray-600 md:w-8 md:h-8" />
+                      <CalendarX
+                        size={24}
+                        className="text-gray-600 md:w-8 md:h-8"
+                      />
                     </div>
                     <p className="text-center font-medium text-base md:text-lg text-gray-400">
                       Sem horários livres
@@ -279,14 +307,16 @@ export const DateTimeSelection = () => {
             onClick={goToPreviousStep}
             className="hover:bg-white/5 px-2 md:px-4"
           >
-            <ChevronLeft size={16} className="mr-1 md:mr-2" /> <span className="hidden sm:inline">Voltar</span>
+            <ChevronLeft size={16} className="mr-1 md:mr-2" />{" "}
+            <span className="hidden sm:inline">Voltar</span>
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={!date || !timeSlot || isLoadingTimes}
             className="w-full sm:w-auto px-6 md:px-8 font-bold shadow-lg shadow-primary/10 transition-all active:scale-95"
           >
-            Confirmar <span className="hidden sm:inline">e Avançar</span> <ChevronRight size={16} className="ml-2" />
+            Confirmar <span className="hidden sm:inline">e Avançar</span>{" "}
+            <ChevronRight size={16} className="ml-2" />
           </Button>
         </div>
       </div>
